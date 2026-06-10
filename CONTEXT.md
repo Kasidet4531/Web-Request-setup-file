@@ -19,3 +19,8 @@ _Avoid_: Engineer, Owner, Setup Owner
 **PSF Created Information**:
 The section of the PSF Request filled in by the Setup File Owner containing the final setup details.
 _Avoid_: Setup Information, Completed Info
+
+**Draft**:
+A PSF Request that has been created but not yet submitted.
+_Avoid_: In-progress request, unsaved request
+
