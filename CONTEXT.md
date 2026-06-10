@@ -28,4 +28,13 @@ _Avoid_: In-progress request, unsaved request
 A configuration defining a trigger field and its target fields to automatically populate data from historical records.
 _Avoid_: Smart suggestion, autofill setting
 
+**Canonical Key**:
+A standardized identifier used to map and normalize fields across different form versions.
+_Avoid_: Global key, standardized key
+
+**Search Index**:
+A structured database table storing pre-extracted canonical values for quick query, filter, and export performance.
+_Avoid_: Query table, view
+
+
 
