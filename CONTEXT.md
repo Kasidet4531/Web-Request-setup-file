@@ -24,3 +24,8 @@ _Avoid_: Setup Information, Completed Info
 A PSF Request that has been created but not yet submitted.
 _Avoid_: In-progress request, unsaved request
 
+**Auto-fill Rule**:
+A configuration defining a trigger field and its target fields to automatically populate data from historical records.
+_Avoid_: Smart suggestion, autofill setting
+
+
