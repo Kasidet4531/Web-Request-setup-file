@@ -24,3 +24,8 @@ pids
 *.sln
 *.sw?
 .DS_Store
+
+# Agent skills
+skills-lock.json
+.agents/
+
