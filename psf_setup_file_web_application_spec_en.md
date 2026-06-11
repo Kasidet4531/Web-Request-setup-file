@@ -4,6 +4,43 @@
 
 ---
 
+## Table of Contents
+
+- [1. Project Overview](#1-project-overview)
+- [2. Main Web Pages](#2-main-web-pages)
+- [3. Login Page](#3-login-page)
+- [4. Dashboard Page](#4-dashboard-page)
+- [5. PSF Request Form Page](#5-psf-request-form-page)
+- [6. Requester Information Section](#6-requester-information-section)
+- [7. PSF Created Information Section](#7-psf-created-information-section)
+- [8. Workflow Status](#8-workflow-status)
+- [9. Role-Based Permission Matrix](#9-role-based-permission-matrix)
+- [10. Dynamic Form Design](#10-dynamic-form-design)
+- [11. Form Versioning](#11-form-versioning)
+- [12. Canonical Field Mapping](#12-canonical-field-mapping)
+- [13. Search Performance Design](#13-search-performance-design)
+- [14. Auto-fill Design](#14-auto-fill-design)
+- [15. Excel Export](#15-excel-export)
+- [16. History / Audit Log](#16-history--audit-log)
+- [17. Admin Page](#17-admin-page)
+- [18. Backend API Service](#18-backend-api-service)
+- [19. Backend Module Structure](#19-backend-module-structure)
+- [20. API Design](#20-api-design)
+- [21. Database Design](#21-database-design)
+- [22. Cache Strategy](#22-cache-strategy)
+- [23. State Persistence](#23-state-persistence)
+- [24. Frontend Route Structure](#24-frontend-route-structure)
+- [25. UI/UX Recommendations](#25-uiux-recommendations)
+- [26. MVP Scope](#26-mvp-scope)
+- [27. Key Design Decisions](#27-key-design-decisions)
+- [28. Functional Requirements Summary](#28-functional-requirements-summary)
+- [29. Non-Functional Requirements](#29-non-functional-requirements)
+- [30. Final Recommended Architecture](#30-final-recommended-architecture)
+- [31. Short Summary](#31-short-summary)
+- [32. Suggested MVP Implementation Order](#32-suggested-mvp-implementation-order)
+
+---
+
 ## 1. Project Overview
 
 This system is a web application for managing requests to create or update **PSF Setup Files**. The application supports a workflow where the requester submits the required setup information, and the setup file owner later completes the PSF setup information.
@@ -72,7 +109,7 @@ Frontend state -> stores only non-sensitive UI data
 ```text
 User logs in
   ↓
-Backend verifies credentials or SSO identity
+Backend verifies credentials (Local Authentication)
   ↓
 Backend sets HttpOnly Secure Cookie
   ↓
@@ -278,14 +315,14 @@ Cancelled
 | Page / Action | Requester | Setup Owner | Admin |
 |---|---:|---:|---:|
 | Login | Yes | Yes | Yes |
-| Dashboard | Own requests | Assigned requests | All requests |
+| Dashboard | Own requests | All requests (pre-filtered to pending) | All requests |
 | Create Request | Yes | Optional | Yes |
 | Edit Requester Information | Before submit | No | Yes |
 | View Requester Information | Yes | Yes | Yes |
 | Edit PSF Created Information | No | Yes | Yes |
 | View PSF Created Information | After PSF Created | Yes | Yes |
 | Mark as PSF Created | No | Yes | Yes |
-| View History | Related requests | Assigned requests | All requests |
+| View History | Related requests | All requests | All requests |
 | Export Excel | Optional | Yes | Yes |
 | Admin Page | No | Optional | Yes |
 
@@ -380,6 +417,12 @@ Backend stores formVersion with each submission
 Historical records are rendered using schema snapshot
 Search, export, and auto-fill use canonical data
 ```
+
+### Draft Version Upgrades (Hybrid Strategy)
+- When a user opens a Draft request associated with an older form version, the UI prompts them with a confirmation dialog:
+  1. **Upgrade**: Migrates the draft to the latest active schema (matching fields preserved, new fields added, obsolete fields removed).
+  2. **Remain on Old Version**: Renders the draft form using its original schema snapshot.
+- Once a request is submitted (status moves from Draft to Submitted), it is locked permanently to its form version schema snapshot.
 
 ### Required Submission Fields
 
@@ -544,11 +587,10 @@ Machine
 
 ### Design Principle
 
-```text
-Auto-fill must use canonical keys, not labels.
-Auto-fill should use validated or completed historical records.
-Auto-filled values should remain editable by the user.
-```
+- **Canonical Keys**: Auto-fill rules must map trigger fields to target fields using canonical keys, not labels.
+- **Rule-Driven Config**: Auto-fill rules are defined dynamically by administrators and stored in the database (`autofill_rules` table), requiring no code changes to add/update rules.
+- **Conflict Resolution (Most Recent Match)**: If multiple completed requests share the same trigger value, the `AutofillService` retrieves target values from the most recently completed request (`completed_at DESC`).
+- **User Agency**: Auto-filled values remain fully editable. The UI displays an `Auto-filled` badge and shows the source request (e.g., *"Auto-filled from REQ-0004 (latest completed)"*).
 
 ### Auto-fill API
 
@@ -587,15 +629,41 @@ GET /api/autofill?formKey=psf-request-form&field=reference_psf_name&value=PSF-00
 
 The system shall support exporting request data to Excel without being blocked by form version differences.
 
-### Design Principle
+### Design Principles & Alignment Strategy
 
-```text
-Do not export directly from raw JSON.
-Export from canonical data or a report view.
-Use an export profile to define columns.
-```
+We use the **Latest Active Schema Alignment** strategy for Excel exports, combining administrative layouts, performance optimization, and role-based cell masking:
 
-### Example Export Columns
+1. **Flat Table Layout**: The exported spreadsheet consists of a single sheet where each row represents one PSF Request.
+2. **Latest Schema Column Structure**: The default column headers match the fields defined in the **latest active/published Form Schema version** of the system.
+3. **Filtering Options**:
+   - **Export All**: Export all requests.
+   - **Filter by Specific Conditions**: Filters are restricted **strictly** to fields defined as **Canonical Keys** in the search index (e.g., `Probecard Name`, `Reference PSF Name`, `Status`, `Priority`, `Requester`, `Setup Owner`) and date parameters (enabling selection of specific Year, Month, or Date ranges for `Request Date` or `Due Date`). Dynamic, non-canonical fields cannot be used for filtering.
+4. **Admin Layout Configuration**:
+   - Admins can configure, reorder (via drag-and-drop), and enable/disable columns (active and obsolete fields) via the "Export Settings" admin panel.
+   - Unconfigured obsolete fields default to a fallback group on the far right or are hidden based on settings.
+5. **Mapping Old Requests to Latest Columns**:
+   - Requests submitted on older form versions are mapped to the active columns using **Canonical Keys**.
+   - If a new field exists in the latest schema but not in the old request, the cell for that request is left blank.
+6. **Handling Obsolete Fields**:
+   - Obsolete fields (deprecated in the latest schema) are appended to the sheet under their original historical label, based on Admin settings.
+   - Obsolete columns are dynamically included **only if** at least one request in the exported subset has a value for that field. If no records contain data for a deprecated field, the column is omitted.
+7. **Data Type Serialization**:
+   - **Primitives (String, Number, Boolean)**: Exported as-is.
+   - **Arrays (e.g., Multi-select)**: Joined into a single string with comma separation (e.g., `Product A, Product B`).
+   - **Nested JSON Objects**: Extracted to specific sub-fields (like `.name`) or serialized as a simplified readable string (`key: value`).
+8. **Security & Cell-Level Masking**:
+   - All users share the same column layout.
+   - If a user with the `Requester` role exports, columns in the `PSF Created Information` section for requests that are not yet in `PSF Created` or `Completed` status are blanked out or set to `N/A (Pending Setup)`.
+9. **Date & Time Formatting**:
+   - All date fields are exported in the system's default timezone (**`Asia/Bangkok` / GMT+7**).
+   - Date cells are formatted as Excel Date cells in `YYYY-MM-DD` format (without time portion) so users can filter, sort, and calculate dates natively.
+10. **Performance & Memory Optimization**:
+    - **Synchronous Streaming (Threshold < 2,000 records)**: If the export dataset is under 2,000 records, the backend streams the spreadsheet immediately using a database cursor.
+    - **Asynchronous Background Job (Threshold >= 2,000 records)**: If 2,000 or more records are requested, an async background job generates the file, and the user is notified to download it via a temporary URL.
+11. **Export Filename**:
+    - Filename format is `psf_requests_[YYYYMMDD_HHMMSS].xlsx` based on the system timezone.
+
+### Example Export Columns (Default)
 
 | Column | Source |
 |---|---|
@@ -612,9 +680,10 @@ Use an export profile to define columns.
 
 ### Export API
 
-```http
-GET /api/requests/export.xlsx?status=PSF_CREATED&from=2026-06-01&to=2026-06-30
-```
+- **Query Format**:
+  ```http
+  GET /api/requests/export.xlsx?status=PSF_CREATED&from=2026-06-01&to=2026-06-30
+  ```
 
 ---
 
@@ -625,6 +694,12 @@ GET /api/requests/export.xlsx?status=PSF_CREATED&from=2026-06-01&to=2026-06-30
 The History page shows who changed data in a request, when the change occurred, which field was changed, and the old and new values.
 
 > This History is not Form Builder History. It is the audit trail for data changes inside a request or submission.
+
+### Design Principles
+
+- **Key-by-Key Diffing**: Data modifications to PSF Requests are audited at the individual field level using key-by-key JSON payload diffing during write operations. Separate rows are inserted into `psf_request_audit_logs` for each modified field key, rather than storing full JSON snapshots.
+- **Request-Specific Association**: Audit logs are indexed and queried using the `request_id` foreign key. The history is displayed on the request details page.
+- **Dynamic Field Mapping**: If fields change between form versions, we log the `field_key` and `field_label` at the time of the change (derived from the active schema snapshot), ensuring history remains readable.
 
 ### Audit Log Should Track
 
@@ -696,8 +771,7 @@ The Admin page allows authorized users to configure and maintain the system.
 ```text
 Admin
 ├── User & Role Management
-├── Master Data Management
-├── Form Configuration
+├── Form Configuration (includes Schema-Embedded Master Data)
 ├── Workflow / Status Configuration
 ├── Field Visibility Rules
 ├── Auto-fill Rules
@@ -708,31 +782,14 @@ Admin
 ### User & Role Management
 
 - Add or update user roles.
-- Assign Requester, Setup Owner, and Admin roles.
+- Assign Requester, Setup Owner (Setup File Owner), and Admin roles.
 - Control which requests each role can access.
 
-### Master Data Management
+### Form Configuration & Schema-Embedded Master Data
 
-Example master data:
-
-```text
-- Product
-- Wafer FAB
-- Probecard Name
-- Machine
-- Request To
-- Priority
-- Template Type
-```
-
-### Form Configuration
-
-- Add, remove, or update fields.
-- Configure required fields.
-- Configure field descriptions.
-- Configure input types.
-- Configure sections.
-- Configure searchable, exportable, and auto-fill fields.
+- **JSON Schema Editor**: Admins configure forms using an integrated Monaco/CodeMirror JSON Schema Editor with syntax highlighting, template boilerplate injection, and validation checks.
+- **Visual Preview**: A side-by-side split screen renders a live draft preview of the form based on the edited JSON.
+- **Embedded Master Data**: Dropdown options for master data (Products, Wafer FABs, Priority, Machines, etc.) are embedded directly within the dynamic JSON Form Schema definition (`options` array) rather than requiring separate database lookup tables and CRUD admin screens.
 
 ### Workflow Configuration
 
@@ -765,42 +822,35 @@ The term **middleware** alone may be too narrow because this layer contains sign
 ### Responsibilities
 
 ```text
-- Authentication and authorization
-- Form schema management
-- Submission processing
-- Workflow status control
-- Canonical mapping
-- Search index update
-- Auto-fill suggestion
-- Excel export
-- Audit logging
-- Attachment handling
+- Authentication and authorization (Local Auth with Bcrypt)
+- Form schema management & validation
+- Submission processing & optimistic locking
+- Workflow status control (Manual status transitions)
+- Canonical mapping (Write-time canonical extraction)
+- Search index updates (psf_request_search_index table)
+- Auto-fill rule suggestion & duplicate match resolution
+- Excel export generation (Streaming / Async Background)
+- Field-level audit logging (Key-by-key JSON diff)
+- Attachment handling (Local filesystem storage with database metadata)
 ```
 
 ### Recommended Stack
 
 ```text
 Frontend: React / TanStack Start / Vite / TypeScript / Tailwind
-Backend API: Rust Axum or NestJS/Fastify
+Backend API: NestJS + TypeScript
 Database: PostgreSQL + JSONB
-Search: PostgreSQL indexed table first
+Search: PostgreSQL indexed table (psf_request_search_index)
 Reverse Proxy: Nginx
-Cache: Optional later
 Excel Export: Backend-generated .xlsx
 ```
 
 ### Recommended Choice
 
-For production readiness, performance, and alignment with a Rust-based architecture:
+For development velocity, shared TypeScript models, and dynamic schema parsing, we chose:
 
 ```text
-Rust Axum + PostgreSQL + Nginx
-```
-
-For faster development and easier TypeScript onboarding:
-
-```text
-NestJS / Fastify + PostgreSQL
+NestJS + PostgreSQL + Nginx
 ```
 
 ---
@@ -810,41 +860,34 @@ NestJS / Fastify + PostgreSQL
 ```text
 backend/
 ├── src/
-│   ├── main.rs
-│   ├── config/
-│   ├── routes/
-│   │   ├── auth.rs
-│   │   ├── dashboard.rs
-│   │   ├── requests.rs
-│   │   ├── history.rs
-│   │   ├── autofill.rs
-│   │   ├── export.rs
-│   │   └── admin.rs
-│   ├── services/
-│   │   ├── auth_service.rs
-│   │   ├── form_schema_service.rs
-│   │   ├── request_service.rs
-│   │   ├── workflow_service.rs
-│   │   ├── canonical_mapping_service.rs
-│   │   ├── search_index_service.rs
-│   │   ├── autofill_service.rs
-│   │   ├── audit_log_service.rs
-│   │   └── excel_export_service.rs
-│   ├── repositories/
-│   │   ├── user_repository.rs
-│   │   ├── form_repository.rs
-│   │   ├── request_repository.rs
-│   │   ├── audit_repository.rs
-│   │   └── search_repository.rs
-│   ├── models/
-│   ├── dto/
+│   ├── main.ts
+│   ├── app.module.ts
 │   ├── auth/
-│   ├── middleware/
-│   │   ├── auth_middleware.rs
-│   │   ├── role_guard.rs
-│   │   ├── request_logger.rs
-│   │   └── error_handler.rs
-│   └── utils/
+│   │   ├── auth.module.ts
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   ├── local-auth.guard.ts
+│   │   └── roles.guard.ts
+│   ├── requests/
+│   │   ├── requests.module.ts
+│   │   ├── requests.controller.ts
+│   │   ├── requests.service.ts
+│   │   ├── search-index.service.ts
+│   │   └── autofill.service.ts
+│   ├── audit/
+│   │   ├── audit.module.ts
+│   │   └── audit_log.service.ts
+│   ├── export/
+│   │   ├── export.module.ts
+│   │   ├── export.controller.ts
+│   │   └── excel_export.service.ts
+│   ├── database/
+│   │   ├── database.module.ts
+│   │   └── schema.entities.ts
+│   └── admin/
+│       ├── admin.module.ts
+│       ├── admin.controller.ts
+│       └── form_schema.service.ts
 ```
 
 ---
