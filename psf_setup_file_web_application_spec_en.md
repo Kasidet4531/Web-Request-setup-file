@@ -7,36 +7,31 @@
 ## Table of Contents
 
 - [1. Project Overview](#1-project-overview)
-- [2. Main Web Pages](#2-main-web-pages)
-- [3. Login Page](#3-login-page)
-- [4. Dashboard Page](#4-dashboard-page)
-- [5. PSF Request Form Page](#5-psf-request-form-page)
-- [6. Requester Information Section](#6-requester-information-section)
-- [7. PSF Created Information Section](#7-psf-created-information-section)
-- [8. Workflow Status](#8-workflow-status)
-- [9. Role-Based Permission Matrix](#9-role-based-permission-matrix)
-- [10. Dynamic Form Design](#10-dynamic-form-design)
-- [11. Form Versioning](#11-form-versioning)
-- [12. Canonical Field Mapping](#12-canonical-field-mapping)
-- [13. Search Performance Design](#13-search-performance-design)
-- [14. Auto-fill Design](#14-auto-fill-design)
-- [15. Excel Export](#15-excel-export)
-- [16. History / Audit Log](#16-history--audit-log)
-- [17. Admin Page](#17-admin-page)
-- [18. Backend API Service](#18-backend-api-service)
-- [19. Backend Module Structure](#19-backend-module-structure)
-- [20. API Design](#20-api-design)
-- [21. Database Design](#21-database-design)
-- [22. State Persistence](#22-state-persistence)
-- [23. Frontend Route Structure](#23-frontend-route-structure)
-- [24. UI/UX Recommendations](#24-uiux-recommendations)
-- [25. MVP Scope](#25-mvp-scope)
-- [26. Key Design Decisions](#26-key-design-decisions)
-- [27. Functional Requirements Summary](#27-functional-requirements-summary)
-- [28. Non-Functional Requirements](#28-non-functional-requirements)
-- [29. Final Recommended Architecture](#29-final-recommended-architecture)
-- [30. Short Summary](#30-short-summary)
-- [31. Suggested MVP Implementation Order](#31-suggested-mvp-implementation-order)
+- [2. Login Page](#2-login-page)
+- [3. Dashboard Page](#3-dashboard-page)
+- [4. PSF Request Form Page](#4-psf-request-form-page)
+- [5. Requester Information Section](#5-requester-information-section)
+- [6. PSF Created Information Section](#6-psf-created-information-section)
+- [7. Workflow Status](#7-workflow-status)
+- [8. Role-Based Permission Matrix](#8-role-based-permission-matrix)
+- [9. Dynamic Form Design](#9-dynamic-form-design)
+- [10. Form Versioning](#10-form-versioning)
+- [11. Canonical Field Mapping](#11-canonical-field-mapping)
+- [12. Search Performance Design](#12-search-performance-design)
+- [13. Auto-fill Design](#13-auto-fill-design)
+- [14. Excel Export](#14-excel-export)
+- [15. History / Audit Log](#15-history--audit-log)
+- [16. Admin Page](#16-admin-page)
+- [17. Backend API Service](#17-backend-api-service)
+- [18. Backend Module Structure](#18-backend-module-structure)
+- [19. API Design](#19-api-design)
+- [20. Database Design](#20-database-design)
+- [21. State Persistence](#21-state-persistence)
+- [22. Frontend Pages and Route Structure](#22-frontend-pages-and-route-structure)
+- [23. UI/UX Recommendations](#23-uiux-recommendations)
+- [24. Functional Requirements Summary](#24-functional-requirements-summary)
+- [25. Non-Functional Requirements](#25-non-functional-requirements)
+- [26. Final Recommended Architecture](#26-final-recommended-architecture)
 
 ---
 
@@ -56,32 +51,7 @@ The key workflow requirement is:
 
 ---
 
-## 2. Main Web Pages
-
-The application should contain the following main pages:
-
-```text
-1. Login
-2. Dashboard
-3. PSF Requests / Form
-4. History / Audit Log
-5. Admin
-```
-
-Recommended navigation labels:
-
-```text
-Dashboard
-PSF Requests
-History
-Admin
-```
-
-The term **PSF Requests** is preferred over only **Form**, because the page is not only a form. It includes request creation, request detail, workflow status, attachments, and update actions.
-
----
-
-## 3. Login Page
+## 2. Login Page
 
 ### Purpose
 
@@ -121,7 +91,7 @@ Frontend renders allowed pages and actions
 
 ---
 
-## 4. Dashboard Page
+## 3. Dashboard Page
 
 ### Purpose
 
@@ -182,7 +152,7 @@ Frequently searched fields should be extracted into indexed columns or a dedicat
 
 ---
 
-## 5. PSF Request Form Page
+## 4. PSF Request Form Page
 
 ### Purpose
 
@@ -197,7 +167,7 @@ The form should be divided into two main sections:
 
 ---
 
-## 6. Requester Information Section
+## 5. Requester Information Section
 
 ### Purpose
 
@@ -230,7 +200,7 @@ This section is filled in by the requester when creating a PSF request.
 
 ---
 
-## 7. PSF Created Information Section
+## 6. PSF Created Information Section
 
 ### Purpose
 
@@ -270,7 +240,7 @@ This section will be visible after the setup file owner completes the PSF setup.
 
 ---
 
-## 8. Workflow Status
+## 7. Workflow Status
 
 ### Recommended Status Flow
 
@@ -309,7 +279,7 @@ Cancelled
 
 ---
 
-## 9. Role-Based Permission Matrix
+## 8. Role-Based Permission Matrix
 
 | Page / Action | Requester | Setup Owner | Admin |
 |---|---:|---:|---:|
@@ -327,7 +297,7 @@ Cancelled
 
 ---
 
-## 10. Dynamic Form Design
+## 9. Dynamic Form Design
 
 ### Concept
 
@@ -402,7 +372,7 @@ Frontend renders form automatically
 
 ---
 
-## 11. Form Versioning
+## 10. Form Versioning
 
 ### Requirement
 
@@ -443,7 +413,7 @@ status
 
 ---
 
-## 12. Canonical Field Mapping
+## 11. Canonical Field Mapping
 
 ### Purpose
 
@@ -487,7 +457,7 @@ Canonical data should be used for:
 
 ---
 
-## 13. Search Performance Design
+## 12. Search Performance Design
 
 ### Problem
 
@@ -560,7 +530,7 @@ Backend loads full JSON and schema snapshot
 
 ---
 
-## 14. Auto-fill Design
+## 13. Auto-fill Design
 
 ### Requirement
 
@@ -622,7 +592,7 @@ GET /api/autofill?formKey=psf-request-form&field=reference_psf_name&value=PSF-00
 
 ---
 
-## 15. Excel Export
+## 14. Excel Export
 
 ### Requirement
 
@@ -686,7 +656,7 @@ We use the **Latest Active Schema Alignment** strategy for Excel exports, combin
 
 ---
 
-## 16. History / Audit Log
+## 15. History / Audit Log
 
 ### Purpose
 
@@ -759,7 +729,7 @@ ADMIN_OVERRIDE
 
 ---
 
-## 17. Admin Page
+## 16. Admin Page
 
 ### Purpose
 
@@ -806,7 +776,7 @@ PSF Created -> Completed: Setup Owner / Admin
 
 ---
 
-## 18. Backend API Service
+## 17. Backend API Service
 
 ### Recommended Term
 
@@ -854,7 +824,7 @@ NestJS + PostgreSQL + Nginx
 
 ---
 
-## 19. Backend Module Structure
+## 18. Backend Module Structure
 
 ```text
 backend/
@@ -891,7 +861,7 @@ backend/
 
 ---
 
-## 20. API Design
+## 19. API Design
 
 ### Auth
 
@@ -958,7 +928,7 @@ PUT /api/admin/export-profile
 
 ---
 
-## 21. Database Design
+## 20. Database Design
 
 ### form_definitions
 
@@ -1095,7 +1065,7 @@ CREATE TABLE export_profiles (
 
 ---
 
-## 22. State Persistence
+## 21. State Persistence
 
 ### Login Session
 
@@ -1109,29 +1079,19 @@ Use HttpOnly Secure Cookie + backend validation
 |---|---|
 | Login session | HttpOnly Secure Cookie |
 | User profile | Backend + memory/session cache |
-| Form draft | localStorage / IndexedDB |
-| Search filters | URL query params |
-| UI preference | localStorage |
-| Submitted data | PostgreSQL |
+| ---
 
-### Page Refresh Flow
+## 22. Frontend Pages and Route Structure
 
-```text
-Page refresh
-  ↓
-Frontend app boot
-  ↓
-Call GET /api/me
-  ↓
-Backend validates session cookie
-  ↓
-If valid: return user and role
-If invalid: redirect to login
-```
+The application contains five main pages accessible via a global navigation menu. The term **PSF Requests** is preferred over only **Form**, because the page is not only a form. It includes request creation, request detail, workflow status, attachments, and update actions.
 
----
+Recommended navigation labels:
+- Dashboard
+- PSF Requests
+- History
+- Admin
 
-## 23. Frontend Route Structure
+The corresponding directory structure for routing (using TanStack Router / file-based routing) is as follows:
 
 ```text
 /routes
@@ -1159,7 +1119,7 @@ If invalid: redirect to login
 
 ---
 
-## 24. UI/UX Recommendations
+## 23. UI/UX Recommendations
 
 ### General UI
 
@@ -1196,128 +1156,71 @@ Need more information
 
 ---
 
-## 25. MVP Scope
+## 24. Functional Requirements Summary
 
-### Must Have
-
-```text
-- Login page
-- Role-based access
-- Dashboard
-- Create PSF request
-- Requester Information section
-- PSF Created Information section
-- Workflow status
-- Requester cannot see PSF Created until status = PSF Created
-- Search by Title, PSF Setup File Name, and Probecard Name
-- Search index table
-- History / Audit Log for data changes
-- Basic Excel export
-```
-
-### Should Have
-
-```text
-- Auto-fill from previous completed request
-- Admin master data management
-- Admin role management
-- Export profile
-- Form schema snapshot
-- Canonical field mapping
-```
-
-### Can Add Later
-
-```text
-- Advanced dynamic form builder
-- Drag-and-drop form layout
-- Advanced search engine such as Meilisearch or OpenSearch
-- Advanced analytics dashboard
-- Notification system
-```
-
----
-
-## 26. Key Design Decisions
-
-```text
-1. Use Backend API Service, not frontend-only logic.
-2. Use dynamic schema for form flexibility.
-3. Use schema snapshot for historical correctness.
-4. Use canonical keys to avoid version problems.
-5. Use indexed search table for performance.
-6. Use audit log for data change traceability.
-7. Use role and status to control visibility.
-8. Keep login and session secure using backend validation.
-```
-
----
-
-## 27. Functional Requirements Summary
-
-### FR-001 Login
+### FR-001 Login [Must Have]
 
 The system shall require users to log in before accessing the application.
 
-### FR-002 Role-Based Access
+### FR-002 Role-Based Access [Must Have]
 
 The system shall control page access, field visibility, and actions based on user role.
 
-### FR-003 Dashboard
+### FR-003 Dashboard [Must Have]
 
 The system shall provide a dashboard showing PSF request summaries and request list.
 
-### FR-004 Create Request
+### FR-004 Create Request [Must Have]
 
 The system shall allow requesters to create and submit PSF requests.
 
-### FR-005 PSF Created Visibility
+### FR-005 PSF Created Visibility [Must Have]
 
 The system shall hide PSF Created Information from the requester until the request status is updated to PSF Created.
 
-### FR-006 Setup Owner Update
+### FR-006 Setup Owner Update [Must Have]
 
 The system shall allow setup file owners to update PSF Created Information.
 
-### FR-007 Status Workflow
+### FR-007 Status Workflow [Must Have]
 
 The system shall support workflow statuses including Draft, Submitted, Setup In Progress, PSF Created, and Completed.
 
-### FR-008 Search
+### FR-008 Search [Must Have]
 
 The system shall support searching by Title, PSF Setup File Name, Probecard Name, and Reference PSF Name.
 
-### FR-009 Search Performance
+### FR-009 Search Performance [Must Have]
 
 The system shall use indexed searchable fields or a search index table for frequently searched fields.
 
-### FR-010 Auto-fill
+### FR-010 Auto-fill [Should Have]
 
 The system shall support auto-fill suggestions based on previously completed or validated requests.
 
-### FR-011 Excel Export
+### FR-011 Excel Export [Must Have]
 
 The system shall support exporting request data to Excel using canonical field mapping.
 
-### FR-012 History / Audit Log
+### FR-012 History / Audit Log [Must Have]
 
 The system shall record field-level data changes, including who changed the data, when the change occurred, the old value, and the new value.
 
-### FR-013 Admin Configuration
+### FR-013 Admin Configuration [Should Have]
 
-The system shall provide admin functions for managing users, roles, master data, form configuration, workflow, auto-fill rules, and export settings.
+The system shall provide admin functions for managing users, roles, form configuration, workflow, auto-fill rules, and export settings.
 
-### FR-014 Form Versioning
+### FR-014 Form Versioning [Should Have]
 
 The system shall store form version and schema snapshot with each request.
 
-### FR-015 Canonical Mapping
+### FR-015 Canonical Mapping [Should Have]
 
 The system shall use canonical field keys to normalize data across form versions.
 
 ---
 
-## 28. Non-Functional Requirements
+## 25. Non-Functional Requirements
 
 ### Performance
 
@@ -1343,11 +1246,10 @@ The system shall use canonical field keys to normalize data across form versions
 
 - Start with PostgreSQL indexes.
 - Add an external search engine only when needed.
-```
 
 ---
 
-## 29. Final Recommended Architecture
+## 26. Final Recommended Architecture
 
 ```text
 React Frontend
@@ -1375,42 +1277,4 @@ PostgreSQL
   ├── psf_request_audit_logs
   ├── autofill_rules
   └── export_profiles
-```
-
----
-
-## 30. Short Summary
-
-The Web Setup File system should be designed as a workflow-based web application where role and status control data visibility and edit permissions. The system should use dynamic form schema for flexibility, schema snapshot for historical accuracy, canonical mapping for version compatibility, a search index table for search performance, audit logs for traceability, and a backend API service as the central business logic layer.
-
-Recommended MVP stack:
-
-```text
-Frontend: React / TanStack / TypeScript / Tailwind
-Backend: NestJS + TypeScript
-Database: PostgreSQL + JSONB
-Search: PostgreSQL indexed search table
-Export: Backend-generated Excel
-Session: HttpOnly Secure Cookie + /api/me
-```
-
----
-
-## 31. Suggested MVP Implementation Order
-
-```text
-1. Create login and role-based access
-2. Create database schema
-3. Create PSF request CRUD API
-4. Create workflow status API
-5. Create Dashboard and request list
-6. Create Requester Information form
-7. Create PSF Created Information form
-8. Add visibility rule based on role and status
-9. Add search index table and search API
-10. Add audit log
-11. Add Excel export
-12. Add basic auto-fill
-13. Add Admin page for users, master data, and configuration
-14. Measure performance
 ```
