@@ -27,17 +27,16 @@
 - [19. Backend Module Structure](#19-backend-module-structure)
 - [20. API Design](#20-api-design)
 - [21. Database Design](#21-database-design)
-- [22. Cache Strategy](#22-cache-strategy)
-- [23. State Persistence](#23-state-persistence)
-- [24. Frontend Route Structure](#24-frontend-route-structure)
-- [25. UI/UX Recommendations](#25-uiux-recommendations)
-- [26. MVP Scope](#26-mvp-scope)
-- [27. Key Design Decisions](#27-key-design-decisions)
-- [28. Functional Requirements Summary](#28-functional-requirements-summary)
-- [29. Non-Functional Requirements](#29-non-functional-requirements)
-- [30. Final Recommended Architecture](#30-final-recommended-architecture)
-- [31. Short Summary](#31-short-summary)
-- [32. Suggested MVP Implementation Order](#32-suggested-mvp-implementation-order)
+- [22. State Persistence](#22-state-persistence)
+- [23. Frontend Route Structure](#23-frontend-route-structure)
+- [24. UI/UX Recommendations](#24-uiux-recommendations)
+- [25. MVP Scope](#25-mvp-scope)
+- [26. Key Design Decisions](#26-key-design-decisions)
+- [27. Functional Requirements Summary](#27-functional-requirements-summary)
+- [28. Non-Functional Requirements](#28-non-functional-requirements)
+- [29. Final Recommended Architecture](#29-final-recommended-architecture)
+- [30. Short Summary](#30-short-summary)
+- [31. Suggested MVP Implementation Order](#31-suggested-mvp-implementation-order)
 
 ---
 
@@ -1096,50 +1095,7 @@ CREATE TABLE export_profiles (
 
 ---
 
-## 22. Cache Strategy
-
-### Decision
-
-For the MVP, Redis or a dedicated cache infrastructure is not required at the beginning.
-
-### Recommended MVP Approach
-
-```text
-- PostgreSQL is the source of truth
-- Use indexed search tables
-- Keep the API service layer cache-ready
-- Use TanStack Query cache on the frontend
-- Use localStorage only for non-sensitive draft or UI state
-```
-
-### Cache Can Be Added Later For
-
-```text
-- Active form schema
-- Field mapping
-- User profile or session context
-- Auto-fill suggestions
-- Selected search results
-```
-
-### Important Rule
-
-```text
-Cache is for performance optimization, not as the source of truth.
-```
-
-### Cache Not Recommended For
-
-```text
-- Audit log
-- Permission validation source of truth
-- Submitted data source of truth
-- Critical workflow status source of truth
-```
-
----
-
-## 23. State Persistence
+## 22. State Persistence
 
 ### Login Session
 
@@ -1175,7 +1131,7 @@ If invalid: redirect to login
 
 ---
 
-## 24. Frontend Route Structure
+## 23. Frontend Route Structure
 
 ```text
 /routes
@@ -1203,7 +1159,7 @@ If invalid: redirect to login
 
 ---
 
-## 25. UI/UX Recommendations
+## 24. UI/UX Recommendations
 
 ### General UI
 
@@ -1240,7 +1196,7 @@ Need more information
 
 ---
 
-## 26. MVP Scope
+## 25. MVP Scope
 
 ### Must Have
 
@@ -1273,7 +1229,6 @@ Need more information
 ### Can Add Later
 
 ```text
-- Redis cache
 - Advanced dynamic form builder
 - Drag-and-drop form layout
 - Advanced search engine such as Meilisearch or OpenSearch
@@ -1283,7 +1238,7 @@ Need more information
 
 ---
 
-## 27. Key Design Decisions
+## 26. Key Design Decisions
 
 ```text
 1. Use Backend API Service, not frontend-only logic.
@@ -1293,14 +1248,12 @@ Need more information
 5. Use indexed search table for performance.
 6. Use audit log for data change traceability.
 7. Use role and status to control visibility.
-8. Do not rely on cache in the MVP.
-9. Add cache only after performance measurement.
-10. Keep login and session secure using backend validation.
+8. Keep login and session secure using backend validation.
 ```
 
 ---
 
-## 28. Functional Requirements Summary
+## 27. Functional Requirements Summary
 
 ### FR-001 Login
 
@@ -1364,7 +1317,7 @@ The system shall use canonical field keys to normalize data across form versions
 
 ---
 
-## 29. Non-Functional Requirements
+## 28. Non-Functional Requirements
 
 ### Performance
 
@@ -1389,12 +1342,12 @@ The system shall use canonical field keys to normalize data across form versions
 ### Scalability
 
 - Start with PostgreSQL indexes.
-- Add Redis or an external search engine only when needed.
-- Keep the API service cache-ready.
+- Add an external search engine only when needed.
+```
 
 ---
 
-## 30. Final Recommended Architecture
+## 29. Final Recommended Architecture
 
 ```text
 React Frontend
@@ -1426,7 +1379,7 @@ PostgreSQL
 
 ---
 
-## 31. Short Summary
+## 30. Short Summary
 
 The Web Setup File system should be designed as a workflow-based web application where role and status control data visibility and edit permissions. The system should use dynamic form schema for flexibility, schema snapshot for historical accuracy, canonical mapping for version compatibility, a search index table for search performance, audit logs for traceability, and a backend API service as the central business logic layer.
 
@@ -1434,17 +1387,16 @@ Recommended MVP stack:
 
 ```text
 Frontend: React / TanStack / TypeScript / Tailwind
-Backend: Rust Axum or NestJS/Fastify
+Backend: NestJS + TypeScript
 Database: PostgreSQL + JSONB
 Search: PostgreSQL indexed search table
-Cache: Not required in MVP
 Export: Backend-generated Excel
 Session: HttpOnly Secure Cookie + /api/me
 ```
 
 ---
 
-## 32. Suggested MVP Implementation Order
+## 31. Suggested MVP Implementation Order
 
 ```text
 1. Create login and role-based access
@@ -1461,5 +1413,4 @@ Session: HttpOnly Secure Cookie + /api/me
 12. Add basic auto-fill
 13. Add Admin page for users, master data, and configuration
 14. Measure performance
-15. Add cache only if needed
 ```
