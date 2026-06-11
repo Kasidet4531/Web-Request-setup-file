@@ -75,6 +75,7 @@ The repository is structured to separate frontend and backend concerns clearly, 
 ├── CONTEXT.md                              # Ubiquitous Domain Glossary & Language rules
 ├── psf_setup_file_web_application_spec_en.md # Full Web Application Product Specification
 ├── docs/
+│   ├── diagrams.md                         # Mermaid Diagrams (Data Flow, Sequence, ER)
 │   └── adr/                                # Architectural Decision Records (ADRs)
 │       ├── 0001-nestjs-postgresql-backend.md
 │       ├── 0002-draft-form-version-upgrade.md
@@ -130,6 +131,29 @@ Detailed rationales for key technical decisions are recorded in the [docs/adr/](
 | [ADR 0011](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0011-key-by-key-diff-request-audit-logs.md) | Key-by-Key Diff Audit Logging | Audits dynamic JSON changes at the granular field-key level during writes for single-request logs. |
 | [ADR 0012](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0012-schema-embedded-master-data.md) | Schema-Embedded Master Data | Embeds master data reference lists inside the JSON Form Schema definitions to avoid relational tables. |
 | [ADR 0013](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0013-excel-export-schema-alignment.md) | Excel Export Layout Strategy | Aligns columns to latest schema using canonical mapping and hides unauthorized fields dynamically. |
+
+---
+
+## 📊 System Diagrams
+
+For comprehensive visual diagrams of the architecture, refer to [docs/diagrams.md](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/diagrams.md):
+
+| Diagram | Description |
+|---|---|
+| **⭐ Deployment Architecture** | **3-tier deployment: Client → Nginx → NestJS → PostgreSQL with security boundaries** |
+| **⭐ Component Architecture** | **Internal backend modules, guards pipeline, controllers, services, and data access** |
+| **⭐ Data Architecture** | **Hybrid JSONB + canonical + search index strategy — the core design** |
+| **⭐ Write Pipeline** | **Critical write path: validation → save → canonical extraction → search index → audit** |
+| System Data Flow | End-to-end data movement across actors, frontend, backend, and database |
+| Request Lifecycle State Machine | All valid status transitions including optional statuses |
+| Login Flow | Local auth sequence with HttpOnly cookie |
+| Create & Submit PSF Request | Form rendering, draft save, submission, and canonical extraction |
+| Setup Owner Completes PSF Created | Full setup owner workflow from pickup to mark-as-created |
+| Auto-fill Flow | Trigger → resolve → suggest → user accept/edit |
+| Excel Export Flow | Sync streaming vs. async background job with cell masking |
+| Admin: Publish New Form Version | Schema editing, preview, and publish with canonical mapping |
+| Database ER Diagram | Complete entity-relationship model for all 8 tables |
+| Backend Module Dependency | NestJS module dependency graph |
 
 ---
 
