@@ -477,7 +477,7 @@ sequenceDiagram
 
     FE ->> FE: Render dynamic form from schema
 
-    Requester ->> FE: Fill in Requester Information (selects Product Type and Setup Owner)
+    Requester ->> FE: Fill in Requester Information (selects Product Type)
     FE ->> BE: POST /api/requests (status = Draft)
     BE ->> DB: INSERT psf_requests (requester_data_json)
     BE ->> DB: INSERT psf_request_audit_logs (CREATE_REQUEST)
@@ -537,7 +537,7 @@ sequenceDiagram
 
     SetupOwner ->> FE: Click "Start Setup"
     FE ->> BE: POST /api/requests/{id}/start-setup
-    BE ->> DB: UPDATE status = 'Setup In Progress'
+    BE ->> DB: UPDATE status = 'Setup In Progress', setup_owner = username, setup_owner_role = role
     BE ->> DB: INSERT audit_log (CHANGE_STATUS)
     BE -->> FE: OK
 
@@ -559,11 +559,12 @@ sequenceDiagram
 
     BE ->> DB: UPDATE status = 'PSF Created', psf_created_at = NOW()
     BE ->> DB: INSERT audit_log (MARK_PSF_CREATED)
-    BE ->> Email: Send notification (Subject: Request Completed) to Requester & all Setup Owners
+    BE ->> Email: Send notification (Subject: Status Updated to PSF Created) to Requester & all Setup Owners
     Email -->> BE: OK
     BE -->> FE: { status: "PSF Created" }
 
     Note over FE: Requester can now see PSF Created Information (read-only)
+    Note over Requester, SetupOwner: Any user (all roles) can manually change the status via the Status Dropdown at any stage, triggering status update in DB and email notifications.
 ```
 
 ### 3.4 Auto-fill Flow

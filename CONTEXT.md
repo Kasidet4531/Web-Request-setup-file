@@ -17,7 +17,7 @@ A user role that creates a PSF Request and provides the initial request informat
 _Avoid_: Requester Role, Applicant
 
 **Setup File Owner**:
-An engineer or user role responsible for reviewing any PSF Request, creating or updating the actual setup file, and entering the setup details. Each Setup File Owner is classified into one of two sub-roles/departments: **GNTC** or **MFG** (where a user can belong to only one department). When a PSF Request is submitted, the Requester selects a specific Setup File Owner via a searchable dropdown. The selected Setup File Owner and their department (GNTC or MFG) are stored with the request, and displayed on the dashboard and export Excel reports.
+An engineer or user role responsible for reviewing any PSF Request, creating or updating the actual setup file, and entering the setup details. Each Setup File Owner is classified into one of two sub-roles/departments: **GNTC** or **MFG** (where a user can belong to only one department). Any user with this role can process any request (there is no exclusive individual assignment at submission). When a Setup File Owner takes action on a request (e.g. starts setup or updates status), they are automatically associated with the request. The Setup File Owner and their department (GNTC or MFG) are stored with the request, and displayed on the dashboard and export Excel reports.
 _Avoid_: Engineer, Owner, Setup Owner
 
 **Product Type**:

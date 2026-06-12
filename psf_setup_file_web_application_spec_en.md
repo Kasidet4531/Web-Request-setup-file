@@ -133,7 +133,7 @@ Overdue
 | Priority | Request priority |
 | Due Date | Required completion date |
 | Requester | Person who created the request |
-| Setup Owner | Person responsible for setup file creation (Searchable Dropdown) |
+| Setup Owner | Person who took action on the request (automatically recorded) |
 | Setup Owner Role | Sub-role/Department of the Setup Owner (GNTC or MFG) |
 
 ### Main Search Fields
@@ -181,7 +181,6 @@ This section is filled in by the requester when creating a PSF request.
 
 ```text
 - Product Type (Radio button: New Product, Transfer Product, Existing Product) [At the very top, Required]
-- Setup File Owner (Searchable Dropdown list, Required)
 - Title
 - Request For
 - Request To
@@ -298,11 +297,19 @@ The system automatically dispatches email notifications on key status transition
      - Product Type
      - A prominent Call-to-Action (CTA) button/link to the Request detail page.
 
-2. **Completion Notification**:
-   - **Trigger**: When a Setup File Owner completes the `PSF Created Information` section and submits, moving the status to `PSF Created` (or `Completed`).
+2. **Status Update / Completion Notification**:
+   - **Trigger**: When any user manually updates the request status using the status actions dropdown (including marking as `PSF Created`, `Completed`, `Rejected`, or reverting to an earlier stage).
    - **Recipient**: The original `Requester` and all users with the `Setup File Owner` role (both GNTC and MFG).
-   - **Email Subject**: `[PSF Request] Request Completed: [Request No.] - [Title]`
-   - **Email Content**: A structured table showing completion status, key metadata (Requester, Due Date, Priority, Product Type), and a prominent CTA button/link to view the completed Request detail page.
+   - **Email Subject**: `[PSF Request] Status Updated to [New Status]: [Request No.] - [Title]`
+   - **Email Content**: A structured table showing the new status, who performed the update, key metadata (Requester, Due Date, Priority, Product Type), and a prominent CTA button/link to view the Request detail page.
+
+### Manual and Dynamic Status Transitions
+
+To support manual human evaluation and flexible workflows:
+- A **Status Dropdown Control** is visible on the Request Detail page to all roles (**Requester**, **Setup Owner**, and **Admin**) in **all request statuses**.
+- Users can manually select any target status from the dropdown to transition the request based on their assessment (e.g., if a request is in the `PSF Created` status but is found to be incorrect, both the Requester and Setup Owner can change the status to `Rejected` or revert it to `Setup In Progress` to signal a correction is needed).
+- The list of available statuses and transitions remains configurable by administrators via the Admin Page, but the UI allows manual selection of the next status directly.
+- The system automatically records the Setup File Owner and their department (GNTC or MFG) when a Setup File Owner changes the status or updates the PSF Created section.
 
 ---
 
@@ -317,7 +324,7 @@ The system automatically dispatches email notifications on key status transition
 | View Requester Information | Yes | Yes | Yes |
 | Edit PSF Created Information | No | Yes | Yes |
 | View PSF Created Information | After PSF Created | Yes | Yes |
-| Mark as PSF Created | No | Yes | Yes |
+| Update Status Manually (Dropdown) | Yes (All statuses) | Yes (All statuses) | Yes (All statuses) |
 | View History | Related requests | All requests | All requests |
 | Export Excel | Optional | Yes | Yes |
 | Admin Page | No | Optional | Yes |
