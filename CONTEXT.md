@@ -17,8 +17,13 @@ A user role that creates a PSF Request and provides the initial request informat
 _Avoid_: Requester Role, Applicant
 
 **Setup File Owner**:
-An engineer or user role responsible for reviewing any PSF Request, creating or updating the actual setup file, and entering the setup details. Any user with this role can process any request (there is no exclusive individual assignment; the system records who completed the setup upon submission).
+An engineer or user role responsible for reviewing any PSF Request, creating or updating the actual setup file, and entering the setup details. Each Setup File Owner is classified into one of two sub-roles/departments: **GNTC** or **MFG** (where a user can belong to only one department). When a PSF Request is submitted, the Requester selects a specific Setup File Owner via a searchable dropdown. The selected Setup File Owner and their department (GNTC or MFG) are stored with the request, and displayed on the dashboard and export Excel reports.
 _Avoid_: Engineer, Owner, Setup Owner
+
+**Product Type**:
+A required field positioned at the very top of the PSF Request form, where the Requester selects exactly one option: **New Product**, **Transfer Product**, or **Existing Product** (via radio buttons). This field is stored in the search index and displayed at the beginning of the tables in both the dashboard and export Excel.
+_Avoid_: Type of product, product category
+
 
 
 **PSF Created Information**:

@@ -124,6 +124,7 @@ Overdue
 | Column | Description |
 |---|---|
 | Request No. | Unique request number |
+| Product Type | Product classification (New Product, Transfer Product, Existing Product) |
 | Title | Request title |
 | Reference PSF Name | Referenced PSF name |
 | Probecard Name | Probecard name |
@@ -132,7 +133,8 @@ Overdue
 | Priority | Request priority |
 | Due Date | Required completion date |
 | Requester | Person who created the request |
-| Setup Owner | Person responsible for setup file creation |
+| Setup Owner | Person responsible for setup file creation (Searchable Dropdown) |
+| Setup Owner Role | Sub-role/Department of the Setup Owner (GNTC or MFG) |
 
 ### Main Search Fields
 
@@ -146,6 +148,8 @@ The Dashboard should support search by:
 - Status
 - Request Date
 - Due Date
+- Product Type
+- Setup Owner Role
 ```
 
 Frequently searched fields should be extracted into indexed columns or a dedicated search index table. The application should not rely on searching directly inside raw JSON for these fields as the main search strategy.
@@ -176,6 +180,8 @@ This section is filled in by the requester when creating a PSF request.
 ### Example Fields
 
 ```text
+- Product Type (Radio button: New Product, Transfer Product, Existing Product) [At the very top, Required]
+- Setup File Owner (Searchable Dropdown list, Required)
 - Title
 - Request For
 - Request To
@@ -277,6 +283,27 @@ Cancelled
 | Rejected | Request has been rejected | No |
 | Cancelled | Request has been cancelled | No |
 
+### Email Notification System
+
+The system automatically dispatches email notifications on key status transitions:
+
+1. **Submission Notification**:
+   - **Trigger**: When a Request status changes from `Draft` or `Need More Information` to `Submitted` (upon Requester submission).
+   - **Recipient**: All users with the `Setup File Owner` role (both GNTC and MFG).
+   - **Email Subject**: `[PSF Request] New Request Assigned: [Request No.] - [Title]`
+   - **Email Content**: A structured table containing:
+     - Requester Name
+     - Due Date
+     - Priority
+     - Product Type
+     - A prominent Call-to-Action (CTA) button/link to the Request detail page.
+
+2. **Completion Notification**:
+   - **Trigger**: When a Setup File Owner completes the `PSF Created Information` section and submits, moving the status to `PSF Created` (or `Completed`).
+   - **Recipient**: The original `Requester` and all users with the `Setup File Owner` role (both GNTC and MFG).
+   - **Email Subject**: `[PSF Request] Request Completed: [Request No.] - [Title]`
+   - **Email Content**: A structured table showing completion status, key metadata (Requester, Due Date, Priority, Product Type), and a prominent CTA button/link to view the completed Request detail page.
+
 ---
 
 ## 8. Role-Based Permission Matrix
@@ -294,6 +321,9 @@ Cancelled
 | View History | Related requests | All requests | All requests |
 | Export Excel | Optional | Yes | Yes |
 | Admin Page | No | Optional | Yes |
+
+> [!NOTE]
+> The **Setup Owner** role has two sub-roles/departments: **GNTC** and **MFG** (each user is assigned to exactly one of them). Both departments share the same access rights and permissions in the matrix above, but their assigned department determines how they are logged and displayed on the dashboard and export reports.
 
 ---
 
@@ -492,6 +522,8 @@ CREATE TABLE psf_request_search_index (
     priority TEXT,
     requester TEXT,
     setup_owner TEXT,
+    setup_owner_role TEXT,
+    product_type TEXT,
     request_date TIMESTAMP,
     due_date TIMESTAMP,
     updated_at TIMESTAMP
@@ -512,6 +544,12 @@ ON psf_request_search_index (probecard_name);
 
 CREATE INDEX idx_status
 ON psf_request_search_index (status);
+
+CREATE INDEX idx_product_type
+ON psf_request_search_index (product_type);
+
+CREATE INDEX idx_setup_owner_role
+ON psf_request_search_index (setup_owner_role);
 ```
 
 ### Search Flow
@@ -637,6 +675,7 @@ We use the **Latest Active Schema Alignment** strategy for Excel exports, combin
 | Column | Source |
 |---|---|
 | Request No. | system.request_id |
+| Product Type | system.product_type |
 | Title | canonical.title |
 | Reference PSF Name | canonical.reference_psf_name |
 | Probecard Name | canonical.probecard_name |
@@ -646,6 +685,7 @@ We use the **Latest Active Schema Alignment** strategy for Excel exports, combin
 | Due Date | canonical.due_date |
 | Requester | system.requester |
 | Setup Owner | system.setup_owner |
+| Setup Owner Role | system.setup_owner_role |
 
 ### Export API
 
@@ -958,6 +998,8 @@ CREATE TABLE psf_requests (
     status TEXT NOT NULL,
     requester TEXT NOT NULL,
     setup_owner TEXT,
+    setup_owner_role TEXT,
+    product_type TEXT NOT NULL,
     requester_data_json JSONB NOT NULL,
     psf_created_data_json JSONB,
     schema_snapshot_json JSONB NOT NULL,
@@ -1009,6 +1051,8 @@ CREATE TABLE psf_request_search_index (
     priority TEXT,
     requester TEXT,
     setup_owner TEXT,
+    setup_owner_role TEXT,
+    product_type TEXT,
     request_date TIMESTAMP,
     due_date TIMESTAMP,
     updated_at TIMESTAMP

@@ -211,12 +211,12 @@ This is one of the most important architectural decisions in the system.
 ```mermaid
 graph LR
     subgraph SourceOfTruth["🏛️ Source of Truth"]
-        REQ_TABLE["psf_requests<br/><br/>requester_data_json (JSONB)<br/>psf_created_data_json (JSONB)<br/>schema_snapshot_json (JSONB)"]
+        REQ_TABLE["psf_requests<br/><br/>product_type (TEXT)<br/>setup_owner_role (TEXT)<br/>requester_data_json (JSONB)<br/>psf_created_data_json (JSONB)<br/>schema_snapshot_json (JSONB)"]
     end
 
     subgraph DerivedData["📊 Derived Data (Write-Time Extraction)"]
         direction TB
-        SEARCH["psf_request_search_index<br/><br/>Flat columns: title, probecard_name,<br/>psf_setup_file_name, status, priority, ...<br/><br/>🔍 Fast Search / Filter / Sort"]
+        SEARCH["psf_request_search_index<br/><br/>Flat columns: product_type, setup_owner_role,<br/>title, probecard_name, psf_setup_file_name, status, ...<br/><br/>🔍 Fast Search / Filter / Sort"]
         CANONICAL["canonical_submission_values<br/><br/>canonical_key → value pairs<br/><br/>🔗 Cross-version field mapping"]
     end
 
@@ -467,6 +467,7 @@ sequenceDiagram
     participant FE as Frontend
     participant BE as Backend API
     participant DB as PostgreSQL
+    participant Email as Email Service
 
     Requester ->> FE: Click "New Request"
     FE ->> BE: GET /api/admin/form-config
@@ -476,7 +477,7 @@ sequenceDiagram
 
     FE ->> FE: Render dynamic form from schema
 
-    Requester ->> FE: Fill in Requester Information
+    Requester ->> FE: Fill in Requester Information (selects Product Type and Setup Owner)
     FE ->> BE: POST /api/requests (status = Draft)
     BE ->> DB: INSERT psf_requests (requester_data_json)
     BE ->> DB: INSERT psf_request_audit_logs (CREATE_REQUEST)
@@ -501,6 +502,8 @@ sequenceDiagram
     end
 
     BE ->> DB: INSERT psf_request_audit_logs (CHANGE_STATUS)
+    BE ->> Email: Send notification (Subject: New Request Assigned) to all Setup Owners
+    Email -->> BE: OK
     BE -->> FE: { status: "Submitted" }
     FE ->> Requester: Show success notification
 ```
@@ -515,6 +518,7 @@ sequenceDiagram
     participant FE as Frontend
     participant BE as Backend API
     participant DB as PostgreSQL
+    participant Email as Email Service
 
     SetupOwner ->> FE: Open Dashboard (filtered: pending)
     FE ->> BE: GET /api/requests?status=Submitted
@@ -555,6 +559,8 @@ sequenceDiagram
 
     BE ->> DB: UPDATE status = 'PSF Created', psf_created_at = NOW()
     BE ->> DB: INSERT audit_log (MARK_PSF_CREATED)
+    BE ->> Email: Send notification (Subject: Request Completed) to Requester & all Setup Owners
+    Email -->> BE: OK
     BE -->> FE: { status: "PSF Created" }
 
     Note over FE: Requester can now see PSF Created Information (read-only)
@@ -724,6 +730,8 @@ erDiagram
         TEXT status
         TEXT requester
         TEXT setup_owner
+        TEXT setup_owner_role
+        TEXT product_type
         JSONB requester_data_json
         JSONB psf_created_data_json
         JSONB schema_snapshot_json
@@ -763,6 +771,8 @@ erDiagram
         TEXT priority
         TEXT requester
         TEXT setup_owner
+        TEXT setup_owner_role
+        TEXT product_type
         TIMESTAMP request_date
         TIMESTAMP due_date
         TIMESTAMP updated_at
