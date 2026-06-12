@@ -29,3 +29,18 @@ pids
 skills-lock.json
 .agents/
 
+# Build and dist folders
+dist/
+build/
+.cache/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database / uploads
+pgdata/
+uploads/
