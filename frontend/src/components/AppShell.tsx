@@ -1,12 +1,82 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
 import { Navigation } from './Navigation'
-import { ApiError, fetchHealthStatus, type HealthCheckResponse } from '../services/api'
+import {
+  ApiError,
+  fetchCurrentUser,
+  fetchHealthStatus,
+  logout,
+  type AuthenticatedUserProfile,
+  type HealthCheckResponse,
+} from '../services/api'
 
 type HealthState =
   | { status: 'loading' }
   | { status: 'success'; data: HealthCheckResponse }
   | { status: 'error'; error: string }
+
+type AuthState =
+  | { status: 'loading' }
+  | { status: 'authenticated'; user: AuthenticatedUserProfile }
+  | { status: 'anonymous' }
+  | { status: 'error'; error: string }
+
+function AuthStatusCard() {
+  const [authState, setAuthState] = useState<AuthState>({ status: 'loading' })
+
+  const loadCurrentUser = async () => {
+    setAuthState({ status: 'loading' })
+
+    try {
+      const data = await fetchCurrentUser()
+      setAuthState({ status: 'authenticated', user: data.user })
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setAuthState({ status: 'anonymous' })
+        return
+      }
+
+      const message = error instanceof ApiError ? error.message : 'Unable to check session'
+      setAuthState({ status: 'error', error: message })
+    }
+  }
+
+  const handleLogout = async () => {
+    await logout()
+    setAuthState({ status: 'anonymous' })
+  }
+
+  useEffect(() => {
+    void loadCurrentUser()
+  }, [])
+
+  if (authState.status === 'loading') {
+    return <p className="auth-status">Checking session…</p>
+  }
+
+  if (authState.status === 'authenticated') {
+    return (
+      <div className="auth-status auth-status--authenticated">
+        <span>
+          Signed in as <strong>{authState.user.displayName}</strong> ({authState.user.role})
+        </span>
+        <button className="secondary-button" onClick={() => void handleLogout()} type="button">
+          Logout
+        </button>
+      </div>
+    )
+  }
+
+  if (authState.status === 'error') {
+    return <p className="auth-status auth-status--error">{authState.error}</p>
+  }
+
+  return (
+    <Link className="primary-button" to="/login">
+      Login
+    </Link>
+  )
+}
 
 function HealthStatusCard() {
   const [healthState, setHealthState] = useState<HealthState>({ status: 'loading' })
@@ -82,6 +152,7 @@ export function AppShell() {
           </p>
         </div>
         <div className="app-shell__actions">
+          <AuthStatusCard />
           <Link className="primary-button" to="/dashboard">
             Open dashboard
           </Link>

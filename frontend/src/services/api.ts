@@ -183,10 +183,36 @@ export interface HealthCheckResponse {
   }
 }
 
+export type UserRole = 'requester' | 'setup_owner' | 'admin'
+
+export interface AuthenticatedUserProfile {
+  id: string
+  username: string
+  displayName: string
+  role: UserRole
+  setupOwnerDepartment: 'GNTC' | 'MFG' | null
+}
+
+export interface AuthResponse {
+  user: AuthenticatedUserProfile
+}
+
 export const api = createApiClient({
   baseUrl: import.meta.env.VITE_API_BASE_URL ?? '/api',
 })
 
 export async function fetchHealthStatus() {
   return api.get<HealthCheckResponse>('/health')
+}
+
+export async function fetchCurrentUser() {
+  return api.get<AuthResponse>('/me')
+}
+
+export async function loginWithPassword(username: string, password: string) {
+  return api.post<AuthResponse>('/login', { username, password })
+}
+
+export async function logout() {
+  return api.post<null>('/logout')
 }
