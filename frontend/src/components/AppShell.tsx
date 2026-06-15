@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
 import { Navigation } from './Navigation'
+import { subscribeAuthSessionChanged } from '../services/auth-session'
 import {
   ApiError,
   fetchCurrentUser,
@@ -47,7 +48,23 @@ function AuthStatusCard() {
   }
 
   useEffect(() => {
-    void loadCurrentUser()
+    const timer = window.setTimeout(() => {
+      void loadCurrentUser()
+    }, 0)
+
+    const unsubscribe = subscribeAuthSessionChanged((detail) => {
+      if (detail.status === 'authenticated') {
+        setAuthState({ status: 'authenticated', user: detail.user })
+        return
+      }
+
+      setAuthState({ status: 'anonymous' })
+    })
+
+    return () => {
+      window.clearTimeout(timer)
+      unsubscribe()
+    }
   }, [])
 
   if (authState.status === 'loading') {

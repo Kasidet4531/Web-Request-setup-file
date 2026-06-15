@@ -1,3 +1,5 @@
+import { notifyAuthSessionChanged } from './auth-session'
+
 export interface ApiClientConfig {
   baseUrl?: string
   headers?: HeadersInit
@@ -156,9 +158,13 @@ export async function fetchCurrentUser() {
 }
 
 export async function loginWithPassword(username: string, password: string) {
-  return api.post<AuthResponse>('/login', { username, password })
+  const response = await api.post<AuthResponse>('/login', { username, password })
+  notifyAuthSessionChanged({ status: 'authenticated', user: response.user })
+  return response
 }
 
 export async function logout() {
-  return api.post<null>('/logout')
+  const response = await api.post<null>('/logout')
+  notifyAuthSessionChanged({ status: 'anonymous' })
+  return response
 }

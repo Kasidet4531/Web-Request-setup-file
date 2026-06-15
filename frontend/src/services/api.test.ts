@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApiClient, fetchCurrentUser, loginWithPassword, logout } from './api'
+import { AUTH_SESSION_CHANGED_EVENT } from './auth-session'
 
 describe('createApiClient', () => {
   const originalFetch = globalThis.fetch
+  const originalWindow = globalThis.window
+  const originalCustomEvent = globalThis.CustomEvent
+
+  class TestCustomEvent<T> extends Event {
+    detail: T
+
+    constructor(type: string, init: CustomEventInit<T>) {
+      super(type)
+      this.detail = init.detail as T
+    }
+  }
 
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -10,6 +22,16 @@ describe('createApiClient', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: originalWindow,
+      writable: true,
+    })
+    Object.defineProperty(globalThis, 'CustomEvent', {
+      configurable: true,
+      value: originalCustomEvent,
+      writable: true,
+    })
   })
 
   it('returns parsed JSON for successful GET requests', async () => {
@@ -47,7 +69,7 @@ describe('createApiClient', () => {
     })
   })
 
-  it('uses session cookies for auth helpers', async () => {
+  it('uses session cookies for auth helpers and announces successful login', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({
         user: {
@@ -62,6 +84,19 @@ describe('createApiClient', () => {
         headers: { 'content-type': 'application/json' },
       }),
     ) as typeof fetch
+    const eventTarget = new EventTarget()
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: eventTarget,
+      writable: true,
+    })
+    Object.defineProperty(globalThis, 'CustomEvent', {
+      configurable: true,
+      value: TestCustomEvent,
+      writable: true,
+    })
+    const authSessionChangedListener = vi.fn()
+    eventTarget.addEventListener(AUTH_SESSION_CHANGED_EVENT, authSessionChangedListener)
 
     await expect(fetchCurrentUser()).resolves.toMatchObject({
       user: { username: 'admin.demo', role: 'admin' },
@@ -78,6 +113,12 @@ describe('createApiClient', () => {
       body: JSON.stringify({ username: 'admin.demo', password: 'AdminDemo123!' }),
       credentials: 'include',
       method: 'POST',
+    }))
+    expect(authSessionChangedListener).toHaveBeenCalledWith(expect.objectContaining({
+      detail: expect.objectContaining({
+        status: 'authenticated',
+        user: expect.objectContaining({ username: 'admin.demo' }),
+      }),
     }))
   })
 
