@@ -18,7 +18,10 @@ import { DATABASE_POOL, DatabaseService } from './database.service';
           password: configService.get<string>('DB_PASSWORD', 'postgres'),
           database: configService.get<string>('DB_NAME', 'psf_setup_db'),
           max: configService.get<number>('DB_POOL_MAX', 10),
-          idleTimeoutMillis: configService.get<number>('DB_IDLE_TIMEOUT_MS', 10_000),
+          idleTimeoutMillis: configService.get<number>(
+            'DB_IDLE_TIMEOUT_MS',
+            10_000,
+          ),
           connectionTimeoutMillis: configService.get<number>(
             'DB_CONNECT_TIMEOUT_MS',
             5_000,

@@ -11,7 +11,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import type { Response } from 'express';
-import type { AuthenticatedRequest, AuthenticatedUserProfile } from './session.types';
+import type {
+  AuthenticatedRequest,
+  AuthenticatedUserProfile,
+} from './session.types';
 
 interface LoginBody {
   username?: string;
@@ -52,12 +55,15 @@ export class AuthController {
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
-    const cookieName = this.configService.get<string>('SESSION_COOKIE_NAME', 'psf.sid');
+    const cookieName = this.configService.get<string>(
+      'SESSION_COOKIE_NAME',
+      'psf.sid',
+    );
 
     await new Promise<void>((resolve, reject) => {
       request.session.destroy((error) => {
         if (error) {
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
           return;
         }
 
@@ -90,7 +96,7 @@ export class AuthController {
     await new Promise<void>((resolve, reject) => {
       request.session.save((error) => {
         if (error) {
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
           return;
         }
 

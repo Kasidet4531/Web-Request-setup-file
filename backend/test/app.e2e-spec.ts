@@ -1,8 +1,17 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Server } from 'node:http';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
+import { AuthService } from './../src/auth/auth.service';
 import { DatabaseService } from './../src/database/database.service';
+
+interface HealthResponse {
+  status: 'ok';
+  application: 'backend';
+  database: { status: 'up' };
+  timestamp: string;
+}
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
@@ -15,6 +24,8 @@ describe('AppController (e2e)', () => {
       .useValue({
         checkHealth: jest.fn().mockResolvedValue({ status: 'up' }),
       })
+      .overrideProvider(AuthService)
+      .useValue({})
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -23,10 +34,10 @@ describe('AppController (e2e)', () => {
   });
 
   it('/api/health (GET)', () => {
-    return request(app.getHttpServer())
+    return request(app.getHttpServer() as Server)
       .get('/api/health')
       .expect(200)
-      .expect(({ body }) => {
+      .expect(({ body }: { body: HealthResponse }) => {
         expect(body).toMatchObject({
           status: 'ok',
           application: 'backend',
