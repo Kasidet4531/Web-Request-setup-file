@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 
@@ -40,7 +46,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const host = this.configService.get<string>('DB_HOST', '127.0.0.1');
       const port = this.configService.get<number>('DB_PORT', 5432);
-      const database = this.configService.get<string>('DB_NAME', 'psf_setup_db');
+      const database = this.configService.get<string>(
+        'DB_NAME',
+        'psf_setup_db',
+      );
       const message = error instanceof Error ? error.message : String(error);
 
       throw new Error(
