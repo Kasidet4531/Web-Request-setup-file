@@ -1,4 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthenticatedRequest } from './session.types';
@@ -13,16 +15,25 @@ describe('AuthController', () => {
   };
 
   let authService: Pick<AuthService, 'validateCredentials' | 'getProfile'>;
-  let configService: { get: jest.Mock };
+  let configService: ConfigService;
   let controller: AuthController;
 
-  function createRequest(): AuthenticatedRequest {
-    return {
+  function createRequest(): {
+    request: AuthenticatedRequest;
+    save: jest.Mock;
+    destroy: jest.Mock;
+  } {
+    const save = jest.fn((callback: (error?: Error) => void) => callback());
+    const destroy = jest.fn((callback: (error?: Error) => void) => callback());
+
+    const request = {
       session: {
-        save: jest.fn((callback: (error?: Error) => void) => callback()),
-        destroy: jest.fn((callback: (error?: Error) => void) => callback()),
+        save,
+        destroy,
       },
     } as unknown as AuthenticatedRequest;
+
+    return { request, save, destroy };
   }
 
   beforeEach(() => {
@@ -32,15 +43,18 @@ describe('AuthController', () => {
     };
     configService = {
       get: jest.fn((_key: string, defaultValue: string) => defaultValue),
-    };
-    controller = new AuthController(authService as AuthService, configService as any);
+    } as unknown as ConfigService;
+    controller = new AuthController(authService as AuthService, configService);
   });
 
   it('stores the user id in the server session after login', async () => {
-    const request = createRequest();
+    const { request, save } = createRequest();
 
     await expect(
-      controller.login({ username: 'admin.demo', password: 'AdminDemo123!' }, request),
+      controller.login(
+        { username: 'admin.demo', password: 'AdminDemo123!' },
+        request,
+      ),
     ).resolves.toEqual({ user });
 
     expect(authService.validateCredentials).toHaveBeenCalledWith(
@@ -48,11 +62,11 @@ describe('AuthController', () => {
       'AdminDemo123!',
     );
     expect(request.session.userId).toBe(user.id);
-    expect(request.session.save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledTimes(1);
   });
 
   it('returns /api/me from the existing session cookie state', async () => {
-    const request = createRequest();
+    const { request } = createRequest();
     request.session.userId = user.id;
 
     await expect(controller.me(request)).resolves.toEqual({ user });
@@ -60,15 +74,18 @@ describe('AuthController', () => {
   });
 
   it('rejects /api/me when no authenticated session exists', async () => {
-    await expect(controller.me(createRequest())).rejects.toThrow(UnauthorizedException);
+    const { request } = createRequest();
+
+    await expect(controller.me(request)).rejects.toThrow(UnauthorizedException);
   });
 
   it('destroys the server session on logout and clears the cookie', async () => {
-    const request = createRequest();
-    const response = { clearCookie: jest.fn() };
+    const { request, destroy } = createRequest();
+    const clearCookie = jest.fn();
+    const response = { clearCookie } as unknown as Response;
 
-    await expect(controller.logout(request, response as any)).resolves.toBeUndefined();
-    expect(request.session.destroy).toHaveBeenCalledTimes(1);
-    expect(response.clearCookie).toHaveBeenCalledWith('psf.sid');
+    await expect(controller.logout(request, response)).resolves.toBeUndefined();
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(clearCookie).toHaveBeenCalledWith('psf.sid');
   });
 });

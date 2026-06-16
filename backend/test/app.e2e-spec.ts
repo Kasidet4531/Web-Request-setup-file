@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
+import { AuthService } from './../src/auth/auth.service';
 import {
   DATABASE_POOL,
   DatabaseService,
@@ -33,6 +34,8 @@ describe('AppController (e2e)', () => {
       })
       .overrideProvider(DATABASE_POOL)
       .useValue(pool)
+      .overrideProvider(AuthService)
+      .useValue({})
       .compile();
 
     app = moduleFixture.createNestApplication();

@@ -44,3 +44,6 @@ build/
 # Database / uploads
 pgdata/
 uploads/
+
+# Hermes / local verification runtime artifacts
+.hime-review-runtime/

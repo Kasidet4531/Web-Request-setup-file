@@ -1,5 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
@@ -9,7 +10,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     query = jest.fn();
-    service = new AuthService({ query } as any);
+    service = new AuthService({ query } as unknown as Pool);
   });
 
   it('validates credentials against a bcrypt password hash', async () => {
@@ -37,9 +38,10 @@ describe('AuthService', () => {
       setupOwnerDepartment: null,
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE username = $1'), [
-      'requester.demo',
-    ]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('WHERE username = $1'),
+      ['requester.demo'],
+    );
   });
 
   it('rejects invalid credentials without exposing which field failed', async () => {
