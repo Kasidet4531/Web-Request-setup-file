@@ -347,7 +347,7 @@ Admin defines form schema
   ↓
 Backend stores form definition
   ↓
-Frontend fetches active schema
+Frontend fetches active schema from the requester-facing runtime endpoint (`GET /api/forms/{formKey}/schema`)
   ↓
 Frontend renders form automatically
 ```
@@ -972,6 +972,15 @@ PUT /api/admin/workflow
 GET /api/admin/export-profile
 PUT /api/admin/export-profile
 ```
+
+### Requester-facing Runtime Form Schema
+
+```http
+GET /api/forms/{formKey}/schema
+```
+
+- This endpoint is used by requester-side form rendering to fetch the active schema snapshot for a runtime form such as `psf-request`.
+- Admin schema management remains under `/api/admin/...`; requester runtime schema reads must not be served from an admin route namespace.
 
 ---
 

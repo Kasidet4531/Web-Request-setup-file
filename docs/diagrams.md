@@ -470,7 +470,7 @@ sequenceDiagram
     participant Email as Email Service
 
     Requester ->> FE: Click "New Request"
-    FE ->> BE: GET /api/admin/form-config
+    FE ->> BE: GET /api/forms/psf-request/schema
     BE ->> DB: SELECT active form_definitions
     DB -->> BE: Schema JSON (latest published)
     BE -->> FE: Form schema
