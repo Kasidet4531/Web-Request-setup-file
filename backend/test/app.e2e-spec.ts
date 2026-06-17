@@ -54,7 +54,7 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('/api/admin/form-definitions/psf-request/active (GET)', () => {
+  it('/api/forms/psf-request/schema (GET)', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
@@ -70,7 +70,7 @@ describe('AppController (e2e)', () => {
     });
 
     return request(app.getHttpServer() as Parameters<typeof request>[0])
-      .get('/api/admin/form-definitions/psf-request/active')
+      .get('/api/forms/psf-request/schema')
       .expect(200)
       .expect(({ body }: { body: Record<string, unknown> }) => {
         expect(body).toMatchObject({
@@ -82,6 +82,12 @@ describe('AppController (e2e)', () => {
           publishedAt: '2026-01-01T00:00:00.000Z',
         });
       });
+  });
+
+  it('does not expose requester-facing active schema reads under the admin namespace', () => {
+    return request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get('/api/admin/form-definitions/psf-request/active')
+      .expect(404);
   });
 
   afterEach(async () => {

@@ -8,6 +8,7 @@ import { RequestsModule } from './requests/requests.module';
 import { AuditModule } from './audit/audit.module';
 import { ExportModule } from './export/export.module';
 import { AdminModule } from './admin/admin.module';
+import { FormsModule } from './forms/forms.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
     AuditModule,
     ExportModule,
     AdminModule,
+    FormsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

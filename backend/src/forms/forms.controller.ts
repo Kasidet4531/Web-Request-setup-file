@@ -2,13 +2,13 @@ import { Controller, Get, Param } from '@nestjs/common';
 import {
   ActiveFormSchemaResponse,
   FormSchemaService,
-} from './form_schema.service';
+} from '../admin/form_schema.service';
 
-@Controller('admin')
-export class AdminController {
+@Controller('forms')
+export class FormsController {
   constructor(private readonly formSchemaService: FormSchemaService) {}
 
-  @Get('form-definitions/:formKey/active')
+  @Get(':formKey/schema')
   getActiveFormSchema(
     @Param('formKey') formKey: string,
   ): Promise<ActiveFormSchemaResponse> {

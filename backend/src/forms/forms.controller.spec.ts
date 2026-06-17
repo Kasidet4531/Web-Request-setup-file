@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AdminController } from './admin.controller';
-import { FormSchemaService } from './form_schema.service';
+import { FormSchemaService } from '../admin/form_schema.service';
+import { FormsController } from './forms.controller';
 
-describe('AdminController', () => {
-  it('exposes an API to fetch the active PSF request schema', async () => {
+describe('FormsController', () => {
+  it('exposes the active PSF request schema through the requester-facing forms API', async () => {
     const activeSchema = {
       formKey: 'psf-request',
       version: 1,
@@ -13,23 +13,27 @@ describe('AdminController', () => {
       schema: { formKey: 'psf-request', version: 1, sections: [] },
       publishedAt: '2026-01-01T00:00:00.000Z',
     };
+    const formSchemaService = {
+      getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AdminController],
+      controllers: [FormsController],
       providers: [
         {
           provide: FormSchemaService,
-          useValue: {
-            getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
-          },
+          useValue: formSchemaService,
         },
       ],
     }).compile();
 
-    const controller = module.get(AdminController);
+    const controller = module.get(FormsController);
 
     await expect(
       controller.getActiveFormSchema('psf-request'),
     ).resolves.toEqual(activeSchema);
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-request',
+    );
   });
 });
