@@ -66,4 +66,54 @@ describe('createApiClient', () => {
       expect.objectContaining({ method: 'GET' }),
     )
   })
+
+  it('creates a draft request from requester form values', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ id: 'request-1', status: 'Draft' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(client.createDraftRequest({ requesterData: { product_type: 'New Product' } })).resolves.toEqual({
+      id: 'request-1',
+      status: 'Draft',
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/requests', expect.objectContaining({
+      body: JSON.stringify({ requesterData: { product_type: 'New Product' } }),
+      method: 'POST',
+    }))
+  })
+
+  it('loads and updates a draft request by id', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'request-1', status: 'Draft' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'request-1', status: 'Draft', requesterData: { title: 'Updated' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(client.fetchPsfRequest('request-1')).resolves.toMatchObject({ id: 'request-1' })
+    await expect(client.updateDraftRequesterData('request-1', { requesterData: { title: 'Updated' } })).resolves.toMatchObject({
+      requesterData: { title: 'Updated' },
+    })
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/requests/request-1', expect.objectContaining({ method: 'GET' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/requester-data', expect.objectContaining({
+      body: JSON.stringify({ requesterData: { title: 'Updated' } }),
+      method: 'PUT',
+    }))
+  })
 })

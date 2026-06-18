@@ -1,4 +1,4 @@
-import type { ActiveFormSchemaResponse } from '../types/forms'
+import type { ActiveFormSchemaResponse, DynamicFormValues, FormSchema } from '../types/forms'
 
 export interface ApiClientConfig {
   baseUrl?: string
@@ -6,7 +6,7 @@ export interface ApiClientConfig {
 }
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
-  body?: BodyInit | Record<string, unknown> | null
+  body?: BodyInit | object | null
 }
 
 export class ApiError extends Error {
@@ -54,6 +54,31 @@ async function parseResponseBody(response: Response): Promise<unknown> {
 
   const text = await response.text()
   return text.length > 0 ? text : null
+}
+
+export interface PsfRequestPayload {
+  requester?: string
+  requesterData: DynamicFormValues
+}
+
+export interface PsfRequestResponse {
+  id: string
+  requestNo: string
+  formKey: string
+  formVersion: number
+  status: string
+  requester: string | null
+  setupOwner: string | null
+  setupOwnerRole: string | null
+  productType: string | null
+  requesterData: DynamicFormValues
+  psfCreatedData: Record<string, unknown>
+  schemaSnapshot: FormSchema
+  createdAt: string
+  updatedAt: string
+  submittedAt: string | null
+  psfCreatedAt: string | null
+  completedAt: string | null
 }
 
 export function createApiClient(config: ApiClientConfig = {}) {
@@ -123,6 +148,20 @@ export function createApiClient(config: ApiClientConfig = {}) {
     fetchActiveFormSchema: (formKey: string) =>
       request<ActiveFormSchemaResponse>(`/admin/form-definitions/${encodeURIComponent(formKey)}/active`, {
         method: 'GET',
+      }),
+    createDraftRequest: (payload: PsfRequestPayload) =>
+      request<PsfRequestResponse>('/requests', {
+        body: payload,
+        method: 'POST',
+      }),
+    fetchPsfRequest: (requestId: string) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}`, {
+        method: 'GET',
+      }),
+    updateDraftRequesterData: (requestId: string, payload: PsfRequestPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/requester-data`, {
+        body: payload,
+        method: 'PUT',
       }),
   }
 }
