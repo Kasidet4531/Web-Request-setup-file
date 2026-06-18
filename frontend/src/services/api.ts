@@ -1,3 +1,5 @@
+import type { ActiveFormSchemaResponse } from '../types/forms'
+
 export interface ApiClientConfig {
   baseUrl?: string
   headers?: HeadersInit
@@ -118,6 +120,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<T>(path, { ...options, body, method: 'PUT' }),
     delete: <T>(path: string, options?: Omit<ApiRequestOptions, 'method' | 'body'>) =>
       request<T>(path, { ...options, method: 'DELETE' }),
+    fetchActiveFormSchema: (formKey: string) =>
+      request<ActiveFormSchemaResponse>(`/admin/form-definitions/${encodeURIComponent(formKey)}/active`, {
+        method: 'GET',
+      }),
   }
 }
 

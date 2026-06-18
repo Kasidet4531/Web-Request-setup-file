@@ -46,4 +46,24 @@ describe('createApiClient', () => {
       message: 'database unavailable',
     })
   })
+
+  it('fetches the active form schema for the requested form key', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ formKey: 'psf-request', version: 1 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(client.fetchActiveFormSchema('psf-request')).resolves.toMatchObject({
+      formKey: 'psf-request',
+      version: 1,
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/admin/form-definitions/psf-request/active',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
 })
