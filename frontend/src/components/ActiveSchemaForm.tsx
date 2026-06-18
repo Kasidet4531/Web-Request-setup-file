@@ -34,6 +34,22 @@ function activeSchemaFromRequest(request: PsfRequestResponse): ActiveFormSchemaR
   }
 }
 
+export interface RequestDraftStatusProps {
+  request: PsfRequestResponse
+}
+
+export function RequestDraftStatus({ request }: RequestDraftStatusProps) {
+  const requestPath = `/requests/${encodeURIComponent(request.id)}/`
+
+  return (
+    <p className="page-card__description">
+      {request.requestNo} · {request.status} ·{' '}
+      <a href={requestPath}>Open saved draft</a>
+      {request.status !== DRAFT_STATUS ? ' · requester-owned fields are locked after Draft status.' : null}
+    </p>
+  )
+}
+
 export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [currentRequest, setCurrentRequest] = useState<PsfRequestResponse | null>(null)
@@ -156,14 +172,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
 
   return (
     <>
-      {currentRequest ? (
-        <p className="page-card__description">
-          {currentRequest.requestNo} · {currentRequest.status}
-          {currentRequest.status !== DRAFT_STATUS
-            ? ' · requester-owned fields are locked after Draft status.'
-            : null}
-        </p>
-      ) : null}
+      {currentRequest ? <RequestDraftStatus request={currentRequest} /> : null}
       {saveMessage ? (
         <p className="status-pill status-pill--success" role="status">
           {saveMessage}
