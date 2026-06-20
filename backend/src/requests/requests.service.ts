@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -15,6 +16,7 @@ import { DATABASE_POOL } from '../database/database.service';
 
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
+const SUBMITTED_STATUS = 'Submitted';
 
 export type RequesterData = Record<string, unknown>;
 
@@ -26,6 +28,10 @@ export interface CreateDraftRequestDto {
 export interface UpdateDraftRequesterDataDto {
   requester?: string;
   requesterData: RequesterData;
+}
+
+export interface SubmitDraftRequestDto {
+  formVersion: number;
 }
 
 export interface PsfRequestResponse {
@@ -186,6 +192,80 @@ export class RequestsService implements OnModuleInit {
     return this.mapRequestRow(result.rows[0]);
   }
 
+  async submitRequest(
+    id: string,
+    dto: SubmitDraftRequestDto,
+  ): Promise<PsfRequestResponse> {
+    const current = await this.pool.query<
+      Pick<PsfRequestRow, 'id' | 'status' | 'requester_data_json'>
+    >(
+      `
+        SELECT id, status, requester_data_json
+        FROM psf_requests
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    const request = current.rows[0];
+    if (!request) {
+      throw new NotFoundException(`PSF request ${id} was not found`);
+    }
+
+    if (request.status !== DRAFT_STATUS) {
+      throw new ForbiddenException('Only Draft requests can be submitted');
+    }
+
+    const activeSchema =
+      await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
+
+    if (activeSchema.version !== dto.formVersion) {
+      throw new BadRequestException(
+        'The active request schema changed before submit. Reload the draft and submit again.',
+      );
+    }
+    const normalizedRequesterData = this.normalizeRequesterDataToSchema(
+      activeSchema.schema,
+      request.requester_data_json ?? {},
+    );
+    this.assertRequiredRequesterFieldsPresent(
+      activeSchema.schema,
+      normalizedRequesterData,
+    );
+
+    const requester = this.normalizeString(
+      normalizedRequesterData.requester_name,
+    );
+    const productType = this.normalizeString(
+      normalizedRequesterData.product_type,
+    );
+    const result = await this.pool.query<PsfRequestRow>(
+      `
+        UPDATE psf_requests
+        SET status = '${SUBMITTED_STATUS}',
+            requester = $2,
+            product_type = $3,
+            requester_data_json = $4::jsonb,
+            form_version = $5,
+            schema_snapshot_json = $6::jsonb,
+            submitted_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        id,
+        requester,
+        productType,
+        normalizedRequesterData,
+        activeSchema.version,
+        activeSchema.schema,
+      ],
+    );
+
+    return this.mapRequestRow(result.rows[0]);
+  }
+
   private async ensureRequestsStorage(): Promise<void> {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS psf_requests (
@@ -224,6 +304,50 @@ export class RequestsService implements OnModuleInit {
     `);
 
     return result.rows[0]?.next ?? `DRAFT-${Date.now()}`;
+  }
+
+  private normalizeRequesterDataToSchema(
+    schema: FormSchemaJson,
+    requesterData: RequesterData,
+  ): RequesterData {
+    const nextData: RequesterData = {};
+
+    schema.sections.forEach((section) => {
+      section.fields.forEach((field) => {
+        if (Object.hasOwn(requesterData, field.fieldKey)) {
+          nextData[field.fieldKey] = requesterData[field.fieldKey];
+        }
+      });
+    });
+
+    return nextData;
+  }
+
+  private assertRequiredRequesterFieldsPresent(
+    schema: FormSchemaJson,
+    requesterData: RequesterData,
+  ): void {
+    const missingLabels = schema.sections.flatMap((section) =>
+      section.fields
+        .filter(
+          (field) =>
+            field.required &&
+            !this.hasSubmittedValue(requesterData[field.fieldKey]),
+        )
+        .map((field) => field.label),
+    );
+
+    if (missingLabels.length > 0) {
+      throw new BadRequestException(
+        `Draft request is missing required fields for the active schema: ${missingLabels.join(', ')}`,
+      );
+    }
+  }
+
+  private hasSubmittedValue(value: unknown): boolean {
+    return typeof value === 'string'
+      ? value.trim().length > 0
+      : value !== null && value !== undefined;
   }
 
   private normalizeString(value: unknown): string | null {

@@ -3,6 +3,7 @@ import { RequestsService } from './requests.service';
 import type {
   CreateDraftRequestDto,
   PsfRequestResponse,
+  SubmitDraftRequestDto,
   UpdateDraftRequesterDataDto,
 } from './requests.service';
 
@@ -30,5 +31,13 @@ export class RequestsController {
     @Body() body: UpdateDraftRequesterDataDto,
   ): Promise<PsfRequestResponse> {
     return this.requestsService.updateDraftRequesterData(requestId, body);
+  }
+
+  @Post(':requestId/submit')
+  submitRequest(
+    @Param('requestId') requestId: string,
+    @Body() body: SubmitDraftRequestDto,
+  ): Promise<PsfRequestResponse> {
+    return this.requestsService.submitRequest(requestId, body);
   }
 }

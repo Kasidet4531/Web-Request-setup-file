@@ -7,6 +7,7 @@ describe('RequestsController draft flow', () => {
   let service: {
     createDraft: jest.Mock;
     getRequest: jest.Mock;
+    submitRequest: jest.Mock;
     updateDraftRequesterData: jest.Mock;
   };
 
@@ -14,6 +15,7 @@ describe('RequestsController draft flow', () => {
     service = {
       createDraft: jest.fn(),
       getRequest: jest.fn(),
+      submitRequest: jest.fn(),
       updateDraftRequesterData: jest.fn(),
     };
 
@@ -66,6 +68,24 @@ describe('RequestsController draft flow', () => {
     expect(service.updateDraftRequesterData).toHaveBeenCalledWith('request-1', {
       requester: 'Fook',
       requesterData: { product_type: 'Transfer Product' },
+    });
+  });
+
+  it('submits a draft request by id', async () => {
+    service.submitRequest.mockResolvedValue({
+      id: 'request-1',
+      status: 'Submitted',
+    });
+
+    await expect(
+      controller.submitRequest('request-1', { formVersion: 4 }),
+    ).resolves.toEqual({
+      id: 'request-1',
+      status: 'Submitted',
+    });
+
+    expect(service.submitRequest).toHaveBeenCalledWith('request-1', {
+      formVersion: 4,
     });
   });
 });

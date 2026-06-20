@@ -61,6 +61,10 @@ export interface PsfRequestPayload {
   requesterData: DynamicFormValues
 }
 
+export interface SubmitPsfRequestPayload {
+  formVersion: number
+}
+
 export interface PsfRequestResponse {
   id: string
   requestNo: string
@@ -146,7 +150,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
     delete: <T>(path: string, options?: Omit<ApiRequestOptions, 'method' | 'body'>) =>
       request<T>(path, { ...options, method: 'DELETE' }),
     fetchActiveFormSchema: (formKey: string) =>
-      request<ActiveFormSchemaResponse>(`/admin/form-definitions/${encodeURIComponent(formKey)}/active`, {
+      request<ActiveFormSchemaResponse>(`/forms/${encodeURIComponent(formKey)}/schema`, {
         method: 'GET',
       }),
     createDraftRequest: (payload: PsfRequestPayload) =>
@@ -162,6 +166,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/requester-data`, {
         body: payload,
         method: 'PUT',
+      }),
+    submitPsfRequest: (requestId: string, payload: SubmitPsfRequestPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/submit`, {
+        body: payload,
+        method: 'POST',
       }),
   }
 }

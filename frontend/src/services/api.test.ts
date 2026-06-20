@@ -62,7 +62,7 @@ describe('createApiClient', () => {
       version: 1,
     })
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/admin/form-definitions/psf-request/active',
+      '/api/forms/psf-request/schema',
       expect.objectContaining({ method: 'GET' }),
     )
   })
@@ -114,6 +114,27 @@ describe('createApiClient', () => {
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/requester-data', expect.objectContaining({
       body: JSON.stringify({ requesterData: { title: 'Updated' } }),
       method: 'PUT',
+    }))
+  })
+
+  it('submits a draft request by id', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ id: 'request-1', status: 'Submitted' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(client.submitPsfRequest('request-1', { formVersion: 4 })).resolves.toMatchObject({
+      id: 'request-1',
+      status: 'Submitted',
+    })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/requests/request-1/submit', expect.objectContaining({
+      body: JSON.stringify({ formVersion: 4 }),
+      method: 'POST',
     }))
   })
 })

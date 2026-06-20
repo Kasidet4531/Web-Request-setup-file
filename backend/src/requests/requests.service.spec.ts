@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FormSchemaService } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
@@ -229,6 +233,201 @@ describe('RequestsService draft flow', () => {
         requester: 'Fook',
         requesterData: { product_type: 'New Product' },
       }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('submits a draft request and refreshes its locked schema snapshot from the active schema', async () => {
+    const submittedSchema = {
+      ...activeSchema,
+      version: 4,
+      schema: {
+        ...activeSchema.schema,
+        version: 4,
+        title: 'PSF Request Form v4',
+      },
+    };
+    formSchemaService.getActiveSchema.mockResolvedValueOnce(submittedSchema);
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Draft',
+          requester_data_json: {
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+        },
+      ],
+    });
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          request_no: 'DRAFT-1',
+          form_key: 'psf-request',
+          form_version: 4,
+          status: 'Submitted',
+          requester: 'Fook',
+          setup_owner: null,
+          setup_owner_role: null,
+          product_type: 'Existing Product',
+          requester_data_json: {
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+          psf_created_data_json: {},
+          schema_snapshot_json: submittedSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:05:03.000Z'),
+          submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+
+    const submitted = await service.submitRequest('request-1', {
+      formVersion: 4,
+    });
+
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-request',
+    );
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining("status = 'Submitted'"),
+      [
+        'request-1',
+        'Fook',
+        'Existing Product',
+        { product_type: 'Existing Product', requester_name: 'Fook' },
+        4,
+        submittedSchema.schema,
+      ],
+    );
+    expect(submitted).toMatchObject({
+      id: 'request-1',
+      status: 'Submitted',
+      formVersion: 4,
+      schemaSnapshot: submittedSchema.schema,
+      submittedAt: '2026-06-18T01:05:03.000Z',
+    });
+  });
+
+  it('drops requester fields that are no longer present in the active schema before locking the submission snapshot', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Draft',
+          requester_data_json: {
+            legacy_field: 'remove me',
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+        },
+      ],
+    });
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          request_no: 'DRAFT-1',
+          form_key: 'psf-request',
+          form_version: 3,
+          status: 'Submitted',
+          requester: 'Fook',
+          setup_owner: null,
+          setup_owner_role: null,
+          product_type: 'Existing Product',
+          requester_data_json: {
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+          psf_created_data_json: {},
+          schema_snapshot_json: activeSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:05:03.000Z'),
+          submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+
+    await service.submitRequest('request-1', {
+      formVersion: 3,
+    });
+
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining("status = 'Submitted'"),
+      [
+        'request-1',
+        'Fook',
+        'Existing Product',
+        { product_type: 'Existing Product', requester_name: 'Fook' },
+        3,
+        activeSchema.schema,
+      ],
+    );
+  });
+
+  it('rejects submission when the latest active schema has required fields the draft has not satisfied', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Draft',
+          requester_data_json: {
+            product_type: 'Existing Product',
+          },
+        },
+      ],
+    });
+
+    await expect(
+      service.submitRequest('request-1', { formVersion: 3 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects submission when the active schema changed after the requester validated the draft', async () => {
+    const newerActiveSchema = {
+      ...activeSchema,
+      version: 4,
+      schema: {
+        ...activeSchema.schema,
+        version: 4,
+      },
+    };
+    formSchemaService.getActiveSchema.mockResolvedValueOnce(newerActiveSchema);
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Draft',
+          requester_data_json: {
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+        },
+      ],
+    });
+
+    await expect(
+      service.submitRequest('request-1', { formVersion: 3 }),
+    ).rejects.toThrow(
+      'The active request schema changed before submit. Reload the draft and submit again.',
+    );
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects submitting a request that is already past Draft status', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Submitted' }],
+    });
+
+    await expect(
+      service.submitRequest('request-1', { formVersion: 3 }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
