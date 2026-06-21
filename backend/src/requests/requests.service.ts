@@ -7,12 +7,13 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import {
   FormSchemaJson,
   FormSchemaService,
 } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
+import { SearchIndexService } from './search-index.service';
 
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
@@ -79,6 +80,7 @@ export class RequestsService implements OnModuleInit {
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     private readonly formSchemaService: FormSchemaService,
+    private readonly searchIndexService: SearchIndexService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -196,74 +198,102 @@ export class RequestsService implements OnModuleInit {
     id: string,
     dto: SubmitDraftRequestDto,
   ): Promise<PsfRequestResponse> {
-    const current = await this.pool.query<
-      Pick<PsfRequestRow, 'id' | 'status' | 'requester_data_json'>
-    >(
-      `
-        SELECT id, status, requester_data_json
-        FROM psf_requests
-        WHERE id = $1
-      `,
-      [id],
-    );
-
-    const request = current.rows[0];
-    if (!request) {
-      throw new NotFoundException(`PSF request ${id} was not found`);
-    }
-
-    if (request.status !== DRAFT_STATUS) {
-      throw new ForbiddenException('Only Draft requests can be submitted');
-    }
-
     const activeSchema =
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
+    const client = await this.pool.connect();
 
-    if (activeSchema.version !== dto.formVersion) {
-      throw new BadRequestException(
-        'The active request schema changed before submit. Reload the draft and submit again.',
+    try {
+      await client.query('BEGIN');
+
+      const current = await client.query<
+        Pick<PsfRequestRow, 'id' | 'status' | 'requester_data_json'>
+      >(
+        `
+          SELECT id, status, requester_data_json
+          FROM psf_requests
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [id],
       );
-    }
-    const normalizedRequesterData = this.normalizeRequesterDataToSchema(
-      activeSchema.schema,
-      request.requester_data_json ?? {},
-    );
-    this.assertRequiredRequesterFieldsPresent(
-      activeSchema.schema,
-      normalizedRequesterData,
-    );
 
-    const requester = this.normalizeString(
-      normalizedRequesterData.requester_name,
-    );
-    const productType = this.normalizeString(
-      normalizedRequesterData.product_type,
-    );
-    const result = await this.pool.query<PsfRequestRow>(
-      `
-        UPDATE psf_requests
-        SET status = '${SUBMITTED_STATUS}',
-            requester = $2,
-            product_type = $3,
-            requester_data_json = $4::jsonb,
-            form_version = $5,
-            schema_snapshot_json = $6::jsonb,
-            submitted_at = NOW(),
-            updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-      `,
-      [
-        id,
-        requester,
-        productType,
-        normalizedRequesterData,
-        activeSchema.version,
+      const request = current.rows[0];
+      if (!request) {
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      }
+
+      if (request.status !== DRAFT_STATUS) {
+        throw new ForbiddenException('Only Draft requests can be submitted');
+      }
+
+      if (activeSchema.version !== dto.formVersion) {
+        throw new BadRequestException(
+          'The active request schema changed before submit. Reload the draft and submit again.',
+        );
+      }
+      const normalizedRequesterData = this.normalizeRequesterDataToSchema(
         activeSchema.schema,
-      ],
-    );
+        request.requester_data_json ?? {},
+      );
+      this.assertRequiredRequesterFieldsPresent(
+        activeSchema.schema,
+        normalizedRequesterData,
+      );
 
-    return this.mapRequestRow(result.rows[0]);
+      const requester = this.normalizeString(
+        normalizedRequesterData.requester_name,
+      );
+      const productType = this.normalizeString(
+        normalizedRequesterData.product_type,
+      );
+      const result = await client.query<PsfRequestRow>(
+        `
+          UPDATE psf_requests
+          SET status = '${SUBMITTED_STATUS}',
+              requester = $2,
+              product_type = $3,
+              requester_data_json = $4::jsonb,
+              form_version = $5,
+              schema_snapshot_json = $6::jsonb,
+              submitted_at = NOW(),
+              updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [
+          id,
+          requester,
+          productType,
+          normalizedRequesterData,
+          activeSchema.version,
+          activeSchema.schema,
+        ],
+      );
+
+      await this.searchIndexService.upsertSubmittedCanonicalValues(
+        id,
+        activeSchema.schema,
+        normalizedRequesterData,
+        client,
+      );
+
+      await client.query('COMMIT');
+
+      return this.mapRequestRow(result.rows[0]);
+    } catch (error) {
+      await this.rollbackSubmitTransaction(client);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async rollbackSubmitTransaction(client: PoolClient): Promise<void> {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Preserve the original submit error if rollback also fails.
+    }
   }
 
   private async ensureRequestsStorage(): Promise<void> {

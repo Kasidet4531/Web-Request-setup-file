@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FormSchemaService } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { RequestsService } from './requests.service';
+import { SearchIndexService } from './search-index.service';
 
 const activeSchema = {
   formKey: 'psf-request',
@@ -47,13 +48,19 @@ const activeSchema = {
 
 describe('RequestsService draft flow', () => {
   let service: RequestsService;
-  let pool: { query: jest.Mock };
+  let pool: { query: jest.Mock; connect: jest.Mock };
+  let dbClient: { query: jest.Mock; release: jest.Mock };
   let formSchemaService: { getActiveSchema: jest.Mock };
+  let searchIndexService: { upsertSubmittedCanonicalValues: jest.Mock };
 
   beforeEach(async () => {
-    pool = { query: jest.fn() };
+    dbClient = { query: jest.fn(), release: jest.fn() };
+    pool = { query: jest.fn(), connect: jest.fn().mockResolvedValue(dbClient) };
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
+    };
+    searchIndexService = {
+      upsertSubmittedCanonicalValues: jest.fn().mockResolvedValue({}),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -61,6 +68,7 @@ describe('RequestsService draft flow', () => {
         RequestsService,
         { provide: DATABASE_POOL, useValue: pool },
         { provide: FormSchemaService, useValue: formSchemaService },
+        { provide: SearchIndexService, useValue: searchIndexService },
       ],
     }).compile();
 
@@ -247,7 +255,8 @@ describe('RequestsService draft flow', () => {
       },
     };
     formSchemaService.getActiveSchema.mockResolvedValueOnce(submittedSchema);
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({});
+    dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
@@ -259,7 +268,7 @@ describe('RequestsService draft flow', () => {
         },
       ],
     });
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
@@ -293,7 +302,8 @@ describe('RequestsService draft flow', () => {
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
     );
-    expect(pool.query).toHaveBeenLastCalledWith(
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining("status = 'Submitted'"),
       [
         'request-1',
@@ -304,6 +314,19 @@ describe('RequestsService draft flow', () => {
         submittedSchema.schema,
       ],
     );
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).toHaveBeenCalledWith(
+      'request-1',
+      submittedSchema.schema,
+      {
+        product_type: 'Existing Product',
+        requester_name: 'Fook',
+      },
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('COMMIT');
+    expect(dbClient.release).toHaveBeenCalledTimes(1);
     expect(submitted).toMatchObject({
       id: 'request-1',
       status: 'Submitted',
@@ -314,7 +337,8 @@ describe('RequestsService draft flow', () => {
   });
 
   it('drops requester fields that are no longer present in the active schema before locking the submission snapshot', async () => {
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({});
+    dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
@@ -327,7 +351,7 @@ describe('RequestsService draft flow', () => {
         },
       ],
     });
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
@@ -358,7 +382,8 @@ describe('RequestsService draft flow', () => {
       formVersion: 3,
     });
 
-    expect(pool.query).toHaveBeenLastCalledWith(
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
       expect.stringContaining("status = 'Submitted'"),
       [
         'request-1',
@@ -371,8 +396,86 @@ describe('RequestsService draft flow', () => {
     );
   });
 
+  it('rolls back the submitted status update when canonical value persistence fails', async () => {
+    dbClient.query.mockResolvedValueOnce({});
+    dbClient.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Draft',
+          requester_data_json: {
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+        },
+      ],
+    });
+    dbClient.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          request_no: 'DRAFT-1',
+          form_key: 'psf-request',
+          form_version: 3,
+          status: 'Submitted',
+          requester: 'Fook',
+          setup_owner: null,
+          setup_owner_role: null,
+          product_type: 'Existing Product',
+          requester_data_json: {
+            product_type: 'Existing Product',
+            requester_name: 'Fook',
+          },
+          psf_created_data_json: {},
+          schema_snapshot_json: activeSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:05:03.000Z'),
+          submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+    searchIndexService.upsertSubmittedCanonicalValues.mockRejectedValueOnce(
+      new Error('canonical persistence failed'),
+    );
+    dbClient.query.mockResolvedValueOnce({});
+
+    await expect(
+      service.submitRequest('request-1', { formVersion: 3 }),
+    ).rejects.toThrow('canonical persistence failed');
+
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("status = 'Submitted'"),
+      [
+        'request-1',
+        'Fook',
+        'Existing Product',
+        { product_type: 'Existing Product', requester_name: 'Fook' },
+        3,
+        activeSchema.schema,
+      ],
+    );
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).toHaveBeenCalledWith(
+      'request-1',
+      activeSchema.schema,
+      {
+        product_type: 'Existing Product',
+        requester_name: 'Fook',
+      },
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+    expect(dbClient.release).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects submission when the latest active schema has required fields the draft has not satisfied', async () => {
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({});
+    dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
@@ -383,11 +486,12 @@ describe('RequestsService draft flow', () => {
         },
       ],
     });
+    dbClient.query.mockResolvedValueOnce({});
 
     await expect(
       service.submitRequest('request-1', { formVersion: 3 }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('rejects submission when the active schema changed after the requester validated the draft', async () => {
@@ -400,7 +504,8 @@ describe('RequestsService draft flow', () => {
       },
     };
     formSchemaService.getActiveSchema.mockResolvedValueOnce(newerActiveSchema);
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({});
+    dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
@@ -412,23 +517,27 @@ describe('RequestsService draft flow', () => {
         },
       ],
     });
+    dbClient.query.mockResolvedValueOnce({});
 
     await expect(
       service.submitRequest('request-1', { formVersion: 3 }),
     ).rejects.toThrow(
       'The active request schema changed before submit. Reload the draft and submit again.',
     );
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('rejects submitting a request that is already past Draft status', async () => {
-    pool.query.mockResolvedValueOnce({
+    dbClient.query.mockResolvedValueOnce({});
+    dbClient.query.mockResolvedValueOnce({
       rows: [{ id: 'request-1', status: 'Submitted' }],
     });
+    dbClient.query.mockResolvedValueOnce({});
 
     await expect(
       service.submitRequest('request-1', { formVersion: 3 }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('raises NotFoundException when loading an unknown request', async () => {
