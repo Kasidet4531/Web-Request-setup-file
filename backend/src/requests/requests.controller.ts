@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import type {
   CreateDraftRequestDto,
   PsfRequestResponse,
+  RequestQueryDto,
   SubmitDraftRequestDto,
   UpdateDraftRequesterDataDto,
 } from './requests.service';
+import type { RequestSearchResult } from './search-index.service';
 
 @Controller('requests')
 export class RequestsController {
@@ -16,6 +18,11 @@ export class RequestsController {
     @Body() body: CreateDraftRequestDto,
   ): Promise<PsfRequestResponse> {
     return this.requestsService.createDraft(body);
+  }
+
+  @Get()
+  queryRequests(@Query() query: RequestQueryDto): Promise<RequestSearchResult> {
+    return this.requestsService.queryRequests(query);
   }
 
   @Get(':requestId')

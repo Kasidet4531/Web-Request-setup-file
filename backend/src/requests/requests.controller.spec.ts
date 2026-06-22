@@ -7,6 +7,7 @@ describe('RequestsController draft flow', () => {
   let service: {
     createDraft: jest.Mock;
     getRequest: jest.Mock;
+    queryRequests: jest.Mock;
     submitRequest: jest.Mock;
     updateDraftRequesterData: jest.Mock;
   };
@@ -15,6 +16,7 @@ describe('RequestsController draft flow', () => {
     service = {
       createDraft: jest.fn(),
       getRequest: jest.fn(),
+      queryRequests: jest.fn(),
       submitRequest: jest.fn(),
       updateDraftRequesterData: jest.fn(),
     };
@@ -40,6 +42,24 @@ describe('RequestsController draft flow', () => {
     expect(service.createDraft).toHaveBeenCalledWith({
       requester: 'Fook',
       requesterData: { product_type: 'New Product' },
+    });
+  });
+
+  it('queries request list filters and pagination', async () => {
+    service.queryRequests.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    });
+
+    await expect(
+      controller.queryRequests({ keyword: 'probe', status: 'Submitted' }),
+    ).resolves.toEqual({ items: [], total: 0, limit: 50, offset: 0 });
+
+    expect(service.queryRequests).toHaveBeenCalledWith({
+      keyword: 'probe',
+      status: 'Submitted',
     });
   });
 

@@ -13,7 +13,11 @@ import {
   FormSchemaService,
 } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
-import { SearchIndexService } from './search-index.service';
+import {
+  RequestSearchFilters,
+  RequestSearchResult,
+  SearchIndexService,
+} from './search-index.service';
 
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
@@ -34,6 +38,8 @@ export interface UpdateDraftRequesterDataDto {
 export interface SubmitDraftRequestDto {
   formVersion: number;
 }
+
+export type RequestQueryDto = RequestSearchFilters;
 
 export interface PsfRequestResponse {
   id: string;
@@ -129,6 +135,14 @@ export class RequestsService implements OnModuleInit {
     );
 
     return this.mapRequestRow(result.rows[0]);
+  }
+
+  async queryRequests(query: RequestQueryDto): Promise<RequestSearchResult> {
+    return this.searchIndexService.queryRequests({
+      ...query,
+      limit: this.parseOptionalNumber(query.limit),
+      offset: this.parseOptionalNumber(query.offset),
+    });
   }
 
   async getRequest(id: string): Promise<PsfRequestResponse> {
@@ -270,22 +284,53 @@ export class RequestsService implements OnModuleInit {
         ],
       );
 
-      await this.searchIndexService.upsertSubmittedCanonicalValues(
-        id,
-        activeSchema.schema,
-        normalizedRequesterData,
+      const submittedRow = result.rows[0];
+      const canonicalValues =
+        await this.searchIndexService.upsertSubmittedCanonicalValues(
+          id,
+          activeSchema.schema,
+          normalizedRequesterData,
+          client,
+        );
+
+      await this.searchIndexService.upsertRequestSearchIndex(
+        {
+          requestId: submittedRow.id,
+          requestNo: submittedRow.request_no,
+          status: submittedRow.status,
+          requester: submittedRow.requester,
+          setupOwner: submittedRow.setup_owner,
+          setupOwnerRole: submittedRow.setup_owner_role,
+          productType: submittedRow.product_type,
+          requestDate: submittedRow.created_at,
+          updatedAt: submittedRow.updated_at,
+        },
+        canonicalValues,
         client,
       );
 
       await client.query('COMMIT');
 
-      return this.mapRequestRow(result.rows[0]);
+      return this.mapRequestRow(submittedRow);
     } catch (error) {
       await this.rollbackSubmitTransaction(client);
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  private parseOptionalNumber(value: unknown): number | undefined {
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return undefined;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   private async rollbackSubmitTransaction(client: PoolClient): Promise<void> {

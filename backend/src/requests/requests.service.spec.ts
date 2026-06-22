@@ -51,7 +51,11 @@ describe('RequestsService draft flow', () => {
   let pool: { query: jest.Mock; connect: jest.Mock };
   let dbClient: { query: jest.Mock; release: jest.Mock };
   let formSchemaService: { getActiveSchema: jest.Mock };
-  let searchIndexService: { upsertSubmittedCanonicalValues: jest.Mock };
+  let searchIndexService: {
+    queryRequests: jest.Mock;
+    upsertRequestSearchIndex: jest.Mock;
+    upsertSubmittedCanonicalValues: jest.Mock;
+  };
 
   beforeEach(async () => {
     dbClient = { query: jest.fn(), release: jest.fn() };
@@ -60,7 +64,17 @@ describe('RequestsService draft flow', () => {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
     };
     searchIndexService = {
-      upsertSubmittedCanonicalValues: jest.fn().mockResolvedValue({}),
+      queryRequests: jest.fn().mockResolvedValue({
+        items: [],
+        total: 0,
+        limit: 50,
+        offset: 0,
+      }),
+      upsertRequestSearchIndex: jest.fn().mockResolvedValue(undefined),
+      upsertSubmittedCanonicalValues: jest.fn().mockResolvedValue({
+        product_type: 'Existing Product',
+        requester: 'Fook',
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -131,6 +145,36 @@ describe('RequestsService draft flow', () => {
       status: 'Draft',
       requesterData: { product_type: 'New Product', requester_name: 'Fook' },
       schemaSnapshot: activeSchema.schema,
+    });
+  });
+
+  it('queries submitted requests through the search index with normalized pagination values', async () => {
+    searchIndexService.queryRequests.mockResolvedValueOnce({
+      items: [{ requestId: 'request-1', requestNo: 'DRAFT-1' }],
+      total: 1,
+      limit: 25,
+      offset: 50,
+    });
+
+    await expect(
+      service.queryRequests({
+        keyword: 'probe',
+        status: 'Submitted',
+        limit: '25' as never,
+        offset: '50' as never,
+      }),
+    ).resolves.toEqual({
+      items: [{ requestId: 'request-1', requestNo: 'DRAFT-1' }],
+      total: 1,
+      limit: 25,
+      offset: 50,
+    });
+
+    expect(searchIndexService.queryRequests).toHaveBeenCalledWith({
+      keyword: 'probe',
+      status: 'Submitted',
+      limit: 25,
+      offset: 50,
     });
   });
 
@@ -323,6 +367,21 @@ describe('RequestsService draft flow', () => {
         product_type: 'Existing Product',
         requester_name: 'Fook',
       },
+      dbClient,
+    );
+    expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+      {
+        requestId: 'request-1',
+        requestNo: 'DRAFT-1',
+        status: 'Submitted',
+        requester: 'Fook',
+        setupOwner: null,
+        setupOwnerRole: null,
+        productType: 'Existing Product',
+        requestDate: new Date('2026-06-18T01:02:03.000Z'),
+        updatedAt: new Date('2026-06-18T01:05:03.000Z'),
+      },
+      { product_type: 'Existing Product', requester: 'Fook' },
       dbClient,
     );
     expect(dbClient.query).toHaveBeenLastCalledWith('COMMIT');
