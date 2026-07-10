@@ -4,7 +4,8 @@ const navItems = [
   { to: '/login', label: 'Login' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/requests', label: 'PSF Requests' },
-  { to: '/history', label: 'History' },
+  { to: '/history', label: 'Global History' },
+  { to: '/admin/export-profile', label: 'Export' },
   { to: '/admin', label: 'Admin' },
 ] as const
 

@@ -57,9 +57,69 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return text.length > 0 ? text : null
 }
 
+function buildQueryPath(path: string, query: object): string {
+  const params = new URLSearchParams()
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === '') {
+      return
+    }
+
+    params.set(key, String(value))
+  })
+
+  const queryString = params.toString()
+  return queryString ? `${path}?${queryString}` : path
+}
+
 export interface PsfRequestPayload {
   requester?: string
   requesterData: DynamicFormValues
+}
+
+export interface PsfRequestQuery {
+  keyword?: string
+  status?: string
+  priority?: string
+  productType?: string
+  requester?: string
+  setupOwner?: string
+  setupOwnerRole?: string
+  dueDateFrom?: string
+  dueDateTo?: string
+  requestDateFrom?: string
+  requestDateTo?: string
+  limit?: number
+  offset?: number
+}
+
+export interface PsfRequestListItem {
+  requestId: string
+  requestNo: string
+  title: string | null
+  referencePsfName: string | null
+  psfSetupFileName: string | null
+  probecardName: string | null
+  status: string
+  priority: string | null
+  requester: string | null
+  setupOwner: string | null
+  setupOwnerRole: string | null
+  productType: string | null
+  requestDate: string | null
+  dueDate: string | null
+  updatedAt: string
+}
+
+export interface PsfRequestListResponse {
+  items: PsfRequestListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface UpdatePsfRequestStatusPayload {
+  status: string
 }
 
 export interface SubmitPsfRequestPayload {
@@ -154,6 +214,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<ActiveFormSchemaResponse>(`/forms/${encodeURIComponent(formKey)}/schema`, {
         method: 'GET',
       }),
+    queryPsfRequests: (query: PsfRequestQuery = {}) =>
+      request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
+        method: 'GET',
+      }),
     createDraftRequest: (payload: PsfRequestPayload) =>
       request<PsfRequestResponse>('/requests', {
         body: payload,
@@ -172,6 +236,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/submit`, {
         body: payload,
         method: 'POST',
+      }),
+    updatePsfRequestStatus: (requestId: string, payload: UpdatePsfRequestStatusPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/status`, {
+        body: payload,
+        method: 'PUT',
       }),
   }
 }

@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { UnauthorizedException } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service';
 import { RequestsController } from './requests.controller';
 import { RequestsService } from './requests.service';
 
@@ -10,7 +12,9 @@ describe('RequestsController draft flow', () => {
     queryRequests: jest.Mock;
     submitRequest: jest.Mock;
     updateDraftRequesterData: jest.Mock;
+    updateRequestStatus: jest.Mock;
   };
+  let authService: { getProfile: jest.Mock };
 
   beforeEach(async () => {
     service = {
@@ -19,11 +23,16 @@ describe('RequestsController draft flow', () => {
       queryRequests: jest.fn(),
       submitRequest: jest.fn(),
       updateDraftRequesterData: jest.fn(),
+      updateRequestStatus: jest.fn(),
     };
+    authService = { getProfile: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RequestsController],
-      providers: [{ provide: RequestsService, useValue: service }],
+      providers: [
+        { provide: RequestsService, useValue: service },
+        { provide: AuthService, useValue: authService },
+      ],
     }).compile();
 
     controller = module.get(RequestsController);
@@ -107,5 +116,43 @@ describe('RequestsController draft flow', () => {
     expect(service.submitRequest).toHaveBeenCalledWith('request-1', {
       formVersion: 4,
     });
+  });
+
+  it('updates workflow status with the authenticated actor profile', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.updateRequestStatus.mockResolvedValue({
+      id: 'request-1',
+      status: 'Setup In Progress',
+    });
+
+    await expect(
+      controller.updateRequestStatus(
+        'request-1',
+        { status: 'Setup In Progress' },
+        { session: { userId: 'user-1' } } as never,
+      ),
+    ).resolves.toEqual({ id: 'request-1', status: 'Setup In Progress' });
+
+    expect(service.updateRequestStatus).toHaveBeenCalledWith('request-1', {
+      status: 'Setup In Progress',
+      actor,
+    });
+  });
+
+  it('rejects workflow status updates without a session user', async () => {
+    await expect(
+      controller.updateRequestStatus(
+        'request-1',
+        { status: 'Setup In Progress' },
+        { session: {} } as never,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

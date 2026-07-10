@@ -52,6 +52,7 @@ describe('RequestsService draft flow', () => {
   let dbClient: { query: jest.Mock; release: jest.Mock };
   let formSchemaService: { getActiveSchema: jest.Mock };
   let searchIndexService: {
+    extractCanonicalValues: jest.Mock;
     queryRequests: jest.Mock;
     upsertRequestSearchIndex: jest.Mock;
     upsertSubmittedCanonicalValues: jest.Mock;
@@ -64,6 +65,10 @@ describe('RequestsService draft flow', () => {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
     };
     searchIndexService = {
+      extractCanonicalValues: jest.fn().mockReturnValue({
+        product_type: 'Existing Product',
+        requester: 'Fook',
+      }),
       queryRequests: jest.fn().mockResolvedValue({
         items: [],
         total: 0,
@@ -176,6 +181,95 @@ describe('RequestsService draft flow', () => {
       limit: 25,
       offset: 50,
     });
+  });
+
+  it('allows a setup owner to manually move a submitted request into setup and records the acting owner', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const updatedRow = {
+      id: 'request-1',
+      request_no: 'DRAFT-1',
+      form_key: 'psf-request',
+      form_version: 3,
+      status: 'Setup In Progress',
+      requester: 'Fook',
+      setup_owner: 'Setup Owner GNTC Demo',
+      setup_owner_role: 'GNTC',
+      product_type: 'Existing Product',
+      requester_data_json: {
+        product_type: 'Existing Product',
+        requester_name: 'Fook',
+      },
+      psf_created_data_json: {},
+      schema_snapshot_json: activeSchema.schema,
+      created_at: new Date('2026-06-18T01:02:03.000Z'),
+      updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+      psf_created_at: null,
+      completed_at: null,
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Submitted' }],
+    });
+    pool.query.mockResolvedValueOnce({ rows: [updatedRow] });
+
+    const result = await service.updateRequestStatus('request-1', {
+      status: 'Setup In Progress',
+      actor,
+    });
+
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.arrayContaining([
+        'request-1',
+        'Setup In Progress',
+        'Setup Owner GNTC Demo',
+        'GNTC',
+      ]),
+    );
+    expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'request-1',
+        status: 'Setup In Progress',
+        setupOwner: 'Setup Owner GNTC Demo',
+        setupOwnerRole: 'GNTC',
+      }),
+      { product_type: 'Existing Product', requester: 'Fook' },
+    );
+    expect(result).toMatchObject({
+      id: 'request-1',
+      status: 'Setup In Progress',
+      setupOwner: 'Setup Owner GNTC Demo',
+      setupOwnerRole: 'GNTC',
+    });
+  });
+
+  it('rejects a requester attempting a setup-owner-only transition', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Submitted' }],
+    });
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'Setup In Progress',
+        actor: {
+          id: 'user-2',
+          username: 'requester.demo',
+          displayName: 'Requester Demo',
+          role: 'requester',
+          setupOwnerDepartment: null,
+        },
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pool.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.any(Array),
+    );
   });
 
   it('loads an existing draft request with requester data and schema snapshot', async () => {

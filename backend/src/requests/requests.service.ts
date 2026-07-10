@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
+import type { AuthenticatedUserProfile } from '../auth/session.types';
 import {
   FormSchemaJson,
   FormSchemaService,
@@ -22,6 +23,42 @@ import {
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
 const SUBMITTED_STATUS = 'Submitted';
+const SETUP_IN_PROGRESS_STATUS = 'Setup In Progress';
+const NEED_MORE_INFORMATION_STATUS = 'Need More Information';
+const PSF_CREATED_STATUS = 'PSF Created';
+const COMPLETED_STATUS = 'Completed';
+const REJECTED_STATUS = 'Rejected';
+const CANCELLED_STATUS = 'Cancelled';
+
+const STATUS_TRANSITIONS_BY_ROLE: Record<string, Record<string, string[]>> = {
+  requester: {
+    [SUBMITTED_STATUS]: [CANCELLED_STATUS],
+    [NEED_MORE_INFORMATION_STATUS]: [SUBMITTED_STATUS, CANCELLED_STATUS],
+  },
+  setup_owner: {
+    [SUBMITTED_STATUS]: [
+      SETUP_IN_PROGRESS_STATUS,
+      NEED_MORE_INFORMATION_STATUS,
+      REJECTED_STATUS,
+    ],
+    [SETUP_IN_PROGRESS_STATUS]: [
+      PSF_CREATED_STATUS,
+      NEED_MORE_INFORMATION_STATUS,
+      REJECTED_STATUS,
+    ],
+    [PSF_CREATED_STATUS]: [COMPLETED_STATUS, NEED_MORE_INFORMATION_STATUS],
+  },
+};
+
+const ALL_MANUAL_STATUSES = [
+  SUBMITTED_STATUS,
+  SETUP_IN_PROGRESS_STATUS,
+  NEED_MORE_INFORMATION_STATUS,
+  PSF_CREATED_STATUS,
+  COMPLETED_STATUS,
+  REJECTED_STATUS,
+  CANCELLED_STATUS,
+];
 
 export type RequesterData = Record<string, unknown>;
 
@@ -37,6 +74,14 @@ export interface UpdateDraftRequesterDataDto {
 
 export interface SubmitDraftRequestDto {
   formVersion: number;
+}
+
+export interface UpdateRequestStatusBodyDto {
+  status: string;
+}
+
+export interface UpdateRequestStatusDto extends UpdateRequestStatusBodyDto {
+  actor: AuthenticatedUserProfile;
 }
 
 export type RequestQueryDto = RequestSearchFilters;
@@ -208,6 +253,76 @@ export class RequestsService implements OnModuleInit {
     return this.mapRequestRow(result.rows[0]);
   }
 
+  async updateRequestStatus(
+    id: string,
+    dto: UpdateRequestStatusDto,
+  ): Promise<PsfRequestResponse> {
+    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+      `
+        SELECT id, status
+        FROM psf_requests
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    const currentRequest = current.rows[0];
+    if (!currentRequest) {
+      throw new NotFoundException(`PSF request ${id} was not found`);
+    }
+
+    this.assertStatusTransitionIsAllowed(
+      dto.actor.role,
+      currentRequest.status,
+      dto.status,
+    );
+
+    const actorName =
+      dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
+    const actorDepartment =
+      dto.actor.role === 'setup_owner' ? dto.actor.setupOwnerDepartment : null;
+
+    const result = await this.pool.query<PsfRequestRow>(
+      `
+        UPDATE psf_requests
+        SET status = $2,
+            setup_owner = COALESCE($3, setup_owner),
+            setup_owner_role = COALESCE($4, setup_owner_role),
+            psf_created_at = CASE WHEN $2 = '${PSF_CREATED_STATUS}' THEN NOW() ELSE psf_created_at END,
+            completed_at = CASE WHEN $2 = '${COMPLETED_STATUS}' THEN NOW() ELSE completed_at END,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [id, dto.status, actorName, actorDepartment],
+    );
+
+    const updatedRow = result.rows[0];
+    if (!updatedRow) {
+      throw new NotFoundException(`PSF request ${id} was not found`);
+    }
+
+    await this.searchIndexService.upsertRequestSearchIndex(
+      {
+        requestId: updatedRow.id,
+        requestNo: updatedRow.request_no,
+        status: updatedRow.status,
+        requester: updatedRow.requester,
+        setupOwner: updatedRow.setup_owner,
+        setupOwnerRole: updatedRow.setup_owner_role,
+        productType: updatedRow.product_type,
+        requestDate: updatedRow.created_at,
+        updatedAt: updatedRow.updated_at,
+      },
+      this.searchIndexService.extractCanonicalValues(
+        updatedRow.schema_snapshot_json,
+        updatedRow.requester_data_json,
+      ),
+    );
+
+    return this.mapRequestRow(updatedRow);
+  }
+
   async submitRequest(
     id: string,
     dto: SubmitDraftRequestDto,
@@ -331,6 +446,35 @@ export class RequestsService implements OnModuleInit {
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private assertStatusTransitionIsAllowed(
+    role: AuthenticatedUserProfile['role'],
+    currentStatus: string,
+    nextStatus: string,
+  ): void {
+    if (!ALL_MANUAL_STATUSES.includes(nextStatus)) {
+      throw new BadRequestException(
+        `Unsupported request status: ${nextStatus}`,
+      );
+    }
+
+    if (nextStatus === currentStatus) {
+      return;
+    }
+
+    if (role === 'admin') {
+      return;
+    }
+
+    const allowedTargets =
+      STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [];
+
+    if (!allowedTargets.includes(nextStatus)) {
+      throw new ForbiddenException(
+        `${role} is not allowed to move a request from ${currentStatus} to ${nextStatus}`,
+      );
+    }
   }
 
   private async rollbackSubmitTransaction(client: PoolClient): Promise<void> {

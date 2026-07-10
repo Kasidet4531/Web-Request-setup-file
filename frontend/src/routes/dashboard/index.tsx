@@ -1,12 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { PagePlaceholder } from '../../components/PagePlaceholder'
+import { DashboardPage } from '../../components/RequestsWorkspace'
 
 export const Route = createFileRoute('/dashboard/')({
-  component: () => (
-    <PagePlaceholder
-      description="Dashboard widgets, request summaries, and role-based insights will be added here next."
-      eyebrow="Route placeholder"
-      title="Dashboard"
-    />
-  ),
+  component: DashboardPage,
 })

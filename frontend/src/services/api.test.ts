@@ -213,6 +213,46 @@ describe('createApiClient', () => {
     }))
   })
 
+  it('queries requests and updates workflow status through backend endpoints', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'request-1', status: 'Setup In Progress' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(client.queryPsfRequests({ keyword: 'probe', status: 'Submitted', limit: 25 })).resolves.toEqual({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    })
+    await expect(client.updatePsfRequestStatus('request-1', { status: 'Setup In Progress' })).resolves.toMatchObject({
+      id: 'request-1',
+      status: 'Setup In Progress',
+    })
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/requests?keyword=probe&status=Submitted&limit=25',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/status', expect.objectContaining({
+      body: JSON.stringify({ status: 'Setup In Progress' }),
+      method: 'PUT',
+    }))
+  })
+
   it('posts logout with the current session cookie', async () => {
     globalThis.fetch = vi.fn(async () => new Response(null, { status: 204 })) as typeof fetch
 
