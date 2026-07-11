@@ -453,6 +453,16 @@ export class RequestsService implements OnModuleInit {
     currentStatus: string,
     nextStatus: string,
   ): void {
+    if (currentStatus === DRAFT_STATUS) {
+      if (nextStatus === DRAFT_STATUS) {
+        return;
+      }
+
+      throw new ForbiddenException(
+        'Draft requests must be submitted through the submit action',
+      );
+    }
+
     if (!ALL_MANUAL_STATUSES.includes(nextStatus)) {
       throw new BadRequestException(
         `Unsupported request status: ${nextStatus}`,

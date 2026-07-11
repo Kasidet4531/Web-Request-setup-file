@@ -272,6 +272,29 @@ describe('RequestsService draft flow', () => {
     );
   });
 
+  it('rejects admin manual status changes out of Draft so submit validation cannot be bypassed', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Draft' }],
+    });
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'Submitted',
+        actor: {
+          id: 'admin-1',
+          username: 'admin.demo',
+          displayName: 'Admin Demo',
+          role: 'admin',
+          setupOwnerDepartment: null,
+        },
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pool.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.any(Array),
+    );
+  });
+
   it('loads an existing draft request with requester data and schema snapshot', async () => {
     pool.query.mockResolvedValueOnce({
       rows: [

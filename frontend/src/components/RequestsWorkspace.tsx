@@ -442,17 +442,23 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
             </div>
             <div className="workflow-actions">
               {ACTIONABLE_STATUSES.has(request.status) ? <span className="status-pill">Action needed</span> : null}
-              <label>
-                Manual status
-                <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                  {[request.status, ...WORKFLOW_STATUSES.filter((candidate) => candidate !== request.status)].map((candidate) => (
-                    <option key={candidate} value={candidate}>{candidate}</option>
-                  ))}
-                </select>
-              </label>
-              <button className="primary-button" disabled={savingStatus || status === request.status} onClick={() => void updateStatus()} type="button">
-                {savingStatus ? 'Updating…' : 'Update status'}
-              </button>
+              {request.status === 'Draft' ? (
+                <p className="page-card__description">Draft requests must be submitted through the requester form before workflow status changes are available.</p>
+              ) : (
+                <>
+                  <label>
+                    Manual status
+                    <select value={status} onChange={(event) => setStatus(event.target.value)}>
+                      {[request.status, ...WORKFLOW_STATUSES.filter((candidate) => candidate !== request.status)].map((candidate) => (
+                        <option key={candidate} value={candidate}>{candidate}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className="primary-button" disabled={savingStatus || status === request.status} onClick={() => void updateStatus()} type="button">
+                    {savingStatus ? 'Updating…' : 'Update status'}
+                  </button>
+                </>
+              )}
             </div>
           </section>
 
