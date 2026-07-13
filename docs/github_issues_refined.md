@@ -209,16 +209,20 @@ Create and maintain the request search index so dashboard and list pages can que
 
 ## GI-10: Dashboard Queue MVP
 
+### Reconciled status
+
+Absorbed by GitHub issue #38 / PR #41 (`663dd24`). Keep #39 and #40 as separate Phase 2 follow-ups for Global History and Export wiring.
+
 ### What to build
 
 Build the dashboard page with summary cards and a request queue table so users can monitor request workload and open a request from the list.
 
 ### Acceptance criteria
 
-- [ ] Dashboard shows summary cards for key request counts.
-- [ ] Dashboard displays a request list table with core columns from the specification.
-- [ ] Search and filter controls work through the request query API.
-- [ ] Selecting a request from the table navigates to its detail page.
+- [x] Dashboard shows summary cards for key request counts.
+- [x] Dashboard displays a request list table with core columns from the specification.
+- [x] Search and filter controls work through the request query API.
+- [x] Selecting a request from the table navigates to its detail page.
 
 ### Blocked by
 
