@@ -96,4 +96,14 @@ describe('RequestHeaderSummary', () => {
     expect(html).toContain('Lin / GNTC')
     expect(requesterFieldsAreReadOnly('request', request)).toBe(true)
   })
+
+  it('ignores non-string saved field values instead of crashing the detail header', () => {
+    const request = buildSubmittedRequest()
+    const malformedRequesterData = request.requesterData as unknown as Record<string, unknown>
+    malformedRequesterData.delivery_by_v4 = 42
+
+    const html = renderToStaticMarkup(<RequestHeaderSummary request={request} />)
+
+    expect(html).toContain('<span>Due Date</span><strong>—</strong>')
+  })
 })

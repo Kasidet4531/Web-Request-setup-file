@@ -51,7 +51,18 @@ function requesterValueForCanonicalKey(request: PsfRequestResponse, canonicalKey
     request.requesterData[canonicalKey],
   ]
 
-  return candidateValues.find((value) => value?.trim().length)?.trim() ?? null
+  for (const value of candidateValues) {
+    if (typeof value !== 'string') {
+      continue
+    }
+
+    const trimmed = value.trim()
+    if (trimmed) {
+      return trimmed
+    }
+  }
+
+  return null
 }
 
 function getRequestTitle(request: PsfRequestListItem | PsfRequestResponse): string {
