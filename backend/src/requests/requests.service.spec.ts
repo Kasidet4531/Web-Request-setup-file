@@ -183,27 +183,80 @@ describe('RequestsService draft flow', () => {
     });
   });
 
-  it('returns only backend-authorized next statuses for a setup owner', async () => {
-    const actor = {
-      id: 'user-1',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
-      role: 'setup_owner' as const,
-      setupOwnerDepartment: 'GNTC' as const,
-    };
-    pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Submitted' }],
-    });
-
-    await expect(
-      service.getAllowedStatusTransitions('request-1', actor),
-    ).resolves.toEqual({
+  it.each([
+    {
+      actor: {
+        id: 'requester-1',
+        username: 'requester.demo',
+        displayName: 'Requester Demo',
+        role: 'requester' as const,
+        setupOwnerDepartment: null,
+      },
+      allowedNextStatuses: ['Cancelled'],
+      currentStatus: 'Submitted',
+      description: 'returns the requester cancellation option from Submitted',
+    },
+    {
+      actor: {
+        id: 'requester-1',
+        username: 'requester.demo',
+        displayName: 'Requester Demo',
+        role: 'requester' as const,
+        setupOwnerDepartment: null,
+      },
+      allowedNextStatuses: ['Submitted', 'Cancelled'],
+      currentStatus: 'Need More Information',
+      description:
+        'returns the requester resubmit and cancellation options from Need More Information',
+    },
+    {
+      actor: {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      },
       allowedNextStatuses: [
         'Setup In Progress',
         'Need More Information',
         'Rejected',
       ],
+      currentStatus: 'Submitted',
+      description: 'returns setup-owner options from Submitted',
+    },
+    {
+      actor: {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      },
+      allowedNextStatuses: ['PSF Created', 'Need More Information', 'Rejected'],
+      currentStatus: 'Setup In Progress',
+      description: 'returns setup-owner options from Setup In Progress',
+    },
+    {
+      actor: {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      },
+      allowedNextStatuses: ['Completed', 'Need More Information'],
+      currentStatus: 'PSF Created',
+      description: 'returns setup-owner options from PSF Created',
+    },
+  ])('$description', async ({ actor, allowedNextStatuses, currentStatus }) => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: currentStatus }],
     });
+
+    await expect(
+      service.getAllowedStatusTransitions('request-1', actor),
+    ).resolves.toEqual({ allowedNextStatuses });
   });
 
   it('allows a setup owner to manually move a submitted request into setup and records the acting owner', async () => {
