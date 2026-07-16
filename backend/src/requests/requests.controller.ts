@@ -10,12 +10,16 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
-import type { AuthenticatedRequest } from '../auth/session.types';
+import type {
+  AuthenticatedRequest,
+  AuthenticatedUserProfile,
+} from '../auth/session.types';
 import { RequestsService } from './requests.service';
 import type {
   CreateDraftRequestDto,
   PsfRequestResponse,
   RequestQueryDto,
+  RequestStatusOptionsResponse,
   SubmitDraftRequestDto,
   UpdateDraftRequesterDataDto,
   UpdateRequestStatusBodyDto,
@@ -41,6 +45,16 @@ export class RequestsController {
     return this.requestsService.queryRequests(query);
   }
 
+  @Get(':requestId/status-options')
+  async getAllowedStatusTransitions(
+    @Param('requestId') requestId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<RequestStatusOptionsResponse> {
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.getAllowedStatusTransitions(requestId, actor);
+  }
+
   @Get(':requestId')
   getRequest(
     @Param('requestId') requestId: string,
@@ -62,18 +76,7 @@ export class RequestsController {
     @Body() body: UpdateRequestStatusBodyDto,
     @Req() request: AuthenticatedRequest,
   ): Promise<PsfRequestResponse> {
-    const userId = request.session.userId;
-
-    if (!userId) {
-      throw new UnauthorizedException('Not authenticated');
-    }
-
-    const actor = await this.authService.getProfile(userId);
-
-    if (!actor) {
-      request.session.userId = undefined;
-      throw new UnauthorizedException('Not authenticated');
-    }
+    const actor = await this.getAuthenticatedActor(request);
 
     return this.requestsService.updateRequestStatus(requestId, {
       status: body.status,
@@ -87,5 +90,24 @@ export class RequestsController {
     @Body() body: SubmitDraftRequestDto,
   ): Promise<PsfRequestResponse> {
     return this.requestsService.submitRequest(requestId, body);
+  }
+
+  private async getAuthenticatedActor(
+    request: AuthenticatedRequest,
+  ): Promise<AuthenticatedUserProfile> {
+    const userId = request.session.userId;
+
+    if (!userId) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    const actor = await this.authService.getProfile(userId);
+
+    if (!actor) {
+      request.session.userId = undefined;
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    return actor;
   }
 }

@@ -122,6 +122,10 @@ export interface UpdatePsfRequestStatusPayload {
   status: string
 }
 
+export interface PsfRequestStatusOptionsResponse {
+  allowedNextStatuses: string[]
+}
+
 export interface SubmitPsfRequestPayload {
   formVersion: number
 }
@@ -225,6 +229,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
       }),
     fetchPsfRequest: (requestId: string) =>
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}`, {
+        method: 'GET',
+      }),
+    fetchPsfRequestStatusOptions: (requestId: string) =>
+      request<PsfRequestStatusOptionsResponse>(`/requests/${encodeURIComponent(requestId)}/status-options`, {
         method: 'GET',
       }),
     updateDraftRequesterData: (requestId: string, payload: PsfRequestPayload) =>

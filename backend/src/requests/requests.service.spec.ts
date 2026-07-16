@@ -183,6 +183,29 @@ describe('RequestsService draft flow', () => {
     });
   });
 
+  it('returns only backend-authorized next statuses for a setup owner', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Submitted' }],
+    });
+
+    await expect(
+      service.getAllowedStatusTransitions('request-1', actor),
+    ).resolves.toEqual({
+      allowedNextStatuses: [
+        'Setup In Progress',
+        'Need More Information',
+        'Rejected',
+      ],
+    });
+  });
+
   it('allows a setup owner to manually move a submitted request into setup and records the acting owner', async () => {
     const actor = {
       id: 'user-1',

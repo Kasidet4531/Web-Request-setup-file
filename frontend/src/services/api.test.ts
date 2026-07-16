@@ -192,6 +192,27 @@ describe('createApiClient', () => {
     }))
   })
 
+  it('loads backend-authoritative workflow options for a request detail', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({
+        allowedNextStatuses: ['Setup In Progress', 'Need More Information', 'Rejected'],
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(client.fetchPsfRequestStatusOptions('request-1')).resolves.toEqual({
+      allowedNextStatuses: ['Setup In Progress', 'Need More Information', 'Rejected'],
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/requests/request-1/status-options',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
   it('submits a draft request by id', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ id: 'request-1', status: 'Submitted' }), {
@@ -213,7 +234,7 @@ describe('createApiClient', () => {
     }))
   })
 
-  it('queries requests and updates workflow status through backend endpoints', async () => {
+  it('updates workflow status and loads the next server-authorized options through backend endpoints', async () => {
     globalThis.fetch = vi
       .fn()
       .mockResolvedValueOnce(
@@ -224,6 +245,12 @@ describe('createApiClient', () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: 'request-1', status: 'Setup In Progress' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ allowedNextStatuses: ['PSF Created', 'Need More Information', 'Rejected'] }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -241,6 +268,9 @@ describe('createApiClient', () => {
       id: 'request-1',
       status: 'Setup In Progress',
     })
+    await expect(client.fetchPsfRequestStatusOptions('request-1')).resolves.toEqual({
+      allowedNextStatuses: ['PSF Created', 'Need More Information', 'Rejected'],
+    })
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
       1,
@@ -251,6 +281,11 @@ describe('createApiClient', () => {
       body: JSON.stringify({ status: 'Setup In Progress' }),
       method: 'PUT',
     }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/requests/request-1/status-options',
+      expect.objectContaining({ method: 'GET' }),
+    )
   })
 
   it('posts logout with the current session cookie', async () => {

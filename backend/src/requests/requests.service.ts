@@ -84,6 +84,10 @@ export interface UpdateRequestStatusDto extends UpdateRequestStatusBodyDto {
   actor: AuthenticatedUserProfile;
 }
 
+export interface RequestStatusOptionsResponse {
+  allowedNextStatuses: string[];
+}
+
 export type RequestQueryDto = RequestSearchFilters;
 
 export interface PsfRequestResponse {
@@ -206,6 +210,32 @@ export class RequestsService implements OnModuleInit {
     }
 
     return this.mapRequestRow(request);
+  }
+
+  async getAllowedStatusTransitions(
+    id: string,
+    actor: AuthenticatedUserProfile,
+  ): Promise<RequestStatusOptionsResponse> {
+    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+      `
+        SELECT id, status
+        FROM psf_requests
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    const request = current.rows[0];
+    if (!request) {
+      throw new NotFoundException(`PSF request ${id} was not found`);
+    }
+
+    return {
+      allowedNextStatuses: this.getAllowedNextStatuses(
+        actor.role,
+        request.status,
+      ),
+    };
   }
 
   async updateDraftRequesterData(
@@ -477,14 +507,28 @@ export class RequestsService implements OnModuleInit {
       return;
     }
 
-    const allowedTargets =
-      STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [];
+    const allowedTargets = this.getAllowedNextStatuses(role, currentStatus);
 
     if (!allowedTargets.includes(nextStatus)) {
       throw new ForbiddenException(
         `${role} is not allowed to move a request from ${currentStatus} to ${nextStatus}`,
       );
     }
+  }
+
+  private getAllowedNextStatuses(
+    role: AuthenticatedUserProfile['role'],
+    currentStatus: string,
+  ): string[] {
+    if (currentStatus === DRAFT_STATUS) {
+      return [];
+    }
+
+    if (role === 'admin') {
+      return ALL_MANUAL_STATUSES.filter((status) => status !== currentStatus);
+    }
+
+    return [...(STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [])];
   }
 
   private async rollbackSubmitTransaction(client: PoolClient): Promise<void> {

@@ -8,6 +8,7 @@ describe('RequestsController draft flow', () => {
   let controller: RequestsController;
   let service: {
     createDraft: jest.Mock;
+    getAllowedStatusTransitions: jest.Mock;
     getRequest: jest.Mock;
     queryRequests: jest.Mock;
     submitRequest: jest.Mock;
@@ -19,6 +20,7 @@ describe('RequestsController draft flow', () => {
   beforeEach(async () => {
     service = {
       createDraft: jest.fn(),
+      getAllowedStatusTransitions: jest.fn(),
       getRequest: jest.fn(),
       queryRequests: jest.fn(),
       submitRequest: jest.fn(),
@@ -79,6 +81,50 @@ describe('RequestsController draft flow', () => {
       id: 'request-1',
       status: 'Draft',
     });
+  });
+
+  it('returns backend-authoritative status options for the authenticated actor', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.getAllowedStatusTransitions.mockResolvedValue({
+      allowedNextStatuses: [
+        'Setup In Progress',
+        'Need More Information',
+        'Rejected',
+      ],
+    });
+
+    await expect(
+      controller.getAllowedStatusTransitions('request-1', {
+        session: { userId: 'user-1' },
+      } as never),
+    ).resolves.toEqual({
+      allowedNextStatuses: [
+        'Setup In Progress',
+        'Need More Information',
+        'Rejected',
+      ],
+    });
+    expect(service.getAllowedStatusTransitions).toHaveBeenCalledWith(
+      'request-1',
+      actor,
+    );
+  });
+
+  it('rejects status-option lookup without a session user', async () => {
+    await expect(
+      controller.getAllowedStatusTransitions('request-1', {
+        session: {},
+      } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(service.getAllowedStatusTransitions).not.toHaveBeenCalled();
   });
 
   it('updates requester-owned data for a draft request', async () => {
