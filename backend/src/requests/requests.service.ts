@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -322,14 +323,17 @@ export class RequestsService implements OnModuleInit {
             completed_at = CASE WHEN $2 = '${COMPLETED_STATUS}' THEN NOW() ELSE completed_at END,
             updated_at = NOW()
         WHERE id = $1
+          AND status = $5
         RETURNING *
       `,
-      [id, dto.status, actorName, actorDepartment],
+      [id, dto.status, actorName, actorDepartment, currentRequest.status],
     );
 
     const updatedRow = result.rows[0];
     if (!updatedRow) {
-      throw new NotFoundException(`PSF request ${id} was not found`);
+      throw new ConflictException(
+        'The request status changed before this update. Reload the request and try again.',
+      );
     }
 
     await this.searchIndexService.upsertRequestSearchIndex(

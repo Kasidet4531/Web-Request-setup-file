@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -323,6 +324,47 @@ describe('RequestsService draft flow', () => {
       setupOwner: 'Setup Owner GNTC Demo',
       setupOwnerRole: 'GNTC',
     });
+  });
+
+  it('rejects a stale status transition when the persisted status changes after validation', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Submitted' }],
+    });
+    pool.query.mockResolvedValueOnce({ rows: [] });
+
+    let error: unknown = undefined;
+    try {
+      await service.updateRequestStatus('request-1', {
+        status: 'Setup In Progress',
+        actor,
+      });
+    } catch (caughtError) {
+      error = caughtError;
+    }
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error).toHaveProperty(
+      'message',
+      'The request status changed before this update. Reload the request and try again.',
+    );
+
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringMatching(/WHERE id = \$1\s+AND status = \$5/),
+      [
+        'request-1',
+        'Setup In Progress',
+        'Setup Owner GNTC Demo',
+        'GNTC',
+        'Submitted',
+      ],
+    );
   });
 
   it('rejects a requester attempting a setup-owner-only transition', async () => {
