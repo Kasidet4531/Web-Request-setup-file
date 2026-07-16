@@ -42,18 +42,88 @@ function statusClassName(status: string): string {
   return `status-badge status-badge--${status.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
+function requesterValueForCanonicalKey(request: PsfRequestResponse, canonicalKey: string): string | null {
+  const matchingField = request.schemaSnapshot.sections
+    .flatMap((section) => section.fields)
+    .find((field) => field.canonicalKey === canonicalKey)
+  const candidateValues = [
+    matchingField ? request.requesterData[matchingField.fieldKey] : undefined,
+    request.requesterData[canonicalKey],
+  ]
+
+  for (const value of candidateValues) {
+    if (typeof value !== 'string') {
+      continue
+    }
+
+    const trimmed = value.trim()
+    if (trimmed) {
+      return trimmed
+    }
+  }
+
+  return null
+}
+
 function getRequestTitle(request: PsfRequestListItem | PsfRequestResponse): string {
   if ('title' in request && request.title) {
     return request.title
   }
 
-  return request.productType ? `${request.productType} PSF request` : 'Untitled PSF request'
+  const snapshotTitle = 'schemaSnapshot' in request ? requesterValueForCanonicalKey(request, 'title') : null
+  if (snapshotTitle) {
+    return snapshotTitle
+  }
+
+  const productType = request.productType ?? ('schemaSnapshot' in request ? requesterValueForCanonicalKey(request, 'product_type') : null)
+  return productType ? `${productType} PSF request` : 'Untitled PSF request'
 }
 
 function getOwnerLabel(request: PsfRequestListItem | PsfRequestResponse): string {
   const owner = request.setupOwner ?? 'Unassigned'
   const dept = request.setupOwnerRole ? ` / ${request.setupOwnerRole}` : ''
   return `${owner}${dept}`
+}
+
+interface RequestDetailSummary {
+  requestNo: string
+  title: string
+  productType: string
+  status: string
+  priority: string
+  dueDate: string | null
+  requester: string
+  owner: string
+}
+
+function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSummary {
+  return {
+    requestNo: request.requestNo,
+    title: getRequestTitle(request),
+    productType: request.productType ?? requesterValueForCanonicalKey(request, 'product_type') ?? '—',
+    status: request.status,
+    priority: requesterValueForCanonicalKey(request, 'priority') ?? 'Normal',
+    dueDate: requesterValueForCanonicalKey(request, 'due_date'),
+    requester: request.requester ?? requesterValueForCanonicalKey(request, 'requester') ?? '—',
+    owner: getOwnerLabel(request),
+  }
+}
+
+export function RequestHeaderSummary({ request }: { request: PsfRequestResponse }) {
+  const summary = buildRequestDetailSummary(request)
+
+  return (
+    <section className="detail-summary-grid" aria-label="Request header">
+      <div><span>Request No.</span><strong>{summary.requestNo}</strong></div>
+      <div><span>Title</span><strong>{summary.title}</strong></div>
+      <div><span>Product Type</span><strong>{summary.productType}</strong></div>
+      <div><span>Status</span><strong className={statusClassName(summary.status)}>{summary.status}</strong></div>
+      <div><span>Priority</span><strong>{summary.priority}</strong></div>
+      <div><span>Due Date</span><strong>{formatDate(summary.dueDate)}</strong></div>
+      <div><span>Requester</span><strong>{summary.requester}</strong></div>
+      <div><span>Owner / Dept</span><strong>{summary.owner}</strong></div>
+    </section>
+  )
 }
 
 function roleAwareRequestQuery(user: AuthenticatedUserProfile | null, extra: PsfRequestQuery = {}): PsfRequestQuery {
@@ -401,10 +471,10 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
     <article className="page-card workflow-page">
       <div className="page-card__header">
         <div>
-          <p className="page-card__eyebrow">Workflow detail</p>
-          <h1>{request ? request.requestNo : 'PSF Request Detail'}</h1>
+          <p className="page-card__eyebrow">{request ? `Request ${request.requestNo}` : 'Workflow detail'}</p>
+          <h1>{request ? getRequestTitle(request) : 'PSF Request Detail'}</h1>
           <p className="page-card__description">
-            Header summary, workflow actions, manual status transition, and dynamic requester sections.
+            Header summary, workflow actions, manual status transition, and schema-driven requester information.
           </p>
         </div>
         <div className="button-row">
@@ -423,15 +493,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
 
       {request ? (
         <>
-          <section className="detail-summary-grid" aria-label="Request summary">
-            <div><span>Title</span><strong>{getRequestTitle(request)}</strong></div>
-            <div><span>Product Type</span><strong>{request.productType ?? '—'}</strong></div>
-            <div><span>Status</span><strong className={statusClassName(request.status)}>{request.status}</strong></div>
-            <div><span>Priority</span><strong>{String(request.requesterData.priority ?? 'Normal')}</strong></div>
-            <div><span>Due Date</span><strong>{formatDate(String(request.requesterData.due_date ?? '') || null)}</strong></div>
-            <div><span>Requester</span><strong>{request.requester ?? '—'}</strong></div>
-            <div><span>Owner / Dept</span><strong>{getOwnerLabel(request)}</strong></div>
-          </section>
+          <RequestHeaderSummary request={request} />
 
           <section className="workflow-section">
             <div className="section-heading">
