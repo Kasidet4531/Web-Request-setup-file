@@ -192,6 +192,52 @@ describe('createApiClient', () => {
     }))
   })
 
+  it('updates PSF Created Information through the authenticated request endpoint', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({
+        id: 'request-1',
+        status: 'Setup In Progress',
+        psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const updatePsfCreatedData = Reflect.get(
+      client,
+      'updatePsfCreatedData',
+    ) as undefined | ((
+      requestId: string,
+      payload: {
+        expectedUpdatedAt: string
+        psfCreatedData: Record<string, string>
+      },
+    ) => Promise<unknown>)
+
+    expect(updatePsfCreatedData).toBeTypeOf('function')
+    if (!updatePsfCreatedData) {
+      return
+    }
+
+    await expect(
+      updatePsfCreatedData('request-1', {
+        expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+        psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+      }),
+    ).resolves.toMatchObject({
+      psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/requests/request-1/psf-created-data', expect.objectContaining({
+      body: JSON.stringify({
+        expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+        psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+      }),
+      method: 'PUT',
+    }))
+  })
+
   it('loads backend-authoritative workflow options for a request detail', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({

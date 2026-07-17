@@ -13,6 +13,7 @@ describe('RequestsController draft flow', () => {
     queryRequests: jest.Mock;
     submitRequest: jest.Mock;
     updateDraftRequesterData: jest.Mock;
+    updatePsfCreatedData: jest.Mock;
     updateRequestStatus: jest.Mock;
   };
   let authService: { getProfile: jest.Mock };
@@ -25,6 +26,7 @@ describe('RequestsController draft flow', () => {
       queryRequests: jest.fn(),
       submitRequest: jest.fn(),
       updateDraftRequesterData: jest.fn(),
+      updatePsfCreatedData: jest.fn(),
       updateRequestStatus: jest.fn(),
     };
     authService = { getProfile: jest.fn() };
@@ -74,13 +76,47 @@ describe('RequestsController draft flow', () => {
     });
   });
 
-  it('loads a request detail by id', async () => {
-    service.getRequest.mockResolvedValue({ id: 'request-1', status: 'Draft' });
-
-    await expect(controller.getRequest('request-1')).resolves.toEqual({
+  it('loads request detail for the authenticated actor so PSF Created Information can be masked server-side', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.getRequest.mockResolvedValue({
       id: 'request-1',
-      status: 'Draft',
+      status: 'Submitted',
     });
+
+    const getRequestForActor = controller.getRequest.bind(
+      controller,
+    ) as unknown as (
+      requestId: string,
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      getRequestForActor('request-1', { session: { userId: 'user-1' } }),
+    ).resolves.toEqual({ id: 'request-1', status: 'Submitted' });
+
+    expect(service.getRequest).toHaveBeenCalledWith('request-1', actor);
+  });
+
+  it('rejects request detail lookup without a session user', async () => {
+    const getRequestForActor = controller.getRequest.bind(
+      controller,
+    ) as unknown as (
+      requestId: string,
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      getRequestForActor('request-1', { session: {} }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(service.getRequest).not.toHaveBeenCalled();
   });
 
   it('returns backend-authoritative status options for the authenticated actor', async () => {
@@ -144,6 +180,112 @@ describe('RequestsController draft flow', () => {
       requester: 'Fook',
       requesterData: { product_type: 'Transfer Product' },
     });
+  });
+
+  it('passes an authenticated actor to the PSF Created Information write service', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.updatePsfCreatedData.mockResolvedValue({
+      id: 'request-1',
+      status: 'Setup In Progress',
+    });
+    const invokeUpdate = async () => {
+      const updatePsfCreatedData = Reflect.get(
+        controller,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        body: {
+          psfCreatedData: Record<string, unknown>;
+          expectedUpdatedAt: string;
+        },
+        request: { session: { userId?: string } },
+      ) => Promise<unknown>;
+
+      return updatePsfCreatedData.call(
+        controller,
+        'request-1',
+        {
+          psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+          expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+        },
+        { session: { userId: 'user-1' } },
+      );
+    };
+
+    await expect(invokeUpdate()).resolves.toEqual({
+      id: 'request-1',
+      status: 'Setup In Progress',
+    });
+    expect(service.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      actor,
+      expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+      psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+    });
+  });
+
+  it('forwards a null PSF Created Information body to service validation without throwing in the controller', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.updatePsfCreatedData.mockResolvedValue({
+      id: 'request-1',
+      status: 'Setup In Progress',
+    });
+    const updatePsfCreatedData = Reflect.get(
+      controller,
+      'updatePsfCreatedData',
+    ) as (
+      requestId: string,
+      body: null,
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      updatePsfCreatedData.call(controller, 'request-1', null, {
+        session: { userId: 'user-1' },
+      }),
+    ).resolves.toEqual({ id: 'request-1', status: 'Setup In Progress' });
+
+    expect(service.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      actor,
+      expectedUpdatedAt: undefined,
+      psfCreatedData: undefined,
+    });
+  });
+
+  it('rejects PSF Created Information writes without a session user', async () => {
+    const invokeUpdate = async () => {
+      const updatePsfCreatedData = Reflect.get(
+        controller,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        body: { psfCreatedData: Record<string, unknown> },
+        request: { session: { userId?: string } },
+      ) => Promise<unknown>;
+
+      return updatePsfCreatedData.call(
+        controller,
+        'request-1',
+        { psfCreatedData: { psf_setup_file_name: 'final-setup.psf' } },
+        { session: {} },
+      );
+    };
+
+    await expect(invokeUpdate()).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.updatePsfCreatedData).not.toHaveBeenCalled();
   });
 
   it('submits a draft request by id', async () => {

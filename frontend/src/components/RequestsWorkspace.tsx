@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { DynamicFormRenderer } from './DynamicFormRenderer'
 import {
   ApiError,
   api,
@@ -10,6 +11,7 @@ import {
   type PsfRequestQuery,
   type PsfRequestResponse,
 } from '../services/api'
+import type { DynamicFormValues } from '../types/forms'
 
 const WORKFLOW_STATUSES = [
   'Submitted',
@@ -166,6 +168,60 @@ export function WorkflowStatusActions({
       </button>
     </>
   )
+}
+
+export const PSF_CREATED_INFORMATION_PLACEHOLDER =
+  'PSF Created Information is reserved for Setup Owners and becomes visible to Requesters after PSF Created or Completed.'
+
+export interface PsfCreatedInformationPanelProps {
+  onChange: (fieldKey: string, value: string) => void
+  onSave: (values: DynamicFormValues) => void
+  request: PsfRequestResponse
+  saving: boolean
+  values: DynamicFormValues
+}
+
+export function PsfCreatedInformationPanel({
+  onChange,
+  onSave,
+  request,
+  saving,
+  values,
+}: PsfCreatedInformationPanelProps) {
+  if (!request.psfCreatedDataVisible) {
+    return (
+      <p className="page-card__description" role="status">
+        {PSF_CREATED_INFORMATION_PLACEHOLDER}
+      </p>
+    )
+  }
+
+  const canEdit = request.canEditPsfCreatedData
+
+  return (
+    <>
+      {saving ? <p className="page-card__description" role="status">Saving PSF Created Information…</p> : null}
+      <DynamicFormRenderer
+        onChange={canEdit ? onChange : undefined}
+        onSubmit={canEdit ? onSave : undefined}
+        readOnly={!canEdit || saving}
+        schema={request.psfCreatedInformationSchema}
+        submitLabel="Save PSF Created Information"
+        values={values}
+      />
+    </>
+  )
+}
+
+function buildPsfCreatedInformationValues(request: PsfRequestResponse): DynamicFormValues {
+  return request.psfCreatedInformationSchema.sections.reduce<DynamicFormValues>((values, section) => {
+    section.fields.forEach((field) => {
+      const value = request.psfCreatedData[field.fieldKey]
+      values[field.fieldKey] = typeof value === 'string' ? value : ''
+    })
+
+    return values
+  }, {})
 }
 
 function roleAwareRequestQuery(user: AuthenticatedUserProfile | null, extra: PsfRequestQuery = {}): PsfRequestQuery {
@@ -456,11 +512,13 @@ export function RequestDetailRoutePage() {
 
 export function RequestDetailShell({ requestId }: { requestId: string }) {
   const [request, setRequest] = useState<PsfRequestResponse | null>(null)
+  const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
   const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [savingPsfCreatedData, setSavingPsfCreatedData] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
 
   useEffect(() => {
@@ -482,6 +540,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
 
         if (mounted) {
           setRequest(response)
+          setPsfCreatedValues(buildPsfCreatedInformationValues(response))
           setAllowedNextStatuses(nextAllowedStatuses)
           setStatus(nextAllowedStatuses[0] ?? '')
           setLoading(false)
@@ -513,6 +572,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
     try {
       const updatedRequest = await api.updatePsfRequestStatus(request.id, { status })
       setRequest(updatedRequest)
+      setPsfCreatedValues(buildPsfCreatedInformationValues(updatedRequest))
       setMessage(`Request ${updatedRequest.requestNo} moved to ${updatedRequest.status}.`)
 
       try {
@@ -534,6 +594,51 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
       setError(statusError instanceof Error ? statusError.message : 'Unable to update workflow status')
     } finally {
       setSavingStatus(false)
+    }
+  }
+
+  function updatePsfCreatedInformation(fieldKey: string, value: string) {
+    setPsfCreatedValues((currentValues) => ({ ...currentValues, [fieldKey]: value }))
+    setError(null)
+    setMessage(null)
+  }
+
+  async function savePsfCreatedInformation(values: DynamicFormValues) {
+    if (!request || !request.canEditPsfCreatedData) {
+      return
+    }
+
+    setSavingPsfCreatedData(true)
+    setError(null)
+    setMessage(null)
+
+    try {
+      const savedRequest = await api.updatePsfCreatedData(request.id, {
+        expectedUpdatedAt: request.updatedAt,
+        psfCreatedData: values,
+      })
+      setRequest(savedRequest)
+      setPsfCreatedValues(buildPsfCreatedInformationValues(savedRequest))
+      setMessage(`PSF Created Information for ${savedRequest.requestNo} saved.`)
+    } catch (saveError) {
+      if (saveError instanceof ApiError && saveError.status === 409) {
+        try {
+          const refreshedRequest = await api.fetchPsfRequest(request.id)
+          setRequest(refreshedRequest)
+          setPsfCreatedValues(buildPsfCreatedInformationValues(refreshedRequest))
+          setError(
+            'PSF Created Information changed while you were editing. The latest data has been loaded; review it and save again.',
+          )
+        } catch {
+          setError(
+            'PSF Created Information changed while you were editing. Reload the request and try again.',
+          )
+        }
+      } else {
+        setError(saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information')
+      }
+    } finally {
+      setSavingPsfCreatedData(false)
     }
   }
 
@@ -591,13 +696,13 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
 
           <section className="workflow-section">
             <h2>PSF Created Information</h2>
-            {request.status === 'PSF Created' || request.status === 'Completed' ? (
-              <pre className="json-preview">{JSON.stringify(request.psfCreatedData, null, 2)}</pre>
-            ) : (
-              <p className="page-card__description">
-                PSF Created Information is reserved for Setup Owners and becomes visible to Requesters after PSF Created or Completed.
-              </p>
-            )}
+            <PsfCreatedInformationPanel
+              onChange={updatePsfCreatedInformation}
+              onSave={(values) => void savePsfCreatedInformation(values)}
+              request={request}
+              saving={savingPsfCreatedData}
+              values={psfCreatedValues}
+            />
           </section>
         </>
       ) : null}

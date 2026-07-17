@@ -122,6 +122,11 @@ export interface UpdatePsfRequestStatusPayload {
   status: string
 }
 
+export interface UpdatePsfCreatedDataPayload {
+  expectedUpdatedAt: string
+  psfCreatedData: DynamicFormValues
+}
+
 export interface PsfRequestStatusOptionsResponse {
   allowedNextStatuses: string[]
 }
@@ -142,6 +147,9 @@ export interface PsfRequestResponse {
   productType: string | null
   requesterData: DynamicFormValues
   psfCreatedData: Record<string, unknown>
+  psfCreatedDataVisible: boolean
+  canEditPsfCreatedData: boolean
+  psfCreatedInformationSchema: FormSchema
   schemaSnapshot: FormSchema
   createdAt: string
   updatedAt: string
@@ -237,6 +245,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       }),
     updateDraftRequesterData: (requestId: string, payload: PsfRequestPayload) =>
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/requester-data`, {
+        body: payload,
+        method: 'PUT',
+      }),
+    updatePsfCreatedData: (requestId: string, payload: UpdatePsfCreatedDataPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/psf-created-data`, {
         body: payload,
         method: 'PUT',
       }),
