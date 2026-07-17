@@ -22,6 +22,7 @@ import type {
   RequestStatusOptionsResponse,
   SubmitDraftRequestDto,
   UpdateDraftRequesterDataDto,
+  UpdatePsfCreatedDataBodyDto,
   UpdateRequestStatusBodyDto,
 } from './requests.service';
 import type { RequestSearchResult } from './search-index.service';
@@ -56,10 +57,13 @@ export class RequestsController {
   }
 
   @Get(':requestId')
-  getRequest(
+  async getRequest(
     @Param('requestId') requestId: string,
+    @Req() request: AuthenticatedRequest,
   ): Promise<PsfRequestResponse> {
-    return this.requestsService.getRequest(requestId);
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.getRequest(requestId, actor);
   }
 
   @Put(':requestId/requester-data')
@@ -68,6 +72,20 @@ export class RequestsController {
     @Body() body: UpdateDraftRequesterDataDto,
   ): Promise<PsfRequestResponse> {
     return this.requestsService.updateDraftRequesterData(requestId, body);
+  }
+
+  @Put(':requestId/psf-created-data')
+  async updatePsfCreatedData(
+    @Param('requestId') requestId: string,
+    @Body() body: UpdatePsfCreatedDataBodyDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PsfRequestResponse> {
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.updatePsfCreatedData(requestId, {
+      actor,
+      psfCreatedData: body.psfCreatedData,
+    });
   }
 
   @Put(':requestId/status')

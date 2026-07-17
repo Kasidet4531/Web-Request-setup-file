@@ -1,16 +1,19 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RequestDetailShell,
   RequestHeaderSummary,
   WorkflowStatusActions,
 } from './RequestsWorkspace'
+import * as RequestsWorkspace from './RequestsWorkspace'
 import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
 import type { PsfRequestResponse } from '../services/api'
 
 const requestDetailApi = vi.hoisted(() => ({
   fetchPsfRequest: vi.fn(),
   fetchPsfRequestStatusOptions: vi.fn(),
+  updatePsfCreatedData: vi.fn(),
   updatePsfRequestStatus: vi.fn(),
 }))
 
@@ -180,6 +183,29 @@ function buildSubmittedRequest(): PsfRequestResponse {
       urgency_v4: 'Urgent',
     },
     psfCreatedData: {},
+    psfCreatedDataVisible: false,
+    canEditPsfCreatedData: false,
+    psfCreatedInformationSchema: {
+      formKey: 'psf-created-information',
+      version: 1,
+      title: 'PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'psf_created_information',
+          title: 'PSF Created Information',
+          visibleTo: ['requester', 'setup_owner', 'admin'],
+          fields: [
+            {
+              fieldKey: 'psf_setup_file_name',
+              canonicalKey: 'psf_setup_file_name',
+              label: 'PSF Setup File Name',
+              type: 'text',
+              required: false,
+            },
+          ],
+        },
+      ],
+    },
     schemaSnapshot: {
       formKey: 'psf-request',
       version: 4,
@@ -235,6 +261,24 @@ function buildSubmittedRequest(): PsfRequestResponse {
     psfCreatedAt: null,
     completedAt: null,
   }
+}
+
+type PsfCreatedInformationPanel = (props: {
+  onChange: (fieldKey: string, value: string) => void
+  onSave: (values: Record<string, string>) => void
+  request: PsfRequestResponse
+  saving: boolean
+  values: Record<string, string>
+}) => ReactElement
+
+function getPsfCreatedInformationPanel(): PsfCreatedInformationPanel | undefined {
+  const panel = Reflect.get(
+    RequestsWorkspace,
+    'PsfCreatedInformationPanel',
+  ) as PsfCreatedInformationPanel | undefined
+
+  expect(panel).toBeTypeOf('function')
+  return panel
 }
 
 describe('RequestHeaderSummary', () => {
@@ -324,10 +368,68 @@ describe('WorkflowStatusActions', () => {
   })
 })
 
+describe('PsfCreatedInformationPanel', () => {
+  it('shows only the friendly placeholder when the backend masks PSF Created Information', () => {
+    const panel = getPsfCreatedInformationPanel()
+    if (!panel) {
+      return
+    }
+    const request = {
+      ...buildSubmittedRequest(),
+      status: 'Setup In Progress',
+      psfCreatedData: { psf_setup_file_name: 'restricted-setup.psf' },
+      psfCreatedDataVisible: false,
+      canEditPsfCreatedData: false,
+    }
+
+    const html = renderToStaticMarkup(panel({
+      request,
+      values: { psf_setup_file_name: 'restricted-setup.psf' },
+      saving: false,
+      onChange: () => undefined,
+      onSave: () => undefined,
+    }))
+
+    expect(html).toContain(
+      'PSF Created Information is reserved for Setup Owners and becomes visible to Requesters after PSF Created or Completed.',
+    )
+    expect(html).not.toContain('restricted-setup.psf')
+    expect(html).not.toContain('<form')
+  })
+
+  it('renders visible PSF Created Information read-only when the backend allows requester visibility', () => {
+    const panel = getPsfCreatedInformationPanel()
+    if (!panel) {
+      return
+    }
+    const request = {
+      ...buildSubmittedRequest(),
+      status: 'PSF Created',
+      psfCreatedData: { psf_setup_file_name: 'visible-setup.psf' },
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: false,
+    }
+
+    const html = renderToStaticMarkup(panel({
+      request,
+      values: { psf_setup_file_name: 'visible-setup.psf' },
+      saving: false,
+      onChange: () => undefined,
+      onSave: () => undefined,
+    }))
+
+    expect(html).toContain('PSF Setup File Name')
+    expect(html).toContain('visible-setup.psf')
+    expect(html).toMatch(/<input[^>]*disabled=""[^>]*>/)
+    expect(html).not.toContain('Save PSF Created Information')
+  })
+})
+
 describe('RequestDetailShell workflow actions', () => {
   beforeEach(() => {
     requestDetailApi.fetchPsfRequest.mockReset()
     requestDetailApi.fetchPsfRequestStatusOptions.mockReset()
+    requestDetailApi.updatePsfCreatedData.mockReset()
     requestDetailApi.updatePsfRequestStatus.mockReset()
     requestDetailHookHarness.reset()
   })
@@ -375,6 +477,103 @@ describe('RequestDetailShell workflow actions', () => {
     expect(actions.props.allowedNextStatuses).toEqual(['PSF Created', 'Need More Information', 'Rejected'])
     expect(actions.props.selectedStatus).toBe('PSF Created')
     expect(success.props.children).toBe('Request PSF-0001 moved to Setup In Progress.')
+  })
+
+  it('saves editable PSF Created Information and refreshes the local detail state', async () => {
+    const setupOwnerRequest = {
+      ...buildSubmittedRequest(),
+      status: 'Setup In Progress',
+      psfCreatedData: { psf_setup_file_name: 'initial-setup.psf' },
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: true,
+    }
+    const savedRequest = {
+      ...setupOwnerRequest,
+      psfCreatedData: { psf_setup_file_name: 'saved-setup.psf' },
+    }
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(setupOwnerRequest)
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({
+      allowedNextStatuses: ['PSF Created', 'Need More Information', 'Rejected'],
+    })
+    requestDetailApi.updatePsfCreatedData.mockResolvedValue(savedRequest)
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    let shell = renderRequestDetailShell()
+    const panel = getPsfCreatedInformationPanel()
+    if (!panel) {
+      return
+    }
+    let panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const onSave = panelElement.props.onSave
+    if (typeof onSave !== 'function') {
+      throw new Error('Expected PSF Created Information save callback')
+    }
+
+    onSave({ psf_setup_file_name: 'saved-setup.psf' })
+    await flushRequestDetailAsyncWork()
+    shell = renderRequestDetailShell()
+    panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const success = requireRenderedElement(shell, (element) => element.props.role === 'status')
+
+    expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      psfCreatedData: { psf_setup_file_name: 'saved-setup.psf' },
+    })
+    expect(panelElement.props.request).toMatchObject({
+      psfCreatedData: { psf_setup_file_name: 'saved-setup.psf' },
+    })
+    expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'saved-setup.psf' })
+    expect(success.props.children).toBe('PSF Created Information for PSF-0001 saved.')
+  })
+
+  it('keeps editable PSF Created Information values and exposes save failures through an alert', async () => {
+    const setupOwnerRequest = {
+      ...buildSubmittedRequest(),
+      status: 'Setup In Progress',
+      psfCreatedData: { psf_setup_file_name: 'initial-setup.psf' },
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: true,
+    }
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(setupOwnerRequest)
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({
+      allowedNextStatuses: ['PSF Created', 'Need More Information', 'Rejected'],
+    })
+    requestDetailApi.updatePsfCreatedData.mockRejectedValue(new Error('PSF data validation failed'))
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    let shell = renderRequestDetailShell()
+    const panel = getPsfCreatedInformationPanel()
+    if (!panel) {
+      return
+    }
+    let panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const onChange = panelElement.props.onChange
+    if (typeof onChange !== 'function') {
+      throw new Error('Expected PSF Created Information change callback')
+    }
+    onChange('psf_setup_file_name', 'retry-setup.psf')
+    shell = renderRequestDetailShell()
+    panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const onSave = panelElement.props.onSave
+    if (typeof onSave !== 'function') {
+      throw new Error('Expected PSF Created Information save callback')
+    }
+
+    onSave(panelElement.props.values)
+    await flushRequestDetailAsyncWork()
+    shell = renderRequestDetailShell()
+
+    panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const alert = requireRenderedElement(shell, (element) => element.props.role === 'alert')
+
+    expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      psfCreatedData: { psf_setup_file_name: 'retry-setup.psf' },
+    })
+    expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'retry-setup.psf' })
+    expect(alert.props.children).toBe('PSF data validation failed')
   })
 
   it('keeps workflow detail stable and exposes a status update failure through an alert', async () => {

@@ -446,6 +446,337 @@ describe('RequestsService draft flow', () => {
     });
   });
 
+  it('masks raw PSF Created Information for a requester before PSF Created', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          request_no: 'PSF-0001',
+          form_key: 'psf-request',
+          form_version: 3,
+          status: 'Setup In Progress',
+          requester: 'Fook',
+          setup_owner: 'Setup Owner GNTC Demo',
+          setup_owner_role: 'GNTC',
+          product_type: 'Existing Product',
+          requester_data_json: { product_type: 'Existing Product' },
+          psf_created_data_json: {
+            psf_setup_file_name: 'restricted-setup.psf',
+            attachment_reference: 'smb://restricted/share/layout.pdf',
+          },
+          schema_snapshot_json: activeSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:06:03.000Z'),
+          submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+    const requester = {
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    type MaskedPsfCreatedDetail = {
+      psfCreatedData: Record<string, unknown>;
+      psfCreatedDataVisible: boolean;
+      canEditPsfCreatedData: boolean;
+      psfCreatedInformationSchema: {
+        formKey: string;
+        sections: Array<{
+          sectionKey: string;
+          fields: Array<{ fieldKey: string; required: boolean }>;
+        }>;
+      };
+    };
+    const getRequestForActor = service.getRequest.bind(service) as unknown as (
+      requestId: string,
+      actor: typeof requester,
+    ) => Promise<MaskedPsfCreatedDetail>;
+
+    const response = await getRequestForActor('request-1', requester);
+    expect(response).toMatchObject({
+      psfCreatedData: {},
+      psfCreatedDataVisible: false,
+      canEditPsfCreatedData: false,
+      psfCreatedInformationSchema: {
+        formKey: 'psf-created-information',
+      },
+    });
+    const section = response.psfCreatedInformationSchema.sections.find(
+      ({ sectionKey }) => sectionKey === 'psf_created_information',
+    );
+    expect(
+      section?.fields.some(
+        ({ fieldKey, required }) =>
+          fieldKey === 'psf_setup_file_name' && required === false,
+      ),
+    ).toBe(true);
+  });
+
+  it.each(['PSF Created', 'Completed'])(
+    'returns PSF Created Information read-only to a requester at %s',
+    async (status) => {
+      pool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            request_no: 'PSF-0001',
+            form_key: 'psf-request',
+            form_version: 3,
+            status,
+            requester: 'Fook',
+            setup_owner: 'Setup Owner GNTC Demo',
+            setup_owner_role: 'GNTC',
+            product_type: 'Existing Product',
+            requester_data_json: { product_type: 'Existing Product' },
+            psf_created_data_json: {
+              psf_setup_file_name: 'visible-setup.psf',
+            },
+            schema_snapshot_json: activeSchema.schema,
+            created_at: new Date('2026-06-18T01:02:03.000Z'),
+            updated_at: new Date('2026-06-18T01:06:03.000Z'),
+            submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+            psf_created_at: new Date('2026-06-18T01:06:03.000Z'),
+            completed_at:
+              status === 'Completed'
+                ? new Date('2026-06-18T01:07:03.000Z')
+                : null,
+          },
+        ],
+      });
+      const requester = {
+        id: 'requester-1',
+        username: 'requester.demo',
+        displayName: 'Requester Demo',
+        role: 'requester' as const,
+        setupOwnerDepartment: null,
+      };
+      const getRequestForActor = service.getRequest.bind(
+        service,
+      ) as unknown as (
+        requestId: string,
+        actor: typeof requester,
+      ) => Promise<unknown>;
+
+      await expect(
+        getRequestForActor('request-1', requester),
+      ).resolves.toMatchObject({
+        status,
+        psfCreatedData: { psf_setup_file_name: 'visible-setup.psf' },
+        psfCreatedDataVisible: true,
+        canEditPsfCreatedData: false,
+      });
+    },
+  );
+
+  it('allows a setup owner to save normalized PSF Created Information without changing status and records the acting owner', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const updatedRow = {
+      id: 'request-1',
+      request_no: 'PSF-0001',
+      form_key: 'psf-request',
+      form_version: 3,
+      status: 'Setup In Progress',
+      requester: 'Fook',
+      setup_owner: 'Setup Owner GNTC Demo',
+      setup_owner_role: 'GNTC',
+      product_type: 'Existing Product',
+      requester_data_json: { product_type: 'Existing Product' },
+      psf_created_data_json: {
+        psf_setup_file_name: 'final-setup.psf',
+        attachment_reference: 'https://files.example/final-layout.pdf',
+      },
+      schema_snapshot_json: activeSchema.schema,
+      created_at: new Date('2026-06-18T01:02:03.000Z'),
+      updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+      psf_created_at: null,
+      completed_at: null,
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+    });
+    pool.query.mockResolvedValueOnce({ rows: [updatedRow] });
+
+    const invokeUpdate = async () => {
+      const updatePsfCreatedData = Reflect.get(
+        service,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
+      ) => Promise<unknown>;
+
+      return updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        psfCreatedData: {
+          psf_setup_file_name: ' final-setup.psf ',
+          attachment_reference: ' https://files.example/final-layout.pdf ',
+          layout: 42,
+          unexpected_field: 'must be dropped',
+        },
+      });
+    };
+
+    await expect(invokeUpdate()).resolves.toMatchObject({
+      status: 'Setup In Progress',
+      setupOwner: 'Setup Owner GNTC Demo',
+      setupOwnerRole: 'GNTC',
+      psfCreatedData: {
+        psf_setup_file_name: 'final-setup.psf',
+        attachment_reference: 'https://files.example/final-layout.pdf',
+      },
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: true,
+    });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      [
+        'request-1',
+        {
+          psf_setup_file_name: 'final-setup.psf',
+          attachment_reference: 'https://files.example/final-layout.pdf',
+        },
+        'Setup Owner GNTC Demo',
+        'GNTC',
+      ],
+    );
+    const queryCalls = pool.query.mock.calls as unknown as Array<
+      [string, unknown[]]
+    >;
+    expect(queryCalls[1]?.[0]).not.toContain('SET status');
+  });
+
+  it('rejects a requester attempting to save PSF Created Information', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+    });
+    const actor = {
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    const invokeUpdate = async () => {
+      const updatePsfCreatedData = Reflect.get(
+        service,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
+      ) => Promise<unknown>;
+
+      return updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        psfCreatedData: { psf_setup_file_name: 'requester-overwrite.psf' },
+      });
+    };
+
+    await expect(invokeUpdate()).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a setup owner attempting to save PSF Created Information after Completed', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Completed' }],
+    });
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const invokeUpdate = async () => {
+      const updatePsfCreatedData = Reflect.get(
+        service,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
+      ) => Promise<unknown>;
+
+      return updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        psfCreatedData: { psf_setup_file_name: 'late-change.psf' },
+      });
+    };
+
+    await expect(invokeUpdate()).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows an admin to save PSF Created Information after Completed without replacing the saved owner', async () => {
+    const updatedRow = {
+      id: 'request-1',
+      request_no: 'PSF-0001',
+      form_key: 'psf-request',
+      form_version: 3,
+      status: 'Completed',
+      requester: 'Fook',
+      setup_owner: 'Setup Owner GNTC Demo',
+      setup_owner_role: 'GNTC',
+      product_type: 'Existing Product',
+      requester_data_json: { product_type: 'Existing Product' },
+      psf_created_data_json: { psf_setup_file_name: 'admin-corrected.psf' },
+      schema_snapshot_json: activeSchema.schema,
+      created_at: new Date('2026-06-18T01:02:03.000Z'),
+      updated_at: new Date('2026-06-18T01:08:03.000Z'),
+      submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+      psf_created_at: new Date('2026-06-18T01:06:03.000Z'),
+      completed_at: new Date('2026-06-18T01:07:03.000Z'),
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Completed' }],
+    });
+    pool.query.mockResolvedValueOnce({ rows: [updatedRow] });
+    const actor = {
+      id: 'admin-1',
+      username: 'admin.demo',
+      displayName: 'Admin Demo',
+      role: 'admin' as const,
+      setupOwnerDepartment: null,
+    };
+    const invokeUpdate = async () => {
+      const updatePsfCreatedData = Reflect.get(
+        service,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
+      ) => Promise<unknown>;
+
+      return updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        psfCreatedData: { psf_setup_file_name: 'admin-corrected.psf' },
+      });
+    };
+
+    await expect(invokeUpdate()).resolves.toMatchObject({
+      status: 'Completed',
+      setupOwner: 'Setup Owner GNTC Demo',
+      setupOwnerRole: 'GNTC',
+      psfCreatedData: { psf_setup_file_name: 'admin-corrected.psf' },
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: true,
+    });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.not.stringContaining("status <> 'Completed'"),
+      ['request-1', { psf_setup_file_name: 'admin-corrected.psf' }, null, null],
+    );
+  });
+
   it('updates requester-owned draft data while the request status is Draft', async () => {
     pool.query.mockResolvedValueOnce({
       rows: [

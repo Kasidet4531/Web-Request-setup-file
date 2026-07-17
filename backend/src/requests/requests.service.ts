@@ -61,6 +61,93 @@ const ALL_MANUAL_STATUSES = [
   CANCELLED_STATUS,
 ];
 
+const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
+  formKey: 'psf-created-information',
+  version: 1,
+  title: 'PSF Created Information',
+  sections: [
+    {
+      sectionKey: 'psf_created_information',
+      title: 'PSF Created Information',
+      visibleTo: ['requester', 'setup_owner', 'admin'],
+      fields: [
+        {
+          fieldKey: 'first_die_ref_xy',
+          canonicalKey: 'first_die_ref_xy',
+          label: 'First Die Ref. (X,Y)',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'probe_coordinate_quadrant',
+          canonicalKey: 'probe_coordinate_quadrant',
+          label: 'Probe & Coordinate Quadrant',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'wafer_id_format',
+          canonicalKey: 'wafer_id_format',
+          label: 'Wafer ID Format',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'mirror_die_available',
+          canonicalKey: 'mirror_die_available',
+          label: 'Mirror Die Available',
+          type: 'select',
+          required: false,
+          options: ['Yes', 'No'],
+        },
+        {
+          fieldKey: 'prepare_fpc_and_physical_wafer_to_psf_cabinet_e2',
+          canonicalKey: 'prepare_fpc_and_physical_wafer_to_psf_cabinet_e2',
+          label: 'Prepare FPC & Physical Wafer to PSF Cabinet E2',
+          type: 'select',
+          required: false,
+          options: ['Yes', 'No'],
+        },
+        {
+          fieldKey: 'psf_setup_file_name',
+          canonicalKey: 'psf_setup_file_name',
+          label: 'PSF Setup File Name',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'job_file_name',
+          canonicalKey: 'job_file_name',
+          label: 'Job File Name',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'template',
+          canonicalKey: 'template',
+          label: 'Template',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'layout',
+          canonicalKey: 'layout',
+          label: 'Layout',
+          type: 'text',
+          required: false,
+        },
+        {
+          fieldKey: 'attachment_reference',
+          canonicalKey: 'attachment_reference',
+          label: 'Attachment Reference',
+          type: 'text',
+          required: false,
+        },
+      ],
+    },
+  ],
+};
+
 export type RequesterData = Record<string, unknown>;
 
 export interface CreateDraftRequestDto {
@@ -85,6 +172,14 @@ export interface UpdateRequestStatusDto extends UpdateRequestStatusBodyDto {
   actor: AuthenticatedUserProfile;
 }
 
+export interface UpdatePsfCreatedDataBodyDto {
+  psfCreatedData: RequesterData;
+}
+
+export interface UpdatePsfCreatedDataDto extends UpdatePsfCreatedDataBodyDto {
+  actor: AuthenticatedUserProfile;
+}
+
 export interface RequestStatusOptionsResponse {
   allowedNextStatuses: string[];
 }
@@ -103,6 +198,9 @@ export interface PsfRequestResponse {
   productType: string | null;
   requesterData: RequesterData;
   psfCreatedData: RequesterData;
+  psfCreatedDataVisible: boolean;
+  canEditPsfCreatedData: boolean;
+  psfCreatedInformationSchema: FormSchemaJson;
   schemaSnapshot: FormSchemaJson;
   createdAt: string;
   updatedAt: string;
@@ -195,7 +293,10 @@ export class RequestsService implements OnModuleInit {
     });
   }
 
-  async getRequest(id: string): Promise<PsfRequestResponse> {
+  async getRequest(
+    id: string,
+    actor?: AuthenticatedUserProfile,
+  ): Promise<PsfRequestResponse> {
     const result = await this.pool.query<PsfRequestRow>(
       `
         SELECT *
@@ -210,7 +311,7 @@ export class RequestsService implements OnModuleInit {
       throw new NotFoundException(`PSF request ${id} was not found`);
     }
 
-    return this.mapRequestRow(request);
+    return this.mapRequestRow(request, actor);
   }
 
   async getAllowedStatusTransitions(
@@ -284,6 +385,74 @@ export class RequestsService implements OnModuleInit {
     return this.mapRequestRow(result.rows[0]);
   }
 
+  async updatePsfCreatedData(
+    id: string,
+    dto: UpdatePsfCreatedDataDto,
+  ): Promise<PsfRequestResponse> {
+    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+      `
+        SELECT id, status
+        FROM psf_requests
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    const request = current.rows[0];
+    if (!request) {
+      throw new NotFoundException(`PSF request ${id} was not found`);
+    }
+
+    if (dto.actor.role === 'requester') {
+      throw new ForbiddenException(
+        'Only Setup File Owners and admins can edit PSF Created Information',
+      );
+    }
+
+    if (
+      dto.actor.role === 'setup_owner' &&
+      request.status === COMPLETED_STATUS
+    ) {
+      throw new ForbiddenException(
+        'Setup File Owners cannot edit PSF Created Information once the request is Completed',
+      );
+    }
+
+    const psfCreatedData = this.normalizePsfCreatedDataToSchema(
+      dto.psfCreatedData,
+    );
+    const actorName =
+      dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
+    const actorDepartment =
+      dto.actor.role === 'setup_owner' ? dto.actor.setupOwnerDepartment : null;
+    const ownerCompletionGuard =
+      dto.actor.role === 'setup_owner'
+        ? `AND status <> '${COMPLETED_STATUS}'`
+        : '';
+    const result = await this.pool.query<PsfRequestRow>(
+      `
+        UPDATE psf_requests
+        SET psf_created_data_json = $2::jsonb,
+            setup_owner = COALESCE($3, setup_owner),
+            setup_owner_role = COALESCE($4, setup_owner_role),
+            updated_at = NOW()
+        WHERE id = $1
+          ${ownerCompletionGuard}
+        RETURNING *
+      `,
+      [id, psfCreatedData, actorName, actorDepartment],
+    );
+
+    const updatedRow = result.rows[0];
+    if (!updatedRow) {
+      throw new ForbiddenException(
+        'Setup File Owners cannot edit PSF Created Information once the request is Completed',
+      );
+    }
+
+    return this.mapRequestRow(updatedRow, dto.actor);
+  }
+
   async updateRequestStatus(
     id: string,
     dto: UpdateRequestStatusDto,
@@ -354,7 +523,7 @@ export class RequestsService implements OnModuleInit {
       ),
     );
 
-    return this.mapRequestRow(updatedRow);
+    return this.mapRequestRow(updatedRow, dto.actor);
   }
 
   async submitRequest(
@@ -600,6 +769,32 @@ export class RequestsService implements OnModuleInit {
     return nextData;
   }
 
+  private normalizePsfCreatedDataToSchema(
+    psfCreatedData: RequesterData,
+  ): RequesterData {
+    const nextData: RequesterData = {};
+
+    PSF_CREATED_INFORMATION_SCHEMA.sections.forEach((section) => {
+      section.fields.forEach((field) => {
+        if (!Object.hasOwn(psfCreatedData, field.fieldKey)) {
+          return;
+        }
+
+        const value = this.normalizeString(psfCreatedData[field.fieldKey]);
+        if (
+          value === null ||
+          (field.options && !field.options.includes(value))
+        ) {
+          return;
+        }
+
+        nextData[field.fieldKey] = value;
+      });
+    });
+
+    return nextData;
+  }
+
   private assertRequiredRequesterFieldsPresent(
     schema: FormSchemaJson,
     requesterData: RequesterData,
@@ -633,7 +828,44 @@ export class RequestsService implements OnModuleInit {
       : null;
   }
 
-  private mapRequestRow(row: PsfRequestRow): PsfRequestResponse {
+  private psfCreatedDataIsVisibleTo(
+    status: string,
+    actor?: AuthenticatedUserProfile,
+  ): boolean {
+    if (!actor) {
+      return false;
+    }
+
+    return (
+      actor.role !== 'requester' ||
+      status === PSF_CREATED_STATUS ||
+      status === COMPLETED_STATUS
+    );
+  }
+
+  private canActorEditPsfCreatedData(
+    status: string,
+    actor?: AuthenticatedUserProfile,
+  ): boolean {
+    if (!actor) {
+      return false;
+    }
+
+    return (
+      actor.role === 'admin' ||
+      (actor.role === 'setup_owner' && status !== COMPLETED_STATUS)
+    );
+  }
+
+  private mapRequestRow(
+    row: PsfRequestRow,
+    actor?: AuthenticatedUserProfile,
+  ): PsfRequestResponse {
+    const psfCreatedDataVisible = this.psfCreatedDataIsVisibleTo(
+      row.status,
+      actor,
+    );
+
     return {
       id: row.id,
       requestNo: row.request_no,
@@ -645,7 +877,12 @@ export class RequestsService implements OnModuleInit {
       setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,
       requesterData: row.requester_data_json ?? {},
-      psfCreatedData: row.psf_created_data_json ?? {},
+      psfCreatedData: psfCreatedDataVisible
+        ? (row.psf_created_data_json ?? {})
+        : {},
+      psfCreatedDataVisible,
+      canEditPsfCreatedData: this.canActorEditPsfCreatedData(row.status, actor),
+      psfCreatedInformationSchema: PSF_CREATED_INFORMATION_SCHEMA,
       schemaSnapshot: row.schema_snapshot_json,
       createdAt: this.serializeTimestamp(row.created_at),
       updatedAt: this.serializeTimestamp(row.updated_at),
