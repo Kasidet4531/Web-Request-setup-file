@@ -21,8 +21,6 @@ const WORKFLOW_STATUSES = [
   'Cancelled',
 ]
 
-const ACTIONABLE_STATUSES = new Set(['Submitted', 'Setup In Progress', 'Need More Information'])
-
 interface AsyncState<T> {
   loading: boolean
   error: string | null
@@ -123,6 +121,50 @@ export function RequestHeaderSummary({ request }: { request: PsfRequestResponse 
       <div><span>Requester</span><strong>{summary.requester}</strong></div>
       <div><span>Owner / Dept</span><strong>{summary.owner}</strong></div>
     </section>
+  )
+}
+
+export interface WorkflowStatusActionsProps {
+  allowedNextStatuses: string[]
+  currentStatus: string
+  onApply: () => void
+  onStatusChange: (status: string) => void
+  saving: boolean
+  selectedStatus: string
+}
+
+export function WorkflowStatusActions({
+  allowedNextStatuses,
+  currentStatus,
+  onApply,
+  onStatusChange,
+  saving,
+  selectedStatus,
+}: WorkflowStatusActionsProps) {
+  if (allowedNextStatuses.length === 0) {
+    return (
+      <p className="page-card__description">
+        Workflow status: <strong>{currentStatus}</strong> (read-only)
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <label>
+        Status
+        <select disabled={saving} onChange={(event) => onStatusChange(event.target.value)} value={selectedStatus}>
+          {allowedNextStatuses.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="primary-button" disabled={saving || !selectedStatus} onClick={onApply} type="button">
+        {saving ? 'Applying status…' : 'Apply status'}
+      </button>
+    </>
   )
 }
 
@@ -414,6 +456,7 @@ export function RequestDetailRoutePage() {
 
 export function RequestDetailShell({ requestId }: { requestId: string }) {
   const [request, setRequest] = useState<PsfRequestResponse | null>(null)
+  const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -426,9 +469,21 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
     async function loadRequest() {
       try {
         const response = await api.fetchPsfRequest(requestId)
+        let nextAllowedStatuses: string[] = []
+
+        try {
+          const statusOptions = await api.fetchPsfRequestStatusOptions(requestId)
+          nextAllowedStatuses = statusOptions.allowedNextStatuses
+        } catch (statusOptionsError) {
+          if (!(statusOptionsError instanceof ApiError && statusOptionsError.status === 401)) {
+            throw statusOptionsError
+          }
+        }
+
         if (mounted) {
           setRequest(response)
-          setStatus(response.status)
+          setAllowedNextStatuses(nextAllowedStatuses)
+          setStatus(nextAllowedStatuses[0] ?? '')
           setLoading(false)
         }
       } catch (loadError) {
@@ -447,7 +502,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
   }, [requestId])
 
   async function updateStatus() {
-    if (!request || !status || status === request.status) {
+    if (!request || !status || !allowedNextStatuses.includes(status)) {
       return
     }
 
@@ -456,10 +511,25 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
     setMessage(null)
 
     try {
-      const updated = await api.updatePsfRequestStatus(request.id, { status })
-      setRequest(updated)
-      setStatus(updated.status)
-      setMessage(`Request ${updated.requestNo} moved to ${updated.status}.`)
+      const updatedRequest = await api.updatePsfRequestStatus(request.id, { status })
+      setRequest(updatedRequest)
+      setMessage(`Request ${updatedRequest.requestNo} moved to ${updatedRequest.status}.`)
+
+      try {
+        const statusOptions = await api.fetchPsfRequestStatusOptions(request.id)
+        setAllowedNextStatuses(statusOptions.allowedNextStatuses)
+        setStatus(statusOptions.allowedNextStatuses[0] ?? '')
+      } catch (statusOptionsError) {
+        setAllowedNextStatuses([])
+        setStatus('')
+        setError(
+          `Request status was updated, but workflow options could not be refreshed: ${
+            statusOptionsError instanceof Error
+              ? statusOptionsError.message
+              : 'Unable to refresh workflow status options'
+          }`,
+        )
+      }
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Unable to update workflow status')
     } finally {
@@ -499,34 +569,24 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
             <div className="section-heading">
               <div>
                 <h2>Workflow actions</h2>
-                <p>Quick action candidates are shown by status; the manual dropdown is validated by the backend session role.</p>
+                <p>Available status transitions are determined by your authenticated server session.</p>
               </div>
             </div>
             <div className="workflow-actions">
-              {ACTIONABLE_STATUSES.has(request.status) ? <span className="status-pill">Action needed</span> : null}
-              {request.status === 'Draft' ? (
-                <p className="page-card__description">Draft requests must be submitted through the requester form before workflow status changes are available.</p>
-              ) : (
-                <>
-                  <label>
-                    Manual status
-                    <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                      {[request.status, ...WORKFLOW_STATUSES.filter((candidate) => candidate !== request.status)].map((candidate) => (
-                        <option key={candidate} value={candidate}>{candidate}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <button className="primary-button" disabled={savingStatus || status === request.status} onClick={() => void updateStatus()} type="button">
-                    {savingStatus ? 'Updating…' : 'Update status'}
-                  </button>
-                </>
-              )}
+              <WorkflowStatusActions
+                allowedNextStatuses={allowedNextStatuses}
+                currentStatus={request.status}
+                onApply={() => void updateStatus()}
+                onStatusChange={setStatus}
+                saving={savingStatus}
+                selectedStatus={status}
+              />
             </div>
           </section>
 
           <section className="workflow-section">
             <h2>Requester Information</h2>
-            <ActiveSchemaForm mode="request" requestId={requestId} />
+            <ActiveSchemaForm key={`${request.id}-${request.status}`} mode="request" requestId={requestId} />
           </section>
 
           <section className="workflow-section">

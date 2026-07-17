@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -82,6 +83,10 @@ export interface UpdateRequestStatusBodyDto {
 
 export interface UpdateRequestStatusDto extends UpdateRequestStatusBodyDto {
   actor: AuthenticatedUserProfile;
+}
+
+export interface RequestStatusOptionsResponse {
+  allowedNextStatuses: string[];
 }
 
 export type RequestQueryDto = RequestSearchFilters;
@@ -208,6 +213,32 @@ export class RequestsService implements OnModuleInit {
     return this.mapRequestRow(request);
   }
 
+  async getAllowedStatusTransitions(
+    id: string,
+    actor: AuthenticatedUserProfile,
+  ): Promise<RequestStatusOptionsResponse> {
+    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+      `
+        SELECT id, status
+        FROM psf_requests
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    const request = current.rows[0];
+    if (!request) {
+      throw new NotFoundException(`PSF request ${id} was not found`);
+    }
+
+    return {
+      allowedNextStatuses: this.getAllowedNextStatuses(
+        actor.role,
+        request.status,
+      ),
+    };
+  }
+
   async updateDraftRequesterData(
     id: string,
     dto: UpdateDraftRequesterDataDto,
@@ -292,14 +323,17 @@ export class RequestsService implements OnModuleInit {
             completed_at = CASE WHEN $2 = '${COMPLETED_STATUS}' THEN NOW() ELSE completed_at END,
             updated_at = NOW()
         WHERE id = $1
+          AND status = $5
         RETURNING *
       `,
-      [id, dto.status, actorName, actorDepartment],
+      [id, dto.status, actorName, actorDepartment, currentRequest.status],
     );
 
     const updatedRow = result.rows[0];
     if (!updatedRow) {
-      throw new NotFoundException(`PSF request ${id} was not found`);
+      throw new ConflictException(
+        'The request status changed before this update. Reload the request and try again.',
+      );
     }
 
     await this.searchIndexService.upsertRequestSearchIndex(
@@ -477,14 +511,28 @@ export class RequestsService implements OnModuleInit {
       return;
     }
 
-    const allowedTargets =
-      STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [];
+    const allowedTargets = this.getAllowedNextStatuses(role, currentStatus);
 
     if (!allowedTargets.includes(nextStatus)) {
       throw new ForbiddenException(
         `${role} is not allowed to move a request from ${currentStatus} to ${nextStatus}`,
       );
     }
+  }
+
+  private getAllowedNextStatuses(
+    role: AuthenticatedUserProfile['role'],
+    currentStatus: string,
+  ): string[] {
+    if (currentStatus === DRAFT_STATUS) {
+      return [];
+    }
+
+    if (role === 'admin') {
+      return ALL_MANUAL_STATUSES.filter((status) => status !== currentStatus);
+    }
+
+    return [...(STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [])];
   }
 
   private async rollbackSubmitTransaction(client: PoolClient): Promise<void> {
