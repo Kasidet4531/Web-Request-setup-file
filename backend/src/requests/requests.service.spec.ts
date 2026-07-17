@@ -581,6 +581,7 @@ describe('RequestsService draft flow', () => {
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
+    const currentUpdatedAt = new Date('2026-06-18T01:05:03.000Z');
     const updatedRow = {
       id: 'request-1',
       request_no: 'PSF-0001',
@@ -604,7 +605,13 @@ describe('RequestsService draft flow', () => {
       completed_at: null,
     };
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Setup In Progress',
+          updated_at: currentUpdatedAt,
+        },
+      ],
     });
     pool.query.mockResolvedValueOnce({ rows: [updatedRow] });
 
@@ -614,11 +621,16 @@ describe('RequestsService draft flow', () => {
         'updatePsfCreatedData',
       ) as (
         requestId: string,
-        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
+        dto: {
+          actor: typeof actor;
+          expectedUpdatedAt: string;
+          psfCreatedData: Record<string, unknown>;
+        },
       ) => Promise<unknown>;
 
       return updatePsfCreatedData.call(service, 'request-1', {
         actor,
+        expectedUpdatedAt: currentUpdatedAt.toISOString(),
         psfCreatedData: {
           psf_setup_file_name: ' final-setup.psf ',
           attachment_reference: ' https://files.example/final-layout.pdf ',
@@ -649,12 +661,173 @@ describe('RequestsService draft flow', () => {
         },
         'Setup Owner GNTC Demo',
         'GNTC',
+        currentUpdatedAt,
       ],
     );
     const queryCalls = pool.query.mock.calls as unknown as Array<
       [string, unknown[]]
     >;
     expect(queryCalls[1]?.[0]).not.toContain('SET status');
+  });
+
+  it.each([undefined, null, [], 'not-an-object'])(
+    'rejects malformed PSF Created Information payload %p with a controlled bad request before writing',
+    async (psfCreatedData) => {
+      const actor = {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      };
+      pool.query.mockResolvedValueOnce({
+        rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+      });
+      const updatePsfCreatedData = Reflect.get(
+        service,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        dto: {
+          actor: typeof actor;
+          expectedUpdatedAt: string;
+          psfCreatedData: unknown;
+        },
+      ) => Promise<unknown>;
+
+      await expect(
+        updatePsfCreatedData.call(service, 'request-1', {
+          actor,
+          expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+          psfCreatedData,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(pool.query).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('requires a valid fetched updatedAt value before saving PSF Created Information', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+    });
+    const updatePsfCreatedData = Reflect.get(
+      service,
+      'updatePsfCreatedData',
+    ) as (
+      requestId: string,
+      dto: {
+        actor: typeof actor;
+        expectedUpdatedAt: unknown;
+        psfCreatedData: Record<string, unknown>;
+      },
+    ) => Promise<unknown>;
+
+    await expect(
+      updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        expectedUpdatedAt: undefined,
+        psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a conflict when another owner saves between the PSF Created Information read and write', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const currentUpdatedAt = new Date('2026-06-18T01:05:03.000Z');
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Setup In Progress',
+          updated_at: currentUpdatedAt,
+        },
+      ],
+    });
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    const updatePsfCreatedData = Reflect.get(
+      service,
+      'updatePsfCreatedData',
+    ) as (
+      requestId: string,
+      dto: {
+        actor: typeof actor;
+        expectedUpdatedAt: string;
+        psfCreatedData: Record<string, unknown>;
+      },
+    ) => Promise<unknown>;
+
+    await expect(
+      updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        expectedUpdatedAt: currentUpdatedAt.toISOString(),
+        psfCreatedData: { psf_setup_file_name: 'stale-setup.psf' },
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining(
+        "updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))",
+      ),
+      [
+        'request-1',
+        { psf_setup_file_name: 'stale-setup.psf' },
+        'Setup Owner GNTC Demo',
+        'GNTC',
+        currentUpdatedAt,
+      ],
+    );
+  });
+
+  it('rejects a client snapshot that is older than the fetched request updatedAt', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Setup In Progress',
+          updated_at: new Date('2026-06-18T01:06:03.000Z'),
+        },
+      ],
+    });
+    const updatePsfCreatedData = Reflect.get(
+      service,
+      'updatePsfCreatedData',
+    ) as (
+      requestId: string,
+      dto: {
+        actor: typeof actor;
+        expectedUpdatedAt: string;
+        psfCreatedData: Record<string, unknown>;
+      },
+    ) => Promise<unknown>;
+
+    await expect(
+      updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+        psfCreatedData: { psf_setup_file_name: 'stale-setup.psf' },
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a requester attempting to save PSF Created Information', async () => {
@@ -718,6 +891,7 @@ describe('RequestsService draft flow', () => {
   });
 
   it('allows an admin to save PSF Created Information after Completed without replacing the saved owner', async () => {
+    const currentUpdatedAt = new Date('2026-06-18T01:07:03.000Z');
     const updatedRow = {
       id: 'request-1',
       request_no: 'PSF-0001',
@@ -738,7 +912,13 @@ describe('RequestsService draft flow', () => {
       completed_at: new Date('2026-06-18T01:07:03.000Z'),
     };
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Completed' }],
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Completed',
+          updated_at: currentUpdatedAt,
+        },
+      ],
     });
     pool.query.mockResolvedValueOnce({ rows: [updatedRow] });
     const actor = {
@@ -754,11 +934,16 @@ describe('RequestsService draft flow', () => {
         'updatePsfCreatedData',
       ) as (
         requestId: string,
-        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
+        dto: {
+          actor: typeof actor;
+          expectedUpdatedAt: string;
+          psfCreatedData: Record<string, unknown>;
+        },
       ) => Promise<unknown>;
 
       return updatePsfCreatedData.call(service, 'request-1', {
         actor,
+        expectedUpdatedAt: currentUpdatedAt.toISOString(),
         psfCreatedData: { psf_setup_file_name: 'admin-corrected.psf' },
       });
     };
@@ -773,7 +958,13 @@ describe('RequestsService draft flow', () => {
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.not.stringContaining("status <> 'Completed'"),
-      ['request-1', { psf_setup_file_name: 'admin-corrected.psf' }, null, null],
+      [
+        'request-1',
+        { psf_setup_file_name: 'admin-corrected.psf' },
+        null,
+        null,
+        currentUpdatedAt,
+      ],
     );
   });
 

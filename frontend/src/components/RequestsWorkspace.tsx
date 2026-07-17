@@ -614,13 +614,29 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
 
     try {
       const savedRequest = await api.updatePsfCreatedData(request.id, {
+        expectedUpdatedAt: request.updatedAt,
         psfCreatedData: values,
       })
       setRequest(savedRequest)
       setPsfCreatedValues(buildPsfCreatedInformationValues(savedRequest))
       setMessage(`PSF Created Information for ${savedRequest.requestNo} saved.`)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information')
+      if (saveError instanceof ApiError && saveError.status === 409) {
+        try {
+          const refreshedRequest = await api.fetchPsfRequest(request.id)
+          setRequest(refreshedRequest)
+          setPsfCreatedValues(buildPsfCreatedInformationValues(refreshedRequest))
+          setError(
+            'PSF Created Information changed while you were editing. The latest data has been loaded; review it and save again.',
+          )
+        } catch {
+          setError(
+            'PSF Created Information changed while you were editing. Reload the request and try again.',
+          )
+        }
+      } else {
+        setError(saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information')
+      }
     } finally {
       setSavingPsfCreatedData(false)
     }

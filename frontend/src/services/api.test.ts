@@ -208,7 +208,13 @@ describe('createApiClient', () => {
     const updatePsfCreatedData = Reflect.get(
       client,
       'updatePsfCreatedData',
-    ) as undefined | ((requestId: string, payload: { psfCreatedData: Record<string, string> }) => Promise<unknown>)
+    ) as undefined | ((
+      requestId: string,
+      payload: {
+        expectedUpdatedAt: string
+        psfCreatedData: Record<string, string>
+      },
+    ) => Promise<unknown>)
 
     expect(updatePsfCreatedData).toBeTypeOf('function')
     if (!updatePsfCreatedData) {
@@ -217,6 +223,7 @@ describe('createApiClient', () => {
 
     await expect(
       updatePsfCreatedData('request-1', {
+        expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
         psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
       }),
     ).resolves.toMatchObject({
@@ -224,6 +231,7 @@ describe('createApiClient', () => {
     })
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/requests/request-1/psf-created-data', expect.objectContaining({
       body: JSON.stringify({
+        expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
         psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
       }),
       method: 'PUT',

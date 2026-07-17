@@ -201,14 +201,20 @@ describe('RequestsController draft flow', () => {
         'updatePsfCreatedData',
       ) as (
         requestId: string,
-        body: { psfCreatedData: Record<string, unknown> },
+        body: {
+          psfCreatedData: Record<string, unknown>;
+          expectedUpdatedAt: string;
+        },
         request: { session: { userId?: string } },
       ) => Promise<unknown>;
 
       return updatePsfCreatedData.call(
         controller,
         'request-1',
-        { psfCreatedData: { psf_setup_file_name: 'final-setup.psf' } },
+        {
+          psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+          expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
+        },
         { session: { userId: 'user-1' } },
       );
     };
@@ -219,7 +225,43 @@ describe('RequestsController draft flow', () => {
     });
     expect(service.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       actor,
+      expectedUpdatedAt: '2026-06-18T01:05:03.000Z',
       psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
+    });
+  });
+
+  it('forwards a null PSF Created Information body to service validation without throwing in the controller', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.updatePsfCreatedData.mockResolvedValue({
+      id: 'request-1',
+      status: 'Setup In Progress',
+    });
+    const updatePsfCreatedData = Reflect.get(
+      controller,
+      'updatePsfCreatedData',
+    ) as (
+      requestId: string,
+      body: null,
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      updatePsfCreatedData.call(controller, 'request-1', null, {
+        session: { userId: 'user-1' },
+      }),
+    ).resolves.toEqual({ id: 'request-1', status: 'Setup In Progress' });
+
+    expect(service.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      actor,
+      expectedUpdatedAt: undefined,
+      psfCreatedData: undefined,
     });
   });
 

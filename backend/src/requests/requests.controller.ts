@@ -77,14 +77,15 @@ export class RequestsController {
   @Put(':requestId/psf-created-data')
   async updatePsfCreatedData(
     @Param('requestId') requestId: string,
-    @Body() body: UpdatePsfCreatedDataBodyDto,
+    @Body() body: UpdatePsfCreatedDataBodyDto | null,
     @Req() request: AuthenticatedRequest,
   ): Promise<PsfRequestResponse> {
     const actor = await this.getAuthenticatedActor(request);
 
     return this.requestsService.updatePsfCreatedData(requestId, {
       actor,
-      psfCreatedData: body.psfCreatedData,
+      expectedUpdatedAt: body?.expectedUpdatedAt,
+      psfCreatedData: body?.psfCreatedData,
     });
   }
 

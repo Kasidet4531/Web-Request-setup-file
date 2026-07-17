@@ -61,6 +61,11 @@ const ALL_MANUAL_STATUSES = [
   CANCELLED_STATUS,
 ];
 
+const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
+  updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC',
+  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+)`;
+
 const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
   formKey: 'psf-created-information',
   version: 1,
@@ -173,11 +178,14 @@ export interface UpdateRequestStatusDto extends UpdateRequestStatusBodyDto {
 }
 
 export interface UpdatePsfCreatedDataBodyDto {
-  psfCreatedData: RequesterData;
+  expectedUpdatedAt?: unknown;
+  psfCreatedData?: unknown;
 }
 
-export interface UpdatePsfCreatedDataDto extends UpdatePsfCreatedDataBodyDto {
+export interface UpdatePsfCreatedDataDto {
   actor: AuthenticatedUserProfile;
+  expectedUpdatedAt: unknown;
+  psfCreatedData: unknown;
 }
 
 export interface RequestStatusOptionsResponse {
@@ -224,6 +232,7 @@ interface PsfRequestRow {
   schema_snapshot_json: FormSchemaJson;
   created_at: Date | string;
   updated_at: Date | string;
+  updated_at_version?: string;
   submitted_at: Date | string | null;
   psf_created_at: Date | string | null;
   completed_at: Date | string | null;
@@ -267,7 +276,7 @@ export class RequestsService implements OnModuleInit {
           updated_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, '{}'::jsonb, $9::jsonb, NOW(), NOW())
-        RETURNING *
+        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
       `,
       [
         randomUUID(),
@@ -299,7 +308,7 @@ export class RequestsService implements OnModuleInit {
   ): Promise<PsfRequestResponse> {
     const result = await this.pool.query<PsfRequestRow>(
       `
-        SELECT *
+        SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         FROM psf_requests
         WHERE id = $1
       `,
@@ -377,7 +386,7 @@ export class RequestsService implements OnModuleInit {
             requester_data_json = $4::jsonb,
             updated_at = NOW()
         WHERE id = $1
-        RETURNING *
+        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
       `,
       [id, requester, productType, dto.requesterData],
     );
@@ -389,9 +398,14 @@ export class RequestsService implements OnModuleInit {
     id: string,
     dto: UpdatePsfCreatedDataDto,
   ): Promise<PsfRequestResponse> {
-    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+    const current = await this.pool.query<
+      Pick<PsfRequestRow, 'id' | 'status' | 'updated_at' | 'updated_at_version'>
+    >(
       `
-        SELECT id, status
+        SELECT id,
+               status,
+               updated_at,
+               ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         FROM psf_requests
         WHERE id = $1
       `,
@@ -418,6 +432,16 @@ export class RequestsService implements OnModuleInit {
       );
     }
 
+    this.assertPsfCreatedDataPayload(dto.psfCreatedData);
+    this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
+
+    const currentUpdatedAt = request.updated_at_version ?? request.updated_at;
+    if (dto.expectedUpdatedAt !== this.serializeTimestamp(currentUpdatedAt)) {
+      throw new ConflictException(
+        'The request changed before this update. Reload the request and try again.',
+      );
+    }
+
     const psfCreatedData = this.normalizePsfCreatedDataToSchema(
       dto.psfCreatedData,
     );
@@ -437,16 +461,17 @@ export class RequestsService implements OnModuleInit {
             setup_owner_role = COALESCE($4, setup_owner_role),
             updated_at = NOW()
         WHERE id = $1
+          AND updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           ${ownerCompletionGuard}
-        RETURNING *
+        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
       `,
-      [id, psfCreatedData, actorName, actorDepartment],
+      [id, psfCreatedData, actorName, actorDepartment, currentUpdatedAt],
     );
 
     const updatedRow = result.rows[0];
     if (!updatedRow) {
-      throw new ForbiddenException(
-        'Setup File Owners cannot edit PSF Created Information once the request is Completed',
+      throw new ConflictException(
+        'The request changed before this update. Reload the request and try again.',
       );
     }
 
@@ -493,7 +518,7 @@ export class RequestsService implements OnModuleInit {
             updated_at = NOW()
         WHERE id = $1
           AND status = $5
-        RETURNING *
+        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
       `,
       [id, dto.status, actorName, actorDepartment, currentRequest.status],
     );
@@ -590,7 +615,7 @@ export class RequestsService implements OnModuleInit {
               submitted_at = NOW(),
               updated_at = NOW()
           WHERE id = $1
-          RETURNING *
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
           id,
@@ -795,6 +820,30 @@ export class RequestsService implements OnModuleInit {
     return nextData;
   }
 
+  private assertPsfCreatedDataPayload(
+    psfCreatedData: unknown,
+  ): asserts psfCreatedData is RequesterData {
+    if (
+      typeof psfCreatedData !== 'object' ||
+      psfCreatedData === null ||
+      Array.isArray(psfCreatedData)
+    ) {
+      throw new BadRequestException(
+        'PSF Created Information must be a JSON object.',
+      );
+    }
+  }
+
+  private assertExpectedUpdatedAt(
+    updatedAt: unknown,
+  ): asserts updatedAt is string {
+    if (typeof updatedAt !== 'string' || Number.isNaN(Date.parse(updatedAt))) {
+      throw new BadRequestException(
+        'A valid request updatedAt value is required to save PSF Created Information.',
+      );
+    }
+  }
+
   private assertRequiredRequesterFieldsPresent(
     schema: FormSchemaJson,
     requesterData: RequesterData,
@@ -885,7 +934,8 @@ export class RequestsService implements OnModuleInit {
       psfCreatedInformationSchema: PSF_CREATED_INFORMATION_SCHEMA,
       schemaSnapshot: row.schema_snapshot_json,
       createdAt: this.serializeTimestamp(row.created_at),
-      updatedAt: this.serializeTimestamp(row.updated_at),
+      updatedAt:
+        row.updated_at_version ?? this.serializeTimestamp(row.updated_at),
       submittedAt: this.serializeNullableTimestamp(row.submitted_at),
       psfCreatedAt: this.serializeNullableTimestamp(row.psf_created_at),
       completedAt: this.serializeNullableTimestamp(row.completed_at),

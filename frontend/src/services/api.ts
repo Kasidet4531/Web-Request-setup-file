@@ -123,6 +123,7 @@ export interface UpdatePsfRequestStatusPayload {
 }
 
 export interface UpdatePsfCreatedDataPayload {
+  expectedUpdatedAt: string
   psfCreatedData: DynamicFormValues
 }
 

@@ -8,7 +8,7 @@ import {
 } from './RequestsWorkspace'
 import * as RequestsWorkspace from './RequestsWorkspace'
 import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
-import type { PsfRequestResponse } from '../services/api'
+import { ApiError, type PsfRequestResponse } from '../services/api'
 
 const requestDetailApi = vi.hoisted(() => ({
   fetchPsfRequest: vi.fn(),
@@ -260,7 +260,7 @@ function buildSubmittedRequest(): PsfRequestResponse {
     submittedAt: '2026-08-01T00:00:00.000Z',
     psfCreatedAt: null,
     completedAt: null,
-  }
+  } as PsfRequestResponse
 }
 
 type PsfCreatedInformationPanel = (props: {
@@ -490,6 +490,7 @@ describe('RequestDetailShell workflow actions', () => {
     const savedRequest = {
       ...setupOwnerRequest,
       psfCreatedData: { psf_setup_file_name: 'saved-setup.psf' },
+      updatedAt: '2026-08-01T00:00:01.000Z',
     }
     requestDetailApi.fetchPsfRequest.mockResolvedValue(setupOwnerRequest)
     requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({
@@ -518,10 +519,12 @@ describe('RequestDetailShell workflow actions', () => {
     const success = requireRenderedElement(shell, (element) => element.props.role === 'status')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
       psfCreatedData: { psf_setup_file_name: 'saved-setup.psf' },
     })
     expect(panelElement.props.request).toMatchObject({
       psfCreatedData: { psf_setup_file_name: 'saved-setup.psf' },
+      updatedAt: '2026-08-01T00:00:01.000Z',
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'saved-setup.psf' })
     expect(success.props.children).toBe('PSF Created Information for PSF-0001 saved.')
@@ -570,10 +573,69 @@ describe('RequestDetailShell workflow actions', () => {
     const alert = requireRenderedElement(shell, (element) => element.props.role === 'alert')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
       psfCreatedData: { psf_setup_file_name: 'retry-setup.psf' },
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'retry-setup.psf' })
     expect(alert.props.children).toBe('PSF data validation failed')
+  })
+
+  it('reloads current PSF Created Information after another owner saves first', async () => {
+    const setupOwnerRequest = {
+      ...buildSubmittedRequest(),
+      status: 'Setup In Progress',
+      psfCreatedData: { psf_setup_file_name: 'initial-setup.psf' },
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: true,
+    }
+    const refreshedRequest = {
+      ...setupOwnerRequest,
+      psfCreatedData: { psf_setup_file_name: 'other-owner-setup.psf' },
+      updatedAt: '2026-08-01T00:00:01.000Z',
+    }
+    requestDetailApi.fetchPsfRequest
+      .mockResolvedValueOnce(setupOwnerRequest)
+      .mockResolvedValueOnce(refreshedRequest)
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({
+      allowedNextStatuses: ['PSF Created', 'Need More Information', 'Rejected'],
+    })
+    requestDetailApi.updatePsfCreatedData.mockRejectedValue(
+      new ApiError('The request was updated by another owner.', 409, 'Conflict', null),
+    )
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    let shell = renderRequestDetailShell()
+    const panel = getPsfCreatedInformationPanel()
+    if (!panel) {
+      return
+    }
+    let panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const onSave = panelElement.props.onSave
+    if (typeof onSave !== 'function') {
+      throw new Error('Expected PSF Created Information save callback')
+    }
+
+    onSave({ psf_setup_file_name: 'my-stale-setup.psf' })
+    await flushRequestDetailAsyncWork()
+    shell = renderRequestDetailShell()
+    panelElement = requireRenderedElement(shell, (element) => element.type === panel)
+    const alert = requireRenderedElement(shell, (element) => element.props.role === 'alert')
+
+    expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
+      psfCreatedData: { psf_setup_file_name: 'my-stale-setup.psf' },
+    })
+    expect(requestDetailApi.fetchPsfRequest).toHaveBeenCalledTimes(2)
+    expect(panelElement.props.request).toMatchObject({
+      psfCreatedData: { psf_setup_file_name: 'other-owner-setup.psf' },
+      updatedAt: '2026-08-01T00:00:01.000Z',
+    })
+    expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'other-owner-setup.psf' })
+    expect(alert.props.children).toBe(
+      'PSF Created Information changed while you were editing. The latest data has been loaded; review it and save again.',
+    )
   })
 
   it('keeps workflow detail stable and exposes a status update failure through an alert', async () => {
