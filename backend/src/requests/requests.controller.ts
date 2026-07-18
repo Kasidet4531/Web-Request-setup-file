@@ -35,10 +35,13 @@ export class RequestsController {
   ) {}
 
   @Post()
-  createDraft(
+  async createDraft(
     @Body() body: CreateDraftRequestDto,
+    @Req() request: AuthenticatedRequest,
   ): Promise<PsfRequestResponse> {
-    return this.requestsService.createDraft(body);
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.createDraft(body, actor);
   }
 
   @Get()
@@ -67,11 +70,18 @@ export class RequestsController {
   }
 
   @Put(':requestId/requester-data')
-  updateDraftRequesterData(
+  async updateDraftRequesterData(
     @Param('requestId') requestId: string,
     @Body() body: UpdateDraftRequesterDataDto,
+    @Req() request: AuthenticatedRequest,
   ): Promise<PsfRequestResponse> {
-    return this.requestsService.updateDraftRequesterData(requestId, body);
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.updateDraftRequesterData(
+      requestId,
+      body,
+      actor,
+    );
   }
 
   @Put(':requestId/psf-created-data')
@@ -104,11 +114,14 @@ export class RequestsController {
   }
 
   @Post(':requestId/submit')
-  submitRequest(
+  async submitRequest(
     @Param('requestId') requestId: string,
     @Body() body: SubmitDraftRequestDto,
+    @Req() request: AuthenticatedRequest,
   ): Promise<PsfRequestResponse> {
-    return this.requestsService.submitRequest(requestId, body);
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.submitRequest(requestId, body, actor);
   }
 
   private async getAuthenticatedActor(
