@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AuditLogService } from '../audit/audit_log.service';
 import { FormSchemaService } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { RequestsService } from './requests.service';
@@ -47,6 +48,14 @@ const activeSchema = {
   },
 };
 
+const requesterActor = {
+  id: '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
+  username: 'requester.demo',
+  displayName: 'Requester Demo',
+  role: 'requester' as const,
+  setupOwnerDepartment: null,
+};
+
 describe('RequestsService draft flow', () => {
   let service: RequestsService;
   let pool: { query: jest.Mock; connect: jest.Mock };
@@ -58,10 +67,19 @@ describe('RequestsService draft flow', () => {
     upsertRequestSearchIndex: jest.Mock;
     upsertSubmittedCanonicalValues: jest.Mock;
   };
+  let auditLogService: { record: jest.Mock };
 
   beforeEach(async () => {
     dbClient = { query: jest.fn(), release: jest.fn() };
     pool = { query: jest.fn(), connect: jest.fn().mockResolvedValue(dbClient) };
+    dbClient.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(query)) {
+        return Promise.resolve({});
+      }
+
+      const result: unknown = pool.query(query, values);
+      return result;
+    });
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
     };
@@ -82,6 +100,7 @@ describe('RequestsService draft flow', () => {
         requester: 'Fook',
       }),
     };
+    auditLogService = { record: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -89,6 +108,7 @@ describe('RequestsService draft flow', () => {
         { provide: DATABASE_POOL, useValue: pool },
         { provide: FormSchemaService, useValue: formSchemaService },
         { provide: SearchIndexService, useValue: searchIndexService },
+        { provide: AuditLogService, useValue: auditLogService },
       ],
     }).compile();
 
@@ -118,20 +138,26 @@ describe('RequestsService draft flow', () => {
       psf_created_at: null,
       completed_at: null,
     };
-    pool.query.mockResolvedValueOnce({
-      rows: [{ next: 'DRAFT-20260618-0001' }],
-    });
-    pool.query.mockResolvedValueOnce({ rows: [insertedRow] });
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ next: 'DRAFT-20260618-0001' }],
+      })
+      .mockResolvedValueOnce({ rows: [insertedRow] })
+      .mockResolvedValueOnce({});
 
-    const draft = await service.createDraft({
-      requester: 'Fook',
-      requesterData: { product_type: 'New Product', requester_name: 'Fook' },
-    });
+    const draft = await service.createDraft(
+      {
+        requester: 'Fook',
+        requesterData: { product_type: 'New Product', requester_name: 'Fook' },
+      },
+      requesterActor,
+    );
 
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
     );
-    expect(pool.query).toHaveBeenLastCalledWith(
+    expect(dbClient.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO psf_requests'),
       [
         expect.any(String),
@@ -290,17 +316,20 @@ describe('RequestsService draft flow', () => {
       psf_created_at: null,
       completed_at: null,
     };
-    pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Submitted' }],
-    });
-    pool.query.mockResolvedValueOnce({ rows: [updatedRow] });
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ id: 'request-1', status: 'Submitted' }],
+      })
+      .mockResolvedValueOnce({ rows: [updatedRow] })
+      .mockResolvedValueOnce({});
 
     const result = await service.updateRequestStatus('request-1', {
       status: 'Setup In Progress',
       actor,
     });
 
-    expect(pool.query).toHaveBeenCalledWith(
+    expect(dbClient.query).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
       expect.arrayContaining([
         'request-1',
@@ -317,6 +346,7 @@ describe('RequestsService draft flow', () => {
         setupOwnerRole: 'GNTC',
       }),
       { product_type: 'Existing Product', requester: 'Fook' },
+      dbClient,
     );
     expect(result).toMatchObject({
       id: 'request-1',
@@ -334,10 +364,13 @@ describe('RequestsService draft flow', () => {
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
-    pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Submitted' }],
-    });
-    pool.query.mockResolvedValueOnce({ rows: [] });
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ id: 'request-1', status: 'Submitted' }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({});
 
     let error: unknown = undefined;
     try {
@@ -355,7 +388,7 @@ describe('RequestsService draft flow', () => {
       'The request status changed before this update. Reload the request and try again.',
     );
 
-    expect(pool.query).toHaveBeenLastCalledWith(
+    expect(dbClient.query).toHaveBeenCalledWith(
       expect.stringMatching(/WHERE id = \$1\s+AND status = \$5/),
       [
         'request-1',
@@ -368,9 +401,12 @@ describe('RequestsService draft flow', () => {
   });
 
   it('rejects a requester attempting a setup-owner-only transition', async () => {
-    pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Submitted' }],
-    });
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ id: 'request-1', status: 'Submitted' }],
+      })
+      .mockResolvedValueOnce({});
 
     await expect(
       service.updateRequestStatus('request-1', {
@@ -384,16 +420,19 @@ describe('RequestsService draft flow', () => {
         },
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(pool.query).not.toHaveBeenCalledWith(
+    expect(dbClient.query).not.toHaveBeenCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
       expect.any(Array),
     );
   });
 
   it('rejects admin manual status changes out of Draft so submit validation cannot be bypassed', async () => {
-    pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Draft' }],
-    });
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ id: 'request-1', status: 'Draft' }],
+      })
+      .mockResolvedValueOnce({});
 
     await expect(
       service.updateRequestStatus('request-1', {
@@ -407,7 +446,7 @@ describe('RequestsService draft flow', () => {
         },
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(pool.query).not.toHaveBeenCalledWith(
+    expect(dbClient.query).not.toHaveBeenCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
       expect.any(Array),
     );
@@ -1004,13 +1043,17 @@ describe('RequestsService draft flow', () => {
       ],
     });
 
-    const updated = await service.updateDraftRequesterData('request-1', {
-      requester: 'Fook',
-      requesterData: {
-        product_type: 'Existing Product',
-        requester_name: 'Fook',
+    const updated = await service.updateDraftRequesterData(
+      'request-1',
+      {
+        requester: 'Fook',
+        requesterData: {
+          product_type: 'Existing Product',
+          requester_name: 'Fook',
+        },
       },
-    });
+      requesterActor,
+    );
 
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
@@ -1038,10 +1081,14 @@ describe('RequestsService draft flow', () => {
     });
 
     await expect(
-      service.updateDraftRequesterData('request-1', {
-        requester: 'Fook',
-        requesterData: { product_type: 'New Product' },
-      }),
+      service.updateDraftRequesterData(
+        'request-1',
+        {
+          requester: 'Fook',
+          requesterData: { product_type: 'New Product' },
+        },
+        requesterActor,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -1096,9 +1143,11 @@ describe('RequestsService draft flow', () => {
       ],
     });
 
-    const submitted = await service.submitRequest('request-1', {
-      formVersion: 4,
-    });
+    const submitted = await service.submitRequest(
+      'request-1',
+      { formVersion: 4 },
+      requesterActor,
+    );
 
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
@@ -1194,9 +1243,11 @@ describe('RequestsService draft flow', () => {
       ],
     });
 
-    await service.submitRequest('request-1', {
-      formVersion: 3,
-    });
+    await service.submitRequest(
+      'request-1',
+      { formVersion: 3 },
+      requesterActor,
+    );
 
     expect(dbClient.query).toHaveBeenNthCalledWith(
       3,
@@ -1258,7 +1309,7 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }),
+      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
     ).rejects.toThrow('canonical persistence failed');
 
     expect(dbClient.query).toHaveBeenNthCalledWith(
@@ -1305,7 +1356,7 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }),
+      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
@@ -1336,7 +1387,7 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }),
+      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
     ).rejects.toThrow(
       'The active request schema changed before submit. Reload the draft and submit again.',
     );
@@ -1351,7 +1402,7 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }),
+      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });

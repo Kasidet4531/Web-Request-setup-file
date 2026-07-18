@@ -11,6 +11,10 @@ import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
 import {
+  AuditLogService,
+  REQUEST_AUDIT_ACTION,
+} from '../audit/audit_log.service';
+import {
   FormSchemaJson,
   FormSchemaService,
 } from '../admin/form_schema.service';
@@ -65,6 +69,8 @@ const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
   updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC',
   'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
 )`;
+
+type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
 const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
   formKey: 'psf-created-information',
@@ -244,54 +250,71 @@ export class RequestsService implements OnModuleInit {
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     private readonly formSchemaService: FormSchemaService,
     private readonly searchIndexService: SearchIndexService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.ensureRequestsStorage();
   }
 
-  async createDraft(dto: CreateDraftRequestDto): Promise<PsfRequestResponse> {
+  async createDraft(
+    dto: CreateDraftRequestDto,
+    actor: AuthenticatedUserProfile,
+  ): Promise<PsfRequestResponse> {
     const activeSchema =
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
-    const requestNo = await this.nextDraftRequestNo();
-    const requester = this.normalizeString(
-      dto.requester ?? dto.requesterData.requester_name,
-    );
-    const productType = this.normalizeString(dto.requesterData.product_type);
 
-    const result = await this.pool.query<PsfRequestRow>(
-      `
-        INSERT INTO psf_requests (
-          id,
-          request_no,
-          form_key,
-          form_version,
-          status,
+    return this.withTransaction(async (client) => {
+      const requestNo = await this.nextDraftRequestNo(client);
+      const requester = this.normalizeString(
+        dto.requester ?? dto.requesterData.requester_name,
+      );
+      const productType = this.normalizeString(dto.requesterData.product_type);
+      const result = await client.query<PsfRequestRow>(
+        `
+          INSERT INTO psf_requests (
+            id,
+            request_no,
+            form_key,
+            form_version,
+            status,
+            requester,
+            product_type,
+            requester_data_json,
+            psf_created_data_json,
+            schema_snapshot_json,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, '{}'::jsonb, $9::jsonb, NOW(), NOW())
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+        [
+          randomUUID(),
+          requestNo,
+          activeSchema.formKey,
+          activeSchema.version,
+          DRAFT_STATUS,
           requester,
-          product_type,
-          requester_data_json,
-          psf_created_data_json,
-          schema_snapshot_json,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, '{}'::jsonb, $9::jsonb, NOW(), NOW())
-        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-      `,
-      [
-        randomUUID(),
-        requestNo,
-        activeSchema.formKey,
-        activeSchema.version,
-        DRAFT_STATUS,
-        requester,
-        productType,
-        dto.requesterData,
-        activeSchema.schema,
-      ],
-    );
+          productType,
+          dto.requesterData,
+          activeSchema.schema,
+        ],
+      );
 
-    return this.mapRequestRow(result.rows[0]);
+      const createdRow = result.rows[0];
+      await this.auditLogService.record(
+        {
+          requestId: createdRow.id,
+          actionType: REQUEST_AUDIT_ACTION.DRAFT_CREATED,
+          actor,
+          metadata: {},
+        },
+        client,
+      );
+
+      return this.mapRequestRow(createdRow);
+    });
   }
 
   async queryRequests(query: RequestQueryDto): Promise<RequestSearchResult> {
@@ -352,46 +375,60 @@ export class RequestsService implements OnModuleInit {
   async updateDraftRequesterData(
     id: string,
     dto: UpdateDraftRequesterDataDto,
+    actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
-    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
-      `
-        SELECT id, status
-        FROM psf_requests
-        WHERE id = $1
-      `,
-      [id],
-    );
-
-    const request = current.rows[0];
-    if (!request) {
-      throw new NotFoundException(`PSF request ${id} was not found`);
-    }
-
-    if (request.status !== DRAFT_STATUS) {
-      throw new ForbiddenException(
-        'Requester-owned fields can only be edited while the request is Draft',
+    return this.withTransaction(async (client) => {
+      const current = await client.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+        `
+          SELECT id, status
+          FROM psf_requests
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [id],
       );
-    }
 
-    const requester = this.normalizeString(
-      dto.requester ?? dto.requesterData.requester_name,
-    );
-    const productType = this.normalizeString(dto.requesterData.product_type);
+      const request = current.rows[0];
+      if (!request) {
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      }
 
-    const result = await this.pool.query<PsfRequestRow>(
-      `
-        UPDATE psf_requests
-        SET requester = $2,
-            product_type = $3,
-            requester_data_json = $4::jsonb,
-            updated_at = NOW()
-        WHERE id = $1
-        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-      `,
-      [id, requester, productType, dto.requesterData],
-    );
+      if (request.status !== DRAFT_STATUS) {
+        throw new ForbiddenException(
+          'Requester-owned fields can only be edited while the request is Draft',
+        );
+      }
 
-    return this.mapRequestRow(result.rows[0]);
+      const requester = this.normalizeString(
+        dto.requester ?? dto.requesterData.requester_name,
+      );
+      const productType = this.normalizeString(dto.requesterData.product_type);
+      const result = await client.query<PsfRequestRow>(
+        `
+          UPDATE psf_requests
+          SET requester = $2,
+              product_type = $3,
+              requester_data_json = $4::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+        [id, requester, productType, dto.requesterData],
+      );
+
+      const updatedRow = result.rows[0];
+      await this.auditLogService.record(
+        {
+          requestId: updatedRow.id,
+          actionType: REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED,
+          actor,
+          metadata: {},
+        },
+        client,
+      );
+
+      return this.mapRequestRow(updatedRow);
+    });
   }
 
   async updatePsfCreatedData(
@@ -482,78 +519,98 @@ export class RequestsService implements OnModuleInit {
     id: string,
     dto: UpdateRequestStatusDto,
   ): Promise<PsfRequestResponse> {
-    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
-      `
-        SELECT id, status
-        FROM psf_requests
-        WHERE id = $1
-      `,
-      [id],
-    );
-
-    const currentRequest = current.rows[0];
-    if (!currentRequest) {
-      throw new NotFoundException(`PSF request ${id} was not found`);
-    }
-
-    this.assertStatusTransitionIsAllowed(
-      dto.actor.role,
-      currentRequest.status,
-      dto.status,
-    );
-
-    const actorName =
-      dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
-    const actorDepartment =
-      dto.actor.role === 'setup_owner' ? dto.actor.setupOwnerDepartment : null;
-
-    const result = await this.pool.query<PsfRequestRow>(
-      `
-        UPDATE psf_requests
-        SET status = $2,
-            setup_owner = COALESCE($3, setup_owner),
-            setup_owner_role = COALESCE($4, setup_owner_role),
-            psf_created_at = CASE WHEN $2 = '${PSF_CREATED_STATUS}' THEN NOW() ELSE psf_created_at END,
-            completed_at = CASE WHEN $2 = '${COMPLETED_STATUS}' THEN NOW() ELSE completed_at END,
-            updated_at = NOW()
-        WHERE id = $1
-          AND status = $5
-        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-      `,
-      [id, dto.status, actorName, actorDepartment, currentRequest.status],
-    );
-
-    const updatedRow = result.rows[0];
-    if (!updatedRow) {
-      throw new ConflictException(
-        'The request status changed before this update. Reload the request and try again.',
+    return this.withTransaction(async (client) => {
+      const current = await client.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+        `
+          SELECT id, status
+          FROM psf_requests
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [id],
       );
-    }
 
-    await this.searchIndexService.upsertRequestSearchIndex(
-      {
-        requestId: updatedRow.id,
-        requestNo: updatedRow.request_no,
-        status: updatedRow.status,
-        requester: updatedRow.requester,
-        setupOwner: updatedRow.setup_owner,
-        setupOwnerRole: updatedRow.setup_owner_role,
-        productType: updatedRow.product_type,
-        requestDate: updatedRow.created_at,
-        updatedAt: updatedRow.updated_at,
-      },
-      this.searchIndexService.extractCanonicalValues(
-        updatedRow.schema_snapshot_json,
-        updatedRow.requester_data_json,
-      ),
-    );
+      const currentRequest = current.rows[0];
+      if (!currentRequest) {
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      }
 
-    return this.mapRequestRow(updatedRow, dto.actor);
+      this.assertStatusTransitionIsAllowed(
+        dto.actor.role,
+        currentRequest.status,
+        dto.status,
+      );
+
+      const actorName =
+        dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
+      const actorDepartment =
+        dto.actor.role === 'setup_owner'
+          ? dto.actor.setupOwnerDepartment
+          : null;
+
+      const result = await client.query<PsfRequestRow>(
+        `
+          UPDATE psf_requests
+          SET status = $2,
+              setup_owner = COALESCE($3, setup_owner),
+              setup_owner_role = COALESCE($4, setup_owner_role),
+              psf_created_at = CASE WHEN $2 = '${PSF_CREATED_STATUS}' THEN NOW() ELSE psf_created_at END,
+              completed_at = CASE WHEN $2 = '${COMPLETED_STATUS}' THEN NOW() ELSE completed_at END,
+              updated_at = NOW()
+          WHERE id = $1
+            AND status = $5
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+        [id, dto.status, actorName, actorDepartment, currentRequest.status],
+      );
+
+      const updatedRow = result.rows[0];
+      if (!updatedRow) {
+        throw new ConflictException(
+          'The request status changed before this update. Reload the request and try again.',
+        );
+      }
+
+      await this.searchIndexService.upsertRequestSearchIndex(
+        {
+          requestId: updatedRow.id,
+          requestNo: updatedRow.request_no,
+          status: updatedRow.status,
+          requester: updatedRow.requester,
+          setupOwner: updatedRow.setup_owner,
+          setupOwnerRole: updatedRow.setup_owner_role,
+          productType: updatedRow.product_type,
+          requestDate: updatedRow.created_at,
+          updatedAt: updatedRow.updated_at,
+        },
+        this.searchIndexService.extractCanonicalValues(
+          updatedRow.schema_snapshot_json,
+          updatedRow.requester_data_json,
+        ),
+        client,
+      );
+
+      await this.auditLogService.record(
+        {
+          requestId: updatedRow.id,
+          actionType: REQUEST_AUDIT_ACTION.REQUEST_STATUS_CHANGED,
+          actor: dto.actor,
+          metadata: {
+            fromStatus: currentRequest.status,
+            toStatus: updatedRow.status,
+          },
+        },
+        client,
+      );
+
+      return this.mapRequestRow(updatedRow, dto.actor);
+    });
   }
 
   async submitRequest(
     id: string,
     dto: SubmitDraftRequestDto,
+    actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
     const activeSchema =
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
@@ -652,11 +709,21 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
+      await this.auditLogService.record(
+        {
+          requestId: submittedRow.id,
+          actionType: REQUEST_AUDIT_ACTION.REQUEST_SUBMITTED,
+          actor,
+          metadata: {},
+        },
+        client,
+      );
+
       await client.query('COMMIT');
 
       return this.mapRequestRow(submittedRow);
     } catch (error) {
-      await this.rollbackSubmitTransaction(client);
+      await this.rollbackTransaction(client);
       throw error;
     } finally {
       client.release();
@@ -729,7 +796,25 @@ export class RequestsService implements OnModuleInit {
     return [...(STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [])];
   }
 
-  private async rollbackSubmitTransaction(client: PoolClient): Promise<void> {
+  private async withTransaction<T>(
+    operation: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await operation(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await this.rollbackTransaction(client);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async rollbackTransaction(client: PoolClient): Promise<void> {
     try {
       await client.query('ROLLBACK');
     } catch {
@@ -766,8 +851,10 @@ export class RequestsService implements OnModuleInit {
     `);
   }
 
-  private async nextDraftRequestNo(): Promise<string> {
-    const result = await this.pool.query<{ next: string }>(`
+  private async nextDraftRequestNo(
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<string> {
+    const result = await queryRunner.query<{ next: string }>(`
       SELECT 'DRAFT-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' ||
              LPAD((COUNT(*) + 1)::TEXT, 4, '0') AS next
       FROM psf_requests

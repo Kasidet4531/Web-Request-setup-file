@@ -42,20 +42,58 @@ describe('RequestsController draft flow', () => {
     controller = module.get(RequestsController);
   });
 
-  it('creates a draft request from requester data', async () => {
+  it('creates a draft request with the authenticated server profile rather than client-supplied identity', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
     service.createDraft.mockResolvedValue({ id: 'request-1', status: 'Draft' });
+    const createDraft = controller.createDraft.bind(controller) as unknown as (
+      body: {
+        requester: string;
+        requesterData: Record<string, unknown>;
+      },
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
 
     await expect(
-      controller.createDraft({
-        requester: 'Fook',
-        requesterData: { product_type: 'New Product' },
-      }),
+      createDraft(
+        {
+          requester: 'Client supplied requester',
+          requesterData: { product_type: 'New Product' },
+        },
+        { session: { userId: 'user-1' } },
+      ),
     ).resolves.toEqual({ id: 'request-1', status: 'Draft' });
 
-    expect(service.createDraft).toHaveBeenCalledWith({
-      requester: 'Fook',
-      requesterData: { product_type: 'New Product' },
-    });
+    expect(service.createDraft).toHaveBeenCalledWith(
+      {
+        requester: 'Client supplied requester',
+        requesterData: { product_type: 'New Product' },
+      },
+      actor,
+    );
+  });
+
+  it('rejects draft creation without a session user', async () => {
+    const createDraft = controller.createDraft.bind(controller) as unknown as (
+      body: {
+        requesterData: Record<string, unknown>;
+      },
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      createDraft(
+        { requesterData: { product_type: 'New Product' } },
+        { session: {} },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.createDraft).not.toHaveBeenCalled();
   });
 
   it('queries request list filters and pagination', async () => {
@@ -163,23 +201,68 @@ describe('RequestsController draft flow', () => {
     expect(service.getAllowedStatusTransitions).not.toHaveBeenCalled();
   });
 
-  it('updates requester-owned data for a draft request', async () => {
+  it('updates requester-owned draft data with the authenticated server profile', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
     service.updateDraftRequesterData.mockResolvedValue({
       id: 'request-1',
       status: 'Draft',
     });
+    const updateDraftRequesterData = controller.updateDraftRequesterData.bind(
+      controller,
+    ) as unknown as (
+      requestId: string,
+      body: {
+        requester: string;
+        requesterData: Record<string, unknown>;
+      },
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
 
     await expect(
-      controller.updateDraftRequesterData('request-1', {
-        requester: 'Fook',
-        requesterData: { product_type: 'Transfer Product' },
-      }),
+      updateDraftRequesterData(
+        'request-1',
+        {
+          requester: 'Client supplied requester',
+          requesterData: { product_type: 'Transfer Product' },
+        },
+        { session: { userId: 'user-1' } },
+      ),
     ).resolves.toEqual({ id: 'request-1', status: 'Draft' });
 
-    expect(service.updateDraftRequesterData).toHaveBeenCalledWith('request-1', {
-      requester: 'Fook',
-      requesterData: { product_type: 'Transfer Product' },
-    });
+    expect(service.updateDraftRequesterData).toHaveBeenCalledWith(
+      'request-1',
+      {
+        requester: 'Client supplied requester',
+        requesterData: { product_type: 'Transfer Product' },
+      },
+      actor,
+    );
+  });
+
+  it('rejects requester-owned draft updates without a session user', async () => {
+    const updateDraftRequesterData = controller.updateDraftRequesterData.bind(
+      controller,
+    ) as unknown as (
+      requestId: string,
+      body: { requesterData: Record<string, unknown> },
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      updateDraftRequesterData(
+        'request-1',
+        { requesterData: { product_type: 'Transfer Product' } },
+        { session: {} },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.updateDraftRequesterData).not.toHaveBeenCalled();
   });
 
   it('passes an authenticated actor to the PSF Created Information write service', async () => {
@@ -288,22 +371,58 @@ describe('RequestsController draft flow', () => {
     expect(service.updatePsfCreatedData).not.toHaveBeenCalled();
   });
 
-  it('submits a draft request by id', async () => {
+  it('submits a draft request with the authenticated server profile', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
     service.submitRequest.mockResolvedValue({
       id: 'request-1',
       status: 'Submitted',
     });
+    const submitRequest = controller.submitRequest.bind(
+      controller,
+    ) as unknown as (
+      requestId: string,
+      body: { formVersion: number },
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
 
     await expect(
-      controller.submitRequest('request-1', { formVersion: 4 }),
+      submitRequest(
+        'request-1',
+        { formVersion: 4 },
+        { session: { userId: 'user-1' } },
+      ),
     ).resolves.toEqual({
       id: 'request-1',
       status: 'Submitted',
     });
 
-    expect(service.submitRequest).toHaveBeenCalledWith('request-1', {
-      formVersion: 4,
-    });
+    expect(service.submitRequest).toHaveBeenCalledWith(
+      'request-1',
+      { formVersion: 4 },
+      actor,
+    );
+  });
+
+  it('rejects draft submission without a session user', async () => {
+    const submitRequest = controller.submitRequest.bind(
+      controller,
+    ) as unknown as (
+      requestId: string,
+      body: { formVersion: number },
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      submitRequest('request-1', { formVersion: 4 }, { session: {} }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.submitRequest).not.toHaveBeenCalled();
   });
 
   it('updates workflow status with the authenticated actor profile', async () => {
