@@ -158,6 +158,20 @@ export interface PsfRequestResponse {
   completedAt: string | null
 }
 
+export type PsfRequestHistoryAction =
+  | 'DRAFT_CREATED'
+  | 'DRAFT_REQUESTER_DATA_UPDATED'
+  | 'REQUEST_SUBMITTED'
+  | 'REQUEST_STATUS_CHANGED'
+
+export interface PsfRequestHistoryEntry {
+  actionType: PsfRequestHistoryAction
+  actorDisplayName: string
+  actorRole: UserRole
+  createdAt: string
+  metadata: Record<string, unknown>
+}
+
 export function createApiClient(config: ApiClientConfig = {}) {
   const baseUrl = config.baseUrl ?? '/api'
   const defaultHeaders = config.headers ?? {}
@@ -237,6 +251,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
       }),
     fetchPsfRequest: (requestId: string) =>
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}`, {
+        method: 'GET',
+      }),
+    fetchPsfRequestHistory: (requestId: string) =>
+      request<PsfRequestHistoryEntry[]>(`/requests/${encodeURIComponent(requestId)}/history`, {
         method: 'GET',
       }),
     fetchPsfRequestStatusOptions: (requestId: string) =>

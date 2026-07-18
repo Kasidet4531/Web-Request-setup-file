@@ -1,6 +1,14 @@
 import { Pool } from 'pg';
 import { AuditLogService } from './audit_log.service';
 
+interface RequestAuditHistoryEntry {
+  actionType: string;
+  actorDisplayName: string;
+  actorRole: 'requester' | 'setup_owner' | 'admin';
+  createdAt: string;
+  metadata: Record<string, unknown>;
+}
+
 type AuditLogServiceContract = {
   onModuleInit(): Promise<void>;
   record(
@@ -18,6 +26,7 @@ type AuditLogServiceContract = {
     },
     queryRunner?: { query: jest.Mock },
   ): Promise<void>;
+  findByRequestId(requestId: string): Promise<RequestAuditHistoryEntry[]>;
 };
 
 describe('AuditLogService', () => {
@@ -93,5 +102,62 @@ describe('AuditLogService', () => {
       ],
     );
     expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it('returns only one request history in deterministic chronological order with UI display fields', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          action_type: 'DRAFT_CREATED',
+          actor_display_name: 'Requester Demo',
+          actor_role: 'requester',
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          metadata_json: {},
+        },
+        {
+          action_type: 'REQUEST_STATUS_CHANGED',
+          actor_display_name: 'Setup Owner GNTC Demo',
+          actor_role: 'setup_owner',
+          created_at: new Date('2026-06-18T01:06:03.000Z'),
+          metadata_json: {
+            fromStatus: 'Submitted',
+            toStatus: 'Setup In Progress',
+          },
+        },
+      ],
+    });
+
+    await expect(service.findByRequestId('request-1')).resolves.toEqual([
+      {
+        actionType: 'DRAFT_CREATED',
+        actorDisplayName: 'Requester Demo',
+        actorRole: 'requester',
+        createdAt: '2026-06-18T01:02:03.000Z',
+        metadata: {},
+      },
+      {
+        actionType: 'REQUEST_STATUS_CHANGED',
+        actorDisplayName: 'Setup Owner GNTC Demo',
+        actorRole: 'setup_owner',
+        createdAt: '2026-06-18T01:06:03.000Z',
+        metadata: {
+          fromStatus: 'Submitted',
+          toStatus: 'Setup In Progress',
+        },
+      },
+    ]);
+
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringMatching(/FROM psf_request_audit_logs/),
+      ['request-1'],
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('WHERE request_id = $1'),
+      ['request-1'],
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('ORDER BY created_at ASC, id ASC'),
+      ['request-1'],
+    );
   });
 });

@@ -9,6 +9,7 @@ describe('RequestsController draft flow', () => {
   let service: {
     createDraft: jest.Mock;
     getAllowedStatusTransitions: jest.Mock;
+    getRequestHistory: jest.Mock;
     getRequest: jest.Mock;
     queryRequests: jest.Mock;
     submitRequest: jest.Mock;
@@ -22,6 +23,7 @@ describe('RequestsController draft flow', () => {
     service = {
       createDraft: jest.fn(),
       getAllowedStatusTransitions: jest.fn(),
+      getRequestHistory: jest.fn(),
       getRequest: jest.fn(),
       queryRequests: jest.fn(),
       submitRequest: jest.fn(),
@@ -155,6 +157,48 @@ describe('RequestsController draft flow', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(service.getRequest).not.toHaveBeenCalled();
+  });
+
+  it('loads request history with the authenticated server profile rather than client-supplied identity', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    const history = [
+      {
+        actionType: 'REQUEST_STATUS_CHANGED',
+        actorDisplayName: 'Setup Owner GNTC Demo',
+        actorRole: 'setup_owner',
+        createdAt: '2026-06-18T01:06:03.000Z',
+        metadata: {
+          fromStatus: 'Submitted',
+          toStatus: 'Setup In Progress',
+        },
+      },
+    ];
+    authService.getProfile.mockResolvedValue(actor);
+    service.getRequestHistory.mockResolvedValue(history);
+
+    await expect(
+      controller.getRequestHistory('request-1', {
+        session: { userId: 'user-1' },
+      } as never),
+    ).resolves.toEqual(history);
+
+    expect(service.getRequestHistory).toHaveBeenCalledWith('request-1', actor);
+  });
+
+  it('rejects request-history lookup without a session user', async () => {
+    await expect(
+      controller.getRequestHistory('request-1', {
+        session: {},
+      } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(service.getRequestHistory).not.toHaveBeenCalled();
   });
 
   it('returns backend-authoritative status options for the authenticated actor', async () => {

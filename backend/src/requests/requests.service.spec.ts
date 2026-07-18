@@ -67,7 +67,7 @@ describe('RequestsService draft flow', () => {
     upsertRequestSearchIndex: jest.Mock;
     upsertSubmittedCanonicalValues: jest.Mock;
   };
-  let auditLogService: { record: jest.Mock };
+  let auditLogService: { findByRequestId: jest.Mock; record: jest.Mock };
 
   beforeEach(async () => {
     dbClient = { query: jest.fn(), release: jest.fn() };
@@ -100,7 +100,10 @@ describe('RequestsService draft flow', () => {
         requester: 'Fook',
       }),
     };
-    auditLogService = { record: jest.fn().mockResolvedValue(undefined) };
+    auditLogService = {
+      findByRequestId: jest.fn().mockResolvedValue([]),
+      record: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -483,6 +486,29 @@ describe('RequestsService draft flow', () => {
       requesterData: { product_type: 'Transfer Product' },
       schemaSnapshot: activeSchema.schema,
     });
+  });
+
+  it('uses the existing request-detail authorization path before fetching request history', async () => {
+    const expectedHistory = [
+      {
+        actionType: 'DRAFT_CREATED',
+        actorDisplayName: 'Requester Demo',
+        actorRole: 'requester',
+        createdAt: '2026-06-18T01:02:03.000Z',
+        metadata: {},
+      },
+    ];
+    const accessCheck = jest
+      .spyOn(service, 'getRequest')
+      .mockResolvedValue({} as never);
+    auditLogService.findByRequestId.mockResolvedValue(expectedHistory);
+
+    await expect(
+      service.getRequestHistory('request-1', requesterActor),
+    ).resolves.toEqual(expectedHistory);
+
+    expect(accessCheck).toHaveBeenCalledWith('request-1', requesterActor);
+    expect(auditLogService.findByRequestId).toHaveBeenCalledWith('request-1');
   });
 
   it('masks raw PSF Created Information for a requester before PSF Created', async () => {
