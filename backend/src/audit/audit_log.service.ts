@@ -23,6 +23,22 @@ export interface RecordRequestAuditAction {
   metadata: Record<string, unknown>;
 }
 
+export interface RequestAuditHistoryEntry {
+  actionType: RequestAuditAction;
+  actorDisplayName: string;
+  actorRole: AuthenticatedUserProfile['role'];
+  createdAt: string;
+  metadata: Record<string, unknown>;
+}
+
+interface RequestAuditHistoryRow {
+  action_type: RequestAuditAction;
+  actor_display_name: string;
+  actor_role: AuthenticatedUserProfile['role'];
+  created_at: Date | string;
+  metadata_json: Record<string, unknown>;
+}
+
 @Injectable()
 export class AuditLogService implements OnModuleInit {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
@@ -63,6 +79,33 @@ export class AuditLogService implements OnModuleInit {
     );
   }
 
+  async findByRequestId(
+    requestId: string,
+  ): Promise<RequestAuditHistoryEntry[]> {
+    const result = await this.pool.query<RequestAuditHistoryRow>(
+      `
+        SELECT
+          action_type,
+          actor_display_name,
+          actor_role,
+          created_at,
+          metadata_json
+        FROM psf_request_audit_logs
+        WHERE request_id = $1
+        ORDER BY created_at ASC, id ASC
+      `,
+      [requestId],
+    );
+
+    return result.rows.map((row) => ({
+      actionType: row.action_type,
+      actorDisplayName: row.actor_display_name,
+      actorRole: row.actor_role,
+      createdAt: this.serializeTimestamp(row.created_at),
+      metadata: row.metadata_json,
+    }));
+  }
+
   private async ensureStorage(): Promise<void> {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS psf_request_audit_logs (
@@ -82,5 +125,9 @@ export class AuditLogService implements OnModuleInit {
       CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_request_created_at
       ON psf_request_audit_logs (request_id, created_at DESC)
     `);
+  }
+
+  private serializeTimestamp(value: Date | string): string {
+    return value instanceof Date ? value.toISOString() : value;
   }
 }

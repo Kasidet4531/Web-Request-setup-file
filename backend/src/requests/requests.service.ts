@@ -13,6 +13,7 @@ import type { AuthenticatedUserProfile } from '../auth/session.types';
 import {
   AuditLogService,
   REQUEST_AUDIT_ACTION,
+  type RequestAuditHistoryEntry,
 } from '../audit/audit_log.service';
 import {
   FormSchemaJson,
@@ -344,6 +345,15 @@ export class RequestsService implements OnModuleInit {
     }
 
     return this.mapRequestRow(request, actor);
+  }
+
+  async getRequestHistory(
+    id: string,
+    actor: AuthenticatedUserProfile,
+  ): Promise<RequestAuditHistoryEntry[]> {
+    await this.getRequest(id, actor);
+
+    return this.auditLogService.findByRequestId(id);
   }
 
   async getAllowedStatusTransitions(

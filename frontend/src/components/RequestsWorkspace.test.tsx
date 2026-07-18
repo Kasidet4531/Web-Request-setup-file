@@ -12,6 +12,7 @@ import { ApiError, type PsfRequestResponse } from '../services/api'
 
 const requestDetailApi = vi.hoisted(() => ({
   fetchPsfRequest: vi.fn(),
+  fetchPsfRequestHistory: vi.fn(),
   fetchPsfRequestStatusOptions: vi.fn(),
   updatePsfCreatedData: vi.fn(),
   updatePsfRequestStatus: vi.fn(),
@@ -281,6 +282,28 @@ function getPsfCreatedInformationPanel(): PsfCreatedInformationPanel | undefined
   return panel
 }
 
+type RequestHistoryPanel = (props: {
+  entries: Array<{
+    actionType: string
+    actorDisplayName: string
+    actorRole: string
+    createdAt: string
+    metadata: Record<string, unknown>
+  }>
+  error: string | null
+  loading: boolean
+}) => ReactElement
+
+function getRequestHistoryPanel(): RequestHistoryPanel | undefined {
+  const panel = Reflect.get(
+    RequestsWorkspace,
+    'RequestHistoryPanel',
+  ) as RequestHistoryPanel | undefined
+
+  expect(panel).toBeTypeOf('function')
+  return panel
+}
+
 describe('RequestHeaderSummary', () => {
   it('uses the submitted schema snapshot for header metadata while requester data stays read-only', () => {
     const request = buildSubmittedRequest()
@@ -425,13 +448,184 @@ describe('PsfCreatedInformationPanel', () => {
   })
 })
 
+describe('RequestHistoryPanel', () => {
+  it('announces request history loading accessibly', () => {
+    const panel = getRequestHistoryPanel()
+    if (!panel) {
+      return
+    }
+
+    const html = renderToStaticMarkup(panel({
+      entries: [],
+      error: null,
+      loading: true,
+    }))
+
+    expect(html).toContain('Loading request history…')
+    expect(html).toContain('role="status"')
+  })
+
+  it('explains when the request has no recorded history', () => {
+    const panel = getRequestHistoryPanel()
+    if (!panel) {
+      return
+    }
+
+    const html = renderToStaticMarkup(panel({
+      entries: [],
+      error: null,
+      loading: false,
+    }))
+
+    expect(html).toContain('No request history has been recorded yet.')
+    expect(html).toContain('role="status"')
+  })
+
+  it('surfaces a history loading failure accessibly instead of treating it as empty', () => {
+    const panel = getRequestHistoryPanel()
+    if (!panel) {
+      return
+    }
+
+    const html = renderToStaticMarkup(panel({
+      entries: [],
+      error: 'Timeline service unavailable',
+      loading: false,
+    }))
+
+    expect(html).toContain('Unable to load request history: Timeline service unavailable')
+    expect(html).toContain('role="alert"')
+    expect(html).not.toContain('No request history has been recorded yet.')
+  })
+
+  it('renders chronological history rows in an accessible table with a status transition summary', () => {
+    const panel = getRequestHistoryPanel()
+    if (!panel) {
+      return
+    }
+
+    const html = renderToStaticMarkup(panel({
+      entries: [
+        {
+          actionType: 'DRAFT_CREATED',
+          actorDisplayName: 'Requester Demo',
+          actorRole: 'requester',
+          createdAt: '2026-06-18T01:02:03.000Z',
+          metadata: {},
+        },
+        {
+          actionType: 'REQUEST_STATUS_CHANGED',
+          actorDisplayName: 'Setup Owner GNTC Demo',
+          actorRole: 'setup_owner',
+          createdAt: '2026-06-18T01:06:03.000Z',
+          metadata: {
+            fromStatus: 'Submitted',
+            toStatus: 'Setup In Progress',
+          },
+        },
+      ],
+      error: null,
+      loading: false,
+    }))
+
+    expect(html).toContain('aria-label="Request history"')
+    expect(html).toContain('<table>')
+    expect(html).toContain('<th scope="col">Timestamp</th>')
+    expect(html).toContain('Draft created')
+    expect(html).toContain('Submitted → Setup In Progress')
+    expect(html).toContain('Requester Demo')
+    expect(html).toContain('Setup Owner GNTC Demo')
+    expect(html).toContain('dateTime="2026-06-18T01:02:03.000Z"')
+    expect(html.indexOf('Draft created')).toBeLessThan(
+      html.indexOf('Submitted → Setup In Progress'),
+    )
+  })
+})
+
 describe('RequestDetailShell workflow actions', () => {
   beforeEach(() => {
     requestDetailApi.fetchPsfRequest.mockReset()
+    requestDetailApi.fetchPsfRequestHistory.mockReset()
     requestDetailApi.fetchPsfRequestStatusOptions.mockReset()
     requestDetailApi.updatePsfCreatedData.mockReset()
     requestDetailApi.updatePsfRequestStatus.mockReset()
     requestDetailHookHarness.reset()
+  })
+
+  it('loads request history inside the existing detail shell through the request-scoped API', async () => {
+    const request = buildSubmittedRequest()
+    const history = [
+      {
+        actionType: 'REQUEST_STATUS_CHANGED',
+        actorDisplayName: 'Setup Owner GNTC Demo',
+        actorRole: 'setup_owner',
+        createdAt: '2026-08-01T00:01:00.000Z',
+        metadata: {
+          fromStatus: 'Submitted',
+          toStatus: 'Setup In Progress',
+        },
+      },
+    ]
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue(history)
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({
+      allowedNextStatuses: ['Setup In Progress', 'Need More Information', 'Rejected'],
+    })
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const shell = renderRequestDetailShell()
+    const panel = getRequestHistoryPanel()
+    if (!panel) {
+      return
+    }
+    const historyPanel = requireRenderedElement(
+      shell,
+      (element) => element.type === panel,
+    )
+
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledWith('request-1')
+    expect(historyPanel.props).toMatchObject({
+      entries: history,
+      error: null,
+      loading: false,
+    })
+  })
+
+  it('keeps the normal request detail usable when request history loading fails', async () => {
+    const request = buildSubmittedRequest()
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
+    requestDetailApi.fetchPsfRequestHistory.mockRejectedValue(
+      new Error('Timeline service unavailable'),
+    )
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({
+      allowedNextStatuses: ['Setup In Progress', 'Need More Information', 'Rejected'],
+    })
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const shell = renderRequestDetailShell()
+    const panel = getRequestHistoryPanel()
+    if (!panel) {
+      return
+    }
+    const summary = requireRenderedElement(
+      shell,
+      (element) => element.type === RequestHeaderSummary,
+    )
+    const historyPanel = requireRenderedElement(
+      shell,
+      (element) => element.type === panel,
+    )
+
+    expect(summary.props.request).toMatchObject({ id: 'request-1' })
+    expect(historyPanel.props).toMatchObject({
+      entries: [],
+      error: 'Timeline service unavailable',
+      loading: false,
+    })
   })
 
   it('applies a status, refreshes local request detail and next options, and announces success', async () => {

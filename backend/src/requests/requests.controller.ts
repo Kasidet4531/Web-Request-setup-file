@@ -9,6 +9,7 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { RequestAuditHistoryEntry } from '../audit/audit_log.service';
 import { AuthService } from '../auth/auth.service';
 import type {
   AuthenticatedRequest,
@@ -57,6 +58,16 @@ export class RequestsController {
     const actor = await this.getAuthenticatedActor(request);
 
     return this.requestsService.getAllowedStatusTransitions(requestId, actor);
+  }
+
+  @Get(':requestId/history')
+  async getRequestHistory(
+    @Param('requestId') requestId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<RequestAuditHistoryEntry[]> {
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.getRequestHistory(requestId, actor);
   }
 
   @Get(':requestId')

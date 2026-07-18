@@ -192,6 +192,44 @@ describe('createApiClient', () => {
     }))
   })
 
+  it('loads a request-scoped history through the authenticated detail API path', async () => {
+    const history = [
+      {
+        actionType: 'REQUEST_STATUS_CHANGED',
+        actorDisplayName: 'Setup Owner GNTC Demo',
+        actorRole: 'setup_owner',
+        createdAt: '2026-06-18T01:06:03.000Z',
+        metadata: {
+          fromStatus: 'Submitted',
+          toStatus: 'Setup In Progress',
+        },
+      },
+    ]
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify(history), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchPsfRequestHistory = Reflect.get(
+      client,
+      'fetchPsfRequestHistory',
+    ) as undefined | ((requestId: string) => Promise<typeof history>)
+
+    expect(fetchPsfRequestHistory).toBeTypeOf('function')
+    if (!fetchPsfRequestHistory) {
+      return
+    }
+
+    await expect(fetchPsfRequestHistory('request-1')).resolves.toEqual(history)
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/requests/request-1/history',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+  })
+
   it('updates PSF Created Information through the authenticated request endpoint', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({

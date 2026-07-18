@@ -7,6 +7,7 @@ import {
   api,
   fetchCurrentUser,
   type AuthenticatedUserProfile,
+  type PsfRequestHistoryEntry,
   type PsfRequestListItem,
   type PsfRequestQuery,
   type PsfRequestResponse,
@@ -36,6 +37,34 @@ function formatDate(value: string | null | undefined): string {
 
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-GB')
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'medium' })
+}
+
+function historyActionSummary(entry: PsfRequestHistoryEntry): string {
+  switch (entry.actionType) {
+    case 'DRAFT_CREATED':
+      return 'Draft created'
+    case 'DRAFT_REQUESTER_DATA_UPDATED':
+      return 'Draft requester information updated'
+    case 'REQUEST_SUBMITTED':
+      return 'Request submitted'
+    case 'REQUEST_STATUS_CHANGED': {
+      const fromStatus = entry.metadata.fromStatus
+      const toStatus = entry.metadata.toStatus
+
+      if (typeof fromStatus === 'string' && typeof toStatus === 'string') {
+        return `${fromStatus} → ${toStatus}`
+      }
+
+      return 'Request status changed'
+    }
+  }
 }
 
 function statusClassName(status: string): string {
@@ -222,6 +251,62 @@ function buildPsfCreatedInformationValues(request: PsfRequestResponse): DynamicF
 
     return values
   }, {})
+}
+
+export function RequestHistoryPanel({
+  entries,
+  error,
+  loading,
+}: {
+  entries: PsfRequestHistoryEntry[]
+  error: string | null
+  loading: boolean
+}) {
+  return (
+    <section className="workflow-section" aria-labelledby="request-history-heading">
+      <div className="section-heading">
+        <div>
+          <h2 id="request-history-heading">History</h2>
+          <p>Recorded actions for this PSF Request.</p>
+        </div>
+      </div>
+      {loading ? <p className="page-card__description" role="status">Loading request history…</p> : null}
+      {error ? (
+        <p className="status-pill status-pill--error" role="alert">
+          Unable to load request history: {error}
+        </p>
+      ) : null}
+      {!loading && !error && entries.length === 0 ? (
+        <p className="page-card__description" role="status">
+          No request history has been recorded yet.
+        </p>
+      ) : null}
+      {!loading && !error && entries.length > 0 ? (
+        <div className="data-table" role="region" aria-label="Request history" tabIndex={0}>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Timestamp</th>
+                <th scope="col">Action</th>
+                <th scope="col">Actor</th>
+                <th scope="col">Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, index) => (
+                <tr key={`${entry.createdAt}-${entry.actionType}-${index}`}>
+                  <td><time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time></td>
+                  <td>{historyActionSummary(entry)}</td>
+                  <td>{entry.actorDisplayName}</td>
+                  <td>{entry.actorRole}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  )
 }
 
 function roleAwareRequestQuery(user: AuthenticatedUserProfile | null, extra: PsfRequestQuery = {}): PsfRequestQuery {
@@ -512,6 +597,11 @@ export function RequestDetailRoutePage() {
 
 export function RequestDetailShell({ requestId }: { requestId: string }) {
   const [request, setRequest] = useState<PsfRequestResponse | null>(null)
+  const [history, setHistory] = useState<AsyncState<PsfRequestHistoryEntry[]>>({
+    loading: true,
+    error: null,
+    data: [],
+  })
   const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
   const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
   const [status, setStatus] = useState('')
@@ -553,7 +643,28 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
       }
     }
 
+    async function loadHistory() {
+      setHistory({ loading: true, error: null, data: [] })
+
+      try {
+        const entries = await api.fetchPsfRequestHistory(requestId)
+
+        if (mounted) {
+          setHistory({ loading: false, error: null, data: entries })
+        }
+      } catch (loadError) {
+        if (mounted) {
+          setHistory({
+            loading: false,
+            error: loadError instanceof Error ? loadError.message : 'Unable to load request history',
+            data: [],
+          })
+        }
+      }
+    }
+
     void loadRequest()
+    void loadHistory()
 
     return () => {
       mounted = false
@@ -653,9 +764,6 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
           </p>
         </div>
         <div className="button-row">
-          <Link className="secondary-button" to="/requests/$requestId/history" params={{ requestId }}>
-            Request history
-          </Link>
           <Link className="secondary-button" to="/history">
             Global History
           </Link>
@@ -669,6 +777,12 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
       {request ? (
         <>
           <RequestHeaderSummary request={request} />
+
+          <RequestHistoryPanel
+            entries={history.data}
+            error={history.error}
+            loading={history.loading}
+          />
 
           <section className="workflow-section">
             <div className="section-heading">
