@@ -251,6 +251,10 @@ export class AuditLogService implements OnModuleInit {
   }
 
   private parseOptionalUuid(value: unknown): string | undefined {
+    if (value !== undefined && typeof value !== 'string') {
+      throw new BadRequestException('requestId must be a UUID.');
+    }
+
     const normalized = this.normalizeOptionalString(value);
 
     if (!normalized) {

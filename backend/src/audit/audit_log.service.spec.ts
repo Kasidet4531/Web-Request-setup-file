@@ -320,4 +320,15 @@ describe('AuditLogService', () => {
       expect(pool.query).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects repeated requestId query values with an HTTP 400 before querying', async () => {
+    const readGlobalAuditLogs = getGlobalAuditLogReader();
+
+    await expect(
+      readGlobalAuditLogs({
+        requestId: ['not-a-uuid', 'also-not-a-uuid'],
+      } as unknown as GlobalAuditLogFilters),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(pool.query).not.toHaveBeenCalled();
+  });
 });
