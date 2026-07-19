@@ -211,7 +211,7 @@ describe('AuditLogService', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
-          request_id: 'request-2',
+          request_id: 'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
           request_no: 'PSF-0002',
           action_type: 'REQUEST_STATUS_CHANGED',
           actor_display_name: 'Setup Owner GNTC Demo',
@@ -236,7 +236,7 @@ describe('AuditLogService', () => {
 
     await expect(
       readGlobalAuditLogs({
-        requestId: 'request-2',
+        requestId: 'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
         user: 'setup.gntc',
         actionType: 'REQUEST_STATUS_CHANGED',
         from: '2026-06-18',
@@ -244,7 +244,7 @@ describe('AuditLogService', () => {
       }),
     ).resolves.toEqual([
       {
-        requestId: 'request-2',
+        requestId: 'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
         requestNo: 'PSF-0002',
         actionType: 'REQUEST_STATUS_CHANGED',
         actorDisplayName: 'Setup Owner GNTC Demo',
@@ -269,7 +269,7 @@ describe('AuditLogService', () => {
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('JOIN psf_requests'),
       [
-        'request-2',
+        'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
         '%setup.gntc%',
         'REQUEST_STATUS_CHANGED',
         new Date('2026-06-18T00:00:00.000Z'),
@@ -305,6 +305,7 @@ describe('AuditLogService', () => {
   });
 
   it.each([
+    ['invalid request id', { requestId: 'not-a-uuid' }],
     ['unknown action type', { actionType: 'REQUEST_DELETED' }],
     ['invalid from date', { from: '2026-02-30' }],
     ['invalid to date', { to: '18-06-2026' }],

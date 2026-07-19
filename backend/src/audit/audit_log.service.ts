@@ -143,7 +143,7 @@ export class AuditLogService implements OnModuleInit {
   async findGlobalAuditLogs(
     filters: GlobalAuditLogFilters = {},
   ): Promise<GlobalAuditLogEntry[]> {
-    const requestId = this.normalizeOptionalString(filters.requestId);
+    const requestId = this.parseOptionalUuid(filters.requestId);
     const user = this.normalizeOptionalString(filters.user);
     const actionType = this.normalizeOptionalString(filters.actionType);
     const from = this.parseUtcDay(filters.from, 'from');
@@ -248,6 +248,24 @@ export class AuditLogService implements OnModuleInit {
 
     const normalized = value.trim();
     return normalized || undefined;
+  }
+
+  private parseOptionalUuid(value: unknown): string | undefined {
+    const normalized = this.normalizeOptionalString(value);
+
+    if (!normalized) {
+      return undefined;
+    }
+
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        normalized,
+      )
+    ) {
+      throw new BadRequestException('requestId must be a UUID.');
+    }
+
+    return normalized;
   }
 
   private parseUtcDay(value: unknown, name: 'from' | 'to'): Date | undefined {
