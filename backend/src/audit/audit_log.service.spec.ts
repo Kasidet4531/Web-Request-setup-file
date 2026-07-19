@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Pool } from 'pg';
 import { AuditLogService } from './audit_log.service';
 
@@ -7,6 +8,24 @@ interface RequestAuditHistoryEntry {
   actorRole: 'requester' | 'setup_owner' | 'admin';
   createdAt: string;
   metadata: Record<string, unknown>;
+}
+
+interface GlobalAuditLogEntry {
+  requestId: string;
+  requestNo: string;
+  actionType: string;
+  actorDisplayName: string;
+  actorRole: 'requester' | 'setup_owner' | 'admin';
+  createdAt: string;
+  metadata: Record<string, unknown>;
+}
+
+interface GlobalAuditLogFilters {
+  requestId?: string;
+  user?: string;
+  actionType?: string;
+  from?: string;
+  to?: string;
 }
 
 type AuditLogServiceContract = {
@@ -27,6 +46,9 @@ type AuditLogServiceContract = {
     queryRunner?: { query: jest.Mock },
   ): Promise<void>;
   findByRequestId(requestId: string): Promise<RequestAuditHistoryEntry[]>;
+  findGlobalAuditLogs?: (
+    filters: GlobalAuditLogFilters,
+  ) => Promise<GlobalAuditLogEntry[]>;
 };
 
 describe('AuditLogService', () => {
@@ -38,7 +60,18 @@ describe('AuditLogService', () => {
     service = new AuditLogService(pool as unknown as Pool);
   });
 
-  it('creates the baseline request audit storage and request-time index', async () => {
+  function getGlobalAuditLogReader(): (
+    filters: GlobalAuditLogFilters,
+  ) => Promise<GlobalAuditLogEntry[]> {
+    const reader = Reflect.get(service, 'findGlobalAuditLogs');
+
+    expect(typeof reader).toBe('function');
+    return reader?.bind(service) as NonNullable<
+      AuditLogServiceContract['findGlobalAuditLogs']
+    >;
+  }
+
+  it('creates the baseline request audit storage with request-time and global-time indexes', async () => {
     await service.onModuleInit();
 
     expect(pool.query).toHaveBeenNthCalledWith(
@@ -65,6 +98,18 @@ describe('AuditLogService', () => {
       2,
       expect.stringContaining(
         'ON psf_request_audit_logs (request_id, created_at DESC)',
+      ),
+    );
+    expect(pool.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining(
+        'CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_created_at',
+      ),
+    );
+    expect(pool.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining(
+        'ON psf_request_audit_logs (created_at DESC, id DESC)',
       ),
     );
   });
@@ -160,4 +205,118 @@ describe('AuditLogService', () => {
       ['request-1'],
     );
   });
+
+  it('returns a newest-first global audit list with parameterized exact, user, action, and UTC-day filters', async () => {
+    const readGlobalAuditLogs = getGlobalAuditLogReader();
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          request_id: 'request-2',
+          request_no: 'PSF-0002',
+          action_type: 'REQUEST_STATUS_CHANGED',
+          actor_display_name: 'Setup Owner GNTC Demo',
+          actor_role: 'setup_owner',
+          created_at: new Date('2026-06-19T23:59:59.000Z'),
+          metadata_json: {
+            fromStatus: 'Submitted',
+            toStatus: 'Setup In Progress',
+          },
+        },
+        {
+          request_id: 'request-1',
+          request_no: 'PSF-0001',
+          action_type: 'DRAFT_CREATED',
+          actor_display_name: 'Requester Demo',
+          actor_role: 'requester',
+          created_at: new Date('2026-06-18T00:00:00.000Z'),
+          metadata_json: {},
+        },
+      ],
+    });
+
+    await expect(
+      readGlobalAuditLogs({
+        requestId: 'request-2',
+        user: 'setup.gntc',
+        actionType: 'REQUEST_STATUS_CHANGED',
+        from: '2026-06-18',
+        to: '2026-06-19',
+      }),
+    ).resolves.toEqual([
+      {
+        requestId: 'request-2',
+        requestNo: 'PSF-0002',
+        actionType: 'REQUEST_STATUS_CHANGED',
+        actorDisplayName: 'Setup Owner GNTC Demo',
+        actorRole: 'setup_owner',
+        createdAt: '2026-06-19T23:59:59.000Z',
+        metadata: {
+          fromStatus: 'Submitted',
+          toStatus: 'Setup In Progress',
+        },
+      },
+      {
+        requestId: 'request-1',
+        requestNo: 'PSF-0001',
+        actionType: 'DRAFT_CREATED',
+        actorDisplayName: 'Requester Demo',
+        actorRole: 'requester',
+        createdAt: '2026-06-18T00:00:00.000Z',
+        metadata: {},
+      },
+    ]);
+
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('JOIN psf_requests'),
+      [
+        'request-2',
+        '%setup.gntc%',
+        'REQUEST_STATUS_CHANGED',
+        new Date('2026-06-18T00:00:00.000Z'),
+        new Date('2026-06-20T00:00:00.000Z'),
+      ],
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('audit_log.request_id = $1'),
+      expect.any(Array),
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('audit_log.actor_username ILIKE $2'),
+      expect.any(Array),
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('audit_log.action_type = $3'),
+      expect.any(Array),
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('audit_log.created_at >= $4'),
+      expect.any(Array),
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('audit_log.created_at < $5'),
+      expect.any(Array),
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'ORDER BY audit_log.created_at DESC, audit_log.id DESC',
+      ),
+      expect.any(Array),
+    );
+  });
+
+  it.each([
+    ['unknown action type', { actionType: 'REQUEST_DELETED' }],
+    ['invalid from date', { from: '2026-02-30' }],
+    ['invalid to date', { to: '18-06-2026' }],
+  ])(
+    'rejects %s with a controlled bad request before querying',
+    async (_description, filters) => {
+      const readGlobalAuditLogs = getGlobalAuditLogReader();
+
+      await expect(readGlobalAuditLogs(filters)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(pool.query).not.toHaveBeenCalled();
+    },
+  );
 });

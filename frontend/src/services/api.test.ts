@@ -230,6 +230,55 @@ describe('createApiClient', () => {
     )
   })
 
+  it('serializes global audit filters for the authenticated audit-log API path', async () => {
+    const history = [
+      {
+        requestId: 'request-1',
+        requestNo: 'PSF-0001',
+        actionType: 'REQUEST_STATUS_CHANGED',
+        actorDisplayName: 'Setup Owner GNTC Demo',
+        actorRole: 'setup_owner',
+        createdAt: '2026-06-19T01:02:03.000Z',
+        metadata: {},
+      },
+    ]
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify(history), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchGlobalAuditLogs = Reflect.get(
+      client,
+      'fetchGlobalAuditLogs',
+    ) as undefined | ((filters: {
+      requestId?: string
+      user?: string
+      actionType?: string
+      from?: string
+      to?: string
+    }) => Promise<typeof history>)
+
+    expect(fetchGlobalAuditLogs).toBeTypeOf('function')
+    if (!fetchGlobalAuditLogs) {
+      return
+    }
+
+    await expect(fetchGlobalAuditLogs({
+      requestId: 'request-1',
+      user: 'setup.gntc',
+      actionType: 'REQUEST_STATUS_CHANGED',
+      from: '2026-06-18',
+      to: '2026-06-19',
+    })).resolves.toEqual(history)
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/audit-logs?requestId=request-1&user=setup.gntc&actionType=REQUEST_STATUS_CHANGED&from=2026-06-18&to=2026-06-19',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+  })
+
   it('updates PSF Created Information through the authenticated request endpoint', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({

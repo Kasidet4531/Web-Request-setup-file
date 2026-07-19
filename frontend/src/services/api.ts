@@ -172,6 +172,24 @@ export interface PsfRequestHistoryEntry {
   metadata: Record<string, unknown>
 }
 
+export interface GlobalAuditLogQuery {
+  requestId?: string
+  user?: string
+  actionType?: PsfRequestHistoryAction
+  from?: string
+  to?: string
+}
+
+export interface GlobalAuditLogEntry {
+  requestId: string
+  requestNo: string
+  actionType: PsfRequestHistoryAction
+  actorDisplayName: string
+  actorRole: UserRole
+  createdAt: string
+  metadata: Record<string, unknown>
+}
+
 export function createApiClient(config: ApiClientConfig = {}) {
   const baseUrl = config.baseUrl ?? '/api'
   const defaultHeaders = config.headers ?? {}
@@ -255,6 +273,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
       }),
     fetchPsfRequestHistory: (requestId: string) =>
       request<PsfRequestHistoryEntry[]>(`/requests/${encodeURIComponent(requestId)}/history`, {
+        method: 'GET',
+      }),
+    fetchGlobalAuditLogs: (query: GlobalAuditLogQuery = {}) =>
+      request<GlobalAuditLogEntry[]>(buildQueryPath('/audit-logs', query), {
         method: 'GET',
       }),
     fetchPsfRequestStatusOptions: (requestId: string) =>
