@@ -1,5 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from "@tanstack/react-router";
+import { RequestExportPage } from "../../components/RequestExportPage";
 
-export const Route = createFileRoute('/admin/export-profile')({
-  component: () => <div>Admin Export Profile Structure Placeholder</div>,
-})
+export const Route = createFileRoute("/admin/export-profile")({
+  component: RequestExportPage,
+});

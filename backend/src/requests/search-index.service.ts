@@ -184,8 +184,9 @@ export class SearchIndexService implements OnModuleInit {
 
   async queryRequests(
     filters: RequestSearchFilters = {},
+    maximumLimit = 100,
   ): Promise<RequestSearchResult> {
-    const limit = this.normalizeLimit(filters.limit);
+    const limit = this.normalizeLimit(filters.limit, maximumLimit);
     const offset = this.normalizeOffset(filters.offset);
     const where: string[] = [];
     const params: unknown[] = [];
@@ -430,12 +431,19 @@ export class SearchIndexService implements OnModuleInit {
     return value.trim();
   }
 
-  private normalizeLimit(value: number | undefined): number {
+  private normalizeLimit(
+    value: number | undefined,
+    maximumLimit: number,
+  ): number {
+    const normalizedMaximumLimit = Number.isFinite(maximumLimit)
+      ? Math.max(Math.trunc(maximumLimit), 1)
+      : 100;
+
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return 50;
     }
 
-    return Math.min(Math.max(Math.trunc(value), 1), 100);
+    return Math.min(Math.max(Math.trunc(value), 1), normalizedMaximumLimit);
   }
 
   private normalizeOffset(value: number | undefined): number {
