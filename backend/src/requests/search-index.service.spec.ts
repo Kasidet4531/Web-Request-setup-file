@@ -275,4 +275,21 @@ describe('SearchIndexService canonical extraction', () => {
       ],
     );
   });
+
+  it('preserves request-list filters for an internal synchronous export-sized query', async () => {
+    await service.queryRequests(
+      {
+        status: 'Submitted',
+        requestDateFrom: '2026-06-01',
+        requestDateTo: '2026-06-30',
+        limit: 2000,
+      },
+      2000,
+    );
+
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM psf_request_search_index'),
+      ['Submitted', '2026-06-01', '2026-06-30', 2000, 0],
+    );
+  });
 });
