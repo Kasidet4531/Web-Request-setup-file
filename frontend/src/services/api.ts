@@ -193,11 +193,12 @@ export interface GlobalAuditLogEntry {
 export function createApiClient(config: ApiClientConfig = {}) {
   const baseUrl = config.baseUrl ?? '/api'
   const defaultHeaders = config.headers ?? {}
+  const resolveUrl = (path: string) => buildUrl(baseUrl, path)
 
   async function request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
     const headers = new Headers(defaultHeaders)
     const method = options.method ?? 'GET'
-    const url = buildUrl(baseUrl, path)
+    const url = resolveUrl(path)
 
     if (options.headers) {
       new Headers(options.headers).forEach((value, key) => headers.set(key, value))
@@ -245,6 +246,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
   }
 
   return {
+    resolveUrl,
     request,
     get: <T>(path: string, options?: Omit<ApiRequestOptions, 'method' | 'body'>) =>
       request<T>(path, { ...options, method: 'GET' }),

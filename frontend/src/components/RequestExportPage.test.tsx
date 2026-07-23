@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as RequestExportPageModule from "./RequestExportPage";
 import * as RequestExportClient from "../services/request-export";
 import * as ExportProfileRoute from "../routes/admin/export-profile";
+import { createApiClient } from "../services/api";
 
 describe("request export URL", () => {
   const originalFetch = globalThis.fetch;
@@ -38,6 +39,35 @@ describe("request export URL", () => {
       }),
     ).toBe(
       "/api/requests/export.xlsx?status=Submitted&from=2026-06-01&to=2026-06-30",
+    );
+  });
+
+  it("uses the configured API base URL for the request export", () => {
+    const buildRequestExportUrl = Reflect.get(
+      RequestExportClient,
+      "buildRequestExportUrl",
+    ) as (
+      filters: { status: string; from: string; to: string },
+      resolveUrl?: (path: string) => string,
+    ) => string;
+    const configuredClient = createApiClient({
+      baseUrl: "https://api.example.test/psf-api/",
+    });
+    const resolveUrl = Reflect.get(configuredClient, "resolveUrl") as (
+      path: string,
+    ) => string;
+
+    expect(
+      buildRequestExportUrl(
+        {
+          status: "Submitted",
+          from: "2026-06-01",
+          to: "2026-06-30",
+        },
+        resolveUrl,
+      ),
+    ).toBe(
+      "https://api.example.test/psf-api/requests/export.xlsx?status=Submitted&from=2026-06-01&to=2026-06-30",
     );
   });
 

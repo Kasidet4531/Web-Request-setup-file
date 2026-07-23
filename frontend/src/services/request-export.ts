@@ -1,3 +1,5 @@
+import { api } from "./api";
+
 export interface RequestExportFilterValues {
   status: string;
   from: string;
@@ -6,6 +8,7 @@ export interface RequestExportFilterValues {
 
 export function buildRequestExportUrl(
   filters: RequestExportFilterValues,
+  resolveUrl: (path: string) => string = api.resolveUrl,
 ): string {
   const query = new URLSearchParams();
   const status = filters.status.trim();
@@ -25,10 +28,11 @@ export function buildRequestExportUrl(
   }
 
   const serializedQuery = query.toString();
+  const path = serializedQuery
+    ? `/requests/export.xlsx?${serializedQuery}`
+    : "/requests/export.xlsx";
 
-  return serializedQuery
-    ? `/api/requests/export.xlsx?${serializedQuery}`
-    : "/api/requests/export.xlsx";
+  return resolveUrl(path);
 }
 
 async function exportErrorMessage(response: Response): Promise<string> {
