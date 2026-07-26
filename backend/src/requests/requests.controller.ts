@@ -51,12 +51,10 @@ export class RequestsController {
     @Query() query: Record<string, unknown>,
     @Req() request: AuthenticatedRequest,
   ): Promise<RequestSearchResult> {
+    const parsedQuery = this.parseRequestQuery(query);
     const actor = await this.getAuthenticatedActor(request);
 
-    return this.requestsService.queryRequests(
-      this.parseRequestQuery(query),
-      actor,
-    );
+    return this.requestsService.queryRequests(parsedQuery, actor);
   }
 
   @Get(':requestId/status-options')
@@ -250,7 +248,13 @@ export class RequestsController {
     }
 
     const normalized = value.trim();
-    return normalized.length > 0 ? normalized : undefined;
+    if (normalized.length === 0) {
+      throw new BadRequestException(
+        `Request query filter ${name} must not be empty`,
+      );
+    }
+
+    return normalized;
   }
 
   private parseOptionalIntegerFilter(

@@ -159,23 +159,40 @@ describe('RequestsController draft flow', () => {
     ['an object filter', { status: { value: 'Submitted' } }],
     ['an invalid calendar date', { requestDateFrom: '2026-02-30' }],
     ['a non-integer limit', { limit: '1.5' }],
+    ['an empty keyword filter', { keyword: '' }],
+    ['a whitespace-only keyword filter', { keyword: '  ' }],
+    ['an empty status filter', { status: '' }],
+    ['a whitespace-only status filter', { status: '  ' }],
+    ['an empty priority filter', { priority: '' }],
+    ['a whitespace-only priority filter', { priority: '  ' }],
+    ['an empty setupOwner filter', { setupOwner: '' }],
+    ['a whitespace-only setupOwner filter', { setupOwner: '  ' }],
+    ['an empty setupOwnerRole filter', { setupOwnerRole: '' }],
+    ['a whitespace-only setupOwnerRole filter', { setupOwnerRole: '  ' }],
+    ['an empty productType filter', { productType: '' }],
+    ['a whitespace-only productType filter', { productType: '  ' }],
+    ['an empty requester filter', { requester: '' }],
+    ['a whitespace-only requester filter', { requester: '  ' }],
+    ['an empty requestDateFrom filter', { requestDateFrom: '' }],
+    ['a whitespace-only requestDateFrom filter', { requestDateFrom: '  ' }],
+    ['an empty requestDateTo filter', { requestDateTo: '' }],
+    ['a whitespace-only requestDateTo filter', { requestDateTo: '  ' }],
+    ['an empty dueDateFrom filter', { dueDateFrom: '' }],
+    ['a whitespace-only dueDateFrom filter', { dueDateFrom: '  ' }],
+    ['an empty dueDateTo filter', { dueDateTo: '' }],
+    ['a whitespace-only dueDateTo filter', { dueDateTo: '  ' }],
+    ['an empty limit filter', { limit: '' }],
+    ['a whitespace-only limit filter', { limit: '  ' }],
+    ['an empty offset filter', { offset: '' }],
+    ['a whitespace-only offset filter', { offset: '  ' }],
   ])(
-    'rejects %s before calling the request query service',
+    'rejects %s before profile lookup or calling the request query service',
     async (_description, query) => {
-      const actor = {
-        id: 'user-1',
-        username: 'requester.demo',
-        displayName: 'Requester Demo',
-        role: 'requester' as const,
-        setupOwnerDepartment: null,
-      };
-      authService.getProfile.mockResolvedValue(actor);
-      service.queryRequests.mockResolvedValue({
-        items: [],
-        total: 0,
-        limit: 50,
-        offset: 0,
-      });
+      authService.getProfile.mockRejectedValue(
+        new Error(
+          'Profile lookup should not occur for an invalid request query',
+        ),
+      );
       const queryRequests = controller.queryRequests.bind(
         controller,
       ) as unknown as (
@@ -186,6 +203,7 @@ describe('RequestsController draft flow', () => {
       await expect(
         queryRequests(query, { session: { userId: 'user-1' } }),
       ).rejects.toBeInstanceOf(BadRequestException);
+      expect(authService.getProfile).not.toHaveBeenCalled();
       expect(service.queryRequests).not.toHaveBeenCalled();
     },
   );
