@@ -62,6 +62,7 @@ describe('RequestsService draft flow', () => {
   let dbClient: { query: jest.Mock; release: jest.Mock };
   let formSchemaService: { getActiveSchema: jest.Mock };
   let searchIndexService: {
+    ensureRequestSearchIndexStorage: jest.Mock;
     extractCanonicalValues: jest.Mock;
     queryRequests: jest.Mock;
     upsertRequestSearchIndex: jest.Mock;
@@ -84,6 +85,7 @@ describe('RequestsService draft flow', () => {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
     };
     searchIndexService = {
+      ensureRequestSearchIndexStorage: jest.fn().mockResolvedValue(undefined),
       extractCanonicalValues: jest.fn().mockReturnValue({
         product_type: 'Existing Product',
         requester: 'Fook',
@@ -116,6 +118,134 @@ describe('RequestsService draft flow', () => {
     }).compile();
 
     service = module.get(RequestsService);
+  });
+
+  it("migrates a pre-GI-49 database's requester ownership into the search index in one ordered transaction", async () => {
+    const legacy = {
+      requestColumns: new Set(['id', 'requester']),
+      searchIndexColumns: new Set(['request_id', 'requester']),
+      appUsers: [
+        {
+          id: requesterActor.id,
+          displayName: requesterActor.displayName,
+        },
+      ],
+      requests: [
+        {
+          id: 'request-1',
+          requester: requesterActor.displayName,
+          requester_user_id: null as string | null,
+        },
+      ],
+      searchEntries: [
+        {
+          request_id: 'request-1',
+          requester: requesterActor.displayName,
+          requester_user_id: null as string | null,
+        },
+      ],
+    };
+    const executedStatements: string[] = [];
+    const executeMigrationStatement = (query: string) => {
+      executedStatements.push(query);
+
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(query)) {
+        return {};
+      }
+
+      if (query.includes('ALTER TABLE psf_requests')) {
+        legacy.requestColumns.add('requester_user_id');
+        return {};
+      }
+
+      if (query.includes('$backfill_requester_owners$')) {
+        if (!legacy.requestColumns.has('requester_user_id')) {
+          throw new Error('request ownership column is unavailable');
+        }
+
+        legacy.requests.forEach((request) => {
+          const matchingOwners = legacy.appUsers.filter(
+            (owner) =>
+              owner.displayName.toLowerCase() ===
+              request.requester.toLowerCase(),
+          );
+
+          if (
+            request.requester_user_id === null &&
+            matchingOwners.length === 1
+          ) {
+            request.requester_user_id = matchingOwners[0].id;
+          }
+        });
+        return {};
+      }
+
+      if (query.includes('ALTER TABLE psf_request_search_index')) {
+        legacy.searchIndexColumns.add('requester_user_id');
+        return {};
+      }
+
+      if (query.includes('$backfill_search_requester_owners$')) {
+        if (
+          !legacy.requestColumns.has('requester_user_id') ||
+          !legacy.searchIndexColumns.has('requester_user_id')
+        ) {
+          throw new Error('request ownership migration has not completed');
+        }
+
+        legacy.searchEntries.forEach((searchEntry) => {
+          const request = legacy.requests.find(
+            (candidate) => candidate.id === searchEntry.request_id,
+          );
+          searchEntry.requester_user_id = request?.requester_user_id ?? null;
+        });
+        return {};
+      }
+
+      return { rows: [] };
+    };
+
+    pool.query.mockImplementation(executeMigrationStatement);
+    dbClient.query.mockImplementation(executeMigrationStatement);
+
+    const migrationSearchIndexService = new SearchIndexService(pool as never);
+    const migrationRequestsService = new RequestsService(
+      pool as never,
+      formSchemaService as never,
+      migrationSearchIndexService,
+      auditLogService as never,
+    );
+
+    await migrationRequestsService.onModuleInit();
+
+    expect(pool.connect).toHaveBeenCalledTimes(1);
+    expect(legacy.requests).toEqual([
+      {
+        id: 'request-1',
+        requester: requesterActor.displayName,
+        requester_user_id: requesterActor.id,
+      },
+    ]);
+    expect(legacy.searchEntries).toEqual([
+      {
+        request_id: 'request-1',
+        requester: requesterActor.displayName,
+        requester_user_id: requesterActor.id,
+      },
+    ]);
+
+    const requestBackfillIndex = executedStatements.findIndex((statement) =>
+      statement.includes('$backfill_requester_owners$'),
+    );
+    const searchIndexBackfillIndex = executedStatements.findIndex((statement) =>
+      statement.includes('$backfill_search_requester_owners$'),
+    );
+
+    expect(executedStatements[0]).toBe('BEGIN');
+    expect(requestBackfillIndex).toBeGreaterThan(0);
+    expect(searchIndexBackfillIndex).toBeGreaterThan(requestBackfillIndex);
+    expect(executedStatements[executedStatements.length - 1]).toBe('COMMIT');
+    expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
   it('derives draft requester identity from the authenticated actor rather than client fields', async () => {
@@ -323,7 +453,7 @@ describe('RequestsService draft flow', () => {
     );
   });
 
-  it('constrains requester list queries to the authenticated requester identity', async () => {
+  it('constrains requester list queries only by immutable identity when display names differ', async () => {
     const queryRequestsForActor = service.queryRequests.bind(
       service,
     ) as unknown as (
@@ -338,7 +468,7 @@ describe('RequestsService draft flow', () => {
 
     await queryRequestsForActor(
       {
-        requester: 'Other Requester',
+        requester: 'Former Requester Display Name',
         status: 'Submitted',
         limit: 25,
         offset: 0,
@@ -347,7 +477,6 @@ describe('RequestsService draft flow', () => {
     );
 
     expect(searchIndexService.queryRequests).toHaveBeenCalledWith({
-      requester: requesterActor.displayName,
       requesterUserId: requesterActor.id,
       status: 'Submitted',
       limit: 25,

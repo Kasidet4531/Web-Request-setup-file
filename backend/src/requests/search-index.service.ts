@@ -94,7 +94,6 @@ export class SearchIndexService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.ensureCanonicalValueStorage();
-    await this.ensureRequestSearchIndexStorage();
   }
 
   extractCanonicalValues(
@@ -343,8 +342,10 @@ export class SearchIndexService implements OnModuleInit {
     `);
   }
 
-  private async ensureRequestSearchIndexStorage(): Promise<void> {
-    await this.pool.query(`
+  async ensureRequestSearchIndexStorage(
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<void> {
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS psf_request_search_index (
         request_id UUID PRIMARY KEY,
         request_no TEXT NOT NULL,
@@ -365,12 +366,12 @@ export class SearchIndexService implements OnModuleInit {
       )
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       ALTER TABLE psf_request_search_index
       ADD COLUMN IF NOT EXISTS requester_user_id UUID
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       DO $$
       BEGIN
         IF to_regclass('public.psf_requests') IS NOT NULL THEN
@@ -386,7 +387,7 @@ export class SearchIndexService implements OnModuleInit {
       $$;
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_keyword
       ON psf_request_search_index (
         title,
@@ -396,32 +397,32 @@ export class SearchIndexService implements OnModuleInit {
       )
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_status
       ON psf_request_search_index (status)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_product_type
       ON psf_request_search_index (product_type)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_requester_user_id
       ON psf_request_search_index (requester_user_id)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_setup_owner_role
       ON psf_request_search_index (setup_owner_role)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_priority
       ON psf_request_search_index (priority)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_updated_at
       ON psf_request_search_index (updated_at DESC)
     `);

@@ -256,7 +256,10 @@ export class RequestsService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.ensureRequestsStorage();
+    await this.withTransaction(async (client) => {
+      await this.ensureRequestsStorage(client);
+      await this.searchIndexService.ensureRequestSearchIndexStorage(client);
+    });
   }
 
   async createDraft(
@@ -330,6 +333,11 @@ export class RequestsService implements OnModuleInit {
   ): Promise<RequestSearchResult> {
     const filters = { ...(query as RequestSearchFilters) };
     delete filters.requesterUserId;
+
+    if (actor.role === 'requester') {
+      delete filters.requester;
+    }
+
     const normalizedFilters = {
       ...filters,
       limit: this.parseOptionalNumber(query.limit),
@@ -339,7 +347,6 @@ export class RequestsService implements OnModuleInit {
     if (actor.role === 'requester') {
       return this.searchIndexService.queryRequests({
         ...normalizedFilters,
-        requester: actor.displayName,
         requesterUserId: actor.id,
       });
     }
@@ -956,8 +963,10 @@ export class RequestsService implements OnModuleInit {
     }
   }
 
-  private async ensureRequestsStorage(): Promise<void> {
-    await this.pool.query(`
+  private async ensureRequestsStorage(
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<void> {
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS psf_requests (
         id UUID PRIMARY KEY,
         request_no TEXT NOT NULL UNIQUE,
@@ -980,12 +989,12 @@ export class RequestsService implements OnModuleInit {
       )
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       ALTER TABLE psf_requests
       ADD COLUMN IF NOT EXISTS requester_user_id UUID
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       DO $$
       BEGIN
         IF to_regclass('public.app_users') IS NOT NULL THEN
@@ -1007,12 +1016,12 @@ export class RequestsService implements OnModuleInit {
       $$;
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_status_updated
       ON psf_requests (status, updated_at DESC)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_requester_user_id
       ON psf_requests (requester_user_id)
     `);
