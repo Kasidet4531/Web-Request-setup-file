@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { RequestsController } from './requests.controller';
 import { RequestsService } from './requests.service';
@@ -98,23 +98,97 @@ describe('RequestsController draft flow', () => {
     expect(service.createDraft).not.toHaveBeenCalled();
   });
 
-  it('queries request list filters and pagination', async () => {
+  it('queries request list filters and pagination for the authenticated actor', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
     service.queryRequests.mockResolvedValue({
       items: [],
       total: 0,
       limit: 50,
       offset: 0,
     });
+    const queryRequests = controller.queryRequests.bind(
+      controller,
+    ) as unknown as (
+      query: Record<string, unknown>,
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
 
     await expect(
-      controller.queryRequests({ keyword: 'probe', status: 'Submitted' }),
+      queryRequests(
+        { keyword: 'probe', status: 'Submitted' },
+        { session: { userId: 'user-1' } },
+      ),
     ).resolves.toEqual({ items: [], total: 0, limit: 50, offset: 0 });
 
-    expect(service.queryRequests).toHaveBeenCalledWith({
-      keyword: 'probe',
-      status: 'Submitted',
-    });
+    expect(service.queryRequests).toHaveBeenCalledWith(
+      { keyword: 'probe', status: 'Submitted' },
+      actor,
+    );
   });
+
+  it('rejects request list access without a session user before querying requests', async () => {
+    service.queryRequests.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    });
+    const queryRequests = controller.queryRequests.bind(
+      controller,
+    ) as unknown as (
+      query: Record<string, unknown>,
+      request: { session: { userId?: string } },
+    ) => Promise<unknown>;
+
+    await expect(
+      queryRequests({ status: 'Submitted' }, { session: {} }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.queryRequests).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a repeated status filter', { status: ['Draft', 'Submitted'] }],
+    ['an array pagination filter', { limit: ['25', '50'] }],
+    ['an object filter', { status: { value: 'Submitted' } }],
+    ['an invalid calendar date', { requestDateFrom: '2026-02-30' }],
+    ['a non-integer limit', { limit: '1.5' }],
+  ])(
+    'rejects %s before calling the request query service',
+    async (_description, query) => {
+      const actor = {
+        id: 'user-1',
+        username: 'requester.demo',
+        displayName: 'Requester Demo',
+        role: 'requester' as const,
+        setupOwnerDepartment: null,
+      };
+      authService.getProfile.mockResolvedValue(actor);
+      service.queryRequests.mockResolvedValue({
+        items: [],
+        total: 0,
+        limit: 50,
+        offset: 0,
+      });
+      const queryRequests = controller.queryRequests.bind(
+        controller,
+      ) as unknown as (
+        rawQuery: Record<string, unknown>,
+        request: { session: { userId?: string } },
+      ) => Promise<unknown>;
+
+      await expect(
+        queryRequests(query, { session: { userId: 'user-1' } }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(service.queryRequests).not.toHaveBeenCalled();
+    },
+  );
 
   it('loads request detail for the authenticated actor so PSF Created Information can be masked server-side', async () => {
     const actor = {

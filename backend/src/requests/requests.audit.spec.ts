@@ -48,7 +48,7 @@ const activeSchema = {
 const requesterActor = {
   id: '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
   username: 'requester.demo',
-  displayName: 'Requester Demo',
+  displayName: 'Fook',
   role: 'requester' as const,
   setupOwnerDepartment: null,
 };
@@ -68,6 +68,7 @@ const draftRow = {
   form_version: 3,
   status: 'Draft',
   requester: 'Fook',
+  requester_user_id: requesterActor.id,
   setup_owner: null,
   setup_owner_role: null,
   product_type: 'New Product',
@@ -171,11 +172,29 @@ describe('RequestsService audit baseline', () => {
       updated_at: new Date('2026-06-18T01:04:03.000Z'),
     };
     pool.query
-      .mockResolvedValueOnce({ rows: [{ id: draftRow.id, status: 'Draft' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: draftRow.id,
+            status: 'Draft',
+            requester: draftRow.requester,
+            requester_user_id: draftRow.requester_user_id,
+          },
+        ],
+      })
       .mockResolvedValueOnce({ rows: [updatedRow] });
     dbClient.query
       .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({ rows: [{ id: draftRow.id, status: 'Draft' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: draftRow.id,
+            status: 'Draft',
+            requester: draftRow.requester,
+            requester_user_id: draftRow.requester_user_id,
+          },
+        ],
+      })
       .mockResolvedValueOnce({ rows: [updatedRow] })
       .mockResolvedValueOnce({});
 
@@ -216,6 +235,8 @@ describe('RequestsService audit baseline', () => {
           {
             id: draftRow.id,
             status: 'Draft',
+            requester: draftRow.requester,
+            requester_user_id: draftRow.requester_user_id,
             requester_data_json: draftRow.requester_data_json,
           },
         ],

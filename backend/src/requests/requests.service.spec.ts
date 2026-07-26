@@ -51,7 +51,7 @@ const activeSchema = {
 const requesterActor = {
   id: '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
   username: 'requester.demo',
-  displayName: 'Requester Demo',
+  displayName: 'Fook',
   role: 'requester' as const,
   setupOwnerDepartment: null,
 };
@@ -118,20 +118,21 @@ describe('RequestsService draft flow', () => {
     service = module.get(RequestsService);
   });
 
-  it('creates a draft request against the active PSF request schema', async () => {
+  it('derives draft requester identity from the authenticated actor rather than client fields', async () => {
     const insertedRow = {
       id: 'request-1',
       request_no: 'DRAFT-20260618-0001',
       form_key: 'psf-request',
       form_version: 3,
       status: 'Draft',
-      requester: 'Fook',
+      requester: requesterActor.displayName,
+      requester_user_id: requesterActor.id,
       setup_owner: null,
       setup_owner_role: null,
       product_type: 'New Product',
       requester_data_json: {
         product_type: 'New Product',
-        requester_name: 'Fook',
+        requester_name: requesterActor.displayName,
       },
       psf_created_data_json: {},
       schema_snapshot_json: activeSchema.schema,
@@ -151,8 +152,11 @@ describe('RequestsService draft flow', () => {
 
     const draft = await service.createDraft(
       {
-        requester: 'Fook',
-        requesterData: { product_type: 'New Product', requester_name: 'Fook' },
+        requester: 'Another requester',
+        requesterData: {
+          product_type: 'New Product',
+          requester_name: 'Another requester',
+        },
       },
       requesterActor,
     );
@@ -168,9 +172,13 @@ describe('RequestsService draft flow', () => {
         'psf-request',
         3,
         'Draft',
-        'Fook',
+        requesterActor.displayName,
+        requesterActor.id,
         'New Product',
-        { product_type: 'New Product', requester_name: 'Fook' },
+        {
+          product_type: 'New Product',
+          requester_name: requesterActor.displayName,
+        },
         activeSchema.schema,
       ],
     );
@@ -178,8 +186,172 @@ describe('RequestsService draft flow', () => {
       id: 'request-1',
       requestNo: 'DRAFT-20260618-0001',
       status: 'Draft',
-      requesterData: { product_type: 'New Product', requester_name: 'Fook' },
+      requesterData: {
+        product_type: 'New Product',
+        requester_name: requesterActor.displayName,
+      },
       schemaSnapshot: activeSchema.schema,
+    });
+  });
+
+  it("rejects a requester reading a different requester's request before mapping response data", async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-2',
+          request_no: 'DRAFT-2',
+          form_key: 'psf-request',
+          form_version: 3,
+          status: 'Draft',
+          requester: 'Other Requester',
+          requester_user_id: 'other-requester-id',
+          setup_owner: null,
+          setup_owner_role: null,
+          product_type: 'New Product',
+          requester_data_json: { requester_name: 'Other Requester' },
+          psf_created_data_json: {},
+          schema_snapshot_json: activeSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:02:03.000Z'),
+          submitted_at: null,
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+
+    await expect(
+      service.getRequest('request-2', requesterActor),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("rejects a requester loading another requester's history before the audit query", async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-2',
+          request_no: 'DRAFT-2',
+          form_key: 'psf-request',
+          form_version: 3,
+          status: 'Draft',
+          requester: 'Other Requester',
+          requester_user_id: 'other-requester-id',
+          setup_owner: null,
+          setup_owner_role: null,
+          product_type: 'New Product',
+          requester_data_json: { requester_name: 'Other Requester' },
+          psf_created_data_json: {},
+          schema_snapshot_json: activeSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:02:03.000Z'),
+          submitted_at: null,
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+
+    await expect(
+      service.getRequestHistory('request-2', requesterActor),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(auditLogService.findByRequestId).not.toHaveBeenCalled();
+  });
+
+  it("rejects a requester updating another requester's draft before the write query", async () => {
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-2',
+            status: 'Draft',
+            requester: 'Other Requester',
+            requester_user_id: 'other-requester-id',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.updateDraftRequesterData(
+        'request-2',
+        {
+          requester: 'Other Requester',
+          requesterData: { product_type: 'New Product' },
+        },
+        requesterActor,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(dbClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.any(Array),
+    );
+  });
+
+  it('rejects a setup owner from editing requester-owned draft data', async () => {
+    const setupOwnerActor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Draft',
+            requester: requesterActor.displayName,
+            requester_user_id: requesterActor.id,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.updateDraftRequesterData(
+        'request-1',
+        { requesterData: { product_type: 'New Product' } },
+        setupOwnerActor,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(dbClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.any(Array),
+    );
+  });
+
+  it('constrains requester list queries to the authenticated requester identity', async () => {
+    const queryRequestsForActor = service.queryRequests.bind(
+      service,
+    ) as unknown as (
+      query: {
+        requester?: string;
+        status?: string;
+        limit?: number;
+        offset?: number;
+      },
+      actor: typeof requesterActor,
+    ) => Promise<unknown>;
+
+    await queryRequestsForActor(
+      {
+        requester: 'Other Requester',
+        status: 'Submitted',
+        limit: 25,
+        offset: 0,
+      },
+      requesterActor,
+    );
+
+    expect(searchIndexService.queryRequests).toHaveBeenCalledWith({
+      requester: requesterActor.displayName,
+      requesterUserId: requesterActor.id,
+      status: 'Submitted',
+      limit: 25,
+      offset: 0,
     });
   });
 
@@ -192,12 +364,21 @@ describe('RequestsService draft flow', () => {
     });
 
     await expect(
-      service.queryRequests({
-        keyword: 'probe',
-        status: 'Submitted',
-        limit: '25' as never,
-        offset: '50' as never,
-      }),
+      service.queryRequests(
+        {
+          keyword: 'probe',
+          status: 'Submitted',
+          limit: '25' as never,
+          offset: '50' as never,
+        },
+        {
+          id: 'admin-1',
+          username: 'admin.demo',
+          displayName: 'Admin Demo',
+          role: 'admin',
+          setupOwnerDepartment: null,
+        },
+      ),
     ).resolves.toEqual({
       items: [{ requestId: 'request-1', requestNo: 'DRAFT-1' }],
       total: 1,
@@ -281,7 +462,13 @@ describe('RequestsService draft flow', () => {
     },
   ])('$description', async ({ actor, allowedNextStatuses, currentStatus }) => {
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: currentStatus }],
+      rows: [
+        {
+          id: 'request-1',
+          status: currentStatus,
+          requester_user_id: actor.role === 'requester' ? actor.id : null,
+        },
+      ],
     });
 
     await expect(
@@ -468,6 +655,7 @@ describe('RequestsService draft flow', () => {
           setup_owner: null,
           setup_owner_role: null,
           product_type: 'Transfer Product',
+          requester_user_id: requesterActor.id,
           requester_data_json: { product_type: 'Transfer Product' },
           psf_created_data_json: {},
           schema_snapshot_json: activeSchema.schema,
@@ -480,7 +668,9 @@ describe('RequestsService draft flow', () => {
       ],
     });
 
-    await expect(service.getRequest('request-1')).resolves.toMatchObject({
+    await expect(
+      service.getRequest('request-1', requesterActor),
+    ).resolves.toMatchObject({
       id: 'request-1',
       status: 'Draft',
       requesterData: { product_type: 'Transfer Product' },
@@ -521,6 +711,7 @@ describe('RequestsService draft flow', () => {
           form_version: 3,
           status: 'Setup In Progress',
           requester: 'Fook',
+          requester_user_id: 'requester-1',
           setup_owner: 'Setup Owner GNTC Demo',
           setup_owner_role: 'GNTC',
           product_type: 'Existing Product',
@@ -594,6 +785,7 @@ describe('RequestsService draft flow', () => {
             form_version: 3,
             status,
             requester: 'Fook',
+            requester_user_id: 'requester-1',
             setup_owner: 'Setup Owner GNTC Demo',
             setup_owner_role: 'GNTC',
             product_type: 'Existing Product',
@@ -922,7 +1114,7 @@ describe('RequestsService draft flow', () => {
     };
 
     await expect(invokeUpdate()).rejects.toBeInstanceOf(ForbiddenException);
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it('rejects a setup owner attempting to save PSF Created Information after Completed', async () => {
@@ -1039,6 +1231,8 @@ describe('RequestsService draft flow', () => {
         {
           id: 'request-1',
           status: 'Draft',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
         },
       ],
     });
@@ -1054,6 +1248,7 @@ describe('RequestsService draft flow', () => {
           setup_owner: null,
           setup_owner_role: null,
           product_type: 'Existing Product',
+          requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
@@ -1086,6 +1281,7 @@ describe('RequestsService draft flow', () => {
       [
         'request-1',
         'Fook',
+        requesterActor.id,
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
       ],
@@ -1103,7 +1299,14 @@ describe('RequestsService draft flow', () => {
 
   it('rejects requester-owned updates after Draft status', async () => {
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Submitted' }],
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Submitted',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
+        },
+      ],
     });
 
     await expect(
@@ -1135,6 +1338,8 @@ describe('RequestsService draft flow', () => {
         {
           id: 'request-1',
           status: 'Draft',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
@@ -1151,6 +1356,7 @@ describe('RequestsService draft flow', () => {
           form_version: 4,
           status: 'Submitted',
           requester: 'Fook',
+          requester_user_id: requesterActor.id,
           setup_owner: null,
           setup_owner_role: null,
           product_type: 'Existing Product',
@@ -1184,6 +1390,7 @@ describe('RequestsService draft flow', () => {
       [
         'request-1',
         'Fook',
+        requesterActor.id,
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
         4,
@@ -1207,6 +1414,7 @@ describe('RequestsService draft flow', () => {
         requestNo: 'DRAFT-1',
         status: 'Submitted',
         requester: 'Fook',
+        requesterUserId: requesterActor.id,
         setupOwner: null,
         setupOwnerRole: null,
         productType: 'Existing Product',
@@ -1234,6 +1442,8 @@ describe('RequestsService draft flow', () => {
         {
           id: 'request-1',
           status: 'Draft',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
           requester_data_json: {
             legacy_field: 'remove me',
             product_type: 'Existing Product',
@@ -1251,6 +1461,7 @@ describe('RequestsService draft flow', () => {
           form_version: 3,
           status: 'Submitted',
           requester: 'Fook',
+          requester_user_id: requesterActor.id,
           setup_owner: null,
           setup_owner_role: null,
           product_type: 'Existing Product',
@@ -1281,6 +1492,7 @@ describe('RequestsService draft flow', () => {
       [
         'request-1',
         'Fook',
+        requesterActor.id,
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
         3,
@@ -1296,6 +1508,8 @@ describe('RequestsService draft flow', () => {
         {
           id: 'request-1',
           status: 'Draft',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
@@ -1312,6 +1526,7 @@ describe('RequestsService draft flow', () => {
           form_version: 3,
           status: 'Submitted',
           requester: 'Fook',
+          requester_user_id: requesterActor.id,
           setup_owner: null,
           setup_owner_role: null,
           product_type: 'Existing Product',
@@ -1344,6 +1559,7 @@ describe('RequestsService draft flow', () => {
       [
         'request-1',
         'Fook',
+        requesterActor.id,
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
         3,
@@ -1367,12 +1583,36 @@ describe('RequestsService draft flow', () => {
   });
 
   it('rejects submission when the latest active schema has required fields the draft has not satisfied', async () => {
+    const schemaWithRequiredTitle = {
+      ...activeSchema,
+      schema: {
+        ...activeSchema.schema,
+        sections: activeSchema.schema.sections.map((section) => ({
+          ...section,
+          fields: [
+            ...section.fields,
+            {
+              fieldKey: 'title',
+              canonicalKey: 'title',
+              label: 'Title',
+              type: 'text' as const,
+              required: true,
+            },
+          ],
+        })),
+      },
+    };
+    formSchemaService.getActiveSchema.mockResolvedValueOnce(
+      schemaWithRequiredTitle,
+    );
     dbClient.query.mockResolvedValueOnce({});
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
           status: 'Draft',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
           },
@@ -1403,6 +1643,8 @@ describe('RequestsService draft flow', () => {
         {
           id: 'request-1',
           status: 'Draft',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
@@ -1423,7 +1665,14 @@ describe('RequestsService draft flow', () => {
   it('rejects submitting a request that is already past Draft status', async () => {
     dbClient.query.mockResolvedValueOnce({});
     dbClient.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Submitted' }],
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Submitted',
+          requester: 'Fook',
+          requester_user_id: requesterActor.id,
+        },
+      ],
     });
     dbClient.query.mockResolvedValueOnce({});
 
@@ -1436,8 +1685,8 @@ describe('RequestsService draft flow', () => {
   it('raises NotFoundException when loading an unknown request', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
 
-    await expect(service.getRequest('missing')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.getRequest('missing', requesterActor),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
