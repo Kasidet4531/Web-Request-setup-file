@@ -12,6 +12,7 @@ export interface RequestSearchIndexSource {
   requestNo: string;
   status: string;
   requester: string | null;
+  requesterUserId: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -27,6 +28,7 @@ export interface RequestSearchFilters {
   setupOwnerRole?: string;
   productType?: string;
   requester?: string;
+  requesterUserId?: string;
   requestDateFrom?: string;
   requestDateTo?: string;
   dueDateFrom?: string;
@@ -92,7 +94,6 @@ export class SearchIndexService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.ensureCanonicalValueStorage();
-    await this.ensureRequestSearchIndexStorage();
   }
 
   extractCanonicalValues(
@@ -133,6 +134,7 @@ export class SearchIndexService implements OnModuleInit {
           status,
           priority,
           requester,
+          requester_user_id,
           setup_owner,
           setup_owner_role,
           product_type,
@@ -141,8 +143,8 @@ export class SearchIndexService implements OnModuleInit {
           updated_at
         )
         VALUES (
-          $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          $11, $12, $13::timestamp, $14::timestamp, $15::timestamp
+          $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid,
+          $11, $12, $13, $14::timestamp, $15::timestamp, $16::timestamp
         )
         ON CONFLICT (request_id)
         DO UPDATE SET
@@ -154,6 +156,7 @@ export class SearchIndexService implements OnModuleInit {
           status = EXCLUDED.status,
           priority = EXCLUDED.priority,
           requester = EXCLUDED.requester,
+          requester_user_id = EXCLUDED.requester_user_id,
           setup_owner = EXCLUDED.setup_owner,
           setup_owner_role = EXCLUDED.setup_owner_role,
           product_type = EXCLUDED.product_type,
@@ -171,6 +174,7 @@ export class SearchIndexService implements OnModuleInit {
         source.status,
         this.stringFromCanonical(canonicalValues.priority),
         source.requester ?? this.stringFromCanonical(canonicalValues.requester),
+        source.requesterUserId,
         source.setupOwner,
         source.setupOwnerRole,
         source.productType ??
@@ -216,6 +220,12 @@ export class SearchIndexService implements OnModuleInit {
       params,
       'requester',
       filters.requester,
+    );
+    this.addExactFilter(
+      where,
+      params,
+      'requester_user_id',
+      filters.requesterUserId,
     );
     this.addDateFilter(
       where,
@@ -332,8 +342,10 @@ export class SearchIndexService implements OnModuleInit {
     `);
   }
 
-  private async ensureRequestSearchIndexStorage(): Promise<void> {
-    await this.pool.query(`
+  async ensureRequestSearchIndexStorage(
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<void> {
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS psf_request_search_index (
         request_id UUID PRIMARY KEY,
         request_no TEXT NOT NULL,
@@ -344,6 +356,7 @@ export class SearchIndexService implements OnModuleInit {
         status TEXT NOT NULL,
         priority TEXT,
         requester TEXT,
+        requester_user_id UUID,
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
@@ -353,7 +366,28 @@ export class SearchIndexService implements OnModuleInit {
       )
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
+      ALTER TABLE psf_request_search_index
+      ADD COLUMN IF NOT EXISTS requester_user_id UUID
+    `);
+
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.psf_requests') IS NOT NULL THEN
+          EXECUTE $backfill_search_requester_owners$
+            UPDATE psf_request_search_index AS search_entry
+            SET requester_user_id = request.requester_user_id
+            FROM psf_requests AS request
+            WHERE search_entry.request_id = request.id
+              AND search_entry.requester_user_id IS NULL
+          $backfill_search_requester_owners$;
+        END IF;
+      END
+      $$;
+    `);
+
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_keyword
       ON psf_request_search_index (
         title,
@@ -363,27 +397,32 @@ export class SearchIndexService implements OnModuleInit {
       )
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_status
       ON psf_request_search_index (status)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_product_type
       ON psf_request_search_index (product_type)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
+      CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_requester_user_id
+      ON psf_request_search_index (requester_user_id)
+    `);
+
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_setup_owner_role
       ON psf_request_search_index (setup_owner_role)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_priority
       ON psf_request_search_index (priority)
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_updated_at
       ON psf_request_search_index (updated_at DESC)
     `);
@@ -466,6 +505,20 @@ export class SearchIndexService implements OnModuleInit {
 
     params.push(value.trim());
     where.push(`LOWER(${column}) = LOWER($${params.length})`);
+  }
+
+  private addExactFilter(
+    where: string[],
+    params: unknown[],
+    column: string,
+    value: string | undefined,
+  ): void {
+    if (!value) {
+      return;
+    }
+
+    params.push(value);
+    where.push(`${column} = $${params.length}`);
   }
 
   private addDateFilter(

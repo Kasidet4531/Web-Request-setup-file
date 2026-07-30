@@ -199,7 +199,7 @@ export interface RequestStatusOptionsResponse {
   allowedNextStatuses: string[];
 }
 
-export type RequestQueryDto = RequestSearchFilters;
+export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'>;
 
 export interface PsfRequestResponse {
   id: string;
@@ -231,6 +231,7 @@ interface PsfRequestRow {
   form_version: number;
   status: string;
   requester: string | null;
+  requester_user_id: string | null;
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
@@ -255,22 +256,28 @@ export class RequestsService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.ensureRequestsStorage();
+    await this.withTransaction(async (client) => {
+      await this.ensureRequestsStorage(client);
+      await this.searchIndexService.ensureRequestSearchIndexStorage(client);
+    });
   }
 
   async createDraft(
     dto: CreateDraftRequestDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
+    this.assertCanCreateDraft(actor);
     const activeSchema =
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
+    const requester = actor.displayName;
+    const requesterData = this.withServerRequesterIdentity(
+      dto.requesterData,
+      requester,
+    );
 
     return this.withTransaction(async (client) => {
       const requestNo = await this.nextDraftRequestNo(client);
-      const requester = this.normalizeString(
-        dto.requester ?? dto.requesterData.requester_name,
-      );
-      const productType = this.normalizeString(dto.requesterData.product_type);
+      const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
         `
           INSERT INTO psf_requests (
@@ -280,6 +287,7 @@ export class RequestsService implements OnModuleInit {
             form_version,
             status,
             requester,
+            requester_user_id,
             product_type,
             requester_data_json,
             psf_created_data_json,
@@ -287,7 +295,7 @@ export class RequestsService implements OnModuleInit {
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, '{}'::jsonb, $9::jsonb, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -297,8 +305,9 @@ export class RequestsService implements OnModuleInit {
           activeSchema.version,
           DRAFT_STATUS,
           requester,
+          actor.id,
           productType,
-          dto.requesterData,
+          requesterData,
           activeSchema.schema,
         ],
       );
@@ -318,17 +327,36 @@ export class RequestsService implements OnModuleInit {
     });
   }
 
-  async queryRequests(query: RequestQueryDto): Promise<RequestSearchResult> {
-    return this.searchIndexService.queryRequests({
-      ...query,
+  async queryRequests(
+    query: RequestQueryDto,
+    actor: AuthenticatedUserProfile,
+  ): Promise<RequestSearchResult> {
+    const filters = { ...(query as RequestSearchFilters) };
+    delete filters.requesterUserId;
+
+    if (actor.role === 'requester') {
+      delete filters.requester;
+    }
+
+    const normalizedFilters = {
+      ...filters,
       limit: this.parseOptionalNumber(query.limit),
       offset: this.parseOptionalNumber(query.offset),
-    });
+    };
+
+    if (actor.role === 'requester') {
+      return this.searchIndexService.queryRequests({
+        ...normalizedFilters,
+        requesterUserId: actor.id,
+      });
+    }
+
+    return this.searchIndexService.queryRequests(normalizedFilters);
   }
 
   async getRequest(
     id: string,
-    actor?: AuthenticatedUserProfile,
+    actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
     const result = await this.pool.query<PsfRequestRow>(
       `
@@ -343,6 +371,8 @@ export class RequestsService implements OnModuleInit {
     if (!request) {
       throw new NotFoundException(`PSF request ${id} was not found`);
     }
+
+    this.assertCanAccessRequest(request, actor);
 
     return this.mapRequestRow(request, actor);
   }
@@ -360,9 +390,11 @@ export class RequestsService implements OnModuleInit {
     id: string,
     actor: AuthenticatedUserProfile,
   ): Promise<RequestStatusOptionsResponse> {
-    const current = await this.pool.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+    const current = await this.pool.query<
+      Pick<PsfRequestRow, 'id' | 'status' | 'requester_user_id'>
+    >(
       `
-        SELECT id, status
+        SELECT id, status, requester_user_id
         FROM psf_requests
         WHERE id = $1
       `,
@@ -373,6 +405,8 @@ export class RequestsService implements OnModuleInit {
     if (!request) {
       throw new NotFoundException(`PSF request ${id} was not found`);
     }
+
+    this.assertCanAccessRequest(request, actor);
 
     return {
       allowedNextStatuses: this.getAllowedNextStatuses(
@@ -387,10 +421,14 @@ export class RequestsService implements OnModuleInit {
     dto: UpdateDraftRequesterDataDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
+    this.assertCanEditRequesterData(actor);
+
     return this.withTransaction(async (client) => {
-      const current = await client.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+      const current = await client.query<
+        Pick<PsfRequestRow, 'id' | 'status' | 'requester' | 'requester_user_id'>
+      >(
         `
-          SELECT id, status
+          SELECT id, status, requester, requester_user_id
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -403,27 +441,38 @@ export class RequestsService implements OnModuleInit {
         throw new NotFoundException(`PSF request ${id} was not found`);
       }
 
+      this.assertCanAccessRequest(request, actor);
+
       if (request.status !== DRAFT_STATUS) {
         throw new ForbiddenException(
           'Requester-owned fields can only be edited while the request is Draft',
         );
       }
 
-      const requester = this.normalizeString(
-        dto.requester ?? dto.requesterData.requester_name,
+      const requesterIdentity = this.getServerRequesterIdentity(request, actor);
+      const requesterData = this.withServerRequesterIdentity(
+        dto.requesterData,
+        requesterIdentity.displayName,
       );
-      const productType = this.normalizeString(dto.requesterData.product_type);
+      const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
         `
           UPDATE psf_requests
           SET requester = $2,
-              product_type = $3,
-              requester_data_json = $4::jsonb,
+              requester_user_id = $3::uuid,
+              product_type = $4,
+              requester_data_json = $5::jsonb,
               updated_at = NOW()
           WHERE id = $1
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-        [id, requester, productType, dto.requesterData],
+        [
+          id,
+          requesterIdentity.displayName,
+          requesterIdentity.userId,
+          productType,
+          requesterData,
+        ],
       );
 
       const updatedRow = result.rows[0];
@@ -445,6 +494,8 @@ export class RequestsService implements OnModuleInit {
     id: string,
     dto: UpdatePsfCreatedDataDto,
   ): Promise<PsfRequestResponse> {
+    this.assertCanEditPsfCreatedData(dto.actor);
+
     const current = await this.pool.query<
       Pick<PsfRequestRow, 'id' | 'status' | 'updated_at' | 'updated_at_version'>
     >(
@@ -462,12 +513,6 @@ export class RequestsService implements OnModuleInit {
     const request = current.rows[0];
     if (!request) {
       throw new NotFoundException(`PSF request ${id} was not found`);
-    }
-
-    if (dto.actor.role === 'requester') {
-      throw new ForbiddenException(
-        'Only Setup File Owners and admins can edit PSF Created Information',
-      );
     }
 
     if (
@@ -530,9 +575,11 @@ export class RequestsService implements OnModuleInit {
     dto: UpdateRequestStatusDto,
   ): Promise<PsfRequestResponse> {
     return this.withTransaction(async (client) => {
-      const current = await client.query<Pick<PsfRequestRow, 'id' | 'status'>>(
+      const current = await client.query<
+        Pick<PsfRequestRow, 'id' | 'status' | 'requester_user_id'>
+      >(
         `
-          SELECT id, status
+          SELECT id, status, requester_user_id
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -544,6 +591,8 @@ export class RequestsService implements OnModuleInit {
       if (!currentRequest) {
         throw new NotFoundException(`PSF request ${id} was not found`);
       }
+
+      this.assertCanAccessRequest(currentRequest, dto.actor);
 
       this.assertStatusTransitionIsAllowed(
         dto.actor.role,
@@ -587,6 +636,7 @@ export class RequestsService implements OnModuleInit {
           requestNo: updatedRow.request_no,
           status: updatedRow.status,
           requester: updatedRow.requester,
+          requesterUserId: updatedRow.requester_user_id,
           setupOwner: updatedRow.setup_owner,
           setupOwnerRole: updatedRow.setup_owner_role,
           productType: updatedRow.product_type,
@@ -622,18 +672,24 @@ export class RequestsService implements OnModuleInit {
     dto: SubmitDraftRequestDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
-    const activeSchema =
-      await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
+    this.assertCanSubmitDraft(actor);
     const client = await this.pool.connect();
 
     try {
       await client.query('BEGIN');
 
       const current = await client.query<
-        Pick<PsfRequestRow, 'id' | 'status' | 'requester_data_json'>
+        Pick<
+          PsfRequestRow,
+          | 'id'
+          | 'status'
+          | 'requester'
+          | 'requester_user_id'
+          | 'requester_data_json'
+        >
       >(
         `
-          SELECT id, status, requester_data_json
+          SELECT id, status, requester, requester_user_id, requester_data_json
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -646,27 +702,32 @@ export class RequestsService implements OnModuleInit {
         throw new NotFoundException(`PSF request ${id} was not found`);
       }
 
+      this.assertCanAccessRequest(request, actor);
+
       if (request.status !== DRAFT_STATUS) {
         throw new ForbiddenException('Only Draft requests can be submitted');
       }
 
+      const activeSchema =
+        await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
       if (activeSchema.version !== dto.formVersion) {
         throw new BadRequestException(
           'The active request schema changed before submit. Reload the draft and submit again.',
         );
       }
-      const normalizedRequesterData = this.normalizeRequesterDataToSchema(
-        activeSchema.schema,
-        request.requester_data_json ?? {},
+      const requesterIdentity = this.getServerRequesterIdentity(request, actor);
+      const normalizedRequesterData = this.withServerRequesterIdentity(
+        this.normalizeRequesterDataToSchema(
+          activeSchema.schema,
+          request.requester_data_json ?? {},
+        ),
+        requesterIdentity.displayName,
       );
       this.assertRequiredRequesterFieldsPresent(
         activeSchema.schema,
         normalizedRequesterData,
       );
 
-      const requester = this.normalizeString(
-        normalizedRequesterData.requester_name,
-      );
       const productType = this.normalizeString(
         normalizedRequesterData.product_type,
       );
@@ -675,10 +736,11 @@ export class RequestsService implements OnModuleInit {
           UPDATE psf_requests
           SET status = '${SUBMITTED_STATUS}',
               requester = $2,
-              product_type = $3,
-              requester_data_json = $4::jsonb,
-              form_version = $5,
-              schema_snapshot_json = $6::jsonb,
+              requester_user_id = $3::uuid,
+              product_type = $4,
+              requester_data_json = $5::jsonb,
+              form_version = $6,
+              schema_snapshot_json = $7::jsonb,
               submitted_at = NOW(),
               updated_at = NOW()
           WHERE id = $1
@@ -686,7 +748,8 @@ export class RequestsService implements OnModuleInit {
         `,
         [
           id,
-          requester,
+          requesterIdentity.displayName,
+          requesterIdentity.userId,
           productType,
           normalizedRequesterData,
           activeSchema.version,
@@ -709,6 +772,7 @@ export class RequestsService implements OnModuleInit {
           requestNo: submittedRow.request_no,
           status: submittedRow.status,
           requester: submittedRow.requester,
+          requesterUserId: submittedRow.requester_user_id,
           setupOwner: submittedRow.setup_owner,
           setupOwnerRole: submittedRow.setup_owner_role,
           productType: submittedRow.product_type,
@@ -738,6 +802,73 @@ export class RequestsService implements OnModuleInit {
     } finally {
       client.release();
     }
+  }
+
+  private assertCanCreateDraft(actor: AuthenticatedUserProfile): void {
+    if (actor.role === 'setup_owner') {
+      throw new ForbiddenException(
+        'Setup File Owners cannot create requester drafts',
+      );
+    }
+  }
+
+  private assertCanEditRequesterData(actor: AuthenticatedUserProfile): void {
+    if (actor.role === 'setup_owner') {
+      throw new ForbiddenException(
+        'Setup File Owners cannot edit requester-owned fields',
+      );
+    }
+  }
+
+  private assertCanSubmitDraft(actor: AuthenticatedUserProfile): void {
+    if (actor.role === 'setup_owner') {
+      throw new ForbiddenException(
+        'Setup File Owners cannot submit requester drafts',
+      );
+    }
+  }
+
+  private assertCanEditPsfCreatedData(actor: AuthenticatedUserProfile): void {
+    if (actor.role === 'requester') {
+      throw new ForbiddenException(
+        'Only Setup File Owners and admins can edit PSF Created Information',
+      );
+    }
+  }
+
+  private assertCanAccessRequest(
+    request: Pick<PsfRequestRow, 'requester_user_id'>,
+    actor: AuthenticatedUserProfile,
+  ): void {
+    if (actor.role === 'requester' && request.requester_user_id !== actor.id) {
+      throw new ForbiddenException(
+        'Requesters can only access requests they created',
+      );
+    }
+  }
+
+  private getServerRequesterIdentity(
+    request: Pick<PsfRequestRow, 'requester' | 'requester_user_id'>,
+    actor: AuthenticatedUserProfile,
+  ): { displayName: string; userId: string | null } {
+    if (actor.role === 'requester') {
+      return { displayName: actor.displayName, userId: actor.id };
+    }
+
+    return {
+      displayName: request.requester ?? actor.displayName,
+      userId: request.requester_user_id,
+    };
+  }
+
+  private withServerRequesterIdentity(
+    requesterData: RequesterData,
+    requesterDisplayName: string,
+  ): RequesterData {
+    return {
+      ...requesterData,
+      requester_name: requesterDisplayName,
+    };
   }
 
   private parseOptionalNumber(value: unknown): number | undefined {
@@ -832,8 +963,10 @@ export class RequestsService implements OnModuleInit {
     }
   }
 
-  private async ensureRequestsStorage(): Promise<void> {
-    await this.pool.query(`
+  private async ensureRequestsStorage(
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<void> {
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS psf_requests (
         id UUID PRIMARY KEY,
         request_no TEXT NOT NULL UNIQUE,
@@ -841,6 +974,7 @@ export class RequestsService implements OnModuleInit {
         form_version INT NOT NULL,
         status TEXT NOT NULL,
         requester TEXT,
+        requester_user_id UUID,
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
@@ -855,9 +989,41 @@ export class RequestsService implements OnModuleInit {
       )
     `);
 
-    await this.pool.query(`
+    await queryRunner.query(`
+      ALTER TABLE psf_requests
+      ADD COLUMN IF NOT EXISTS requester_user_id UUID
+    `);
+
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.app_users') IS NOT NULL THEN
+          EXECUTE $backfill_requester_owners$
+            UPDATE psf_requests AS request
+            SET requester_user_id = owner.id
+            FROM app_users AS owner
+            WHERE request.requester_user_id IS NULL
+              AND LOWER(request.requester) = LOWER(owner.display_name)
+              AND NOT EXISTS (
+                SELECT 1
+                FROM app_users AS duplicate
+                WHERE LOWER(duplicate.display_name) = LOWER(owner.display_name)
+                  AND duplicate.id <> owner.id
+              )
+          $backfill_requester_owners$;
+        END IF;
+      END
+      $$;
+    `);
+
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_status_updated
       ON psf_requests (status, updated_at DESC)
+    `);
+
+    await queryRunner.query(`
+      CREATE INDEX IF NOT EXISTS idx_psf_requests_requester_user_id
+      ON psf_requests (requester_user_id)
     `);
   }
 
