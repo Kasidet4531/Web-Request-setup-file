@@ -18,6 +18,18 @@ interface HealthResponseBody {
   timestamp: string;
 }
 
+interface FormDefinitionRow {
+  form_key: string;
+  version: number;
+  title: string;
+  description: string | null;
+  status: string;
+  schema_json: Record<string, unknown>;
+  created_by: string | null;
+  created_at: Date;
+  published_at: Date | null;
+}
+
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let activeUserId: string | undefined;
@@ -42,7 +54,8 @@ describe('AppController (e2e)', () => {
           return Promise.resolve({});
         }
 
-        return pool.query(query, values);
+        const result: unknown = pool.query(query, values);
+        return result;
       },
     );
     activeUserId = 'admin-1';
@@ -134,6 +147,212 @@ describe('AppController (e2e)', () => {
           publishedAt: '2026-01-01T00:00:00.000Z',
         });
       });
+  });
+
+  it('registers admin form-config routes to save and publish a draft while requester schema reads select the promoted version', async () => {
+    const formDefinitions: FormDefinitionRow[] = [
+      {
+        form_key: 'psf-request',
+        version: 1,
+        title: 'PSF Request Form',
+        description: 'Requester-facing MVP schema',
+        status: 'active',
+        schema_json: {
+          formKey: 'psf-request',
+          version: 1,
+          title: 'PSF Request Form',
+          sections: [
+            {
+              sectionKey: 'requester_information',
+              title: 'Requester Information',
+              visibleTo: ['requester', 'setup_owner', 'admin'],
+              fields: [
+                {
+                  fieldKey: 'title',
+                  canonicalKey: 'title',
+                  label: 'Title',
+                  type: 'text',
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+        created_by: 'system-seed',
+        created_at: new Date('2026-06-01T00:00:00.000Z'),
+        published_at: new Date('2026-06-01T00:00:00.000Z'),
+      },
+    ];
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('FOR UPDATE')) {
+        return Promise.resolve({ rows: formDefinitions });
+      }
+
+      if (query.includes('INSERT INTO form_definitions')) {
+        const [
+          ,
+          formKey,
+          version,
+          title,
+          description,
+          schema,
+          status,
+          createdBy,
+        ] = values as [
+          string,
+          string,
+          number,
+          string,
+          string | null,
+          Record<string, unknown>,
+          string,
+          string,
+        ];
+        const created: FormDefinitionRow = {
+          form_key: formKey,
+          version,
+          title,
+          description,
+          status,
+          schema_json: schema,
+          created_by: createdBy,
+          created_at: new Date('2026-06-02T00:00:00.000Z'),
+          published_at: null,
+        };
+        formDefinitions.push(created);
+        return Promise.resolve({ rows: [created] });
+      }
+
+      if (query.includes("SET status = 'published'")) {
+        formDefinitions.forEach((definition) => {
+          if (definition.status === 'active') {
+            definition.status = 'published';
+          }
+        });
+        return Promise.resolve({ rows: [] });
+      }
+
+      if (query.includes("SET status = 'active'")) {
+        const [, version] = values as [string, number];
+        const promoted = formDefinitions.find(
+          (definition) =>
+            definition.version === version && definition.status === 'draft',
+        );
+        if (!promoted) {
+          return Promise.resolve({ rows: [] });
+        }
+
+        promoted.status = 'active';
+        promoted.published_at = new Date('2026-06-03T00:00:00.000Z');
+        return Promise.resolve({ rows: [promoted] });
+      }
+
+      if (
+        query.includes('created_by') &&
+        query.includes('ORDER BY version DESC')
+      ) {
+        return Promise.resolve({
+          rows: [...formDefinitions].sort(
+            (left, right) => right.version - left.version,
+          ),
+        });
+      }
+
+      if (query.includes("WHERE form_key = $1 AND status = 'active'")) {
+        return Promise.resolve({
+          rows: formDefinitions.filter(
+            (definition) => definition.status === 'active',
+          ),
+        });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
+
+    await request(server)
+      .get('/api/admin/form-config')
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          formKey: 'psf-request',
+          versions: [expect.objectContaining({ version: 1, status: 'active' })],
+        });
+      });
+
+    await request(server)
+      .put('/api/admin/form-config')
+      .send({
+        description: 'Draft schema for the next requester form revision.',
+        schema: {
+          formKey: 'psf-request',
+          title: 'PSF Request Form v2',
+          sections: [
+            {
+              sectionKey: 'requester_information',
+              title: 'Requester Information',
+              visibleTo: ['requester', 'setup_owner', 'admin'],
+              fields: [
+                {
+                  fieldKey: 'title',
+                  canonicalKey: 'title',
+                  label: 'Title',
+                  type: 'text',
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+      })
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          formKey: 'psf-request',
+          version: 2,
+          status: 'draft',
+          createdBy: 'admin.demo',
+          schema: { formKey: 'psf-request', version: 2 },
+        });
+      });
+
+    await request(server)
+      .post('/api/admin/form-config/publish')
+      .send({ version: 2 })
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          formKey: 'psf-request',
+          version: 2,
+          status: 'active',
+          schema: { formKey: 'psf-request', version: 2 },
+        });
+      });
+
+    await request(server)
+      .get('/api/forms/psf-request/schema')
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          formKey: 'psf-request',
+          version: 2,
+          status: 'active',
+          schema: { formKey: 'psf-request', version: 2 },
+        });
+      });
+
+    const queryCallsBeforeRejection = pool.query.mock.calls.length;
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+
+    await request(server).get('/api/admin/form-config').expect(403);
+    expect(pool.query).toHaveBeenCalledTimes(queryCallsBeforeRejection);
   });
 
   it('/api/requests/export.xlsx (GET) sends an XLSX attachment for an admin', () => {
