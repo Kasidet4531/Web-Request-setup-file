@@ -23,13 +23,28 @@ describe('AppController (e2e)', () => {
   let activeUserId: string | undefined;
   const authService = { getProfile: jest.fn() };
   const excelExportService = { exportRequests: jest.fn() };
+  const transactionClient = {
+    query: jest.fn(),
+    release: jest.fn(),
+  };
   const pool = {
     query: jest.fn().mockResolvedValue({ rows: [] }),
+    connect: jest.fn().mockResolvedValue(transactionClient),
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     pool.query.mockResolvedValue({ rows: [] });
+    pool.connect.mockResolvedValue(transactionClient);
+    transactionClient.query.mockImplementation(
+      (query: string, values?: unknown[]) => {
+        if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(query)) {
+          return Promise.resolve({});
+        }
+
+        return pool.query(query, values);
+      },
+    );
     activeUserId = 'admin-1';
     authService.getProfile.mockResolvedValue({
       id: 'admin-1',
@@ -67,6 +82,14 @@ describe('AppController (e2e)', () => {
     });
     app.setGlobalPrefix('api');
     await app.init();
+  });
+
+  it('initializes startup storage in a committed transaction', () => {
+    expect(pool.connect).toHaveBeenCalledTimes(1);
+    expect(transactionClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(transactionClient.query).toHaveBeenLastCalledWith('COMMIT');
+    expect(transactionClient.release).toHaveBeenCalledTimes(1);
+    expect(transactionClient.query).not.toHaveBeenCalledWith('ROLLBACK');
   });
 
   it('/api/health (GET)', () => {
