@@ -36,5 +36,35 @@ export interface ActiveFormSchemaResponse {
   publishedAt: string | null
 }
 
+export type FormSchemaStatus = 'active' | 'draft' | 'published'
+
+export type FormSchemaDraft = Omit<FormSchema, 'version'>
+
+export interface FormSchemaVersionResponse {
+  formKey: string
+  version: number
+  title: string
+  description: string | null
+  status: FormSchemaStatus
+  schema: FormSchema
+  createdBy: string | null
+  createdAt: string
+  publishedAt: string | null
+}
+
+export interface FormSchemaVersionListResponse {
+  formKey: string
+  versions: FormSchemaVersionResponse[]
+}
+
+export interface SaveFormSchemaDraftPayload {
+  description?: string | null
+  schema: FormSchemaDraft
+}
+
+export interface PublishFormSchemaDraftPayload {
+  version: number
+}
+
 export type DynamicFormValues = Record<string, string>
 export type DynamicFormErrors = Record<string, string>

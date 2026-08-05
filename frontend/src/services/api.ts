@@ -1,4 +1,12 @@
-import type { ActiveFormSchemaResponse, DynamicFormValues, FormSchema } from '../types/forms'
+import type {
+  ActiveFormSchemaResponse,
+  DynamicFormValues,
+  FormSchema,
+  FormSchemaVersionListResponse,
+  FormSchemaVersionResponse,
+  PublishFormSchemaDraftPayload,
+  SaveFormSchemaDraftPayload,
+} from '../types/forms'
 import { notifyAuthSessionChanged } from './auth-session'
 
 export interface ApiClientConfig {
@@ -259,6 +267,20 @@ export function createApiClient(config: ApiClientConfig = {}) {
     fetchActiveFormSchema: (formKey: string) =>
       request<ActiveFormSchemaResponse>(`/forms/${encodeURIComponent(formKey)}/schema`, {
         method: 'GET',
+      }),
+    fetchAdminFormConfig: () =>
+      request<FormSchemaVersionListResponse>('/admin/form-config', {
+        method: 'GET',
+      }),
+    saveAdminFormConfigDraft: (payload: SaveFormSchemaDraftPayload) =>
+      request<FormSchemaVersionResponse>('/admin/form-config', {
+        body: payload,
+        method: 'PUT',
+      }),
+    publishAdminFormConfigDraft: (payload: PublishFormSchemaDraftPayload) =>
+      request<FormSchemaVersionResponse>('/admin/form-config/publish', {
+        body: payload,
+        method: 'POST',
       }),
     queryPsfRequests: (query: PsfRequestQuery = {}) =>
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
