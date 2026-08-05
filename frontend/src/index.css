@@ -363,6 +363,67 @@ button {
   justify-content: flex-end;
 }
 
+.admin-form-config__body,
+.admin-form-config__editor,
+.admin-form-config__preview,
+.admin-form-config__field {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-form-config__section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.admin-form-config__section-header h2,
+.admin-form-config__preview > h2 {
+  margin: 0;
+}
+
+.admin-form-config__section-header p {
+  color: var(--text-muted);
+  margin: 0.5rem 0 0;
+  max-width: 46rem;
+}
+
+.admin-form-config__field {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.admin-form-config__field select,
+.admin-form-config__field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(8, 17, 32, 0.82);
+  color: var(--text);
+  padding: 0.8rem 0.9rem;
+}
+
+.admin-form-config__field textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.admin-form-config__field select:disabled,
+.admin-form-config__field textarea:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.admin-form-config__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
 .auth-status {
   color: var(--text-muted);
   margin: 0;

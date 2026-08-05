@@ -142,6 +142,166 @@ describe('createApiClient', () => {
     )
   })
 
+  it('loads, saves, and publishes the backend-authorized admin form configuration', async () => {
+    const schema = {
+      formKey: 'psf-request',
+      title: 'PSF Request Form',
+      sections: [],
+    }
+    const draft = {
+      createdAt: '2026-08-05T00:00:00.000Z',
+      createdBy: 'admin.demo',
+      description: 'Editable schema',
+      formKey: 'psf-request',
+      publishedAt: null,
+      schema: { ...schema, version: 2 },
+      status: 'draft',
+      title: schema.title,
+      version: 2,
+    }
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ formKey: 'psf-request', versions: [draft] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(draft), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...draft, status: 'active' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchAdminFormConfig = Reflect.get(client, 'fetchAdminFormConfig') as undefined | (() => Promise<unknown>)
+    const saveAdminFormConfigDraft = Reflect.get(client, 'saveAdminFormConfigDraft') as
+      | undefined
+      | ((payload: { description?: string | null; schema: typeof schema }) => Promise<unknown>)
+    const publishAdminFormConfigDraft = Reflect.get(client, 'publishAdminFormConfigDraft') as
+      | undefined
+      | ((payload: { version: number }) => Promise<unknown>)
+
+    expect(fetchAdminFormConfig).toBeTypeOf('function')
+    expect(saveAdminFormConfigDraft).toBeTypeOf('function')
+    expect(publishAdminFormConfigDraft).toBeTypeOf('function')
+    if (!fetchAdminFormConfig || !saveAdminFormConfigDraft || !publishAdminFormConfigDraft) {
+      return
+    }
+
+    await expect(fetchAdminFormConfig()).resolves.toEqual({ formKey: 'psf-request', versions: [draft] })
+    await expect(saveAdminFormConfigDraft({ description: 'Editable schema', schema })).resolves.toEqual(draft)
+    await expect(publishAdminFormConfigDraft({ version: 2 })).resolves.toEqual({ ...draft, status: 'active' })
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/form-config',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/form-config',
+      expect.objectContaining({
+        body: JSON.stringify({ description: 'Editable schema', schema }),
+        credentials: 'include',
+        method: 'PUT',
+      }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/form-config/publish',
+      expect.objectContaining({
+        body: JSON.stringify({ version: 2 }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('propagates the backend admin authorization error without client-side authority claims', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ message: 'Only admins can manage form schema configurations.' }), {
+        status: 403,
+        statusText: 'Forbidden',
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchAdminFormConfig = Reflect.get(client, 'fetchAdminFormConfig') as undefined | (() => Promise<unknown>)
+
+    expect(fetchAdminFormConfig).toBeTypeOf('function')
+    if (!fetchAdminFormConfig) {
+      return
+    }
+
+    await expect(fetchAdminFormConfig()).rejects.toMatchObject({
+      message: 'Only admins can manage form schema configurations.',
+      name: 'ApiError',
+      status: 403,
+    })
+  })
+
+  it('propagates backend save and publish errors from their admin form-config paths', async () => {
+    const schema = {
+      formKey: 'psf-request',
+      title: 'PSF Request Form',
+      sections: [],
+    }
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'Schema validation failed.' }), {
+          status: 400,
+          statusText: 'Bad Request',
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'Draft is no longer publishable.' }), {
+          status: 409,
+          statusText: 'Conflict',
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(
+      client.saveAdminFormConfigDraft({ description: 'Editable schema', schema }),
+    ).rejects.toMatchObject({ message: 'Schema validation failed.', name: 'ApiError', status: 400 })
+    await expect(client.publishAdminFormConfigDraft({ version: 2 })).rejects.toMatchObject({
+      message: 'Draft is no longer publishable.',
+      name: 'ApiError',
+      status: 409,
+    })
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/form-config',
+      expect.objectContaining({
+        body: JSON.stringify({ description: 'Editable schema', schema }),
+        credentials: 'include',
+        method: 'PUT',
+      }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/form-config/publish',
+      expect.objectContaining({
+        body: JSON.stringify({ version: 2 }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+  })
+
   it('creates a draft request from requester form values', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ id: 'request-1', status: 'Draft' }), {
