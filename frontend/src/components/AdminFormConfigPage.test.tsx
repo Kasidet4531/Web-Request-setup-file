@@ -100,6 +100,28 @@ describe('AdminFormConfigPage helpers', () => {
     expect(invalidShape).toEqual({ error: 'Section 1 must have a nonblank sectionKey.', schema: null })
   })
 
+  it('rejects prototype-reserved field keys before they can reach the shared live preview', () => {
+    const version = buildVersion()
+    const parsed = parseFormSchemaDraft(
+      JSON.stringify({
+        ...editableSchema,
+        sections: [
+          {
+            ...editableSchema.sections[0],
+            fields: [{ ...editableSchema.sections[0].fields[0], fieldKey: '__proto__' }],
+          },
+        ],
+      }),
+    )
+    const previewSchema = parsed.schema ? buildPreviewSchema(parsed.schema, version) : null
+
+    expect(() => renderToStaticMarkup(<AdminFormConfigPreview schema={previewSchema} />)).not.toThrow()
+    expect(parsed).toEqual({
+      error: 'Field 1 in section 1 must not use the prototype-reserved fieldKey "__proto__".',
+      schema: null,
+    })
+  })
+
   it('renders the existing DynamicFormRenderer only for a valid local schema preview', () => {
     const version = buildVersion()
     const valid = parseFormSchemaDraft(formatFormSchemaDraft(version.schema))

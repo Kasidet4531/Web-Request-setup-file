@@ -30,6 +30,10 @@ function isNonblankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isRendererSafeFieldKey(value: string): boolean {
+  return !Object.prototype.hasOwnProperty.call(Object.prototype, value)
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
@@ -43,6 +47,10 @@ function validateField(field: unknown, sectionIndex: number, fieldIndex: number)
 
   if (!isNonblankString(field.fieldKey)) {
     return `${fieldPrefix} must have a nonblank fieldKey.`
+  }
+
+  if (!isRendererSafeFieldKey(field.fieldKey)) {
+    return `${fieldPrefix} must not use the prototype-reserved fieldKey "${field.fieldKey}".`
   }
 
   if (!isNonblankString(field.canonicalKey)) {
