@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuditLogService } from '../audit/audit_log.service';
-import { FormSchemaService } from '../admin/form_schema.service';
+import {
+  FormSchemaService,
+  type FormSchemaJson,
+} from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { RequestsService } from './requests.service';
 import { SearchIndexService } from './search-index.service';
@@ -122,6 +125,55 @@ describe('RequestsService draft flow', () => {
     }).compile();
 
     service = module.get(RequestsService);
+  });
+
+  it('does not mutate the prototype when an active schema contains a prototype-reserved field key', () => {
+    const normalizeRequesterDataToSchema = Reflect.get(
+      service,
+      'normalizeRequesterDataToSchema',
+    ) as
+      | undefined
+      | ((
+          schema: FormSchemaJson,
+          requesterData: Record<string, unknown>,
+          initializeMissingValues?: boolean,
+        ) => Record<string, unknown>);
+    expect(normalizeRequesterDataToSchema).toBeDefined();
+    if (!normalizeRequesterDataToSchema) {
+      return;
+    }
+
+    const unsafeSchema: FormSchemaJson = {
+      ...activeSchema.schema,
+      sections: activeSchema.schema.sections.map((section) => ({
+        ...section,
+        fields: [
+          ...section.fields,
+          {
+            fieldKey: '__proto__',
+            canonicalKey: 'unsafe',
+            label: 'Unsafe key',
+            type: 'text',
+            required: false,
+          },
+        ],
+      })),
+    };
+    const requesterData = JSON.parse(
+      '{"product_type":"Existing Product","requester_name":"Fook","__proto__":{"polluted":true}}',
+    ) as Record<string, unknown>;
+
+    const normalized = normalizeRequesterDataToSchema(
+      unsafeSchema,
+      requesterData,
+    );
+
+    expect(Object.getPrototypeOf(normalized)).toBe(Object.prototype);
+    expect(Object.hasOwn(normalized, '__proto__')).toBe(false);
+    expect(normalized).toEqual({
+      product_type: 'Existing Product',
+      requester_name: 'Fook',
+    });
   });
 
   it("migrates a pre-GI-49 database's requester ownership into the search index in one ordered transaction", async () => {

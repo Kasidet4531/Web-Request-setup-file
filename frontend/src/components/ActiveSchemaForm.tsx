@@ -12,7 +12,7 @@ import {
   requesterFieldsAreReadOnly,
   resolveRequestFormSchema,
 } from './activeSchemaFormState'
-import { api, type PsfRequestResponse } from '../services/api'
+import { ApiError, api, type PsfRequestResponse } from '../services/api'
 import { validateRequiredFields } from '../services/formValidation'
 import type {
   ActiveFormSchemaResponse,
@@ -372,7 +372,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       setDraftSchemaVersion(classification)
       setDraftSchemaDecision('not-needed')
       setErrors({})
-      setValues(buildRequestValuesForSchema(upgradedSchema.schema, upgradedRequest.requesterData))
+      setValues(buildRequestValuesForSchema(upgradedSchema.schema, values))
       setSaveMessage(
         `Draft ${upgradedRequest.requestNo} upgraded to schema version ${upgradedRequest.formVersion}.`,
       )
@@ -414,10 +414,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         setDraftSchemaVersion(latestClassification)
         setDraftSchemaDecision(requiresChoice ? 'unresolved' : 'not-needed')
         setErrors({})
-        setValues(buildRequestValuesForSchema(lockedSchema.schema, currentRequest.requesterData))
+        setValues(buildRequestValuesForSchema(lockedSchema.schema, values))
         if (requiresChoice) {
           setUpgradeError(
-            'A newer active schema is available. Choose Upgrade or Remain before continuing.',
+            'A newer active schema is available. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
           )
         } else {
           setSaveError(
@@ -464,6 +464,34 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       setValues(buildRequestValuesForSchema(submittedRequest.schemaSnapshot, submittedRequest.requesterData))
       setSaveMessage(`Request ${submittedRequest.requestNo} submitted.`)
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        try {
+          const refreshedActiveSchema = await api.fetchActiveFormSchema(currentRequest.formKey)
+          const refreshedClassification = classifyDraftSchemaVersion(
+            'request',
+            currentRequest,
+            refreshedActiveSchema,
+          )
+
+          if (isDraftSchemaDecisionRequired(refreshedClassification)) {
+            const lockedSchema = activeSchemaFromRequest(currentRequest)
+
+            setActiveRequestSchema(refreshedActiveSchema)
+            setActiveSchema(lockedSchema)
+            setDraftSchemaVersion(refreshedClassification)
+            setDraftSchemaDecision('unresolved')
+            setErrors({})
+            setValues(buildRequestValuesForSchema(lockedSchema.schema, values))
+            setUpgradeError(
+              'The active schema changed while this Draft was being submitted. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
+            )
+            return
+          }
+        } catch {
+          // Preserve the original submit conflict when the active schema cannot be refreshed.
+        }
+      }
+
       setSaveError(error instanceof Error ? error.message : 'Unable to submit request')
     } finally {
       setSubmitting(false)

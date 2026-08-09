@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PsfRequestResponse } from '../services/api'
+import { ApiError, type PsfRequestResponse } from '../services/api'
 import type { ActiveFormSchemaResponse, FormSchema } from '../types/forms'
 import { ActiveSchemaForm, DraftSchemaUpgradeDecision } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
@@ -189,6 +189,16 @@ const activeRequestSchema: ActiveFormSchemaResponse = {
   },
 }
 
+const currentActiveRequestSchema: ActiveFormSchemaResponse = {
+  formKey: 'psf-request',
+  version: 1,
+  title: 'PSF Request Form v1',
+  description: null,
+  status: 'active',
+  publishedAt: '2026-08-07T00:00:00.000Z',
+  schema: snapshotSchema,
+}
+
 function buildDraft(overrides: Partial<PsfRequestResponse> = {}): PsfRequestResponse {
   return {
     id: 'request-1',
@@ -363,6 +373,45 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     expect(getSubmitButton(page).props.disabled).toBe(false)
   })
 
+  it('preserves compatible unsaved requester edits when upgrading after Remain', async () => {
+    requestApi.upgradeDraftSchema.mockResolvedValueOnce(
+      buildDraft({
+        formVersion: 2,
+        requesterData: { product_type: 'New Product', title: '' },
+        schemaSnapshot: activeRequestSchema.schema,
+      }),
+    )
+
+    let page = await loadOlderDraft()
+    const onRemain = getDecision(page).props.onRemain
+    if (typeof onRemain !== 'function') {
+      throw new Error('Expected explicit remain callback')
+    }
+
+    onRemain()
+    page = renderDraftForm()
+    const onChange = getFormRenderer(page).props.onChange
+    if (typeof onChange !== 'function') {
+      throw new Error('Expected requester edit callback after Remain')
+    }
+
+    onChange('product_type', 'Transfer Product')
+    page = renderDraftForm()
+    const onUpgrade = getDecision(page).props.onUpgrade
+    if (typeof onUpgrade !== 'function') {
+      throw new Error('Expected upgrade callback after Remain')
+    }
+
+    onUpgrade()
+    await flushAsyncWork()
+    page = renderDraftForm()
+
+    expect(getFormRenderer(page).props.values).toEqual({
+      product_type: 'Transfer Product',
+      title: '',
+    })
+  })
+
   it('keeps the explicit choice recoverable after an upgrade error', async () => {
     requestApi.upgradeDraftSchema
       .mockRejectedValueOnce(new Error('The active schema changed. Reload and retry.'))
@@ -415,6 +464,95 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     expect(formRenderer.props.onSubmit).toBeTypeOf('function')
     expect(getSubmitButton(page).props.disabled).toBe(true)
     expect(requestApi.upgradeDraftSchema).not.toHaveBeenCalled()
+  })
+
+  it('preserves unsaved requester edits and exposes Reload and Upgrade when submit detects a newer schema', async () => {
+    requestApi.fetchActiveFormSchema
+      .mockResolvedValueOnce(currentActiveRequestSchema)
+      .mockResolvedValueOnce(activeRequestSchema)
+
+    let page = await loadOlderDraft()
+    const onChange = getFormRenderer(page).props.onChange
+    if (typeof onChange !== 'function') {
+      throw new Error('Expected requester edit callback')
+    }
+
+    onChange('product_type', 'Transfer Product')
+    page = renderDraftForm()
+    const onSubmit = getSubmitButton(page).props.onClick
+    if (typeof onSubmit !== 'function') {
+      throw new Error('Expected submit callback')
+    }
+
+    onSubmit()
+    await flushAsyncWork()
+    page = renderDraftForm()
+
+    const decision = getDecision(page)
+    expect(decision.props.onReload).toBeTypeOf('function')
+    expect(decision.props.onUpgrade).toBeTypeOf('function')
+    const onRemain = decision.props.onRemain
+    if (typeof onRemain !== 'function') {
+      throw new Error('Expected recoverable remain callback')
+    }
+
+    onRemain()
+    page = renderDraftForm()
+    expect(getFormRenderer(page).props.values).toEqual({
+      product_type: 'Transfer Product',
+      legacy_note: '',
+    })
+  })
+
+  it('recovers the Reload and Upgrade decision after a schema publish races the submit mutation', async () => {
+    requestApi.fetchActiveFormSchema
+      .mockResolvedValueOnce(currentActiveRequestSchema)
+      .mockResolvedValueOnce(currentActiveRequestSchema)
+      .mockResolvedValueOnce(activeRequestSchema)
+    requestApi.updateDraftRequesterData.mockResolvedValueOnce(
+      buildDraft({ requesterData: { product_type: 'Transfer Product' } }),
+    )
+    requestApi.submitPsfRequest.mockRejectedValueOnce(
+      new ApiError(
+        'The active request schema changed before submit. Reload the draft and submit again.',
+        409,
+        'Conflict',
+        null,
+      ),
+    )
+
+    let page = await loadOlderDraft()
+    const onChange = getFormRenderer(page).props.onChange
+    if (typeof onChange !== 'function') {
+      throw new Error('Expected requester edit callback')
+    }
+
+    onChange('product_type', 'Transfer Product')
+    page = renderDraftForm()
+    const onSubmit = getSubmitButton(page).props.onClick
+    if (typeof onSubmit !== 'function') {
+      throw new Error('Expected submit callback')
+    }
+
+    onSubmit()
+    await flushAsyncWork()
+    await flushAsyncWork()
+    page = renderDraftForm()
+
+    const decision = getDecision(page)
+    expect(decision.props.onReload).toBeTypeOf('function')
+    expect(decision.props.onUpgrade).toBeTypeOf('function')
+    const onRemain = decision.props.onRemain
+    if (typeof onRemain !== 'function') {
+      throw new Error('Expected recoverable remain callback')
+    }
+
+    onRemain()
+    page = renderDraftForm()
+    expect(getFormRenderer(page).props.values).toEqual({
+      product_type: 'Transfer Product',
+      legacy_note: '',
+    })
   })
 
   it('keeps an inconsistent Draft snapshot read-only and non-submittable', async () => {

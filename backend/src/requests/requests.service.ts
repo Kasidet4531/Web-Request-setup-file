@@ -1268,6 +1268,12 @@ export class RequestsService implements OnModuleInit {
 
     schema.sections.forEach((section) => {
       section.fields.forEach((field) => {
+        if (
+          Object.prototype.hasOwnProperty.call(Object.prototype, field.fieldKey)
+        ) {
+          return;
+        }
+
         if (Object.hasOwn(requesterData, field.fieldKey)) {
           nextData[field.fieldKey] = requesterData[field.fieldKey];
         } else if (initializeMissingValues) {
