@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuditLogService } from '../audit/audit_log.service';
-import { FormSchemaService } from '../admin/form_schema.service';
+import {
+  FormSchemaService,
+  type FormSchemaJson,
+} from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { RequestsService } from './requests.service';
 import { SearchIndexService } from './search-index.service';
@@ -60,7 +63,10 @@ describe('RequestsService draft flow', () => {
   let service: RequestsService;
   let pool: { query: jest.Mock; connect: jest.Mock };
   let dbClient: { query: jest.Mock; release: jest.Mock };
-  let formSchemaService: { getActiveSchema: jest.Mock };
+  let formSchemaService: {
+    getActiveSchema: jest.Mock;
+    getActiveSchemaForUpdate: jest.Mock;
+  };
   let searchIndexService: {
     ensureRequestSearchIndexStorage: jest.Mock;
     extractCanonicalValues: jest.Mock;
@@ -83,6 +89,7 @@ describe('RequestsService draft flow', () => {
     });
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
+      getActiveSchemaForUpdate: jest.fn().mockResolvedValue(activeSchema),
     };
     searchIndexService = {
       ensureRequestSearchIndexStorage: jest.fn().mockResolvedValue(undefined),
@@ -118,6 +125,55 @@ describe('RequestsService draft flow', () => {
     }).compile();
 
     service = module.get(RequestsService);
+  });
+
+  it('does not mutate the prototype when an active schema contains a prototype-reserved field key', () => {
+    const normalizeRequesterDataToSchema = Reflect.get(
+      service,
+      'normalizeRequesterDataToSchema',
+    ) as
+      | undefined
+      | ((
+          schema: FormSchemaJson,
+          requesterData: Record<string, unknown>,
+          initializeMissingValues?: boolean,
+        ) => Record<string, unknown>);
+    expect(normalizeRequesterDataToSchema).toBeDefined();
+    if (!normalizeRequesterDataToSchema) {
+      return;
+    }
+
+    const unsafeSchema: FormSchemaJson = {
+      ...activeSchema.schema,
+      sections: activeSchema.schema.sections.map((section) => ({
+        ...section,
+        fields: [
+          ...section.fields,
+          {
+            fieldKey: '__proto__',
+            canonicalKey: 'unsafe',
+            label: 'Unsafe key',
+            type: 'text',
+            required: false,
+          },
+        ],
+      })),
+    };
+    const requesterData = JSON.parse(
+      '{"product_type":"Existing Product","requester_name":"Fook","__proto__":{"polluted":true}}',
+    ) as Record<string, unknown>;
+
+    const normalized = normalizeRequesterDataToSchema(
+      unsafeSchema,
+      requesterData,
+    );
+
+    expect(Object.getPrototypeOf(normalized)).toBe(Object.prototype);
+    expect(Object.hasOwn(normalized, '__proto__')).toBe(false);
+    expect(normalized).toEqual({
+      product_type: 'Existing Product',
+      requester_name: 'Fook',
+    });
   });
 
   it("migrates a pre-GI-49 database's requester ownership into the search index in one ordered transaction", async () => {
@@ -406,6 +462,7 @@ describe('RequestsService draft flow', () => {
       service.updateDraftRequesterData(
         'request-2',
         {
+          formVersion: 3,
           requester: 'Other Requester',
           requesterData: { product_type: 'New Product' },
         },
@@ -443,7 +500,7 @@ describe('RequestsService draft flow', () => {
     await expect(
       service.updateDraftRequesterData(
         'request-1',
-        { requesterData: { product_type: 'New Product' } },
+        { formVersion: 3, requesterData: { product_type: 'New Product' } },
         setupOwnerActor,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -1359,6 +1416,7 @@ describe('RequestsService draft flow', () => {
       rows: [
         {
           id: 'request-1',
+          form_version: 3,
           status: 'Draft',
           requester: 'Fook',
           requester_user_id: requesterActor.id,
@@ -1396,6 +1454,7 @@ describe('RequestsService draft flow', () => {
     const updated = await service.updateDraftRequesterData(
       'request-1',
       {
+        formVersion: 3,
         requester: 'Fook',
         requesterData: {
           product_type: 'Existing Product',
@@ -1413,6 +1472,7 @@ describe('RequestsService draft flow', () => {
         requesterActor.id,
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
+        3,
       ],
     );
     expect(updated).toMatchObject({
@@ -1442,6 +1502,7 @@ describe('RequestsService draft flow', () => {
       service.updateDraftRequesterData(
         'request-1',
         {
+          formVersion: 3,
           requester: 'Fook',
           requesterData: { product_type: 'New Product' },
         },
@@ -1450,7 +1511,7 @@ describe('RequestsService draft flow', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('submits a draft request and refreshes its locked schema snapshot from the active schema', async () => {
+  it('submits a current draft using its locked active schema snapshot', async () => {
     const submittedSchema = {
       ...activeSchema,
       version: 4,
@@ -1460,19 +1521,24 @@ describe('RequestsService draft flow', () => {
         title: 'PSF Request Form v4',
       },
     };
-    formSchemaService.getActiveSchema.mockResolvedValueOnce(submittedSchema);
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
+      submittedSchema,
+    );
     dbClient.query.mockResolvedValueOnce({});
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
+          form_key: 'psf-request',
           status: 'Draft',
+          form_version: 4,
           requester: 'Fook',
           requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
           },
+          schema_snapshot_json: submittedSchema.schema,
         },
       ],
     });
@@ -1510,8 +1576,9 @@ describe('RequestsService draft flow', () => {
       requesterActor,
     );
 
-    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+    expect(formSchemaService.getActiveSchemaForUpdate).toHaveBeenCalledWith(
       'psf-request',
+      dbClient,
     );
     expect(dbClient.query).toHaveBeenNthCalledWith(
       3,
@@ -1570,7 +1637,9 @@ describe('RequestsService draft flow', () => {
       rows: [
         {
           id: 'request-1',
+          form_key: 'psf-request',
           status: 'Draft',
+          form_version: 3,
           requester: 'Fook',
           requester_user_id: requesterActor.id,
           requester_data_json: {
@@ -1578,6 +1647,7 @@ describe('RequestsService draft flow', () => {
             product_type: 'Existing Product',
             requester_name: 'Fook',
           },
+          schema_snapshot_json: activeSchema.schema,
         },
       ],
     });
@@ -1636,13 +1706,16 @@ describe('RequestsService draft flow', () => {
       rows: [
         {
           id: 'request-1',
+          form_key: 'psf-request',
           status: 'Draft',
+          form_version: 3,
           requester: 'Fook',
           requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
           },
+          schema_snapshot_json: activeSchema.schema,
         },
       ],
     });
@@ -1731,7 +1804,7 @@ describe('RequestsService draft flow', () => {
         })),
       },
     };
-    formSchemaService.getActiveSchema.mockResolvedValueOnce(
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
       schemaWithRequiredTitle,
     );
     dbClient.query.mockResolvedValueOnce({});
@@ -1739,12 +1812,15 @@ describe('RequestsService draft flow', () => {
       rows: [
         {
           id: 'request-1',
+          form_key: 'psf-request',
           status: 'Draft',
+          form_version: 3,
           requester: 'Fook',
           requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
           },
+          schema_snapshot_json: activeSchema.schema,
         },
       ],
     });
@@ -1765,19 +1841,24 @@ describe('RequestsService draft flow', () => {
         version: 4,
       },
     };
-    formSchemaService.getActiveSchema.mockResolvedValueOnce(newerActiveSchema);
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
+      newerActiveSchema,
+    );
     dbClient.query.mockResolvedValueOnce({});
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
           id: 'request-1',
+          form_key: 'psf-request',
           status: 'Draft',
+          form_version: 4,
           requester: 'Fook',
           requester_user_id: requesterActor.id,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: 'Fook',
           },
+          schema_snapshot_json: newerActiveSchema.schema,
         },
       ],
     });

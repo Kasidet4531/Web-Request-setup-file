@@ -26,6 +26,7 @@ import type {
   UpdateDraftRequesterDataDto,
   UpdatePsfCreatedDataBodyDto,
   UpdateRequestStatusBodyDto,
+  UpgradeDraftSchemaDto,
 } from './requests.service';
 import type { RequestSearchResult } from './search-index.service';
 
@@ -100,6 +101,17 @@ export class RequestsController {
       body,
       actor,
     );
+  }
+
+  @Post(':requestId/upgrade-schema')
+  async upgradeDraftSchema(
+    @Param('requestId') requestId: string,
+    @Body() body: UpgradeDraftSchemaDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PsfRequestResponse> {
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.upgradeDraftSchema(requestId, body, actor);
   }
 
   @Put(':requestId/psf-created-data')

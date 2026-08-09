@@ -341,15 +341,50 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: '/api' })
 
     await expect(client.fetchPsfRequest('request-1')).resolves.toMatchObject({ id: 'request-1' })
-    await expect(client.updateDraftRequesterData('request-1', { requesterData: { title: 'Updated' } })).resolves.toMatchObject({
+    await expect(client.updateDraftRequesterData('request-1', {
+      formVersion: 3,
+      requesterData: { title: 'Updated' },
+    })).resolves.toMatchObject({
       requesterData: { title: 'Updated' },
     })
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/requests/request-1', expect.objectContaining({ method: 'GET' }))
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/requester-data', expect.objectContaining({
-      body: JSON.stringify({ requesterData: { title: 'Updated' } }),
+      body: JSON.stringify({ formVersion: 3, requesterData: { title: 'Updated' } }),
       method: 'PUT',
     }))
+  })
+
+  it('upgrades an older Draft schema only through the explicit expected active version endpoint', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ id: 'request-1', formVersion: 2, status: 'Draft' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+    const client = createApiClient({ baseUrl: '/api' })
+    const upgradeDraftSchema = Reflect.get(client, 'upgradeDraftSchema') as
+      | undefined
+      | ((requestId: string, payload: { formVersion: number }) => Promise<unknown>)
+
+    expect(upgradeDraftSchema).toBeTypeOf('function')
+    if (!upgradeDraftSchema) {
+      return
+    }
+
+    await expect(upgradeDraftSchema('request-1', { formVersion: 2 })).resolves.toMatchObject({
+      formVersion: 2,
+      id: 'request-1',
+      status: 'Draft',
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/requests/request-1/upgrade-schema',
+      expect.objectContaining({
+        body: JSON.stringify({ formVersion: 2 }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
   })
 
   it('loads a request-scoped history through the authenticated detail API path', async () => {
