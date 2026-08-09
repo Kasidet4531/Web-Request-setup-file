@@ -14,6 +14,7 @@ describe('RequestsController draft flow', () => {
     queryRequests: jest.Mock;
     submitRequest: jest.Mock;
     updateDraftRequesterData: jest.Mock;
+    upgradeDraftSchema: jest.Mock;
     updatePsfCreatedData: jest.Mock;
     updateRequestStatus: jest.Mock;
   };
@@ -28,6 +29,7 @@ describe('RequestsController draft flow', () => {
       queryRequests: jest.fn(),
       submitRequest: jest.fn(),
       updateDraftRequesterData: jest.fn(),
+      upgradeDraftSchema: jest.fn(),
       updatePsfCreatedData: jest.fn(),
       updateRequestStatus: jest.fn(),
     };
@@ -355,6 +357,7 @@ describe('RequestsController draft flow', () => {
     ) as unknown as (
       requestId: string,
       body: {
+        formVersion: number;
         requester: string;
         requesterData: Record<string, unknown>;
       },
@@ -365,6 +368,7 @@ describe('RequestsController draft flow', () => {
       updateDraftRequesterData(
         'request-1',
         {
+          formVersion: 3,
           requester: 'Client supplied requester',
           requesterData: { product_type: 'Transfer Product' },
         },
@@ -375,6 +379,7 @@ describe('RequestsController draft flow', () => {
     expect(service.updateDraftRequesterData).toHaveBeenCalledWith(
       'request-1',
       {
+        formVersion: 3,
         requester: 'Client supplied requester',
         requesterData: { product_type: 'Transfer Product' },
       },
@@ -382,19 +387,90 @@ describe('RequestsController draft flow', () => {
     );
   });
 
+  it('upgrades a Draft schema with the authenticated server profile and explicit target version', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    service.upgradeDraftSchema.mockResolvedValue({
+      formVersion: 4,
+      id: 'request-1',
+      status: 'Draft',
+    });
+    const upgradeDraftSchema = Reflect.get(controller, 'upgradeDraftSchema') as
+      | undefined
+      | ((
+          requestId: string,
+          body: { formVersion: number },
+          request: { session: { userId?: string } },
+        ) => Promise<unknown>);
+
+    expect(upgradeDraftSchema).toEqual(expect.any(Function));
+    if (!upgradeDraftSchema) {
+      return;
+    }
+
+    await expect(
+      upgradeDraftSchema.call(
+        controller,
+        'request-1',
+        { formVersion: 4 },
+        { session: { userId: 'user-1' } },
+      ),
+    ).resolves.toEqual({
+      formVersion: 4,
+      id: 'request-1',
+      status: 'Draft',
+    });
+    expect(service.upgradeDraftSchema).toHaveBeenCalledWith(
+      'request-1',
+      { formVersion: 4 },
+      actor,
+    );
+  });
+
+  it('rejects Draft schema upgrades without a session user', async () => {
+    const upgradeDraftSchema = Reflect.get(controller, 'upgradeDraftSchema') as
+      | undefined
+      | ((
+          requestId: string,
+          body: { formVersion: number },
+          request: { session: { userId?: string } },
+        ) => Promise<unknown>);
+
+    expect(upgradeDraftSchema).toEqual(expect.any(Function));
+    if (!upgradeDraftSchema) {
+      return;
+    }
+
+    await expect(
+      upgradeDraftSchema.call(
+        controller,
+        'request-1',
+        { formVersion: 4 },
+        { session: {} },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.upgradeDraftSchema).not.toHaveBeenCalled();
+  });
+
   it('rejects requester-owned draft updates without a session user', async () => {
     const updateDraftRequesterData = controller.updateDraftRequesterData.bind(
       controller,
     ) as unknown as (
       requestId: string,
-      body: { requesterData: Record<string, unknown> },
+      body: { formVersion: number; requesterData: Record<string, unknown> },
       request: { session: { userId?: string } },
     ) => Promise<unknown>;
 
     await expect(
       updateDraftRequesterData(
         'request-1',
-        { requesterData: { product_type: 'Transfer Product' } },
+        { formVersion: 3, requesterData: { product_type: 'Transfer Product' } },
         { session: {} },
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);

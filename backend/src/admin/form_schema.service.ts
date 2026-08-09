@@ -98,6 +98,8 @@ const SUPPORTED_FIELD_TYPES = new Set<FormSchemaField['type']>([
 ]);
 const SUPPORTED_VISIBLE_TO = new Set(['requester', 'setup_owner', 'admin']);
 
+type QueryRunner = Pick<PoolClient, 'query'>;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -230,6 +232,32 @@ export class FormSchemaService implements OnModuleInit {
     );
 
     const activeSchema = result.rows[0];
+
+    if (!activeSchema) {
+      throw new NotFoundException(`No active form schema found for ${formKey}`);
+    }
+
+    return {
+      formKey: activeSchema.form_key,
+      version: activeSchema.version,
+      title: activeSchema.title,
+      description: activeSchema.description,
+      status: activeSchema.status,
+      schema: activeSchema.schema_json,
+      publishedAt: this.serializeTimestamp(activeSchema.published_at),
+    };
+  }
+
+  async getActiveSchemaForUpdate(
+    formKey: string,
+    client: QueryRunner,
+  ): Promise<ActiveFormSchemaResponse> {
+    if (formKey !== PSF_REQUEST_FORM_KEY) {
+      throw new NotFoundException(`No active form schema found for ${formKey}`);
+    }
+
+    const lockedRows = await this.lockManagedForm(client);
+    const activeSchema = lockedRows.find((row) => row.status === 'active');
 
     if (!activeSchema) {
       throw new NotFoundException(`No active form schema found for ${formKey}`);
@@ -549,7 +577,7 @@ export class FormSchemaService implements OnModuleInit {
   }
 
   private async lockManagedForm(
-    client: PoolClient,
+    client: QueryRunner,
   ): Promise<FormDefinitionRow[]> {
     // Acquire the stable per-form anchor first. The second locked read then
     // starts with a fresh READ COMMITTED snapshot after any waiter is released.

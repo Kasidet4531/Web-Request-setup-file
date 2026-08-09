@@ -85,6 +85,10 @@ export interface PsfRequestPayload {
   requesterData: DynamicFormValues
 }
 
+export interface UpdateDraftRequesterDataPayload extends PsfRequestPayload {
+  formVersion: number
+}
+
 export interface PsfRequestQuery {
   keyword?: string
   status?: string
@@ -140,6 +144,10 @@ export interface PsfRequestStatusOptionsResponse {
 }
 
 export interface SubmitPsfRequestPayload {
+  formVersion: number
+}
+
+export interface UpgradeDraftSchemaPayload {
   formVersion: number
 }
 
@@ -307,10 +315,15 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<PsfRequestStatusOptionsResponse>(`/requests/${encodeURIComponent(requestId)}/status-options`, {
         method: 'GET',
       }),
-    updateDraftRequesterData: (requestId: string, payload: PsfRequestPayload) =>
+    updateDraftRequesterData: (requestId: string, payload: UpdateDraftRequesterDataPayload) =>
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/requester-data`, {
         body: payload,
         method: 'PUT',
+      }),
+    upgradeDraftSchema: (requestId: string, payload: UpgradeDraftSchemaPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/upgrade-schema`, {
+        body: payload,
+        method: 'POST',
       }),
     updatePsfCreatedData: (requestId: string, payload: UpdatePsfCreatedDataPayload) =>
       request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/psf-created-data`, {

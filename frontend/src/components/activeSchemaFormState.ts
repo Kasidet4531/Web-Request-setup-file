@@ -47,12 +47,87 @@ export function activeSchemaFromRequest(request: PsfRequestResponse): ActiveForm
   }
 }
 
+export type DraftSchemaVersionClassification =
+  | 'not-applicable'
+  | 'older'
+  | 'equal'
+  | 'newer-or-inconsistent'
+
+export function classifyDraftSchemaVersion(
+  mode: 'request' | 'preview',
+  request: PsfRequestResponse,
+  activeRequestSchema: ActiveFormSchemaResponse | null,
+): DraftSchemaVersionClassification {
+  if (
+    mode !== 'request' ||
+    request.status !== DRAFT_STATUS ||
+    activeRequestSchema === null
+  ) {
+    return 'not-applicable'
+  }
+
+  if (
+    request.schemaSnapshot.formKey !== request.formKey ||
+    request.schemaSnapshot.version !== request.formVersion
+  ) {
+    return 'newer-or-inconsistent'
+  }
+
+  if (request.formVersion < activeRequestSchema.version) {
+    return 'older'
+  }
+
+  if (request.formVersion === activeRequestSchema.version) {
+    return 'equal'
+  }
+
+  return 'newer-or-inconsistent'
+}
+
+export function isDraftSchemaDecisionRequired(
+  classification: DraftSchemaVersionClassification,
+): boolean {
+  return classification === 'older'
+}
+
+export function canSubmitDraftForSchemaVersion(
+  classification: DraftSchemaVersionClassification,
+): boolean {
+  return classification === 'equal'
+}
+
+export interface DraftSchemaUpgradeLock {
+  finish: () => void
+  tryStart: () => boolean
+}
+
+export function createDraftSchemaUpgradeLock(): DraftSchemaUpgradeLock {
+  let inFlight = false
+
+  return {
+    tryStart: () => {
+      if (inFlight) {
+        return false
+      }
+
+      inFlight = true
+      return true
+    },
+    finish: () => {
+      inFlight = false
+    },
+  }
+}
+
 export function resolveRequestFormSchema(
   mode: 'request' | 'preview',
   request: PsfRequestResponse,
   activeRequestSchema: ActiveFormSchemaResponse | null,
 ): ActiveFormSchemaResponse {
-  if (mode === 'request' && request.status === DRAFT_STATUS && activeRequestSchema) {
+  if (
+    classifyDraftSchemaVersion(mode, request, activeRequestSchema) === 'equal' &&
+    activeRequestSchema
+  ) {
     return activeRequestSchema
   }
 

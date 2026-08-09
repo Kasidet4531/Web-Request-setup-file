@@ -89,7 +89,10 @@ describe('RequestsService audit baseline', () => {
   let service: RequestsService;
   let pool: { query: jest.Mock; connect: jest.Mock };
   let dbClient: { query: jest.Mock; release: jest.Mock };
-  let formSchemaService: { getActiveSchema: jest.Mock };
+  let formSchemaService: {
+    getActiveSchema: jest.Mock;
+    getActiveSchemaForUpdate: jest.Mock;
+  };
   let searchIndexService: {
     extractCanonicalValues: jest.Mock;
     upsertRequestSearchIndex: jest.Mock;
@@ -102,6 +105,7 @@ describe('RequestsService audit baseline', () => {
     pool = { query: jest.fn(), connect: jest.fn().mockResolvedValue(dbClient) };
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
+      getActiveSchemaForUpdate: jest.fn().mockResolvedValue(activeSchema),
     };
     searchIndexService = {
       extractCanonicalValues: jest.fn().mockReturnValue({
@@ -176,6 +180,7 @@ describe('RequestsService audit baseline', () => {
         rows: [
           {
             id: draftRow.id,
+            form_version: draftRow.form_version,
             status: 'Draft',
             requester: draftRow.requester,
             requester_user_id: draftRow.requester_user_id,
@@ -189,6 +194,7 @@ describe('RequestsService audit baseline', () => {
         rows: [
           {
             id: draftRow.id,
+            form_version: draftRow.form_version,
             status: 'Draft',
             requester: draftRow.requester,
             requester_user_id: draftRow.requester_user_id,
@@ -201,6 +207,7 @@ describe('RequestsService audit baseline', () => {
     await service.updateDraftRequesterData(
       draftRow.id,
       {
+        formVersion: draftRow.form_version,
         requester: 'Client supplied requester',
         requesterData: updatedRow.requester_data_json,
       },
@@ -234,10 +241,13 @@ describe('RequestsService audit baseline', () => {
         rows: [
           {
             id: draftRow.id,
+            form_key: draftRow.form_key,
+            form_version: activeSchema.version,
             status: 'Draft',
             requester: draftRow.requester,
             requester_user_id: draftRow.requester_user_id,
             requester_data_json: draftRow.requester_data_json,
+            schema_snapshot_json: activeSchema.schema,
           },
         ],
       })

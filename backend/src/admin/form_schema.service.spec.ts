@@ -191,6 +191,27 @@ describe('FormSchemaService', () => {
     });
   });
 
+  it('locks and reads the active schema through the caller transaction', async () => {
+    const active = makeRow(2, 'active');
+    transactionClient.query.mockResolvedValue({ rows: [active] });
+
+    await expect(
+      service.getActiveSchemaForUpdate(PSF_REQUEST_FORM_KEY, transactionClient),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        formKey: PSF_REQUEST_FORM_KEY,
+        version: 2,
+        status: 'active',
+      }),
+    );
+
+    expect(transactionClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('FOR UPDATE'),
+      [PSF_REQUEST_FORM_KEY],
+    );
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it('raises NotFoundException when no active schema exists for a form key', async () => {
     pool.query.mockResolvedValue({ rows: [] });
 

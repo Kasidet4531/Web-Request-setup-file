@@ -355,6 +355,185 @@ describe('AppController (e2e)', () => {
     expect(pool.query).toHaveBeenCalledTimes(queryCallsBeforeRejection);
   });
 
+  it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {
+    const requesterId = '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e';
+    const oldSchema = {
+      formKey: 'psf-request',
+      version: 1,
+      title: 'PSF Request Form v1',
+      sections: [
+        {
+          sectionKey: 'requester_information',
+          title: 'Requester Information',
+          visibleTo: ['requester'],
+          fields: [
+            {
+              fieldKey: 'product_type',
+              canonicalKey: 'product_type',
+              label: 'Product Type',
+              type: 'text',
+              required: true,
+            },
+            {
+              fieldKey: 'legacy_field',
+              canonicalKey: 'legacy_field',
+              label: 'Legacy Field',
+              type: 'text',
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    const activeSchema = {
+      formKey: 'psf-request',
+      version: 2,
+      title: 'PSF Request Form v2',
+      sections: [
+        {
+          sectionKey: 'requester_information',
+          title: 'Requester Information',
+          visibleTo: ['requester'],
+          fields: [
+            {
+              fieldKey: 'product_type',
+              canonicalKey: 'product_type',
+              label: 'Product Type',
+              type: 'text',
+              required: true,
+            },
+            {
+              fieldKey: 'requester_name',
+              canonicalKey: 'requester',
+              label: 'Requester Name',
+              type: 'text',
+              required: true,
+            },
+            {
+              fieldKey: 'new_field',
+              canonicalKey: 'new_field',
+              label: 'New Field',
+              type: 'text',
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    const activeDefinition: FormDefinitionRow = {
+      form_key: 'psf-request',
+      version: 2,
+      title: activeSchema.title,
+      description: null,
+      status: 'active',
+      schema_json: activeSchema,
+      created_by: 'admin-1',
+      created_at: new Date('2026-08-01T00:00:00.000Z'),
+      published_at: new Date('2026-08-02T00:00:00.000Z'),
+    };
+    const lockedDraft = {
+      id: 'request-1',
+      form_key: 'psf-request',
+      form_version: 1,
+      status: 'Draft',
+      requester: 'Requester Demo',
+      requester_user_id: requesterId,
+      requester_data_json: {
+        legacy_field: 'remove on upgrade',
+        product_type: 'Existing Product',
+      },
+      schema_snapshot_json: oldSchema,
+    };
+    const upgradedRow = {
+      ...lockedDraft,
+      request_no: 'DRAFT-0001',
+      form_version: 2,
+      product_type: 'Existing Product',
+      requester_data_json: {
+        new_field: '',
+        product_type: 'Existing Product',
+        requester_name: 'Requester Demo',
+      },
+      psf_created_data_json: {},
+      schema_snapshot_json: activeSchema,
+      created_at: new Date('2026-08-01T00:00:00.000Z'),
+      updated_at: new Date('2026-08-09T00:00:00.000Z'),
+      submitted_at: null,
+      psf_created_at: null,
+      completed_at: null,
+      setup_owner: null,
+      setup_owner_role: null,
+    };
+
+    activeUserId = requesterId;
+    authService.getProfile.mockResolvedValue({
+      id: requesterId,
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    pool.query.mockClear();
+    transactionClient.query.mockClear();
+    transactionClient.release.mockClear();
+    pool.query.mockImplementation((query: string) => {
+      if (query.includes('FROM psf_requests') && query.includes('FOR UPDATE')) {
+        return Promise.resolve({ rows: [lockedDraft] });
+      }
+
+      if (
+        query.includes('FROM form_definitions') &&
+        query.includes('LIMIT 1')
+      ) {
+        return Promise.resolve({ rows: [{ form_key: 'psf-request' }] });
+      }
+
+      if (
+        query.includes('FROM form_definitions') &&
+        query.includes('FOR UPDATE')
+      ) {
+        return Promise.resolve({ rows: [activeDefinition] });
+      }
+
+      if (query.includes('UPDATE psf_requests')) {
+        return Promise.resolve({ rows: [upgradedRow] });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .post('/api/requests/request-1/upgrade-schema')
+      .send({ formVersion: 2 })
+      .expect(201)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          formKey: 'psf-request',
+          formVersion: 2,
+          id: 'request-1',
+          requesterData: {
+            new_field: '',
+            product_type: 'Existing Product',
+            requester_name: 'Requester Demo',
+          },
+          schemaSnapshot: { formKey: 'psf-request', version: 2 },
+          status: 'Draft',
+        });
+      });
+
+    expect(transactionClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(transactionClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('FOR UPDATE'),
+      ['request-1'],
+    );
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.arrayContaining(['request-1', 2]),
+    );
+    expect(transactionClient.query).toHaveBeenLastCalledWith('COMMIT');
+    expect(transactionClient.release).toHaveBeenCalledTimes(1);
+  });
+
   it('/api/requests/export.xlsx (GET) sends an XLSX attachment for an admin', () => {
     return request(app.getHttpServer() as Parameters<typeof request>[0])
       .get(

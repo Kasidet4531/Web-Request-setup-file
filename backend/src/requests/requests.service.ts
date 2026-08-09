@@ -73,6 +73,10 @@ const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
 
 type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
   formKey: 'psf-created-information',
   version: 1,
@@ -168,11 +172,16 @@ export interface CreateDraftRequestDto {
 }
 
 export interface UpdateDraftRequesterDataDto {
+  formVersion: number;
   requester?: string;
   requesterData: RequesterData;
 }
 
 export interface SubmitDraftRequestDto {
+  formVersion: number;
+}
+
+export interface UpgradeDraftSchemaDto {
   formVersion: number;
 }
 
@@ -422,13 +431,17 @@ export class RequestsService implements OnModuleInit {
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
     this.assertCanEditRequesterData(actor);
+    this.assertExpectedFormVersion(dto.formVersion);
 
     return this.withTransaction(async (client) => {
       const current = await client.query<
-        Pick<PsfRequestRow, 'id' | 'status' | 'requester' | 'requester_user_id'>
+        Pick<
+          PsfRequestRow,
+          'id' | 'form_version' | 'status' | 'requester' | 'requester_user_id'
+        >
       >(
         `
-          SELECT id, status, requester, requester_user_id
+          SELECT id, form_version, status, requester, requester_user_id
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -449,6 +462,12 @@ export class RequestsService implements OnModuleInit {
         );
       }
 
+      if (request.form_version !== dto.formVersion) {
+        throw new ConflictException(
+          'The Draft schema changed before these edits were saved. Reload the Draft and try again.',
+        );
+      }
+
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
       const requesterData = this.withServerRequesterIdentity(
         dto.requesterData,
@@ -464,6 +483,7 @@ export class RequestsService implements OnModuleInit {
               requester_data_json = $5::jsonb,
               updated_at = NOW()
           WHERE id = $1
+            AND form_version = $6
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -472,10 +492,16 @@ export class RequestsService implements OnModuleInit {
           requesterIdentity.userId,
           productType,
           requesterData,
+          dto.formVersion,
         ],
       );
 
       const updatedRow = result.rows[0];
+      if (!updatedRow) {
+        throw new ConflictException(
+          'The Draft changed while these edits were being saved. Reload the Draft and try again.',
+        );
+      }
       await this.auditLogService.record(
         {
           requestId: updatedRow.id,
@@ -487,6 +513,147 @@ export class RequestsService implements OnModuleInit {
       );
 
       return this.mapRequestRow(updatedRow);
+    });
+  }
+
+  async upgradeDraftSchema(
+    id: string,
+    dto: UpgradeDraftSchemaDto,
+    actor: AuthenticatedUserProfile,
+  ): Promise<PsfRequestResponse> {
+    this.assertCanEditRequesterData(actor);
+    this.assertExpectedFormVersion(dto.formVersion);
+
+    return this.withTransaction(async (client) => {
+      const current = await client.query<
+        Pick<
+          PsfRequestRow,
+          | 'id'
+          | 'form_key'
+          | 'form_version'
+          | 'status'
+          | 'requester'
+          | 'requester_user_id'
+          | 'requester_data_json'
+          | 'schema_snapshot_json'
+        >
+      >(
+        `
+          SELECT
+            id,
+            form_key,
+            form_version,
+            status,
+            requester,
+            requester_user_id,
+            requester_data_json,
+            schema_snapshot_json
+          FROM psf_requests
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [id],
+      );
+
+      const request = current.rows[0];
+      if (!request) {
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      }
+
+      this.assertCanAccessRequest(request, actor);
+
+      if (request.status !== DRAFT_STATUS) {
+        throw new ForbiddenException(
+          'Only Draft requests can be upgraded to the active schema',
+        );
+      }
+
+      if (!this.requestSchemaSnapshotMatchesVersion(request)) {
+        throw new ConflictException(
+          'This Draft schema snapshot is inconsistent. Reload the request and try again.',
+        );
+      }
+
+      if (request.form_key !== PSF_REQUEST_FORM_KEY) {
+        throw new ConflictException(
+          'This Draft does not use the managed PSF request schema. Reload the request and try again.',
+        );
+      }
+
+      const activeSchema =
+        await this.formSchemaService.getActiveSchemaForUpdate(
+          PSF_REQUEST_FORM_KEY,
+          client,
+        );
+      if (activeSchema.version !== dto.formVersion) {
+        throw new ConflictException(
+          'The active request schema changed before this upgrade. Reload the Draft and try again.',
+        );
+      }
+
+      if (request.form_version >= activeSchema.version) {
+        throw new ConflictException(
+          'This Draft is not based on an older active schema version. Reload the Draft and try again.',
+        );
+      }
+
+      const requesterIdentity = this.getServerRequesterIdentity(request, actor);
+      const requesterData = this.withServerRequesterIdentity(
+        this.normalizeRequesterDataToSchema(
+          activeSchema.schema,
+          request.requester_data_json ?? {},
+          true,
+        ),
+        requesterIdentity.displayName,
+      );
+      const productType = this.normalizeString(requesterData.product_type);
+      const result = await client.query<PsfRequestRow>(
+        `
+          UPDATE psf_requests
+          SET requester = $2,
+              requester_user_id = $3::uuid,
+              product_type = $4,
+              requester_data_json = $5::jsonb,
+              form_version = $6,
+              schema_snapshot_json = $7::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+            AND status = '${DRAFT_STATUS}'
+            AND form_version = $8
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+        [
+          id,
+          requesterIdentity.displayName,
+          requesterIdentity.userId,
+          productType,
+          requesterData,
+          activeSchema.version,
+          activeSchema.schema,
+          request.form_version,
+        ],
+      );
+      const upgradedRow = result.rows[0];
+      if (!upgradedRow) {
+        throw new ConflictException(
+          'The Draft changed before its schema could be upgraded. Reload the Draft and try again.',
+        );
+      }
+
+      await this.auditLogService.record(
+        {
+          requestId: upgradedRow.id,
+          actionType: REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED,
+          actor,
+          metadata: {
+            fromFormVersion: request.form_version,
+            toFormVersion: activeSchema.version,
+          },
+        },
+        client,
+      );
+
+      return this.mapRequestRow(upgradedRow);
     });
   }
 
@@ -682,14 +849,25 @@ export class RequestsService implements OnModuleInit {
         Pick<
           PsfRequestRow,
           | 'id'
+          | 'form_key'
           | 'status'
+          | 'form_version'
           | 'requester'
           | 'requester_user_id'
           | 'requester_data_json'
+          | 'schema_snapshot_json'
         >
       >(
         `
-          SELECT id, status, requester, requester_user_id, requester_data_json
+          SELECT
+            id,
+            form_key,
+            status,
+            form_version,
+            requester,
+            requester_user_id,
+            requester_data_json,
+            schema_snapshot_json
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -708,8 +886,22 @@ export class RequestsService implements OnModuleInit {
         throw new ForbiddenException('Only Draft requests can be submitted');
       }
 
+      if (!this.requestSchemaSnapshotMatchesVersion(request)) {
+        throw new ConflictException(
+          'This Draft schema snapshot is inconsistent. Reload the Draft and try again.',
+        );
+      }
+
       const activeSchema =
-        await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
+        await this.formSchemaService.getActiveSchemaForUpdate(
+          PSF_REQUEST_FORM_KEY,
+          client,
+        );
+      if (request.form_version !== activeSchema.version) {
+        throw new ConflictException(
+          'This Draft uses an older or inconsistent schema version. Explicitly upgrade the Draft before submitting.',
+        );
+      }
       if (activeSchema.version !== dto.formVersion) {
         throw new BadRequestException(
           'The active request schema changed before submit. Reload the draft and submit again.',
@@ -828,6 +1020,18 @@ export class RequestsService implements OnModuleInit {
     }
   }
 
+  private assertExpectedFormVersion(value: unknown): asserts value is number {
+    if (
+      typeof value !== 'number' ||
+      !Number.isSafeInteger(value) ||
+      value <= 0
+    ) {
+      throw new BadRequestException(
+        'formVersion must be a positive safe integer.',
+      );
+    }
+  }
+
   private assertCanEditPsfCreatedData(actor: AuthenticatedUserProfile): void {
     if (actor.role === 'requester') {
       throw new ForbiddenException(
@@ -859,6 +1063,21 @@ export class RequestsService implements OnModuleInit {
       displayName: request.requester ?? actor.displayName,
       userId: request.requester_user_id,
     };
+  }
+
+  private requestSchemaSnapshotMatchesVersion(
+    request: Pick<
+      PsfRequestRow,
+      'form_key' | 'form_version' | 'schema_snapshot_json'
+    >,
+  ): boolean {
+    const schemaSnapshot = request.schema_snapshot_json;
+
+    return (
+      isRecord(schemaSnapshot) &&
+      schemaSnapshot.formKey === request.form_key &&
+      schemaSnapshot.version === request.form_version
+    );
   }
 
   private withServerRequesterIdentity(
@@ -1043,6 +1262,7 @@ export class RequestsService implements OnModuleInit {
   private normalizeRequesterDataToSchema(
     schema: FormSchemaJson,
     requesterData: RequesterData,
+    initializeMissingValues = false,
   ): RequesterData {
     const nextData: RequesterData = {};
 
@@ -1050,6 +1270,8 @@ export class RequestsService implements OnModuleInit {
       section.fields.forEach((field) => {
         if (Object.hasOwn(requesterData, field.fieldKey)) {
           nextData[field.fieldKey] = requesterData[field.fieldKey];
+        } else if (initializeMissingValues) {
+          nextData[field.fieldKey] = '';
         }
       });
     });
