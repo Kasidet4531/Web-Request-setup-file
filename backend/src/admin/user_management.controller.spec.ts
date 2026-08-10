@@ -17,7 +17,7 @@ const adminActor = {
 };
 
 const managedSetupOwner = {
-  id: 'setup-owner-1',
+  id: '0d41e0f4-f84b-4fa5-86d7-8a6091771d5d',
   username: 'setup.gntc.demo',
   displayName: 'Setup Owner GNTC Demo',
   role: 'setup_owner' as const,
@@ -202,7 +202,7 @@ describe('UserManagementController', () => {
 
     await expect(
       controller.updateUser(
-        'missing-user',
+        'eb2ac6f0-30e6-474e-b099-ea0cb2347c11',
         { role: 'setup_owner', setupOwnerDepartment: 'GNTC' },
         { session: { userId: adminActor.id } } as never,
       ),

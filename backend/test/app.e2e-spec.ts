@@ -361,7 +361,7 @@ describe('AppController (e2e)', () => {
 
   it('registers admin user-management routes with server-side validation and authorization', async () => {
     const setupOwner = {
-      id: 'setup-owner-1',
+      id: '0d41e0f4-f84b-4fa5-86d7-8a6091771d5d',
       username: 'setup.gntc.demo',
       displayName: 'Setup Owner GNTC Demo',
       role: 'setup_owner' as const,
@@ -400,6 +400,29 @@ describe('AppController (e2e)', () => {
       .send({ role: 'requester', setupOwnerDepartment: 'GNTC' })
       .expect(400);
     expect(authService.updateUser).toHaveBeenCalledTimes(1);
+
+    await request(server)
+      .put('/api/admin/users/not-a-uuid')
+      .send({ role: 'requester', setupOwnerDepartment: null })
+      .expect(400)
+      .expect(({ body }: { body: { message: string } }) => {
+        expect(body.message).toBe('userId must be a UUID.');
+      });
+    expect(authService.updateUser).toHaveBeenCalledTimes(1);
+
+    const missingUserId = 'eb2ac6f0-30e6-474e-b099-ea0cb2347c11';
+    authService.updateUser.mockResolvedValueOnce(null);
+    await request(server)
+      .put(`/api/admin/users/${missingUserId}`)
+      .send({ role: 'requester', setupOwnerDepartment: null })
+      .expect(404)
+      .expect(({ body }: { body: { message: string } }) => {
+        expect(body.message).toBe('User not found.');
+      });
+    expect(authService.updateUser).toHaveBeenLastCalledWith(missingUserId, {
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
 
     authService.getProfile.mockResolvedValueOnce({
       ...setupOwner,

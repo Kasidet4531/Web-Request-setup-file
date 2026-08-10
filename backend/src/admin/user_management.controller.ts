@@ -42,7 +42,7 @@ export class UserManagementController {
     await this.getAuthenticatedAdmin(request);
 
     const user = await this.authService.updateUser(
-      userId,
+      this.parseUserId(userId),
       this.parseUpdateUser(body),
     );
     if (!user) {
@@ -108,6 +108,18 @@ export class UserManagementController {
     }
 
     return { role, setupOwnerDepartment: null };
+  }
+
+  private parseUserId(value: string): string {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      )
+    ) {
+      throw new BadRequestException('userId must be a UUID.');
+    }
+
+    return value;
   }
 
   private isUserRole(value: unknown): value is UserRole {
