@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApiClient, fetchCurrentUser, loginWithPassword, logout } from './api'
+import {
+  createApiClient,
+  fetchCurrentUser,
+  loginWithPassword,
+  logout,
+  refreshCurrentUser,
+} from './api'
 import { AUTH_SESSION_CHANGED_EVENT } from './auth-session'
 
 describe('createApiClient', () => {
@@ -613,6 +619,114 @@ describe('createApiClient', () => {
       3,
       '/api/requests/request-1/status-options',
       expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
+  it('loads and updates user records through backend-authorized admin endpoints', async () => {
+    const updatedUser = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner',
+      setupOwnerDepartment: 'GNTC',
+    }
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([updatedUser]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(updatedUser), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchAdminUsers = Reflect.get(client, 'fetchAdminUsers') as
+      | undefined
+      | (() => Promise<typeof updatedUser[]>)
+    const updateAdminUser = Reflect.get(client, 'updateAdminUser') as
+      | undefined
+      | ((
+        userId: string,
+        payload: { role: 'requester' | 'setup_owner' | 'admin'; setupOwnerDepartment: 'GNTC' | 'MFG' | null },
+      ) => Promise<typeof updatedUser>)
+
+    expect(fetchAdminUsers).toBeTypeOf('function')
+    expect(updateAdminUser).toBeTypeOf('function')
+    if (!fetchAdminUsers || !updateAdminUser) {
+      return
+    }
+
+    await expect(fetchAdminUsers()).resolves.toEqual([updatedUser])
+    await expect(
+      updateAdminUser(updatedUser.id, {
+        role: 'setup_owner',
+        setupOwnerDepartment: 'GNTC',
+      }),
+    ).resolves.toEqual(updatedUser)
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/users',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/users/setup-owner-1',
+      expect.objectContaining({
+        body: JSON.stringify({
+          role: 'setup_owner',
+          setupOwnerDepartment: 'GNTC',
+        }),
+        credentials: 'include',
+        method: 'PUT',
+      }),
+    )
+  })
+
+  it('announces a freshly fetched profile when management updates refresh the session', async () => {
+    const user = {
+      id: 'user-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner',
+      setupOwnerDepartment: 'GNTC',
+    }
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ user }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+    const eventTarget = new EventTarget()
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: eventTarget,
+      writable: true,
+    })
+    Object.defineProperty(globalThis, 'CustomEvent', {
+      configurable: true,
+      value: TestCustomEvent,
+      writable: true,
+    })
+    const listener = vi.fn()
+    eventTarget.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
+
+    await expect(refreshCurrentUser()).resolves.toEqual({ user })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/me',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { status: 'authenticated', user },
+      }),
     )
   })
 

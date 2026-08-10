@@ -466,6 +466,45 @@ button {
   justify-content: flex-end;
 }
 
+.admin-user-management__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-user-management__table {
+  border: 1px solid rgba(41, 66, 100, 0.85);
+  border-radius: 16px;
+  background: rgba(22, 39, 67, 0.72);
+}
+
+.admin-user-management__field select {
+  width: 100%;
+  min-width: 11rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(8, 17, 32, 0.82);
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+}
+
+.admin-user-management__field select:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .auth-status {
   color: var(--text-muted);
   margin: 0;

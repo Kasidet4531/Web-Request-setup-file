@@ -33,7 +33,11 @@ interface FormDefinitionRow {
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let activeUserId: string | undefined;
-  const authService = { getProfile: jest.fn() };
+  const authService = {
+    getProfile: jest.fn(),
+    listUsers: jest.fn(),
+    updateUser: jest.fn(),
+  };
   const excelExportService = { exportRequests: jest.fn() };
   const transactionClient = {
     query: jest.fn(),
@@ -353,6 +357,57 @@ describe('AppController (e2e)', () => {
 
     await request(server).get('/api/admin/form-config').expect(403);
     expect(pool.query).toHaveBeenCalledTimes(queryCallsBeforeRejection);
+  });
+
+  it('registers admin user-management routes with server-side validation and authorization', async () => {
+    const setupOwner = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const updatedUser = {
+      ...setupOwner,
+      role: 'admin' as const,
+      setupOwnerDepartment: null,
+    };
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    authService.listUsers.mockResolvedValue([setupOwner]);
+    authService.updateUser.mockResolvedValue(updatedUser);
+
+    await request(server)
+      .get('/api/admin/users')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual([setupOwner]);
+      });
+
+    await request(server)
+      .put(`/api/admin/users/${setupOwner.id}`)
+      .send({ role: 'admin', setupOwnerDepartment: null })
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual(updatedUser);
+      });
+    expect(authService.updateUser).toHaveBeenCalledWith(setupOwner.id, {
+      role: 'admin',
+      setupOwnerDepartment: null,
+    });
+
+    await request(server)
+      .put(`/api/admin/users/${setupOwner.id}`)
+      .send({ role: 'requester', setupOwnerDepartment: 'GNTC' })
+      .expect(400);
+    expect(authService.updateUser).toHaveBeenCalledTimes(1);
+
+    authService.getProfile.mockResolvedValueOnce({
+      ...setupOwner,
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server).get('/api/admin/users').expect(403);
+    expect(authService.listUsers).toHaveBeenCalledTimes(1);
   });
 
   it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {

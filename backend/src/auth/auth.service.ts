@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   OnModuleInit,
@@ -22,6 +23,11 @@ interface SeedUser {
   username: string;
   displayName: string;
   password: string;
+  role: UserRole;
+  setupOwnerDepartment: 'GNTC' | 'MFG' | null;
+}
+
+export interface UpdateUserProfileInput {
   role: UserRole;
   setupOwnerDepartment: 'GNTC' | 'MFG' | null;
 }
@@ -103,6 +109,36 @@ export class AuthService implements OnModuleInit {
     return user ? this.toProfile(user) : null;
   }
 
+  async listUsers(): Promise<AuthenticatedUserProfile[]> {
+    const result = await this.pool.query<UserRow>(
+      `SELECT id, username, display_name, password_hash, role, setup_owner_department
+       FROM app_users
+       ORDER BY display_name ASC, username ASC`,
+    );
+
+    return result.rows.map((user) => this.toProfile(user));
+  }
+
+  async updateUser(
+    userId: string,
+    update: UpdateUserProfileInput,
+  ): Promise<AuthenticatedUserProfile | null> {
+    this.assertValidRoleDepartmentPairing(update);
+
+    const result = await this.pool.query<UserRow>(
+      `UPDATE app_users
+       SET role = $2,
+           setup_owner_department = $3,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, username, display_name, password_hash, role, setup_owner_department`,
+      [userId, update.role, update.setupOwnerDepartment],
+    );
+
+    const user = result.rows[0];
+    return user ? this.toProfile(user) : null;
+  }
+
   private async ensureUsersTable(): Promise<void> {
     await this.pool.query(`
       CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -114,9 +150,32 @@ export class AuthService implements OnModuleInit {
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL CHECK (role IN ('requester', 'setup_owner', 'admin')),
         setup_owner_department TEXT CHECK (setup_owner_department IN ('GNTC', 'MFG')),
+        CONSTRAINT app_users_role_department_consistency CHECK (
+          (role = 'setup_owner' AND setup_owner_department IS NOT NULL)
+          OR (role IN ('requester', 'admin') AND setup_owner_department IS NULL)
+        ),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await this.pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'app_users'::regclass
+            AND conname = 'app_users_role_department_consistency'
+        ) THEN
+          ALTER TABLE app_users
+          ADD CONSTRAINT app_users_role_department_consistency CHECK (
+            (role = 'setup_owner' AND setup_owner_department IS NOT NULL)
+            OR (role IN ('requester', 'admin') AND setup_owner_department IS NULL)
+          ) NOT VALID;
+        END IF;
+      END
+      $$;
     `);
   }
 
@@ -147,6 +206,29 @@ export class AuthService implements OnModuleInit {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  private assertValidRoleDepartmentPairing(
+    update: UpdateUserProfileInput,
+  ): void {
+    if (update.role === 'setup_owner') {
+      if (
+        update.setupOwnerDepartment !== 'GNTC' &&
+        update.setupOwnerDepartment !== 'MFG'
+      ) {
+        throw new BadRequestException(
+          'Setup File Owners must belong to GNTC or MFG.',
+        );
+      }
+
+      return;
+    }
+
+    if (update.setupOwnerDepartment !== null) {
+      throw new BadRequestException(
+        'Only Setup File Owners may have a department.',
+      );
+    }
   }
 
   private toProfile(user: UserRow): AuthenticatedUserProfile {
