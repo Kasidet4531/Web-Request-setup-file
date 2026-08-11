@@ -33,7 +33,11 @@ interface FormDefinitionRow {
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let activeUserId: string | undefined;
-  const authService = { getProfile: jest.fn() };
+  const authService = {
+    getProfile: jest.fn(),
+    listUsers: jest.fn(),
+    updateUser: jest.fn(),
+  };
   const excelExportService = { exportRequests: jest.fn() };
   const transactionClient = {
     query: jest.fn(),
@@ -353,6 +357,80 @@ describe('AppController (e2e)', () => {
 
     await request(server).get('/api/admin/form-config').expect(403);
     expect(pool.query).toHaveBeenCalledTimes(queryCallsBeforeRejection);
+  });
+
+  it('registers admin user-management routes with server-side validation and authorization', async () => {
+    const setupOwner = {
+      id: '0d41e0f4-f84b-4fa5-86d7-8a6091771d5d',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const updatedUser = {
+      ...setupOwner,
+      role: 'admin' as const,
+      setupOwnerDepartment: null,
+    };
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    authService.listUsers.mockResolvedValue([setupOwner]);
+    authService.updateUser.mockResolvedValue(updatedUser);
+
+    await request(server)
+      .get('/api/admin/users')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual([setupOwner]);
+      });
+
+    await request(server)
+      .put(`/api/admin/users/${setupOwner.id}`)
+      .send({ role: 'admin', setupOwnerDepartment: null })
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual(updatedUser);
+      });
+    expect(authService.updateUser).toHaveBeenCalledWith(setupOwner.id, {
+      role: 'admin',
+      setupOwnerDepartment: null,
+    });
+
+    await request(server)
+      .put(`/api/admin/users/${setupOwner.id}`)
+      .send({ role: 'requester', setupOwnerDepartment: 'GNTC' })
+      .expect(400);
+    expect(authService.updateUser).toHaveBeenCalledTimes(1);
+
+    await request(server)
+      .put('/api/admin/users/not-a-uuid')
+      .send({ role: 'requester', setupOwnerDepartment: null })
+      .expect(400)
+      .expect(({ body }: { body: { message: string } }) => {
+        expect(body.message).toBe('userId must be a UUID.');
+      });
+    expect(authService.updateUser).toHaveBeenCalledTimes(1);
+
+    const missingUserId = 'eb2ac6f0-30e6-474e-b099-ea0cb2347c11';
+    authService.updateUser.mockResolvedValueOnce(null);
+    await request(server)
+      .put(`/api/admin/users/${missingUserId}`)
+      .send({ role: 'requester', setupOwnerDepartment: null })
+      .expect(404)
+      .expect(({ body }: { body: { message: string } }) => {
+        expect(body.message).toBe('User not found.');
+      });
+    expect(authService.updateUser).toHaveBeenLastCalledWith(missingUserId, {
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+
+    authService.getProfile.mockResolvedValueOnce({
+      ...setupOwner,
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server).get('/api/admin/users').expect(403);
+    expect(authService.listUsers).toHaveBeenCalledTimes(1);
   });
 
   it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {

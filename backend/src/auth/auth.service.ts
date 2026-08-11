@@ -1,10 +1,11 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import * as bcrypt from 'bcryptjs';
 import { DATABASE_POOL } from '../database/database.service';
 import { AuthenticatedUserProfile, UserRole } from './session.types';
@@ -22,6 +23,11 @@ interface SeedUser {
   username: string;
   displayName: string;
   password: string;
+  role: UserRole;
+  setupOwnerDepartment: 'GNTC' | 'MFG' | null;
+}
+
+export interface UpdateUserProfileInput {
   role: UserRole;
   setupOwnerDepartment: 'GNTC' | 'MFG' | null;
 }
@@ -103,6 +109,64 @@ export class AuthService implements OnModuleInit {
     return user ? this.toProfile(user) : null;
   }
 
+  async listUsers(): Promise<AuthenticatedUserProfile[]> {
+    const result = await this.pool.query<UserRow>(
+      `SELECT id, username, display_name, password_hash, role, setup_owner_department
+       FROM app_users
+       ORDER BY display_name ASC, username ASC`,
+    );
+
+    return result.rows.map((user) => this.toProfile(user));
+  }
+
+  async updateUser(
+    userId: string,
+    update: UpdateUserProfileInput,
+  ): Promise<AuthenticatedUserProfile | null> {
+    this.assertValidRoleDepartmentPairing(update);
+
+    return this.withTransaction(async (client) => {
+      await client.query('LOCK TABLE app_users IN SHARE ROW EXCLUSIVE MODE');
+      const current = await client.query<Pick<UserRow, 'id' | 'role'>>(
+        `SELECT id, role
+         FROM app_users
+         WHERE id = $1
+         FOR UPDATE`,
+        [userId],
+      );
+      const currentUser = current.rows[0];
+      if (!currentUser) {
+        return null;
+      }
+
+      if (currentUser.role === 'admin' && update.role !== 'admin') {
+        const administrators = await client.query<{ admin_count: number }>(
+          `SELECT COUNT(*)::int AS admin_count
+           FROM app_users
+           WHERE role = 'admin'`,
+        );
+        if ((administrators.rows[0]?.admin_count ?? 0) <= 1) {
+          throw new BadRequestException(
+            'At least one administrator must remain.',
+          );
+        }
+      }
+
+      const result = await client.query<UserRow>(
+        `UPDATE app_users
+         SET role = $2,
+             setup_owner_department = $3,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, username, display_name, password_hash, role, setup_owner_department`,
+        [userId, update.role, update.setupOwnerDepartment],
+      );
+
+      const user = result.rows[0];
+      return user ? this.toProfile(user) : null;
+    });
+  }
+
   private async ensureUsersTable(): Promise<void> {
     await this.pool.query(`
       CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -114,9 +178,52 @@ export class AuthService implements OnModuleInit {
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL CHECK (role IN ('requester', 'setup_owner', 'admin')),
         setup_owner_department TEXT CHECK (setup_owner_department IN ('GNTC', 'MFG')),
+        CONSTRAINT app_users_role_department_consistency CHECK (
+          (role = 'setup_owner' AND setup_owner_department IS NOT NULL AND setup_owner_department IN ('GNTC', 'MFG'))
+          OR (role IN ('requester', 'admin') AND setup_owner_department IS NULL)
+        ),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await this.pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'app_users'::regclass
+            AND conname = 'app_users_role_department_consistency'
+        ) THEN
+          ALTER TABLE app_users
+          ADD CONSTRAINT app_users_role_department_consistency CHECK (
+            (role = 'setup_owner' AND setup_owner_department IS NOT NULL AND setup_owner_department IN ('GNTC', 'MFG'))
+            OR (role IN ('requester', 'admin') AND setup_owner_department IS NULL)
+          ) NOT VALID;
+        END IF;
+      END
+      $$;
+    `);
+
+    const inconsistentUsers = await this.pool.query<{ id: string }>(`
+      SELECT id
+      FROM app_users
+      WHERE (
+        (role = 'setup_owner' AND setup_owner_department IS NOT NULL AND setup_owner_department IN ('GNTC', 'MFG'))
+        OR (role IN ('requester', 'admin') AND setup_owner_department IS NULL)
+      ) IS NOT TRUE
+      LIMIT 1
+    `);
+    if (inconsistentUsers.rows.length > 0) {
+      throw new Error(
+        'Cannot start because app_users contains invalid role and department data. Repair existing rows so Setup File Owners have GNTC or MFG and requesters or administrators have no department, then restart.',
+      );
+    }
+
+    await this.pool.query(`
+      ALTER TABLE app_users
+      VALIDATE CONSTRAINT app_users_role_department_consistency
     `);
   }
 
@@ -147,6 +254,55 @@ export class AuthService implements OnModuleInit {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  private assertValidRoleDepartmentPairing(
+    update: UpdateUserProfileInput,
+  ): void {
+    if (update.role === 'setup_owner') {
+      if (
+        update.setupOwnerDepartment !== 'GNTC' &&
+        update.setupOwnerDepartment !== 'MFG'
+      ) {
+        throw new BadRequestException(
+          'Setup File Owners must belong to GNTC or MFG.',
+        );
+      }
+
+      return;
+    }
+
+    if (update.setupOwnerDepartment !== null) {
+      throw new BadRequestException(
+        'Only Setup File Owners may have a department.',
+      );
+    }
+  }
+
+  private async withTransaction<T>(
+    operation: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await operation(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await this.rollbackTransaction(client);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async rollbackTransaction(client: PoolClient): Promise<void> {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Preserve the original update error if rollback also fails.
+    }
   }
 
   private toProfile(user: UserRow): AuthenticatedUserProfile {

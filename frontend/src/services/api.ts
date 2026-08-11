@@ -290,6 +290,15 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'POST',
       }),
+    fetchAdminUsers: () =>
+      request<AuthenticatedUserProfile[]>('/admin/users', {
+        method: 'GET',
+      }),
+    updateAdminUser: (userId: string, payload: UpdateAdminUserPayload) =>
+      request<AuthenticatedUserProfile>(`/admin/users/${encodeURIComponent(userId)}`, {
+        body: payload,
+        method: 'PUT',
+      }),
     queryPsfRequests: (query: PsfRequestQuery = {}) =>
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',
@@ -361,6 +370,11 @@ export interface AuthenticatedUserProfile {
   setupOwnerDepartment: 'GNTC' | 'MFG' | null
 }
 
+export interface UpdateAdminUserPayload {
+  role: UserRole
+  setupOwnerDepartment: 'GNTC' | 'MFG' | null
+}
+
 export interface AuthResponse {
   user: AuthenticatedUserProfile
 }
@@ -375,6 +389,12 @@ export async function fetchHealthStatus() {
 
 export async function fetchCurrentUser() {
   return api.get<AuthResponse>('/me')
+}
+
+export async function refreshCurrentUser() {
+  const response = await fetchCurrentUser()
+  notifyAuthSessionChanged({ status: 'authenticated', user: response.user })
+  return response
 }
 
 export async function loginWithPassword(username: string, password: string) {
