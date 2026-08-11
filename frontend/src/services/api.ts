@@ -162,6 +162,23 @@ export interface ReplaceAdminWorkflowTransitionConfigurationPayload {
   transitions: WorkflowTransitionRule[]
 }
 
+export interface AdminAutofillRule {
+  id: string
+  formKey: string
+  triggerCanonicalKey: string
+  targetCanonicalKeys: string[]
+  lookupSource: 'previous_completed_submission'
+  status: 'active'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveAdminAutofillRulePayload {
+  formKey: string
+  triggerCanonicalKey: string
+  targetCanonicalKeys: string[]
+}
+
 export interface SubmitPsfRequestPayload {
   formVersion: number
 }
@@ -329,6 +346,26 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    fetchAdminAutofillRules: () =>
+      request<AdminAutofillRule[]>('/admin/autofill', {
+        method: 'GET',
+      }),
+    createAdminAutofillRule: (payload: SaveAdminAutofillRulePayload) =>
+      request<AdminAutofillRule>('/admin/autofill', {
+        body: payload,
+        method: 'POST',
+      }),
+    updateAdminAutofillRule: (
+      ruleId: string,
+      payload: SaveAdminAutofillRulePayload,
+    ) =>
+      request<AdminAutofillRule>(
+        `/admin/autofill/${encodeURIComponent(ruleId)}`,
+        {
+          body: payload,
+          method: 'PUT',
+        },
+      ),
     queryPsfRequests: (query: PsfRequestQuery = {}) =>
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',
