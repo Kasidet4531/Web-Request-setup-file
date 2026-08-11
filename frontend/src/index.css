@@ -493,6 +493,54 @@ button {
   opacity: 0.85;
 }
 
+.admin-workflow-transition__body,
+.admin-workflow-transition__matrix,
+.admin-workflow-transition__source,
+.admin-workflow-transition__principals {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-workflow-transition__source {
+  border: 1px solid rgba(41, 66, 100, 0.85);
+  border-radius: 16px;
+  background: rgba(22, 39, 67, 0.48);
+  padding: 1rem;
+}
+
+.admin-workflow-transition__source h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-workflow-transition__table {
+  border: 1px solid rgba(41, 66, 100, 0.85);
+  border-radius: 12px;
+}
+
+.admin-workflow-transition__principals {
+  min-width: 11rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-workflow-transition__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.admin-workflow-transition__checkbox input {
+  accent-color: var(--accent-strong);
+}
+
+.admin-workflow-transition__checkbox input:disabled {
+  cursor: not-allowed;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

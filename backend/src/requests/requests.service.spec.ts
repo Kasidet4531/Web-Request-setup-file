@@ -10,6 +10,7 @@ import {
   FormSchemaService,
   type FormSchemaJson,
 } from '../admin/form_schema.service';
+import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { RequestsService } from './requests.service';
 import { SearchIndexService } from './search-index.service';
@@ -67,6 +68,9 @@ describe('RequestsService draft flow', () => {
     getActiveSchema: jest.Mock;
     getActiveSchemaForUpdate: jest.Mock;
   };
+  let workflowTransitionService: {
+    getAllowedNextStatuses: jest.Mock;
+  };
   let searchIndexService: {
     ensureRequestSearchIndexStorage: jest.Mock;
     extractCanonicalValues: jest.Mock;
@@ -90,6 +94,9 @@ describe('RequestsService draft flow', () => {
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(activeSchema),
       getActiveSchemaForUpdate: jest.fn().mockResolvedValue(activeSchema),
+    };
+    workflowTransitionService = {
+      getAllowedNextStatuses: jest.fn().mockResolvedValue([]),
     };
     searchIndexService = {
       ensureRequestSearchIndexStorage: jest.fn().mockResolvedValue(undefined),
@@ -119,6 +126,10 @@ describe('RequestsService draft flow', () => {
         RequestsService,
         { provide: DATABASE_POOL, useValue: pool },
         { provide: FormSchemaService, useValue: formSchemaService },
+        {
+          provide: WorkflowTransitionService,
+          useValue: workflowTransitionService,
+        },
         { provide: SearchIndexService, useValue: searchIndexService },
         { provide: AuditLogService, useValue: auditLogService },
       ],
@@ -268,6 +279,7 @@ describe('RequestsService draft flow', () => {
     const migrationRequestsService = new RequestsService(
       pool as never,
       formSchemaService as never,
+      workflowTransitionService as never,
       migrationSearchIndexService,
       auditLogService as never,
     );
@@ -656,10 +668,16 @@ describe('RequestsService draft flow', () => {
         },
       ],
     });
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce(
+      allowedNextStatuses,
+    );
 
     await expect(
       service.getAllowedStatusTransitions('request-1', actor),
     ).resolves.toEqual({ allowedNextStatuses });
+    expect(
+      workflowTransitionService.getAllowedNextStatuses,
+    ).toHaveBeenCalledWith(actor, currentStatus);
   });
 
   it('allows a setup owner to manually move a submitted request into setup and records the acting owner', async () => {
@@ -670,6 +688,9 @@ describe('RequestsService draft flow', () => {
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+      'Setup In Progress',
+    ]);
     const updatedRow = {
       id: 'request-1',
       request_no: 'DRAFT-1',
@@ -730,6 +751,43 @@ describe('RequestsService draft flow', () => {
       setupOwner: 'Setup Owner GNTC Demo',
       setupOwnerRole: 'GNTC',
     });
+    expect(
+      workflowTransitionService.getAllowedNextStatuses,
+    ).toHaveBeenCalledWith(actor, 'Submitted', dbClient);
+  });
+
+  it('denies a Setup File Owner status update when the saved configuration does not match their department', async () => {
+    const actor = {
+      id: 'setup-owner-mfg',
+      username: 'setup.mfg.demo',
+      displayName: 'Setup Owner MFG Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'MFG' as const,
+    };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([]);
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 'request-1', status: 'Submitted', requester_user_id: null },
+        ],
+      })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'Setup In Progress',
+        actor,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(
+      workflowTransitionService.getAllowedNextStatuses,
+    ).toHaveBeenCalledWith(actor, 'Submitted', dbClient);
+    expect(dbClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.any(Array),
+    );
   });
 
   it('rejects a stale status transition when the persisted status changes after validation', async () => {
@@ -740,6 +798,9 @@ describe('RequestsService draft flow', () => {
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+      'Setup In Progress',
+    ]);
     dbClient.query
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({

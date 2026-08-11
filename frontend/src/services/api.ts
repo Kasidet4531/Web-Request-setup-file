@@ -143,6 +143,25 @@ export interface PsfRequestStatusOptionsResponse {
   allowedNextStatuses: string[]
 }
 
+export type SetupOwnerDepartment = 'GNTC' | 'MFG'
+
+export interface WorkflowTransitionRule {
+  fromStatus: string
+  toStatus: string
+  enabled: boolean
+  allowedRoles: UserRole[]
+  allowedSetupOwnerDepartments: SetupOwnerDepartment[]
+}
+
+export interface AdminWorkflowTransitionConfiguration {
+  statuses: string[]
+  transitions: WorkflowTransitionRule[]
+}
+
+export interface ReplaceAdminWorkflowTransitionConfigurationPayload {
+  transitions: WorkflowTransitionRule[]
+}
+
 export interface SubmitPsfRequestPayload {
   formVersion: number
 }
@@ -299,6 +318,17 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    fetchAdminWorkflowTransitionConfiguration: () =>
+      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
+        method: 'GET',
+      }),
+    replaceAdminWorkflowTransitionConfiguration: (
+      payload: ReplaceAdminWorkflowTransitionConfigurationPayload,
+    ) =>
+      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
+        body: payload,
+        method: 'PUT',
+      }),
     queryPsfRequests: (query: PsfRequestQuery = {}) =>
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',
@@ -367,12 +397,12 @@ export interface AuthenticatedUserProfile {
   username: string
   displayName: string
   role: UserRole
-  setupOwnerDepartment: 'GNTC' | 'MFG' | null
+  setupOwnerDepartment: SetupOwnerDepartment | null
 }
 
 export interface UpdateAdminUserPayload {
   role: UserRole
-  setupOwnerDepartment: 'GNTC' | 'MFG' | null
+  setupOwnerDepartment: SetupOwnerDepartment | null
 }
 
 export interface AuthResponse {

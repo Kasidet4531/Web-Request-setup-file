@@ -30,9 +30,51 @@ interface FormDefinitionRow {
   published_at: Date | null;
 }
 
+type PoolQuery = (
+  query: string,
+  values?: unknown[],
+) => Promise<{ rows: unknown[] }>;
+
+const MANUAL_WORKFLOW_STATUSES = [
+  'Submitted',
+  'Setup In Progress',
+  'Need More Information',
+  'PSF Created',
+  'Completed',
+  'Rejected',
+  'Cancelled',
+];
+
+function buildWorkflowConfiguration(
+  ruleOverrides: (
+    fromStatus: string,
+    toStatus: string,
+  ) => Partial<{
+    enabled: boolean;
+    allowedRoles: string[];
+    allowedSetupOwnerDepartments: string[];
+  }> = () => ({}),
+) {
+  return {
+    transitions: MANUAL_WORKFLOW_STATUSES.flatMap((fromStatus) =>
+      MANUAL_WORKFLOW_STATUSES.filter(
+        (toStatus) => toStatus !== fromStatus,
+      ).map((toStatus) => ({
+        fromStatus,
+        toStatus,
+        enabled: true,
+        allowedRoles: ['admin'],
+        allowedSetupOwnerDepartments: [],
+        ...ruleOverrides(fromStatus, toStatus),
+      })),
+    ),
+  };
+}
+
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let activeUserId: string | undefined;
+  let workflowConfiguration: unknown;
   const authService = {
     getProfile: jest.fn(),
     listUsers: jest.fn(),
@@ -50,7 +92,34 @@ describe('AppController (e2e)', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    pool.query.mockResolvedValue({ rows: [] });
+    workflowConfiguration = null;
+    pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('SELECT config_json')) {
+        return Promise.resolve({
+          rows:
+            workflowConfiguration === null
+              ? []
+              : [{ config_json: workflowConfiguration }],
+        });
+      }
+
+      if (query.includes('INSERT INTO workflow_transition_config')) {
+        const nextConfiguration = values?.[1] ?? null;
+        if (query.includes('DO NOTHING')) {
+          workflowConfiguration ??= nextConfiguration;
+        } else {
+          workflowConfiguration = nextConfiguration;
+        }
+
+        return Promise.resolve({
+          rows: query.includes('RETURNING')
+            ? [{ config_json: workflowConfiguration }]
+            : [],
+        });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
     pool.connect.mockResolvedValue(transactionClient);
     transactionClient.query.mockImplementation(
       (query: string, values?: unknown[]) => {
@@ -431,6 +500,121 @@ describe('AppController (e2e)', () => {
     });
     await request(server).get('/api/admin/users').expect(403);
     expect(authService.listUsers).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers admin workflow transition routes that persist one complete replacement and enforce admin authorization', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    await request(server)
+      .get('/api/admin/workflow')
+      .expect(200)
+      .expect(
+        ({
+          body,
+        }: {
+          body: { statuses: string[]; transitions: unknown[] };
+        }) => {
+          expect(body.statuses).toEqual(MANUAL_WORKFLOW_STATUSES);
+          expect(body.transitions).toHaveLength(42);
+        },
+      );
+
+    const gntcOnly = buildWorkflowConfiguration((fromStatus, toStatus) =>
+      fromStatus === 'Submitted' && toStatus === 'Setup In Progress'
+        ? {
+            allowedRoles: [],
+            allowedSetupOwnerDepartments: ['GNTC'],
+          }
+        : {
+            enabled: false,
+            allowedRoles: [],
+            allowedSetupOwnerDepartments: [],
+          },
+    );
+
+    await request(server)
+      .put('/api/admin/workflow')
+      .send(gntcOnly)
+      .expect(200)
+      .expect(
+        ({
+          body,
+        }: {
+          body: { transitions: Array<Record<string, unknown>> };
+        }) => {
+          expect(
+            body.transitions.find(
+              (transition) =>
+                transition.fromStatus === 'Submitted' &&
+                transition.toStatus === 'Setup In Progress',
+            ),
+          ).toMatchObject({
+            enabled: true,
+            allowedRoles: [],
+            allowedSetupOwnerDepartments: ['GNTC'],
+          });
+        },
+      );
+
+    const defaultPoolQuery = pool.query.getMockImplementation() as
+      | PoolQuery
+      | undefined;
+    if (!defaultPoolQuery) {
+      throw new Error('Expected the workflow storage query mock');
+    }
+    pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('FROM psf_requests')) {
+        return Promise.resolve({
+          rows: [
+            {
+              id: 'request-1',
+              status: 'Submitted',
+              requester_user_id: null,
+            },
+          ],
+        });
+      }
+
+      return defaultPoolQuery(query, values);
+    });
+
+    activeUserId = 'setup-owner-gntc';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'setup-owner-gntc',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner',
+      setupOwnerDepartment: 'GNTC',
+    });
+    await request(server)
+      .get('/api/requests/request-1/status-options')
+      .expect(200)
+      .expect(({ body }: { body: { allowedNextStatuses: string[] } }) => {
+        expect(body.allowedNextStatuses).toEqual(['Setup In Progress']);
+      });
+
+    activeUserId = 'setup-owner-mfg';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'setup-owner-mfg',
+      username: 'setup.mfg.demo',
+      displayName: 'Setup Owner MFG Demo',
+      role: 'setup_owner',
+      setupOwnerDepartment: 'MFG',
+    });
+    await request(server)
+      .put('/api/requests/request-1/status')
+      .send({ status: 'Setup In Progress' })
+      .expect(403);
+
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server).get('/api/admin/workflow').expect(403);
   });
 
   it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {

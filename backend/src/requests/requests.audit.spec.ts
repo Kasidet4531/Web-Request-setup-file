@@ -4,6 +4,7 @@ import {
   REQUEST_AUDIT_ACTION,
 } from '../audit/audit_log.service';
 import { FormSchemaService } from '../admin/form_schema.service';
+import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { RequestsService } from './requests.service';
 import { SearchIndexService } from './search-index.service';
@@ -125,6 +126,14 @@ describe('RequestsService audit baseline', () => {
         RequestsService,
         { provide: DATABASE_POOL, useValue: pool },
         { provide: FormSchemaService, useValue: formSchemaService },
+        {
+          provide: WorkflowTransitionService,
+          useValue: {
+            getAllowedNextStatuses: jest
+              .fn()
+              .mockResolvedValue(['Setup In Progress']),
+          },
+        },
         { provide: SearchIndexService, useValue: searchIndexService },
         { provide: AuditLogService, useValue: auditLogService },
       ],
