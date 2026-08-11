@@ -19,6 +19,10 @@ import {
   FormSchemaJson,
   FormSchemaService,
 } from '../admin/form_schema.service';
+import {
+  MANUAL_WORKFLOW_STATUSES,
+  WorkflowTransitionService,
+} from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import {
   RequestSearchFilters,
@@ -29,42 +33,9 @@ import {
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
 const SUBMITTED_STATUS = 'Submitted';
-const SETUP_IN_PROGRESS_STATUS = 'Setup In Progress';
-const NEED_MORE_INFORMATION_STATUS = 'Need More Information';
 const PSF_CREATED_STATUS = 'PSF Created';
 const COMPLETED_STATUS = 'Completed';
-const REJECTED_STATUS = 'Rejected';
-const CANCELLED_STATUS = 'Cancelled';
-
-const STATUS_TRANSITIONS_BY_ROLE: Record<string, Record<string, string[]>> = {
-  requester: {
-    [SUBMITTED_STATUS]: [CANCELLED_STATUS],
-    [NEED_MORE_INFORMATION_STATUS]: [SUBMITTED_STATUS, CANCELLED_STATUS],
-  },
-  setup_owner: {
-    [SUBMITTED_STATUS]: [
-      SETUP_IN_PROGRESS_STATUS,
-      NEED_MORE_INFORMATION_STATUS,
-      REJECTED_STATUS,
-    ],
-    [SETUP_IN_PROGRESS_STATUS]: [
-      PSF_CREATED_STATUS,
-      NEED_MORE_INFORMATION_STATUS,
-      REJECTED_STATUS,
-    ],
-    [PSF_CREATED_STATUS]: [COMPLETED_STATUS, NEED_MORE_INFORMATION_STATUS],
-  },
-};
-
-const ALL_MANUAL_STATUSES = [
-  SUBMITTED_STATUS,
-  SETUP_IN_PROGRESS_STATUS,
-  NEED_MORE_INFORMATION_STATUS,
-  PSF_CREATED_STATUS,
-  COMPLETED_STATUS,
-  REJECTED_STATUS,
-  CANCELLED_STATUS,
-];
+const MANUAL_STATUS_SET = new Set<string>(MANUAL_WORKFLOW_STATUSES);
 
 const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
   updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC',
@@ -260,6 +231,7 @@ export class RequestsService implements OnModuleInit {
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     private readonly formSchemaService: FormSchemaService,
+    private readonly workflowTransitionService: WorkflowTransitionService,
     private readonly searchIndexService: SearchIndexService,
     private readonly auditLogService: AuditLogService,
   ) {}
@@ -418,10 +390,11 @@ export class RequestsService implements OnModuleInit {
     this.assertCanAccessRequest(request, actor);
 
     return {
-      allowedNextStatuses: this.getAllowedNextStatuses(
-        actor.role,
-        request.status,
-      ),
+      allowedNextStatuses:
+        await this.workflowTransitionService.getAllowedNextStatuses(
+          actor,
+          request.status,
+        ),
     };
   }
 
@@ -761,10 +734,11 @@ export class RequestsService implements OnModuleInit {
 
       this.assertCanAccessRequest(currentRequest, dto.actor);
 
-      this.assertStatusTransitionIsAllowed(
-        dto.actor.role,
+      await this.assertStatusTransitionIsAllowed(
+        dto.actor,
         currentRequest.status,
         dto.status,
+        client,
       );
 
       const actorName =
@@ -1103,11 +1077,12 @@ export class RequestsService implements OnModuleInit {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
-  private assertStatusTransitionIsAllowed(
-    role: AuthenticatedUserProfile['role'],
+  private async assertStatusTransitionIsAllowed(
+    actor: AuthenticatedUserProfile,
     currentStatus: string,
     nextStatus: string,
-  ): void {
+    queryRunner: QueryRunner,
+  ): Promise<void> {
     if (currentStatus === DRAFT_STATUS) {
       if (nextStatus === DRAFT_STATUS) {
         return;
@@ -1118,7 +1093,7 @@ export class RequestsService implements OnModuleInit {
       );
     }
 
-    if (!ALL_MANUAL_STATUSES.includes(nextStatus)) {
+    if (!MANUAL_STATUS_SET.has(nextStatus)) {
       throw new BadRequestException(
         `Unsupported request status: ${nextStatus}`,
       );
@@ -1128,32 +1103,22 @@ export class RequestsService implements OnModuleInit {
       return;
     }
 
-    if (role === 'admin') {
-      return;
-    }
+    const allowedTargets =
+      await this.workflowTransitionService.getAllowedNextStatuses(
+        actor,
+        currentStatus,
+        queryRunner,
+      );
 
-    const allowedTargets = this.getAllowedNextStatuses(role, currentStatus);
-
-    if (!allowedTargets.includes(nextStatus)) {
+    if (
+      !allowedTargets.includes(
+        nextStatus as (typeof MANUAL_WORKFLOW_STATUSES)[number],
+      )
+    ) {
       throw new ForbiddenException(
-        `${role} is not allowed to move a request from ${currentStatus} to ${nextStatus}`,
+        `${actor.role} is not allowed to move a request from ${currentStatus} to ${nextStatus}`,
       );
     }
-  }
-
-  private getAllowedNextStatuses(
-    role: AuthenticatedUserProfile['role'],
-    currentStatus: string,
-  ): string[] {
-    if (currentStatus === DRAFT_STATUS) {
-      return [];
-    }
-
-    if (role === 'admin') {
-      return ALL_MANUAL_STATUSES.filter((status) => status !== currentStatus);
-    }
-
-    return [...(STATUS_TRANSITIONS_BY_ROLE[role]?.[currentStatus] ?? [])];
   }
 
   private async withTransaction<T>(

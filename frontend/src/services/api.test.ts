@@ -622,6 +622,70 @@ describe('createApiClient', () => {
     )
   })
 
+  it('loads and atomically replaces the administrator workflow-transition configuration', async () => {
+    const configuration = {
+      statuses: ['Submitted', 'Setup In Progress'],
+      transitions: [
+        {
+          fromStatus: 'Submitted',
+          toStatus: 'Setup In Progress',
+          enabled: true,
+          allowedRoles: ['setup_owner'],
+          allowedSetupOwnerDepartments: ['GNTC'],
+        },
+      ],
+    }
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(configuration), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(configuration), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchConfiguration = Reflect.get(
+      client,
+      'fetchAdminWorkflowTransitionConfiguration',
+    ) as undefined | (() => Promise<typeof configuration>)
+    const replaceConfiguration = Reflect.get(
+      client,
+      'replaceAdminWorkflowTransitionConfiguration',
+    ) as undefined | ((payload: Pick<typeof configuration, 'transitions'>) => Promise<typeof configuration>)
+
+    expect(fetchConfiguration).toBeTypeOf('function')
+    expect(replaceConfiguration).toBeTypeOf('function')
+    if (!fetchConfiguration || !replaceConfiguration) {
+      return
+    }
+
+    await expect(fetchConfiguration()).resolves.toEqual(configuration)
+    await expect(replaceConfiguration({ transitions: configuration.transitions })).resolves.toEqual(
+      configuration,
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/workflow',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/workflow',
+      expect.objectContaining({
+        body: JSON.stringify({ transitions: configuration.transitions }),
+        credentials: 'include',
+        method: 'PUT',
+      }),
+    )
+  })
+
   it('loads and updates user records through backend-authorized admin endpoints', async () => {
     const updatedUser = {
       id: 'setup-owner-1',
