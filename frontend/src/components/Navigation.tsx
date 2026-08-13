@@ -7,6 +7,7 @@ const navItems = [
   { to: '/history', label: 'Global History' },
   { to: '/admin/export-profile', label: 'Export' },
   { to: '/admin', label: 'Admin' },
+  { to: '/admin/autofill', label: 'Autofill rules' },
 ] as const
 
 export function Navigation() {

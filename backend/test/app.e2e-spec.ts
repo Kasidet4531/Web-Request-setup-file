@@ -10,6 +10,7 @@ import {
   DatabaseService,
 } from './../src/database/database.service';
 import { ExcelExportService } from './../src/export/excel_export.service';
+import { AutofillService } from './../src/requests/autofill.service';
 
 interface HealthResponseBody {
   status: string;
@@ -615,6 +616,260 @@ describe('AppController (e2e)', () => {
       setupOwnerDepartment: null,
     });
     await request(server).get('/api/admin/workflow').expect(403);
+  });
+
+  it('registers admin autofill rules that validate canonical keys, persist atomically, and are readable through the runtime service', async () => {
+    const activeDefinition: FormDefinitionRow = {
+      form_key: 'psf-request',
+      version: 1,
+      title: 'PSF Request Form',
+      description: null,
+      status: 'active',
+      schema_json: {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'PSF Request Form',
+        sections: [
+          {
+            sectionKey: 'requester_information',
+            title: 'Requester Information',
+            visibleTo: ['requester', 'setup_owner', 'admin'],
+            fields: [
+              {
+                fieldKey: 'reference_psf_name',
+                canonicalKey: 'reference_psf_name',
+                label: 'Reference PSF Name',
+                type: 'text',
+                required: false,
+                autofillTrigger: true,
+              },
+              {
+                fieldKey: 'reference_product',
+                canonicalKey: 'reference_product',
+                label: 'Reference Product',
+                type: 'text',
+                required: false,
+                autofillTrigger: true,
+              },
+              {
+                fieldKey: 'product',
+                canonicalKey: 'product',
+                label: 'Product',
+                type: 'text',
+                required: true,
+              },
+              {
+                fieldKey: 'wafer_fab',
+                canonicalKey: 'wafer_fab',
+                label: 'Wafer FAB',
+                type: 'text',
+                required: true,
+              },
+            ],
+          },
+        ],
+      },
+      created_by: 'system-seed',
+      created_at: new Date('2026-08-11T00:00:00.000Z'),
+      published_at: new Date('2026-08-11T00:00:00.000Z'),
+    };
+    const storedRules: Array<{
+      id: string;
+      form_key: string;
+      trigger_canonical_key: string;
+      lookup_source: string;
+      fill_targets_json: string[];
+      status: string;
+      created_at: Date;
+      updated_at: Date;
+    }> = [];
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (
+        query.includes('FROM form_definitions') &&
+        query.includes('LIMIT 1') &&
+        query.includes('FOR UPDATE')
+      ) {
+        return Promise.resolve({ rows: [{ form_key: 'psf-request' }] });
+      }
+
+      if (
+        query.includes('FROM form_definitions') &&
+        query.includes('FOR UPDATE')
+      ) {
+        return Promise.resolve({ rows: [activeDefinition] });
+      }
+
+      if (query.includes('INSERT INTO autofill_rules')) {
+        const [
+          id,
+          formKey,
+          triggerCanonicalKey,
+          lookupSource,
+          fillTargetsJson,
+          status,
+        ] = values as [string, string, string, string, string, string];
+        if (
+          storedRules.some(
+            (rule) =>
+              rule.form_key === formKey &&
+              rule.trigger_canonical_key === triggerCanonicalKey,
+          )
+        ) {
+          return Promise.reject(
+            Object.assign(new Error('duplicate rule'), { code: '23505' }),
+          );
+        }
+
+        const created = {
+          id,
+          form_key: formKey,
+          trigger_canonical_key: triggerCanonicalKey,
+          lookup_source: lookupSource,
+          fill_targets_json: JSON.parse(fillTargetsJson) as string[],
+          status,
+          created_at: new Date('2026-08-11T10:00:00.000Z'),
+          updated_at: new Date('2026-08-11T10:00:00.000Z'),
+        };
+        storedRules.push(created);
+        return Promise.resolve({ rows: [created] });
+      }
+
+      if (query.includes('UPDATE autofill_rules')) {
+        const [triggerCanonicalKey, fillTargetsJson, ruleId, formKey] =
+          values as [string, string, string, string];
+        const existing = storedRules.find(
+          (rule) => rule.id === ruleId && rule.form_key === formKey,
+        );
+        if (!existing) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (
+          storedRules.some(
+            (rule) =>
+              rule.id !== ruleId &&
+              rule.form_key === formKey &&
+              rule.trigger_canonical_key === triggerCanonicalKey,
+          )
+        ) {
+          return Promise.reject(
+            Object.assign(new Error('duplicate rule'), { code: '23505' }),
+          );
+        }
+
+        existing.trigger_canonical_key = triggerCanonicalKey;
+        existing.fill_targets_json = JSON.parse(fillTargetsJson) as string[];
+        existing.updated_at = new Date('2026-08-11T11:00:00.000Z');
+        return Promise.resolve({ rows: [existing] });
+      }
+
+      if (query.includes('FROM autofill_rules')) {
+        return Promise.resolve({ rows: storedRules });
+      }
+
+      return Promise.resolve({ rows: [] });
+    });
+
+    await request(server).get('/api/admin/autofill').expect(200).expect([]);
+
+    let ruleId = '';
+    await request(server)
+      .post('/api/admin/autofill')
+      .send({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_psf_name',
+        targetCanonicalKeys: ['product', 'wafer_fab'],
+      })
+      .expect(201)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        ruleId = body.id as string;
+        expect(body).toMatchObject({
+          formKey: 'psf-request',
+          triggerCanonicalKey: 'reference_psf_name',
+          targetCanonicalKeys: ['product', 'wafer_fab'],
+          lookupSource: 'previous_completed_submission',
+          status: 'active',
+        });
+      });
+    expect(ruleId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+
+    await request(server)
+      .get('/api/admin/autofill')
+      .expect(200)
+      .expect(({ body }: { body: Array<Record<string, unknown>> }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0]).toMatchObject({ id: ruleId });
+      });
+
+    await request(server)
+      .put(`/api/admin/autofill/${ruleId}`)
+      .send({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_product',
+        targetCanonicalKeys: ['product'],
+      })
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          id: ruleId,
+          triggerCanonicalKey: 'reference_product',
+          targetCanonicalKeys: ['product'],
+        });
+      });
+
+    await expect(
+      app.get(AutofillService).getActiveRules('psf-request'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: ruleId,
+        triggerCanonicalKey: 'reference_product',
+        targetCanonicalKeys: ['product'],
+      }),
+    ]);
+
+    const rulesBeforeRejectedMutations = JSON.stringify(storedRules);
+    await request(server)
+      .post('/api/admin/autofill')
+      .send({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_product',
+        targetCanonicalKeys: ['wafer_fab'],
+      })
+      .expect(409);
+    await request(server)
+      .put(`/api/admin/autofill/${ruleId}`)
+      .send({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_product',
+        targetCanonicalKeys: ['unknown_target'],
+      })
+      .expect(400);
+    await request(server)
+      .post('/api/admin/autofill')
+      .send({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_psf_name',
+        targetCanonicalKeys: ['product'],
+        unexpected: true,
+      })
+      .expect(400);
+    expect(JSON.stringify(storedRules)).toBe(rulesBeforeRejectedMutations);
+
+    activeUserId = undefined;
+    await request(server).get('/api/admin/autofill').expect(401);
+
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server).get('/api/admin/autofill').expect(403);
   });
 
   it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {

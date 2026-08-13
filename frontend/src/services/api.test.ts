@@ -686,6 +686,110 @@ describe('createApiClient', () => {
     )
   })
 
+  it('lists, creates, and edits administrator autofill rules through canonical-key endpoints', async () => {
+    const rule = {
+      id: 'f0e9b091-8ee5-4d92-90ed-c4ac8ec01845',
+      formKey: 'psf-request',
+      triggerCanonicalKey: 'reference_psf_name',
+      targetCanonicalKeys: ['product', 'wafer_fab'],
+      lookupSource: 'previous_completed_submission',
+      status: 'active',
+      createdAt: '2026-08-11T10:00:00.000Z',
+      updatedAt: '2026-08-11T10:00:00.000Z',
+    }
+    const updatedRule = {
+      ...rule,
+      triggerCanonicalKey: 'reference_product',
+      targetCanonicalKeys: ['product'],
+      updatedAt: '2026-08-11T11:00:00.000Z',
+    }
+    const createPayload = {
+      formKey: 'psf-request',
+      triggerCanonicalKey: 'reference_psf_name',
+      targetCanonicalKeys: ['product', 'wafer_fab'],
+    }
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([rule]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(rule), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(updatedRule), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    const fetchAdminAutofillRules = Reflect.get(client, 'fetchAdminAutofillRules') as
+      | undefined
+      | (() => Promise<typeof rule[]>)
+    const createAdminAutofillRule = Reflect.get(client, 'createAdminAutofillRule') as
+      | undefined
+      | ((payload: typeof createPayload) => Promise<typeof rule>)
+    const updateAdminAutofillRule = Reflect.get(client, 'updateAdminAutofillRule') as
+      | undefined
+      | ((ruleId: string, payload: typeof createPayload) => Promise<typeof updatedRule>)
+
+    expect(fetchAdminAutofillRules).toBeTypeOf('function')
+    expect(createAdminAutofillRule).toBeTypeOf('function')
+    expect(updateAdminAutofillRule).toBeTypeOf('function')
+    if (
+      !fetchAdminAutofillRules ||
+      !createAdminAutofillRule ||
+      !updateAdminAutofillRule
+    ) {
+      return
+    }
+
+    await expect(fetchAdminAutofillRules()).resolves.toEqual([rule])
+    await expect(createAdminAutofillRule(createPayload)).resolves.toEqual(rule)
+    await expect(
+      updateAdminAutofillRule(rule.id, {
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_product',
+        targetCanonicalKeys: ['product'],
+      }),
+    ).resolves.toEqual(updatedRule)
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/autofill',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/autofill',
+      expect.objectContaining({
+        body: JSON.stringify(createPayload),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      3,
+      `/api/admin/autofill/${rule.id}`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          formKey: 'psf-request',
+          triggerCanonicalKey: 'reference_product',
+          targetCanonicalKeys: ['product'],
+        }),
+        credentials: 'include',
+        method: 'PUT',
+      }),
+    )
+  })
+
   it('loads and updates user records through backend-authorized admin endpoints', async () => {
     const updatedUser = {
       id: 'setup-owner-1',
