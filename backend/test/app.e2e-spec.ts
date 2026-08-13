@@ -883,6 +883,52 @@ describe('AppController (e2e)', () => {
       created_at: new Date('2026-08-11T10:00:00.000Z'),
       updated_at: new Date('2026-08-11T10:00:00.000Z'),
     };
+    const activeDefinition: FormDefinitionRow = {
+      form_key: 'psf-request',
+      version: 1,
+      title: 'PSF Request Form',
+      description: null,
+      status: 'active',
+      schema_json: {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'PSF Request Form',
+        sections: [
+          {
+            sectionKey: 'requester_information',
+            title: 'Requester Information',
+            visibleTo: ['requester'],
+            fields: [
+              {
+                fieldKey: 'reference_psf_name',
+                canonicalKey: 'reference_psf_name',
+                label: 'Reference PSF Name',
+                type: 'text',
+                required: false,
+                autofillTrigger: true,
+              },
+              {
+                fieldKey: 'product',
+                canonicalKey: 'product',
+                label: 'Product',
+                type: 'text',
+                required: false,
+              },
+              {
+                fieldKey: 'wafer_fab',
+                canonicalKey: 'wafer_fab',
+                label: 'Wafer FAB',
+                type: 'text',
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+      created_by: 'system-seed',
+      created_at: new Date('2026-08-11T00:00:00.000Z'),
+      published_at: new Date('2026-08-11T00:00:00.000Z'),
+    };
     const defaultPoolQuery = pool.query.getMockImplementation() as
       | PoolQuery
       | undefined;
@@ -894,6 +940,13 @@ describe('AppController (e2e)', () => {
     pool.query.mockImplementation((query: string, values?: unknown[]) => {
       if (query.includes('FROM autofill_rules')) {
         return Promise.resolve({ rows: [runtimeRule] });
+      }
+
+      if (
+        query.includes('FROM form_definitions') &&
+        query.includes("WHERE form_key = $1 AND status = 'active'")
+      ) {
+        return Promise.resolve({ rows: [activeDefinition] });
       }
 
       if (query.includes('WITH matched_source')) {
@@ -970,6 +1023,120 @@ describe('AppController (e2e)', () => {
           'Setup File Owners cannot edit requester-owned fields',
         );
       });
+  });
+
+  it('fails closed when a requester directly invokes an admin-only stored autofill rule', async () => {
+    const privateRule = {
+      id: '75806824-f1b1-4c2a-bb47-41928cb78609',
+      form_key: 'psf-request',
+      trigger_canonical_key: 'private_trigger',
+      lookup_source: 'previous_completed_submission',
+      fill_targets_json: ['private_target'],
+      status: 'active',
+      created_at: new Date('2026-08-11T10:00:00.000Z'),
+      updated_at: new Date('2026-08-11T10:00:00.000Z'),
+    };
+    const activeDefinition: FormDefinitionRow = {
+      form_key: 'psf-request',
+      version: 1,
+      title: 'PSF Request Form',
+      description: null,
+      status: 'active',
+      schema_json: {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'PSF Request Form',
+        sections: [
+          {
+            sectionKey: 'admin_only_information',
+            title: 'Admin-only Information',
+            visibleTo: ['admin'],
+            fields: [
+              {
+                fieldKey: 'private_trigger',
+                canonicalKey: 'private_trigger',
+                label: 'Private Trigger',
+                type: 'text',
+                required: false,
+                autofillTrigger: true,
+              },
+              {
+                fieldKey: 'private_target',
+                canonicalKey: 'private_target',
+                label: 'Private Target',
+                type: 'text',
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+      created_by: 'system-seed',
+      created_at: new Date('2026-08-11T00:00:00.000Z'),
+      published_at: new Date('2026-08-11T00:00:00.000Z'),
+    };
+    const defaultPoolQuery = pool.query.getMockImplementation() as
+      | PoolQuery
+      | undefined;
+    if (!defaultPoolQuery) {
+      throw new Error('Expected the default pool query mock');
+    }
+
+    let canonicalLookupCalls = 0;
+    pool.query.mockClear();
+    pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('FROM autofill_rules')) {
+        return Promise.resolve({ rows: [privateRule] });
+      }
+
+      if (
+        query.includes('FROM form_definitions') &&
+        query.includes("WHERE form_key = $1 AND status = 'active'")
+      ) {
+        return Promise.resolve({ rows: [activeDefinition] });
+      }
+
+      if (query.includes('WITH matched_source')) {
+        canonicalLookupCalls += 1;
+        expect(values).toEqual([
+          'psf-request',
+          'private_trigger',
+          JSON.stringify('private-reference'),
+          ['private_target'],
+        ]);
+        return Promise.resolve({
+          rows: [
+            {
+              matched: true,
+              canonical_key: 'private_target',
+              value_json: 'historical-admin-only-value',
+            },
+          ],
+        });
+      }
+
+      return defaultPoolQuery(query, values);
+    });
+
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+
+    const response = await request(
+      app.getHttpServer() as Parameters<typeof request>[0],
+    )
+      .get(
+        '/api/autofill?formKey=psf-request&field=private_trigger&value=private-reference',
+      )
+      .expect(200);
+
+    expect(response.body).toEqual({ matched: false, suggestedValues: {} });
+    expect(canonicalLookupCalls).toBe(0);
   });
 
   it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {

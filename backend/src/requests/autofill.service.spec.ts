@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AutofillRuleService } from '../admin/autofill_rule.service';
+import { FormSchemaService } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { AutofillService } from './autofill.service';
 
@@ -14,8 +15,86 @@ const activeRule = {
   updatedAt: '2026-08-11T10:00:00.000Z',
 };
 
+const requesterVisibleSchema = {
+  formKey: 'psf-request',
+  version: 1,
+  title: 'PSF Request Form',
+  description: null,
+  status: 'active',
+  publishedAt: '2026-08-11T00:00:00.000Z',
+  schema: {
+    formKey: 'psf-request',
+    version: 1,
+    title: 'PSF Request Form',
+    sections: [
+      {
+        sectionKey: 'requester_information',
+        title: 'Requester Information',
+        visibleTo: ['requester'],
+        fields: [
+          {
+            fieldKey: 'reference_psf_name',
+            canonicalKey: 'reference_psf_name',
+            label: 'Reference PSF Name',
+            type: 'text',
+            required: false,
+            autofillTrigger: true,
+          },
+          {
+            fieldKey: 'product',
+            canonicalKey: 'product',
+            label: 'Product',
+            type: 'text',
+            required: false,
+          },
+          {
+            fieldKey: 'wafer_fab',
+            canonicalKey: 'wafer_fab',
+            label: 'Wafer FAB',
+            type: 'text',
+            required: false,
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const schemaWithAdminOnlyAutofillFields = {
+  ...requesterVisibleSchema,
+  schema: {
+    ...requesterVisibleSchema.schema,
+    sections: [
+      ...requesterVisibleSchema.schema.sections,
+      {
+        sectionKey: 'admin_only_information',
+        title: 'Admin-only Information',
+        visibleTo: ['admin'],
+        fields: [
+          {
+            fieldKey: 'private_trigger',
+            canonicalKey: 'private_trigger',
+            label: 'Private Trigger',
+            type: 'text',
+            required: false,
+            autofillTrigger: true,
+          },
+          {
+            fieldKey: 'private_target',
+            canonicalKey: 'private_target',
+            label: 'Private Target',
+            type: 'text',
+            required: false,
+          },
+        ],
+      },
+    ],
+  },
+};
+
 describe('AutofillService', () => {
   let autofillRuleService: { listActiveRules: jest.Mock };
+  let formSchemaService: { getActiveSchema: jest.Mock };
   let pool: { query: jest.Mock };
   let service: AutofillService;
 
@@ -23,11 +102,15 @@ describe('AutofillService', () => {
     autofillRuleService = {
       listActiveRules: jest.fn(),
     };
+    formSchemaService = {
+      getActiveSchema: jest.fn().mockResolvedValue(requesterVisibleSchema),
+    };
     pool = { query: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AutofillService,
         { provide: AutofillRuleService, useValue: autofillRuleService },
+        { provide: FormSchemaService, useValue: formSchemaService },
         { provide: DATABASE_POOL, useValue: pool },
       ],
     }).compile();
@@ -56,6 +139,66 @@ describe('AutofillService', () => {
       }),
     ).resolves.toEqual({ matched: false, suggestedValues: {} });
 
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without querying historical canonical values when a stored rule targets an admin-only field', async () => {
+    autofillRuleService.listActiveRules.mockResolvedValue([
+      {
+        ...activeRule,
+        targetCanonicalKeys: ['private_target'],
+      },
+    ]);
+    formSchemaService.getActiveSchema.mockResolvedValue(
+      schemaWithAdminOnlyAutofillFields,
+    );
+    pool.query.mockResolvedValue({
+      rows: [
+        {
+          canonical_key: 'private_target',
+          matched: true,
+          value_json: 'historical-admin-only-value',
+        },
+      ],
+    });
+
+    await expect(
+      service.lookupSuggestions({
+        formKey: 'psf-request',
+        field: 'reference_psf_name',
+        value: 'REF-PSF-1',
+      }),
+    ).resolves.toEqual({ matched: false, suggestedValues: {} });
+
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-request',
+    );
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without querying historical canonical values when a stored rule has an admin-only trigger', async () => {
+    autofillRuleService.listActiveRules.mockResolvedValue([
+      {
+        ...activeRule,
+        triggerCanonicalKey: 'private_trigger',
+        targetCanonicalKeys: ['product'],
+      },
+    ]);
+    formSchemaService.getActiveSchema.mockResolvedValue(
+      schemaWithAdminOnlyAutofillFields,
+    );
+
+    await expect(
+      service.lookupSuggestions({
+        formKey: 'psf-request',
+        field: 'private_trigger',
+        value: 'REF-PSF-1',
+      }),
+    ).resolves.toEqual({ matched: false, suggestedValues: {} });
+
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-request',
+    );
     expect(pool.query).not.toHaveBeenCalled();
   });
 

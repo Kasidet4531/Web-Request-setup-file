@@ -2,8 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import {
   AutofillRuleService,
+  isRequesterVisibleAutofillRule,
   type AutofillRule,
 } from '../admin/autofill_rule.service';
+import { FormSchemaService } from '../admin/form_schema.service';
 import { DATABASE_POOL } from '../database/database.service';
 import type { CanonicalValue } from './search-index.service';
 
@@ -42,6 +44,7 @@ export class AutofillService {
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     private readonly autofillRuleService: AutofillRuleService,
+    private readonly formSchemaService: FormSchemaService,
   ) {}
 
   async getActiveRules(formKey: string): Promise<AutofillRule[]> {
@@ -56,6 +59,13 @@ export class AutofillService {
       (candidate) => candidate.triggerCanonicalKey === query.field,
     );
     if (!rule) {
+      return { matched: false, suggestedValues: {} };
+    }
+
+    const activeSchema = await this.formSchemaService.getActiveSchema(
+      query.formKey,
+    );
+    if (!isRequesterVisibleAutofillRule(rule, activeSchema)) {
       return { matched: false, suggestedValues: {} };
     }
 
