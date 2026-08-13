@@ -2,23 +2,32 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import {
   activeSchemaFromRequest,
+  applyRuntimeAutofillSuggestions,
   buildRequestValuesForSchema,
   canSubmitDraftForSchemaVersion,
   classifyDraftSchemaVersion,
   createDraftSchemaUpgradeLock,
   DRAFT_STATUS,
+  getRequesterAutofillTriggerField,
+  type RuntimeAutofillFieldState,
   type DraftSchemaVersionClassification,
   isDraftSchemaDecisionRequired,
   requesterFieldsAreReadOnly,
   resolveRequestFormSchema,
 } from './activeSchemaFormState'
-import { ApiError, api, type PsfRequestResponse } from '../services/api'
+import {
+  ApiError,
+  api,
+  type PsfRequestResponse,
+  type RuntimeAutofillSuggestionsResponse,
+} from '../services/api'
 import { validateRequiredFields } from '../services/formValidation'
 import type {
   ActiveFormSchemaResponse,
   DynamicFormErrors,
   DynamicFormValues,
   FormSchema,
+  FormSchemaField,
 } from '../types/forms'
 
 const PSF_REQUEST_FORM_KEY = 'psf-request'
@@ -142,6 +151,11 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   const [draftSchemaDecision, setDraftSchemaDecision] = useState<DraftSchemaDecision>('not-needed')
   const [draftSchemaVersion, setDraftSchemaVersion] = useState<DraftSchemaVersionClassification>('not-applicable')
   const [errors, setErrors] = useState<DynamicFormErrors>({})
+  const [autofillStatuses, setAutofillStatuses] = useState<
+    Partial<Record<string, RuntimeAutofillFieldState>>
+  >({})
+  const [autofillError, setAutofillError] = useState<string | null>(null)
+  const [autofillLoading, setAutofillLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadedSchemaKey, setLoadedSchemaKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -154,10 +168,33 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   const [upgradePending, setUpgradePending] = useState(false)
   const [values, setValues] = useState<DynamicFormValues>({})
   const draftSchemaUpgradeLock = useRef(createDraftSchemaUpgradeLock())
+  const autofillLookupGeneration = useRef(0)
+  const fieldEditVersions = useRef<Record<string, number>>({})
+  const isMountedRef = useRef(true)
+  const valuesRef = useRef<DynamicFormValues>({})
   const loadKey = `${mode}:${requestId ?? 'new'}:${reloadKey}`
+
+  function replaceValues(nextValues: DynamicFormValues) {
+    valuesRef.current = nextValues
+    setValues(nextValues)
+  }
+
+  function invalidateRuntimeAutofill() {
+    autofillLookupGeneration.current += 1
+    setAutofillLoading(false)
+  }
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
+    autofillLookupGeneration.current += 1
 
     async function loadSchemaOrRequest() {
       try {
@@ -191,7 +228,13 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
           setDraftSchemaDecision(
             isDraftSchemaDecisionRequired(classification) ? 'unresolved' : 'not-needed',
           )
-          setValues(buildRequestValuesForSchema(resolvedSchema.schema, request.requesterData))
+          const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, request.requesterData)
+          invalidateRuntimeAutofill()
+          fieldEditVersions.current = {}
+          replaceValues(nextValues)
+          setAutofillError(null)
+          setAutofillLoading(false)
+          setAutofillStatuses({})
           return
         }
 
@@ -211,7 +254,13 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         setDraftSchemaDecision('not-needed')
         setDraftSchemaVersion('not-applicable')
         setActiveSchema(response)
-        setValues(buildInitialValues(response.schema))
+        const nextValues = buildInitialValues(response.schema)
+        invalidateRuntimeAutofill()
+        fieldEditVersions.current = {}
+        replaceValues(nextValues)
+        setAutofillError(null)
+        setAutofillLoading(false)
+        setAutofillStatuses({})
       } catch (error) {
         if (mounted) {
           setLoadError(error instanceof Error ? error.message : 'Unable to load PSF request draft')
@@ -271,15 +320,125 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
     return null
   }, [activeRequestSchema?.version, currentRequest, draftSchemaVersion])
 
+  function isCurrentRuntimeAutofillLookup(
+    generation: number,
+    triggerFieldKey: string,
+    triggerValue: string,
+  ): boolean {
+    return (
+      isMountedRef.current &&
+      autofillLookupGeneration.current === generation &&
+      valuesRef.current[triggerFieldKey] === triggerValue
+    )
+  }
+
+  async function loadRuntimeAutofillSuggestions(
+    field: FormSchemaField,
+    triggerValue: string,
+    generation: number,
+    lookupEditVersions: Record<string, number | undefined>,
+    schema: FormSchema,
+  ) {
+    let response: RuntimeAutofillSuggestionsResponse
+
+    try {
+      response = await api.fetchRuntimeAutofillSuggestions({
+        formKey: schema.formKey,
+        field: field.canonicalKey,
+        value: triggerValue.trim(),
+      })
+    } catch (error) {
+      if (isCurrentRuntimeAutofillLookup(generation, field.fieldKey, triggerValue)) {
+        setAutofillError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load autofill suggestions. You can continue editing the form.',
+        )
+      }
+      return
+    } finally {
+      if (isCurrentRuntimeAutofillLookup(generation, field.fieldKey, triggerValue)) {
+        setAutofillLoading(false)
+      }
+    }
+
+    if (!isCurrentRuntimeAutofillLookup(generation, field.fieldKey, triggerValue) || !response.matched) {
+      return
+    }
+
+    const applied = applyRuntimeAutofillSuggestions({
+      currentEditVersions: fieldEditVersions.current,
+      currentValues: valuesRef.current,
+      lookupEditVersions,
+      schema,
+      suggestedValues: response.suggestedValues,
+    })
+    if (applied.appliedFieldKeys.length === 0) {
+      return
+    }
+
+    replaceValues(applied.values)
+    setAutofillStatuses((currentStatuses) => {
+      const nextStatuses = { ...currentStatuses }
+      applied.appliedFieldKeys.forEach((fieldKey) => {
+        nextStatuses[fieldKey] = 'auto-filled'
+      })
+      return nextStatuses
+    })
+  }
+
   function updateField(fieldKey: string, value: string) {
-    setValues((currentValues) => ({ ...currentValues, [fieldKey]: value }))
+    const nextValues = { ...valuesRef.current, [fieldKey]: value }
+    const nextEditVersion = (fieldEditVersions.current[fieldKey] ?? 0) + 1
+    fieldEditVersions.current = {
+      ...fieldEditVersions.current,
+      [fieldKey]: nextEditVersion,
+    }
+    replaceValues(nextValues)
     setErrors((currentErrors) => {
       const nextErrors = { ...currentErrors }
       delete nextErrors[fieldKey]
       return nextErrors
     })
+    setAutofillStatuses((currentStatuses) =>
+      currentStatuses[fieldKey] === 'auto-filled'
+        ? { ...currentStatuses, [fieldKey]: 'edited-by-user' }
+        : currentStatuses,
+    )
+    setAutofillError(null)
     setSaveError(null)
     setSaveMessage(null)
+
+    if (
+      mode !== 'request' ||
+      formReadOnly ||
+      isSchemaChoicePending ||
+      !activeSchema
+    ) {
+      return
+    }
+
+    const triggerField = getRequesterAutofillTriggerField(activeSchema.schema, fieldKey)
+    if (!triggerField) {
+      return
+    }
+
+    const generation = autofillLookupGeneration.current + 1
+    autofillLookupGeneration.current = generation
+    if (value.trim().length === 0) {
+      setAutofillLoading(false)
+      return
+    }
+
+    const lookupEditVersions = { ...fieldEditVersions.current }
+    setAutofillLoading(true)
+    void loadRuntimeAutofillSuggestions(
+      triggerField,
+      value,
+      generation,
+      lookupEditVersions,
+      activeSchema.schema,
+    )
   }
 
   function remainOnDraftSchema() {
@@ -290,6 +449,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   }
 
   function reloadDraftSchema() {
+    invalidateRuntimeAutofill()
     setUpgradeError(null)
     setReloadKey((currentReloadKey) => currentReloadKey + 1)
   }
@@ -306,6 +466,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       return
     }
 
+    invalidateRuntimeAutofill()
     setSaving(true)
     setSaveError(null)
     setSaveMessage(null)
@@ -331,7 +492,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       setDraftSchemaDecision(
         isDraftSchemaDecisionRequired(classification) ? 'remain' : 'not-needed',
       )
-      setValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
+      fieldEditVersions.current = {}
+      setAutofillError(null)
+      setAutofillStatuses({})
+      replaceValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
       setSaveMessage(`Draft ${savedRequest.requestNo} saved.`)
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to save draft request')
@@ -354,6 +518,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       return
     }
 
+    invalidateRuntimeAutofill()
     setUpgradePending(true)
     setUpgradeError(null)
     setSaveError(null)
@@ -372,7 +537,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       setDraftSchemaVersion(classification)
       setDraftSchemaDecision('not-needed')
       setErrors({})
-      setValues(buildRequestValuesForSchema(upgradedSchema.schema, values))
+      fieldEditVersions.current = {}
+      setAutofillError(null)
+      setAutofillStatuses({})
+      replaceValues(buildRequestValuesForSchema(upgradedSchema.schema, valuesRef.current))
       setSaveMessage(
         `Draft ${upgradedRequest.requestNo} upgraded to schema version ${upgradedRequest.formVersion}.`,
       )
@@ -393,6 +561,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       return
     }
 
+    invalidateRuntimeAutofill()
     setSubmitting(true)
     setSaveError(null)
     setSaveMessage(null)
@@ -414,7 +583,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         setDraftSchemaVersion(latestClassification)
         setDraftSchemaDecision(requiresChoice ? 'unresolved' : 'not-needed')
         setErrors({})
-        setValues(buildRequestValuesForSchema(lockedSchema.schema, values))
+        fieldEditVersions.current = {}
+        setAutofillError(null)
+        setAutofillStatuses({})
+        replaceValues(buildRequestValuesForSchema(lockedSchema.schema, valuesRef.current))
         if (requiresChoice) {
           setUpgradeError(
             'A newer active schema is available. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
@@ -427,13 +599,13 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         return
       }
 
-      const nextRequesterData = buildRequestValuesForSchema(latestActiveSchema.schema, values)
+      const nextRequesterData = buildRequestValuesForSchema(latestActiveSchema.schema, valuesRef.current)
       const nextErrors = validateRequiredFields(latestActiveSchema.schema, nextRequesterData)
 
       setActiveRequestSchema(latestActiveSchema)
       setActiveSchema(latestActiveSchema)
       setDraftSchemaVersion(latestClassification)
-      setValues(nextRequesterData)
+      replaceValues(nextRequesterData)
       setErrors(nextErrors)
 
       if (Object.keys(nextErrors).length > 0) {
@@ -461,7 +633,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       setActiveSchema(activeSchemaFromRequest(submittedRequest))
       setDraftSchemaVersion('not-applicable')
       setDraftSchemaDecision('not-needed')
-      setValues(buildRequestValuesForSchema(submittedRequest.schemaSnapshot, submittedRequest.requesterData))
+      fieldEditVersions.current = {}
+      setAutofillError(null)
+      setAutofillStatuses({})
+      replaceValues(buildRequestValuesForSchema(submittedRequest.schemaSnapshot, submittedRequest.requesterData))
       setSaveMessage(`Request ${submittedRequest.requestNo} submitted.`)
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -481,7 +656,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
             setDraftSchemaVersion(refreshedClassification)
             setDraftSchemaDecision('unresolved')
             setErrors({})
-            setValues(buildRequestValuesForSchema(lockedSchema.schema, values))
+            fieldEditVersions.current = {}
+            setAutofillError(null)
+            setAutofillStatuses({})
+            replaceValues(buildRequestValuesForSchema(lockedSchema.schema, valuesRef.current))
             setUpgradeError(
               'The active schema changed while this Draft was being submitted. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
             )
@@ -540,6 +718,12 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
           {saveError}
         </p>
       ) : null}
+      {autofillLoading ? <p role="status">Loading autofill suggestions…</p> : null}
+      {autofillError ? (
+        <p className="status-pill status-pill--error" role="alert">
+          Autofill suggestions could not be loaded: {autofillError}
+        </p>
+      ) : null}
       {schemaDecisionRequired &&
       draftSchemaDecision === 'remain' &&
       currentRequest &&
@@ -558,6 +742,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       ) : null}
       <DynamicFormRenderer
         errors={errors}
+        fieldStatuses={autofillStatuses}
         onChange={!formReadOnly ? updateField : undefined}
         onSubmit={!formReadOnly ? saveDraft : undefined}
         readOnly={formReadOnly}

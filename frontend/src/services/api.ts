@@ -179,6 +179,19 @@ export interface SaveAdminAutofillRulePayload {
   targetCanonicalKeys: string[]
 }
 
+export type RuntimeAutofillCanonicalValue = string | number | boolean | string[]
+
+export interface RuntimeAutofillSuggestionsQuery {
+  formKey: string
+  field: string
+  value: string
+}
+
+export interface RuntimeAutofillSuggestionsResponse {
+  matched: boolean
+  suggestedValues: Record<string, RuntimeAutofillCanonicalValue>
+}
+
 export interface SubmitPsfRequestPayload {
   formVersion: number
 }
@@ -366,6 +379,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
           method: 'PUT',
         },
       ),
+    fetchRuntimeAutofillSuggestions: (query: RuntimeAutofillSuggestionsQuery) =>
+      request<RuntimeAutofillSuggestionsResponse>(buildQueryPath('/autofill', query), {
+        method: 'GET',
+      }),
     queryPsfRequests: (query: PsfRequestQuery = {}) =>
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',

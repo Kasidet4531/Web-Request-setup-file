@@ -13,7 +13,10 @@ export type {
   FormSchemaField,
 } from '../types/forms'
 
+export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
+
 export interface DynamicFormRendererProps {
+  fieldStatuses?: Partial<Record<string, DynamicFormFieldStatus>>
   schema: FormSchema
   values?: DynamicFormValues
   errors?: DynamicFormErrors
@@ -41,6 +44,7 @@ function buildFieldId(field: FormSchemaField): string {
 
 export function DynamicFormRenderer({
   errors = {},
+  fieldStatuses = {},
   onChange,
   onSubmit,
   readOnly = false,
@@ -76,6 +80,7 @@ export function DynamicFormRenderer({
           <FieldControl
             errors={errors}
             field={productTypeField}
+            fieldStatus={fieldStatuses[productTypeField.fieldKey]}
             onChange={handleFieldChange(productTypeField.fieldKey)}
             readOnly={readOnly}
             value={values[productTypeField.fieldKey] ?? ''}
@@ -99,6 +104,7 @@ export function DynamicFormRenderer({
                   <FieldControl
                     errors={errors}
                     field={field}
+                    fieldStatus={fieldStatuses[field.fieldKey]}
                     key={field.fieldKey}
                     onChange={handleFieldChange(field.fieldKey)}
                     readOnly={readOnly}
@@ -125,16 +131,20 @@ export function DynamicFormRenderer({
 interface FieldControlProps {
   errors: DynamicFormErrors
   field: FormSchemaField
+  fieldStatus?: DynamicFormFieldStatus
   onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
   readOnly: boolean
   value: string
 }
 
-function FieldControl({ errors, field, onChange, readOnly, value }: FieldControlProps) {
+function FieldControl({ errors, field, fieldStatus, onChange, readOnly, value }: FieldControlProps) {
   const error = errors[field.fieldKey]
   const fieldId = buildFieldId(field)
   const errorId = `${field.fieldKey}-error`
-  const describedBy = error ? errorId : undefined
+  const fieldStatusId = `${field.fieldKey}-autofill-status`
+  const describedBy = [error ? errorId : null, fieldStatus ? fieldStatusId : null]
+    .filter((id): id is string => id !== null)
+    .join(' ') || undefined
 
   return (
     <div aria-readonly={readOnly || undefined} className="dynamic-form__field">
@@ -154,6 +164,11 @@ function FieldControl({ errors, field, onChange, readOnly, value }: FieldControl
       {error ? (
         <p className="dynamic-form__error" id={errorId}>
           {error}
+        </p>
+      ) : null}
+      {fieldStatus ? (
+        <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
+          {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
         </p>
       ) : null}
     </div>

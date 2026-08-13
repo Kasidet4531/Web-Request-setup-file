@@ -872,6 +872,106 @@ describe('AppController (e2e)', () => {
     await request(server).get('/api/admin/autofill').expect(403);
   });
 
+  it('serves authenticated requester runtime autofill suggestions from completed canonical values without exposing source request data', async () => {
+    const runtimeRule = {
+      id: '75806824-f1b1-4c2a-bb47-41928cb78609',
+      form_key: 'psf-request',
+      trigger_canonical_key: 'reference_psf_name',
+      lookup_source: 'previous_completed_submission',
+      fill_targets_json: ['product', 'wafer_fab'],
+      status: 'active',
+      created_at: new Date('2026-08-11T10:00:00.000Z'),
+      updated_at: new Date('2026-08-11T10:00:00.000Z'),
+    };
+    const defaultPoolQuery = pool.query.getMockImplementation() as
+      | PoolQuery
+      | undefined;
+    if (!defaultPoolQuery) {
+      throw new Error('Expected the default pool query mock');
+    }
+
+    pool.query.mockClear();
+    pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('FROM autofill_rules')) {
+        return Promise.resolve({ rows: [runtimeRule] });
+      }
+
+      if (query.includes('WITH matched_source')) {
+        expect(values).toEqual([
+          'psf-request',
+          'reference_psf_name',
+          JSON.stringify('REF-PSF-1'),
+          ['product', 'wafer_fab'],
+        ]);
+        return Promise.resolve({
+          rows: [
+            {
+              matched: true,
+              canonical_key: 'product',
+              value_json: 'New Product',
+            },
+            { matched: true, canonical_key: 'wafer_fab', value_json: 'Fab A' },
+          ],
+        });
+      }
+
+      return defaultPoolQuery(query, values);
+    });
+
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(
+        '/api/autofill?formKey=psf-request&field=reference_psf_name&value=REF-PSF-1',
+      )
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          matched: true,
+          suggestedValues: {
+            product: 'New Product',
+            wafer_fab: 'Fab A',
+          },
+        });
+        expect(body).not.toHaveProperty('sourceRequest');
+        expect(JSON.stringify(body)).not.toContain('request_no');
+        expect(JSON.stringify(body)).not.toContain('requester_data_json');
+      });
+
+    activeUserId = undefined;
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(
+        '/api/autofill?formKey=psf-request&field=reference_psf_name&value=REF-PSF-1',
+      )
+      .expect(401);
+
+    activeUserId = 'setup-owner-1';
+    authService.getProfile.mockResolvedValueOnce({
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner',
+      setupOwnerDepartment: 'GNTC',
+    });
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(
+        '/api/autofill?formKey=psf-request&field=reference_psf_name&value=REF-PSF-1',
+      )
+      .expect(403)
+      .expect(({ body }: { body: { message: string } }) => {
+        expect(body.message).toBe(
+          'Setup File Owners cannot edit requester-owned fields',
+        );
+      });
+  });
+
   it('registers an explicit Draft schema upgrade route that returns the upgraded authoritative snapshot', async () => {
     const requesterId = '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e';
     const oldSchema = {
