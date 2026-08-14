@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DATABASE_POOL } from '../database/database.service';
-import { FormSchemaService } from './form_schema.service';
+import {
+  FormSchemaService,
+  type ActiveFormSchemaResponse,
+} from './form_schema.service';
 import { AutofillRuleService } from './autofill_rule.service';
 
 type StoredRule = {
@@ -78,8 +81,35 @@ const validInput = {
   targetCanonicalKeys: ['product', 'wafer_fab'],
 };
 
-function cloneSchema() {
-  return JSON.parse(JSON.stringify(activeSchema)) as typeof activeSchema;
+function cloneSchema(): ActiveFormSchemaResponse {
+  return JSON.parse(JSON.stringify(activeSchema)) as ActiveFormSchemaResponse;
+}
+
+function makeSchemaWithAdminOnlyAutofillFields(): ActiveFormSchemaResponse {
+  const schema = cloneSchema();
+  schema.schema.sections.push({
+    sectionKey: 'admin_only_autofill',
+    title: 'Admin-only Autofill',
+    visibleTo: ['admin'],
+    fields: [
+      {
+        fieldKey: 'private_trigger',
+        canonicalKey: 'private_trigger',
+        label: 'Private Trigger',
+        type: 'text',
+        required: false,
+        autofillTrigger: true,
+      },
+      {
+        fieldKey: 'private_target',
+        canonicalKey: 'private_target',
+        label: 'Private Target',
+        type: 'text',
+        required: false,
+      },
+    ],
+  });
+  return schema;
 }
 
 describe('AutofillRuleService', () => {
@@ -309,6 +339,93 @@ describe('AutofillRuleService', () => {
       expect(storedRules).toEqual([]);
     },
   );
+
+  it('rejects admin-only trigger and target keys on both create and update', async () => {
+    const adminOnlySchema = makeSchemaWithAdminOnlyAutofillFields();
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
+      adminOnlySchema,
+    );
+
+    await expect(
+      service.createRule({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'private_trigger',
+        targetCanonicalKeys: ['product'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      transactionClient.query.mock.calls.some(([query]) =>
+        typeof query === 'string'
+          ? query.includes('INSERT INTO autofill_rules')
+          : false,
+      ),
+    ).toBe(false);
+    expect(storedRules).toEqual([]);
+
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
+      adminOnlySchema,
+    );
+    transactionClient.query.mockClear();
+    await expect(
+      service.createRule({
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_psf_name',
+        targetCanonicalKeys: ['private_target'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      transactionClient.query.mock.calls.some(([query]) =>
+        typeof query === 'string'
+          ? query.includes('INSERT INTO autofill_rules')
+          : false,
+      ),
+    ).toBe(false);
+    expect(storedRules).toEqual([]);
+
+    const created = await service.createRule(validInput);
+    const rulesBeforeRejectedUpdate = JSON.stringify(storedRules);
+    transactionClient.query.mockClear();
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
+      adminOnlySchema,
+    );
+
+    await expect(
+      service.updateRule(created.id, {
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'reference_psf_name',
+        targetCanonicalKeys: ['private_target'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(
+      transactionClient.query.mock.calls.some(([query]) =>
+        typeof query === 'string'
+          ? query.includes('UPDATE autofill_rules')
+          : false,
+      ),
+    ).toBe(false);
+    expect(JSON.stringify(storedRules)).toBe(rulesBeforeRejectedUpdate);
+
+    transactionClient.query.mockClear();
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce(
+      adminOnlySchema,
+    );
+    await expect(
+      service.updateRule(created.id, {
+        formKey: 'psf-request',
+        triggerCanonicalKey: 'private_trigger',
+        targetCanonicalKeys: ['product'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      transactionClient.query.mock.calls.some(([query]) =>
+        typeof query === 'string'
+          ? query.includes('UPDATE autofill_rules')
+          : false,
+      ),
+    ).toBe(false);
+    expect(JSON.stringify(storedRules)).toBe(rulesBeforeRejectedUpdate);
+  });
 
   it('rejects schema-invalid duplicate canonical fields before persistence', async () => {
     const schemaWithDuplicateTarget = cloneSchema();

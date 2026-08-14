@@ -898,6 +898,38 @@ describe('createApiClient', () => {
     )
   })
 
+  it('loads runtime autofill suggestions through the authenticated canonical-query endpoint', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          matched: true,
+          suggestedValues: { product: 'New Product' },
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await expect(
+      client.fetchRuntimeAutofillSuggestions({
+        formKey: 'psf-request',
+        field: 'reference_psf_name',
+        value: 'REF & PSF',
+      }),
+    ).resolves.toEqual({
+      matched: true,
+      suggestedValues: { product: 'New Product' },
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/autofill?formKey=psf-request&field=reference_psf_name&value=REF+%26+PSF',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+  })
+
   it('posts logout with the current session cookie', async () => {
     globalThis.fetch = vi.fn(async () => new Response(null, { status: 204 })) as typeof fetch
 

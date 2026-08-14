@@ -273,7 +273,8 @@ button {
 }
 
 .dynamic-form__meta,
-.dynamic-form__error {
+.dynamic-form__error,
+.dynamic-form__autofill-status {
   margin: 0.35rem 0 0;
 }
 
@@ -355,6 +356,12 @@ button {
 .auth-status--error,
 .form-error {
   color: var(--error-text);
+  font-weight: 700;
+}
+
+.dynamic-form__autofill-status {
+  color: var(--accent);
+  font-size: 0.875rem;
   font-weight: 700;
 }
 

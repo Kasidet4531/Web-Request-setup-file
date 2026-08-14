@@ -1,7 +1,27 @@
 import type { PsfRequestResponse } from '../services/api'
-import type { ActiveFormSchemaResponse, DynamicFormValues, FormSchema } from '../types/forms'
+import type {
+  ActiveFormSchemaResponse,
+  DynamicFormValues,
+  FormSchema,
+  FormSchemaField,
+} from '../types/forms'
 
 export const DRAFT_STATUS = 'Draft'
+
+export type RuntimeAutofillFieldState = 'auto-filled' | 'edited-by-user'
+
+export interface ApplyRuntimeAutofillSuggestionsInput {
+  currentEditVersions: Record<string, number | undefined>
+  currentValues: DynamicFormValues
+  lookupEditVersions: Record<string, number | undefined>
+  schema: FormSchema
+  suggestedValues: Record<string, unknown>
+}
+
+export interface ApplyRuntimeAutofillSuggestionsResult {
+  appliedFieldKeys: string[]
+  values: DynamicFormValues
+}
 
 function buildInitialValues(schema: FormSchema): DynamicFormValues {
   return schema.sections.reduce<DynamicFormValues>((values, section) => {
@@ -17,6 +37,58 @@ function fieldKeysForSchema(schema: FormSchema): Set<string> {
   return new Set(
     schema.sections.flatMap((section) => section.fields.map((field) => field.fieldKey)),
   )
+}
+
+function requesterVisibleFields(schema: FormSchema): FormSchemaField[] {
+  return schema.sections.flatMap((section) =>
+    section.visibleTo.includes('requester') ? section.fields : [],
+  )
+}
+
+export function getRequesterAutofillTriggerField(
+  schema: FormSchema,
+  fieldKey: string,
+): FormSchemaField | null {
+  return (
+    requesterVisibleFields(schema).find(
+      (field) => field.fieldKey === fieldKey && field.autofillTrigger === true,
+    ) ?? null
+  )
+}
+
+export function applyRuntimeAutofillSuggestions({
+  currentEditVersions,
+  currentValues,
+  lookupEditVersions,
+  schema,
+  suggestedValues,
+}: ApplyRuntimeAutofillSuggestionsInput): ApplyRuntimeAutofillSuggestionsResult {
+  const requesterFieldsByCanonicalKey = new Map(
+    requesterVisibleFields(schema).map((field) => [field.canonicalKey, field]),
+  )
+  const nextValues = { ...currentValues }
+  const appliedFieldKeys: string[] = []
+
+  Object.entries(suggestedValues).forEach(([canonicalKey, suggestedValue]) => {
+    const field = requesterFieldsByCanonicalKey.get(canonicalKey)
+    if (
+      !field ||
+      typeof suggestedValue !== 'string' ||
+      suggestedValue.trim().length === 0 ||
+      nextValues[field.fieldKey] !== '' ||
+      currentEditVersions[field.fieldKey] !== lookupEditVersions[field.fieldKey]
+    ) {
+      return
+    }
+
+    nextValues[field.fieldKey] = suggestedValue
+    appliedFieldKeys.push(field.fieldKey)
+  })
+
+  return {
+    appliedFieldKeys,
+    values: appliedFieldKeys.length > 0 ? nextValues : currentValues,
+  }
 }
 
 export function buildRequestValuesForSchema(

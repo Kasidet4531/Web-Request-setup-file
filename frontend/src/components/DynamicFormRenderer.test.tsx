@@ -101,4 +101,21 @@ describe('DynamicFormRenderer', () => {
     expect(html).toContain('disabled=""')
     expect(html).toContain('Probe card update')
   })
+
+  it('renders accessible local runtime-autofill provenance labels only when supplied by an editable caller', () => {
+    const html = renderToStaticMarkup(
+      <DynamicFormRenderer
+        fieldStatuses={{ priority: 'edited-by-user', title: 'auto-filled' }}
+        schema={schema}
+        values={{ priority: 'Normal', title: 'Suggested title' }}
+        onChange={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('Auto-filled')
+    expect(html).toContain('Edited by user')
+    expect(html).toContain('id="title-autofill-status"')
+    expect(html).toContain('id="priority-autofill-status"')
+    expect(html).toContain('aria-describedby="title-autofill-status"')
+  })
 })
