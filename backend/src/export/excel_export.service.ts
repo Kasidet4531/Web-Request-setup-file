@@ -1,5 +1,6 @@
 import { Injectable, PayloadTooLargeException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
+import { Worker } from 'node:worker_threads';
 import {
   FormSchemaService,
   type FormSchemaField,
@@ -26,8 +27,32 @@ export interface RequestExportWorkbook {
   filename: string;
 }
 
-// ponytail: synchronous export limit 2000; add GI-25 async jobs when volume exceeds it.
 const SYNCHRONOUS_EXPORT_LIMIT = 2000;
+const ASYNCHRONOUS_EXPORT_PAGE_SIZE = 500;
+const ASYNCHRONOUS_EXPORT_YIELD_INTERVAL = 100;
+
+const EXPORT_WORKBOOK_WORKER_SOURCE = `
+  const { parentPort } = require('node:worker_threads');
+  const ExcelJS = require('exceljs');
+
+  parentPort.once('message', async ({ columns, rows }) => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('PSF Requests');
+      worksheet.columns = columns;
+      rows.forEach((row) => worksheet.addRow(row));
+      const content = await workbook.xlsx.writeBuffer();
+      parentPort.postMessage({ content: Buffer.from(content) });
+    } catch {
+      parentPort.postMessage({ error: true });
+    }
+  });
+`;
+
+interface ExportWorksheetColumn {
+  header: string;
+  key: string;
+}
 
 const REQUEST_METADATA_COLUMNS: Array<{
   header: string;
@@ -87,24 +112,63 @@ export class ExcelExportService {
 
   async exportRequests(
     filters: RequestExportFilters,
-    actor: AuthenticatedUserProfile,
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+    maximumRecords = SYNCHRONOUS_EXPORT_LIMIT,
   ): Promise<RequestExportWorkbook> {
     const result = await this.searchIndexService.queryExportRequests(
       {
         ...filters,
-        limit: SYNCHRONOUS_EXPORT_LIMIT,
+        limit: maximumRecords,
         offset: 0,
       },
       actor,
-      SYNCHRONOUS_EXPORT_LIMIT,
+      maximumRecords,
     );
 
-    if (result.total > SYNCHRONOUS_EXPORT_LIMIT) {
+    if (result.total > maximumRecords) {
       throw new PayloadTooLargeException(
-        `Synchronous exports are limited to ${SYNCHRONOUS_EXPORT_LIMIT} requests.`,
+        `Synchronous exports are limited to ${maximumRecords} requests.`,
       );
     }
 
+    return this.createWorkbook(result.items, actor);
+  }
+
+  async exportAllRequests(
+    filters: RequestExportFilters,
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  ): Promise<RequestExportWorkbook> {
+    const items: RequestExportItem[] = [];
+    let offset = 0;
+    let total = 0;
+
+    do {
+      const result = await this.searchIndexService.queryExportRequests(
+        {
+          ...filters,
+          limit: ASYNCHRONOUS_EXPORT_PAGE_SIZE,
+          offset,
+        },
+        actor,
+        ASYNCHRONOUS_EXPORT_PAGE_SIZE,
+      );
+      items.push(...result.items);
+      offset += result.items.length;
+      total = result.total;
+
+      if (result.items.length === 0) {
+        break;
+      }
+    } while (offset < total);
+
+    return this.createWorkbook(items, actor, true);
+  }
+
+  private async createWorkbook(
+    items: RequestExportItem[],
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+    renderInWorker = false,
+  ): Promise<RequestExportWorkbook> {
     const activeSchema =
       await this.formSchemaService.getActiveSchema('psf-request');
     const requesterFields = this.getExportableFields(
@@ -113,9 +177,7 @@ export class ExcelExportService {
     );
     const psfCreatedFields = this.getAllPsfCreatedFields();
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('PSF Requests');
-    worksheet.columns = [
+    const columns: ExportWorksheetColumn[] = [
       ...REQUEST_METADATA_COLUMNS.map(({ header, key }) => ({ header, key })),
       ...requesterFields.map((field, index) => ({
         header: field.label,
@@ -126,8 +188,9 @@ export class ExcelExportService {
         key: `psf-created-${index}`,
       })),
     ];
+    const rows: string[][] = [];
 
-    result.items.forEach((item) => {
+    for (const [index, item] of items.entries()) {
       const canonicalValues =
         item.canonicalValues ??
         this.searchIndexService.extractCanonicalValues(
@@ -139,7 +202,7 @@ export class ExcelExportService {
         actor,
       );
 
-      worksheet.addRow([
+      rows.push([
         ...REQUEST_METADATA_COLUMNS.map((column) =>
           this.searchIndexService.serializeCanonicalValue(column.read(item)),
         ),
@@ -156,12 +219,76 @@ export class ExcelExportService {
             : '',
         ),
       ]);
-    });
+      if (
+        renderInWorker &&
+        (index + 1) % ASYNCHRONOUS_EXPORT_YIELD_INTERVAL === 0
+      ) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+
+    const content = renderInWorker
+      ? await this.renderWorkbookInWorker(columns, rows)
+      : await this.renderWorkbookInProcess(columns, rows);
 
     return {
-      content: Buffer.from(await workbook.xlsx.writeBuffer()),
+      content,
       filename: formatRequestExportFilename(new Date()),
     };
+  }
+
+  private async renderWorkbookInProcess(
+    columns: ExportWorksheetColumn[],
+    rows: string[][],
+  ): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('PSF Requests');
+    worksheet.columns = columns;
+    rows.forEach((row) => worksheet.addRow(row));
+
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
+  private renderWorkbookInWorker(
+    columns: ExportWorksheetColumn[],
+    rows: string[][],
+  ): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      const worker = new Worker(EXPORT_WORKBOOK_WORKER_SOURCE, { eval: true });
+      let settled = false;
+      const fail = () => {
+        if (!settled) {
+          settled = true;
+          reject(new Error('Unable to render export workbook.'));
+        }
+      };
+      const succeed = (content: Buffer) => {
+        if (!settled) {
+          settled = true;
+          resolve(content);
+        }
+      };
+
+      worker.once('message', (message: unknown) => {
+        if (!message || typeof message !== 'object') {
+          fail();
+          return;
+        }
+
+        const content = (message as { content?: unknown }).content;
+        if (!(content instanceof Uint8Array)) {
+          fail();
+          return;
+        }
+
+        succeed(Buffer.from(content));
+      });
+      worker.once('error', fail);
+      worker.once('exit', () => {
+        fail();
+      });
+      worker.postMessage({ columns, rows });
+    });
   }
 
   private getExportableFields(

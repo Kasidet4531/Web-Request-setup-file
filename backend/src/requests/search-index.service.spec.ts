@@ -403,6 +403,34 @@ describe('SearchIndexService canonical extraction', () => {
     expect(query).not.toContain('requester_user_id = $');
   });
 
+  it('counts an export through the same status, date, and requester ownership scope without loading rows', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
+    const requesterActor = {
+      id: 'requester-1',
+      role: 'requester' as const,
+    };
+
+    await expect(
+      service.countExportRequests(
+        {
+          status: 'Submitted',
+          requestDateFrom: '2026-06-01',
+          requestDateTo: '2026-06-30',
+        },
+        requesterActor,
+      ),
+    ).resolves.toBe(2001);
+
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('SELECT COUNT(*)::int AS total'),
+      ['Submitted', requesterActor.id, '2026-06-01', '2026-06-30'],
+    );
+    const [query] = pool.query.mock.calls[0] as [string, unknown[]];
+    expect(query).toContain('FROM psf_requests AS request');
+    expect(query).toContain('request.requester_user_id = $2');
+    expect(query).not.toContain('LIMIT');
+  });
+
   it.each([
     [['North, East', ' South '], 'North, East, South'],
     [[], ''],

@@ -122,6 +122,10 @@ interface RequestExportRow {
   total_count: number;
 }
 
+interface RequestExportCountRow {
+  total: number;
+}
+
 interface CanonicalValueRow {
   canonicalKey: string;
   value: CanonicalValue;
@@ -341,34 +345,7 @@ export class SearchIndexService implements OnModuleInit {
   ): Promise<RequestExportResult> {
     const limit = this.normalizeLimit(filters.limit, maximumLimit);
     const offset = this.normalizeOffset(filters.offset);
-    const where: string[] = [];
-    const params: unknown[] = [];
-
-    this.addCaseInsensitiveFilter(
-      where,
-      params,
-      'request.status',
-      filters.status,
-    );
-    if (actor.role === 'requester') {
-      this.addExactFilter(where, params, 'request.requester_user_id', actor.id);
-    }
-    this.addDateFilter(
-      where,
-      params,
-      'request.created_at',
-      '>=',
-      filters.requestDateFrom,
-    );
-    this.addDateFilter(
-      where,
-      params,
-      'request.created_at',
-      '<=',
-      filters.requestDateTo,
-    );
-
-    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const { whereClause, params } = this.buildExportWhere(filters, actor);
     const result = await this.pool.query<RequestExportRow>(
       `
         SELECT
@@ -406,6 +383,23 @@ export class SearchIndexService implements OnModuleInit {
       limit,
       offset,
     };
+  }
+
+  async countExportRequests(
+    filters: RequestSearchFilters,
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  ): Promise<number> {
+    const { whereClause, params } = this.buildExportWhere(filters, actor);
+    const result = await this.pool.query<RequestExportCountRow>(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM psf_requests AS request
+        ${whereClause}
+      `,
+      params,
+    );
+
+    return result.rows[0]?.total ?? 0;
   }
 
   async upsertSubmittedCanonicalValues(
@@ -656,6 +650,43 @@ export class SearchIndexService implements OnModuleInit {
 
     params.push(value.trim());
     where.push(`${column} ${operator} $${params.length}::timestamp`);
+  }
+
+  private buildExportWhere(
+    filters: RequestSearchFilters,
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  ): { whereClause: string; params: unknown[] } {
+    const where: string[] = [];
+    const params: unknown[] = [];
+
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'request.status',
+      filters.status,
+    );
+    if (actor.role === 'requester') {
+      this.addExactFilter(where, params, 'request.requester_user_id', actor.id);
+    }
+    this.addDateFilter(
+      where,
+      params,
+      'request.created_at',
+      '>=',
+      filters.requestDateFrom,
+    );
+    this.addDateFilter(
+      where,
+      params,
+      'request.created_at',
+      '<=',
+      filters.requestDateTo,
+    );
+
+    return {
+      whereClause: where.length > 0 ? `WHERE ${where.join(' AND ')}` : '',
+      params,
+    };
   }
 
   private mapSearchIndexRow(

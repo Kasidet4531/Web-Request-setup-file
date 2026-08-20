@@ -10,6 +10,8 @@ import {
   DatabaseService,
 } from './../src/database/database.service';
 import { ExcelExportService } from './../src/export/excel_export.service';
+import { ExportJobProcessor } from './../src/export/export-job.processor';
+import { ExportJobRepository } from './../src/export/export-job.repository';
 import { AutofillService } from './../src/requests/autofill.service';
 
 interface HealthResponseBody {
@@ -81,7 +83,18 @@ describe('AppController (e2e)', () => {
     listUsers: jest.fn(),
     updateUser: jest.fn(),
   };
-  const excelExportService = { exportRequests: jest.fn() };
+  const excelExportService = {
+    exportRequests: jest.fn(),
+    exportAllRequests: jest.fn(),
+  };
+  const exportJobRepository = {
+    enqueue: jest.fn(),
+    findOwned: jest.fn(),
+    findOwnedContent: jest.fn(),
+    claimNext: jest.fn(),
+    complete: jest.fn(),
+    fail: jest.fn(),
+  };
   const transactionClient = {
     query: jest.fn(),
     release: jest.fn(),
@@ -158,6 +171,10 @@ describe('AppController (e2e)', () => {
       .useValue(authService)
       .overrideProvider(ExcelExportService)
       .useValue(excelExportService)
+      .overrideProvider(ExportJobRepository)
+      .useValue(exportJobRepository)
+      .overrideProvider(ExportJobProcessor)
+      .useValue({})
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -191,6 +208,89 @@ describe('AppController (e2e)', () => {
         });
         expect(body.timestamp).toEqual(expect.any(String));
       });
+  });
+
+  it('enqueues a second large export and serves an ordinary API request while a claimed job is held in worker-backed generation', async () => {
+    const claimedJob = {
+      id: '2b8b2f0b-5ea4-4d2b-8a20-9f99276dfa49',
+      ownerUserId: 'admin-1',
+      ownerRole: 'admin' as const,
+      filters: { status: 'Submitted' },
+      status: 'running' as const,
+      attemptCount: 1,
+      queuedAt: '2026-08-20T00:00:00.000Z',
+      startedAt: '2026-08-20T00:00:01.000Z',
+      claimedAt: '2026-08-20T00:00:01.000Z',
+      completedAt: null,
+      failedAt: null,
+      filename: null,
+      content: null,
+      failureMessage: null,
+      claimToken: '4d793b59-03e7-4c21-bb79-4e4db810ea5a',
+    };
+    let releaseGeneration: (() => void) | undefined;
+    const generationStarted = new Promise<void>((resolve) => {
+      excelExportService.exportAllRequests.mockImplementation(() => {
+        resolve();
+        return new Promise((resolveGeneration) => {
+          releaseGeneration = () =>
+            resolveGeneration({
+              content: Buffer.from('xlsx-content'),
+              filename: 'psf_requests_20260820_070300.xlsx',
+            });
+        });
+      });
+    });
+    exportJobRepository.claimNext.mockResolvedValueOnce(claimedJob);
+    exportJobRepository.complete.mockResolvedValueOnce(undefined);
+    const processor = new ExportJobProcessor(
+      exportJobRepository as never,
+      excelExportService as never,
+      { get: jest.fn((_name: string, fallback: unknown) => fallback) } as never,
+    );
+
+    const processing = processor.processNext();
+    await generationStarted;
+
+    const queuedJob = {
+      id: '39a59a33-677c-42fb-a2f5-1d744c8a6b21',
+      ownerUserId: 'admin-1',
+      ownerRole: 'admin' as const,
+      filters: { status: 'Submitted' },
+      status: 'queued' as const,
+      attemptCount: 0,
+      queuedAt: '2026-08-20T00:00:00.000Z',
+      startedAt: null,
+      claimedAt: null,
+      completedAt: null,
+      failedAt: null,
+      filename: null,
+      content: null,
+      failureMessage: null,
+      claimToken: null,
+    };
+    pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
+    exportJobRepository.enqueue.mockResolvedValueOnce(queuedJob);
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get('/api/requests/export.xlsx?status=Submitted')
+      .expect(202)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          id: queuedJob.id,
+          status: 'queued',
+          statusUrl: `/requests/export-jobs/${queuedJob.id}`,
+        });
+      });
+    expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get('/api/health')
+      .expect(200);
+    expect(exportJobRepository.complete).not.toHaveBeenCalled();
+
+    releaseGeneration?.();
+    await processing;
   });
 
   it('/api/forms/psf-request/schema (GET)', () => {
@@ -1347,6 +1447,7 @@ describe('AppController (e2e)', () => {
             role: 'admin',
             setupOwnerDepartment: null,
           },
+          2000,
         );
       });
   });
@@ -1370,8 +1471,86 @@ describe('AppController (e2e)', () => {
         expect(excelExportService.exportRequests).toHaveBeenCalledWith(
           { status: 'Submitted' },
           requesterActor,
+          2000,
         );
       });
+  });
+
+  it('/api/requests/export.xlsx (GET) queues a large export and serves its owned XLSX only after completion', async () => {
+    const jobId = '2b8b2f0b-5ea4-4d2b-8a20-9f99276dfa49';
+    const queuedJob = {
+      id: jobId,
+      ownerUserId: 'admin-1',
+      ownerRole: 'admin',
+      filters: { status: 'Submitted' },
+      status: 'queued',
+      attemptCount: 0,
+      queuedAt: '2026-08-20T00:00:00.000Z',
+      startedAt: null,
+      claimedAt: null,
+      completedAt: null,
+      failedAt: null,
+      filename: null,
+      content: null,
+      failureMessage: null,
+      claimToken: null,
+    };
+    pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
+    exportJobRepository.enqueue.mockResolvedValueOnce(queuedJob);
+
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get('/api/requests/export.xlsx?status=Submitted')
+      .expect(202)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          id: jobId,
+          status: 'queued',
+          statusUrl: `/requests/export-jobs/${jobId}`,
+        });
+        expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+      });
+
+    exportJobRepository.findOwned.mockResolvedValueOnce(null);
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(`/api/requests/export-jobs/${jobId}`)
+      .expect(404);
+
+    exportJobRepository.findOwned.mockResolvedValueOnce(queuedJob);
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(`/api/requests/export-jobs/${jobId}`)
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toMatchObject({
+          id: jobId,
+          status: 'queued',
+          queuedAt: '2026-08-20T00:00:00.000Z',
+        });
+        expect(body).not.toHaveProperty('downloadUrl');
+      });
+
+    exportJobRepository.findOwnedContent.mockResolvedValueOnce(queuedJob);
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(`/api/requests/export-jobs/${jobId}/download`)
+      .expect(409);
+
+    exportJobRepository.findOwnedContent.mockResolvedValueOnce({
+      ...queuedJob,
+      status: 'completed',
+      completedAt: '2026-08-20T00:02:00.000Z',
+      content: Buffer.from('xlsx-content'),
+      filename: 'psf_requests_20260820_070300.xlsx',
+    });
+    await request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get(`/api/requests/export-jobs/${jobId}/download`)
+      .expect(200)
+      .expect(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .expect(
+        'Content-Disposition',
+        'attachment; filename="psf_requests_20260820_070300.xlsx"',
+      );
   });
 
   it('/api/requests/export.xlsx (GET) preserves the setup-owner denial before exporting', () => {

@@ -516,6 +516,65 @@ describe('ExcelExportService', () => {
     );
   });
 
+  it('paginates a durable large export through the same workbook rendering and actor scope', async () => {
+    const exportItem = (requestNo: string) => ({
+      requestId: requestNo,
+      requestNo,
+      status: 'Submitted',
+      requester: 'Requester Demo',
+      setupOwner: null,
+      setupOwnerRole: null,
+      productType: null,
+      requestDate: '2026-08-20T00:00:00.000Z',
+      updatedAt: '2026-08-20T00:00:00.000Z',
+      requesterData: {},
+      psfCreatedData: {},
+      schemaSnapshot: {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'PSF Request Form',
+        sections: [],
+      },
+      canonicalValues: {},
+    });
+    searchIndexService.queryExportRequests
+      .mockResolvedValueOnce({
+        items: [exportItem('PSF-0001')],
+        total: 2,
+        limit: 500,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({
+        items: [exportItem('PSF-0002')],
+        total: 2,
+        limit: 500,
+        offset: 1,
+      });
+
+    const result = await service.exportAllRequests(
+      { status: 'Submitted' },
+      requesterActor,
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(result.content);
+    const worksheet = workbook.getWorksheet('PSF Requests');
+
+    expect(worksheet?.getRow(2).getCell(1).value).toBe('PSF-0001');
+    expect(worksheet?.getRow(3).getCell(1).value).toBe('PSF-0002');
+    expect(searchIndexService.queryExportRequests).toHaveBeenNthCalledWith(
+      1,
+      { status: 'Submitted', limit: 500, offset: 0 },
+      requesterActor,
+      500,
+    );
+    expect(searchIndexService.queryExportRequests).toHaveBeenNthCalledWith(
+      2,
+      { status: 'Submitted', limit: 500, offset: 1 },
+      requesterActor,
+      500,
+    );
+  });
+
   it('names the workbook with an Asia/Bangkok timestamp', () => {
     expect(
       formatRequestExportFilename(new Date('2026-06-18T17:05:06.000Z')),
