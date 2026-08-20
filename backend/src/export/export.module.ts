@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
+import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { RequestsModule } from '../requests/requests.module';
 import { ExcelExportService } from './excel_export.service';
 import { ExportController } from './export.controller';
 
 @Module({
-  imports: [AuthModule, RequestsModule],
+  imports: [AdminModule, AuthModule, RequestsModule],
   providers: [ExcelExportService],
   controllers: [ExportController],
   exports: [ExcelExportService],

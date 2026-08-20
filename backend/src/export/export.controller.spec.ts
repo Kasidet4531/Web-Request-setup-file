@@ -18,10 +18,7 @@ describe('ExportController', () => {
     ]) as ExportController;
   });
 
-  it.each([
-    ['requester', null],
-    ['setup_owner', 'GNTC'],
-  ] as const)(
+  it.each([['setup_owner', 'GNTC']] as const)(
     'rejects a %s before querying requests for an export',
     async (role, setupOwnerDepartment) => {
       authService.getProfile.mockResolvedValue({
@@ -50,6 +47,41 @@ describe('ExportController', () => {
       expect(excelExportService.exportRequests).not.toHaveBeenCalled();
     },
   );
+
+  it('allows a requester and passes the authenticated actor to the export service', async () => {
+    const actor = {
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    excelExportService.exportRequests.mockResolvedValue({
+      content: Buffer.from('xlsx-content'),
+      filename: 'psf_requests_20260619_000506.xlsx',
+    });
+    const exportController = controller as unknown as {
+      exportRequests: (
+        query: Record<string, unknown>,
+        request: { session: { userId?: string } },
+        response: { end: jest.Mock; setHeader: jest.Mock },
+      ) => Promise<void>;
+    };
+
+    await expect(
+      exportController.exportRequests(
+        { status: 'Submitted' },
+        { session: { userId: actor.id } },
+        response,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+      { status: 'Submitted' },
+      actor,
+    );
+  });
 
   it.each([
     ['status', { status: ['Submitted', 'Completed'] }],
@@ -118,15 +150,16 @@ describe('ExportController', () => {
     },
   );
 
-  it('passes current request-list filters to the export service and returns an XLSX attachment for an admin', async () => {
+  it('passes current request-list filters and the authenticated actor to the export service and returns an XLSX attachment for an admin', async () => {
     const content = Buffer.from('xlsx-content');
-    authService.getProfile.mockResolvedValue({
+    const actor = {
       id: 'admin-1',
       username: 'admin.demo',
       displayName: 'Admin Demo',
-      role: 'admin',
+      role: 'admin' as const,
       setupOwnerDepartment: null,
-    });
+    };
+    authService.getProfile.mockResolvedValue(actor);
     excelExportService.exportRequests.mockResolvedValue({
       content,
       filename: 'psf_requests_20260619_000506.xlsx',
@@ -151,11 +184,14 @@ describe('ExportController', () => {
       ),
     ).resolves.toBeUndefined();
 
-    expect(excelExportService.exportRequests).toHaveBeenCalledWith({
-      status: 'Submitted',
-      requestDateFrom: '2026-06-01',
-      requestDateTo: '2026-06-30',
-    });
+    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+      {
+        status: 'Submitted',
+        requestDateFrom: '2026-06-01',
+        requestDateTo: '2026-06-30',
+      },
+      actor,
+    );
     expect(response.setHeader).toHaveBeenNthCalledWith(
       1,
       'Content-Type',
