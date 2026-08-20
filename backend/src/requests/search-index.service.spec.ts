@@ -294,4 +294,131 @@ describe('SearchIndexService canonical extraction', () => {
       ['Submitted', '2026-06-01', '2026-06-30', 2000, 0],
     );
   });
+
+  it('enforces requester ownership in one bulk export query regardless of a caller requester filter', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          request_id: 'request-1',
+          request_no: 'PSF-0001',
+          status: 'Submitted',
+          requester: 'Requester Demo',
+          setup_owner: 'Setup Owner Demo',
+          setup_owner_role: 'GNTC',
+          product_type: 'New Product',
+          request_date: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:05:03.000Z'),
+          requester_data_json: { legacy_title: 'Legacy title' },
+          psf_created_data_json: { psf_setup_file_name: 'final.psf' },
+          schema_snapshot_json: {
+            formKey: 'psf-request',
+            version: 1,
+            title: 'PSF Request Form',
+            sections: [],
+          },
+          canonical_values_json: { title: 'Current title' },
+          total_count: 1,
+        },
+      ],
+    });
+    const actor = {
+      id: 'requester-1',
+      role: 'requester' as const,
+    };
+    const exportQueryService = service as unknown as {
+      queryExportRequests: (
+        filters: {
+          status?: string;
+          requesterUserId?: string;
+          limit?: number;
+          offset?: number;
+        },
+        actor: { id: string; role: 'requester' },
+        maximumLimit?: number,
+      ) => Promise<{
+        items: Array<{
+          requestId: string;
+          canonicalValues: Record<string, unknown> | null;
+        }>;
+        total: number;
+        limit: number;
+        offset: number;
+      }>;
+    };
+
+    await expect(
+      exportQueryService.queryExportRequests(
+        {
+          status: 'Submitted',
+          requesterUserId: 'foreign-requester-id',
+          limit: 2000,
+          offset: 0,
+        },
+        actor,
+        2000,
+      ),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          requestId: 'request-1',
+          canonicalValues: { title: 'Current title' },
+        },
+      ],
+      total: 1,
+      limit: 2000,
+      offset: 0,
+    });
+
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM psf_requests'),
+      ['Submitted', actor.id, 2000, 0],
+    );
+    const [query] = pool.query.mock.calls[0] as [string, unknown[]];
+    expect(query).toContain('canonical_submission_values');
+    expect(query).toContain('requester_data_json');
+    expect(query).toContain('schema_snapshot_json');
+    expect(query).toContain('requester_user_id = $2');
+  });
+
+  it('does not apply requester ownership scoping to an admin export query', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    const adminActor = {
+      id: 'admin-1',
+      role: 'admin' as const,
+    };
+
+    await service.queryExportRequests(
+      { status: 'Submitted', limit: 2000, offset: 0 },
+      adminActor,
+      2000,
+    );
+
+    expect(pool.query).toHaveBeenCalledWith(expect.any(String), [
+      'Submitted',
+      2000,
+      0,
+    ]);
+    const [query] = pool.query.mock.calls[0] as [string, unknown[]];
+    expect(query).not.toContain('requester_user_id = $');
+  });
+
+  it.each([
+    [['North, East', ' South '], 'North, East, South'],
+    [[], ''],
+    [null, ''],
+    ['  scalar  ', 'scalar'],
+    [42, '42'],
+    [false, 'false'],
+    [{ unexpected: true }, ''],
+  ])(
+    'serializes canonical value %p deterministically as %p',
+    (value, expected) => {
+      const canonicalSerializer = service as unknown as {
+        serializeCanonicalValue: (value: unknown) => string;
+      };
+
+      expect(canonicalSerializer.serializeCanonicalValue(value)).toBe(expected);
+    },
+  );
 });

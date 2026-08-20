@@ -12,6 +12,7 @@ import {
 } from '../admin/form_schema.service';
 import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
+import * as requestsServiceModule from './requests.service';
 import { RequestsService } from './requests.service';
 import { SearchIndexService } from './search-index.service';
 
@@ -1959,5 +1960,27 @@ describe('RequestsService draft flow', () => {
     await expect(
       service.getRequest('missing', requesterActor),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('PSF Created visibility policy', () => {
+  it.each([
+    ['requester', 'Draft', false],
+    ['requester', 'Submitted', false],
+    ['requester', 'PSF Created', true],
+    ['requester', 'Completed', true],
+    ['admin', 'Draft', true],
+    ['setup_owner', 'Submitted', true],
+  ] as const)('returns %s for a %s at %s', (role, status, expected) => {
+    const visibilityPolicy = requestsServiceModule as unknown as {
+      canActorViewPsfCreatedData: (
+        status: string,
+        actor: { role: typeof role },
+      ) => boolean;
+    };
+
+    expect(visibilityPolicy.canActorViewPsfCreatedData(status, { role })).toBe(
+      expected,
+    );
   });
 });

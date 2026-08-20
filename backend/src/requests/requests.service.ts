@@ -48,7 +48,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
+export function canActorViewPsfCreatedData(
+  status: string,
+  actor?: Pick<AuthenticatedUserProfile, 'role'>,
+): boolean {
+  return (
+    actor !== undefined &&
+    (actor.role !== 'requester' ||
+      status === PSF_CREATED_STATUS ||
+      status === COMPLETED_STATUS)
+  );
+}
+
+export const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
   formKey: 'psf-created-information',
   version: 1,
   title: 'PSF Created Information',
@@ -1333,21 +1345,6 @@ export class RequestsService implements OnModuleInit {
       : null;
   }
 
-  private psfCreatedDataIsVisibleTo(
-    status: string,
-    actor?: AuthenticatedUserProfile,
-  ): boolean {
-    if (!actor) {
-      return false;
-    }
-
-    return (
-      actor.role !== 'requester' ||
-      status === PSF_CREATED_STATUS ||
-      status === COMPLETED_STATUS
-    );
-  }
-
   private canActorEditPsfCreatedData(
     status: string,
     actor?: AuthenticatedUserProfile,
@@ -1366,10 +1363,7 @@ export class RequestsService implements OnModuleInit {
     row: PsfRequestRow,
     actor?: AuthenticatedUserProfile,
   ): PsfRequestResponse {
-    const psfCreatedDataVisible = this.psfCreatedDataIsVisibleTo(
-      row.status,
-      actor,
-    );
+    const psfCreatedDataVisible = canActorViewPsfCreatedData(row.status, actor);
 
     return {
       id: row.id,

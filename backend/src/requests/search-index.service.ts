@@ -1,6 +1,7 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import type { FormSchemaJson } from '../admin/form_schema.service';
+import type { AuthenticatedUserProfile } from '../auth/session.types';
 import { DATABASE_POOL } from '../database/database.service';
 import type { RequesterData } from './requests.service';
 
@@ -62,6 +63,29 @@ export interface RequestSearchResult {
   offset: number;
 }
 
+export interface RequestExportItem {
+  requestId: string;
+  requestNo: string;
+  status: string;
+  requester: string | null;
+  setupOwner: string | null;
+  setupOwnerRole: string | null;
+  productType: string | null;
+  requestDate: string;
+  updatedAt: string;
+  requesterData: RequesterData;
+  psfCreatedData: RequesterData;
+  schemaSnapshot: FormSchemaJson;
+  canonicalValues: CanonicalValues | null;
+}
+
+export interface RequestExportResult {
+  items: RequestExportItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 interface RequestSearchIndexRow {
   request_id: string;
   request_no: string;
@@ -78,6 +102,23 @@ interface RequestSearchIndexRow {
   request_date: Date | string | null;
   due_date: Date | string | null;
   updated_at: Date | string;
+  total_count: number;
+}
+
+interface RequestExportRow {
+  request_id: string;
+  request_no: string;
+  status: string;
+  requester: string | null;
+  setup_owner: string | null;
+  setup_owner_role: string | null;
+  product_type: string | null;
+  request_date: Date | string;
+  updated_at: Date | string;
+  requester_data_json: RequesterData;
+  psf_created_data_json: RequesterData;
+  schema_snapshot_json: FormSchemaJson;
+  canonical_values_json: CanonicalValues | null;
   total_count: number;
 }
 
@@ -293,6 +334,80 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
+  async queryExportRequests(
+    filters: RequestSearchFilters,
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+    maximumLimit = 100,
+  ): Promise<RequestExportResult> {
+    const limit = this.normalizeLimit(filters.limit, maximumLimit);
+    const offset = this.normalizeOffset(filters.offset);
+    const where: string[] = [];
+    const params: unknown[] = [];
+
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'request.status',
+      filters.status,
+    );
+    if (actor.role === 'requester') {
+      this.addExactFilter(where, params, 'request.requester_user_id', actor.id);
+    }
+    this.addDateFilter(
+      where,
+      params,
+      'request.created_at',
+      '>=',
+      filters.requestDateFrom,
+    );
+    this.addDateFilter(
+      where,
+      params,
+      'request.created_at',
+      '<=',
+      filters.requestDateTo,
+    );
+
+    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const result = await this.pool.query<RequestExportRow>(
+      `
+        SELECT
+          request.id AS request_id,
+          request.request_no,
+          request.status,
+          request.requester,
+          request.setup_owner,
+          request.setup_owner_role,
+          request.product_type,
+          request.created_at AS request_date,
+          request.updated_at,
+          request.requester_data_json,
+          request.psf_created_data_json,
+          request.schema_snapshot_json,
+          canonical_values.canonical_values_json,
+          COUNT(*) OVER()::int AS total_count
+        FROM psf_requests AS request
+        LEFT JOIN LATERAL (
+          SELECT jsonb_object_agg(canonical_key, value_json) AS canonical_values_json
+          FROM canonical_submission_values
+          WHERE request_id = request.id
+        ) AS canonical_values ON TRUE
+        ${whereClause}
+        ORDER BY request.updated_at DESC, request.request_no DESC
+        LIMIT $${params.length + 1}
+        OFFSET $${params.length + 2}
+      `,
+      [...params, limit, offset],
+    );
+
+    return {
+      items: result.rows.map((row) => this.mapExportRow(row)),
+      total: result.rows[0]?.total_count ?? 0,
+      limit,
+      offset,
+    };
+  }
+
   async upsertSubmittedCanonicalValues(
     requestId: string,
     schema: FormSchemaJson,
@@ -443,19 +558,26 @@ export class SearchIndexService implements OnModuleInit {
   private stringFromCanonical(
     value: CanonicalValue | undefined,
   ): string | null {
-    if (typeof value === 'string') {
-      return value;
+    const serialized = this.serializeCanonicalValue(value);
+    return serialized.length > 0 ? serialized : null;
+  }
+
+  serializeCanonicalValue(value: unknown): string {
+    const normalized = this.normalizeCanonicalValue(value);
+
+    if (typeof normalized === 'string') {
+      return normalized;
     }
 
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
+    if (typeof normalized === 'number' || typeof normalized === 'boolean') {
+      return String(normalized);
     }
 
-    if (Array.isArray(value)) {
-      return value.join(', ');
+    if (Array.isArray(normalized)) {
+      return normalized.join(', ');
     }
 
-    return null;
+    return '';
   }
 
   private serializeDateForQuery(value: unknown): string | null {
@@ -555,6 +677,24 @@ export class SearchIndexService implements OnModuleInit {
       requestDate: this.serializeNullableTimestamp(row.request_date),
       dueDate: this.serializeNullableTimestamp(row.due_date),
       updatedAt: this.serializeTimestamp(row.updated_at),
+    };
+  }
+
+  private mapExportRow(row: RequestExportRow): RequestExportItem {
+    return {
+      requestId: row.request_id,
+      requestNo: row.request_no,
+      status: row.status,
+      requester: row.requester,
+      setupOwner: row.setup_owner,
+      setupOwnerRole: row.setup_owner_role,
+      productType: row.product_type,
+      requestDate: this.serializeTimestamp(row.request_date),
+      updatedAt: this.serializeTimestamp(row.updated_at),
+      requesterData: row.requester_data_json ?? {},
+      psfCreatedData: row.psf_created_data_json ?? {},
+      schemaSnapshot: row.schema_snapshot_json,
+      canonicalValues: row.canonical_values_json,
     };
   }
 

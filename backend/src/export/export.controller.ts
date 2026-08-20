@@ -37,12 +37,15 @@ export class ExportController {
   ): Promise<void> {
     const actor = await this.getAuthenticatedActor(request);
 
-    if (actor.role !== 'admin') {
-      throw new ForbiddenException('Only admins can export requests.');
+    if (actor.role !== 'admin' && actor.role !== 'requester') {
+      throw new ForbiddenException(
+        'Only admins and requesters can export requests.',
+      );
     }
 
     const exportResult = await this.excelExportService.exportRequests(
       this.parseExportFilters(query),
+      actor,
     );
 
     response.setHeader('Content-Type', XLSX_CONTENT_TYPE);

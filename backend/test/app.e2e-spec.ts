@@ -1334,28 +1334,66 @@ describe('AppController (e2e)', () => {
       )
       .expect(() => {
         expect(authService.getProfile).toHaveBeenCalledWith('admin-1');
-        expect(excelExportService.exportRequests).toHaveBeenCalledWith({
-          status: 'Submitted',
-          requestDateFrom: '2026-06-01',
-          requestDateTo: '2026-06-30',
-        });
+        expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+          {
+            status: 'Submitted',
+            requestDateFrom: '2026-06-01',
+            requestDateTo: '2026-06-30',
+          },
+          {
+            id: 'admin-1',
+            username: 'admin.demo',
+            displayName: 'Admin Demo',
+            role: 'admin',
+            setupOwnerDepartment: null,
+          },
+        );
       });
   });
 
-  it('/api/requests/export.xlsx (GET) rejects a non-admin before exporting', () => {
-    authService.getProfile.mockResolvedValueOnce({
+  it('/api/requests/export.xlsx (GET) permits a requester and forwards the authenticated actor', () => {
+    const requesterActor = {
       id: 'requester-1',
       username: 'requester.demo',
       displayName: 'Requester Demo',
       role: 'requester',
       setupOwnerDepartment: null,
+    };
+    activeUserId = requesterActor.id;
+    authService.getProfile.mockResolvedValueOnce(requesterActor);
+
+    return request(app.getHttpServer() as Parameters<typeof request>[0])
+      .get('/api/requests/export.xlsx?status=Submitted')
+      .expect(200)
+      .expect(() => {
+        expect(authService.getProfile).toHaveBeenCalledWith(requesterActor.id);
+        expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+          { status: 'Submitted' },
+          requesterActor,
+        );
+      });
+  });
+
+  it('/api/requests/export.xlsx (GET) preserves the setup-owner denial before exporting', () => {
+    const setupOwnerActor = {
+      id: 'setup-owner-1',
+      username: 'setup.owner',
+      displayName: 'Setup Owner Demo',
+      role: 'setup_owner',
+      setupOwnerDepartment: 'GNTC',
+    };
+    activeUserId = setupOwnerActor.id;
+    authService.getProfile.mockResolvedValueOnce({
+      ...setupOwnerActor,
     });
 
     return request(app.getHttpServer() as Parameters<typeof request>[0])
       .get('/api/requests/export.xlsx')
       .expect(403)
       .expect(({ body }: { body: { message: string } }) => {
-        expect(body.message).toBe('Only admins can export requests.');
+        expect(body.message).toBe(
+          'Only admins and requesters can export requests.',
+        );
         expect(excelExportService.exportRequests).not.toHaveBeenCalled();
       });
   });
