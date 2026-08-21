@@ -4,17 +4,30 @@ import { ExportController } from './export.controller';
 describe('ExportController', () => {
   let authService: { getProfile: jest.Mock };
   let excelExportService: { exportRequests: jest.Mock };
+  let searchIndexService: { countExportRequests: jest.Mock };
+  let exportJobRepository: { enqueue: jest.Mock };
+  let configService: { get: jest.Mock };
   let controller: ExportController;
   const response = { end: jest.fn(), setHeader: jest.fn() };
 
   beforeEach(() => {
     authService = { getProfile: jest.fn() };
     excelExportService = { exportRequests: jest.fn() };
+    searchIndexService = {
+      countExportRequests: jest.fn().mockResolvedValue(0),
+    };
+    exportJobRepository = { enqueue: jest.fn() };
+    configService = {
+      get: jest.fn((_name: string, fallback: unknown) => fallback),
+    };
     response.end.mockReset();
     response.setHeader.mockReset();
     controller = Reflect.construct(ExportController, [
       excelExportService,
       authService,
+      searchIndexService,
+      exportJobRepository,
+      configService,
     ]) as ExportController;
   });
 
@@ -80,6 +93,7 @@ describe('ExportController', () => {
     expect(excelExportService.exportRequests).toHaveBeenCalledWith(
       { status: 'Submitted' },
       actor,
+      2000,
     );
   });
 
@@ -191,6 +205,7 @@ describe('ExportController', () => {
         requestDateTo: '2026-06-30',
       },
       actor,
+      2000,
     );
     expect(response.setHeader).toHaveBeenNthCalledWith(
       1,

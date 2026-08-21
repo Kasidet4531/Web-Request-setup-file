@@ -1,8 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  downloadRequestExport,
+  downloadCompletedRequestExport,
+  fetchRequestExportJob,
+  startRequestExport,
   type RequestExportFilterValues,
 } from "../services/request-export";
+
+export const EXPORT_JOB_POLL_INTERVAL_MS = 2_000;
+const EXPORT_JOB_FAILURE_MESSAGE = "Unable to prepare this export. Please try again.";
+
+type PendingRequestExportJob = {
+  id: string;
+  status: "queued" | "running";
+  statusUrl: string;
+};
 
 const WORKFLOW_STATUSES = [
   "Submitted",
@@ -76,7 +87,7 @@ export function RequestExportFiltersForm({
       </label>
       <div className="button-row">
         <button className="primary-button" disabled={downloading} type="submit">
-          {downloading ? "Downloading…" : "Export XLSX"}
+          {downloading ? "Preparing…" : "Export XLSX"}
         </button>
       </div>
     </form>
@@ -91,14 +102,16 @@ export interface RequestExportFeedbackValue {
 export function RequestExportFeedback({
   downloading,
   feedback,
+  jobStatus,
 }: {
   downloading: boolean;
   feedback: RequestExportFeedbackValue | null;
+  jobStatus: "queued" | "running" | null;
 }) {
   if (downloading) {
     return (
       <p className="page-card__description" role="status">
-        Preparing request export…
+        {jobStatus ? `Request export ${jobStatus}…` : "Preparing request export…"}
       </p>
     );
   }
@@ -127,6 +140,10 @@ export function RequestExportPage() {
   const [feedback, setFeedback] = useState<RequestExportFeedbackValue | null>(
     null,
   );
+  const [pendingJob, setPendingJob] = useState<PendingRequestExportJob | null>(
+    null,
+  );
+  const pendingJobStatusUrl = pendingJob?.statusUrl;
 
   const updateFilters = (
     field: keyof RequestExportFilterValues,
@@ -135,23 +152,107 @@ export function RequestExportPage() {
     setFilters((current) => ({ ...current, [field]: value }));
   };
 
+  useEffect(() => {
+    if (!pendingJobStatusUrl) {
+      return;
+    }
+
+    let cancelled = false;
+    let polling = false;
+    const poll = async () => {
+      if (cancelled || polling) {
+        return;
+      }
+
+      polling = true;
+
+      try {
+        const job = await fetchRequestExportJob(pendingJobStatusUrl);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (job.status === "completed") {
+          await downloadCompletedRequestExport(job);
+
+          if (!cancelled) {
+            setFeedback({
+              kind: "success",
+              message: "Request export downloaded.",
+            });
+            setPendingJob(null);
+            setDownloading(false);
+          }
+          return;
+        }
+
+        if (job.status === "failed") {
+          setFeedback({
+            kind: "error",
+            message: job.failureMessage ?? EXPORT_JOB_FAILURE_MESSAGE,
+          });
+          setPendingJob(null);
+          setDownloading(false);
+          return;
+        }
+
+        if (job.status === "queued" || job.status === "running") {
+          const pendingStatus: PendingRequestExportJob["status"] =
+            job.status === "queued" ? "queued" : "running";
+          setPendingJob((current) =>
+            current?.id === job.id
+              ? { ...current, status: pendingStatus }
+              : current,
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFeedback({
+            kind: "error",
+            message:
+              error instanceof Error ? error.message : "Unable to export requests.",
+          });
+          setPendingJob(null);
+          setDownloading(false);
+        }
+      } finally {
+        polling = false;
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), EXPORT_JOB_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [pendingJobStatusUrl]);
+
   const exportRequests = async () => {
     setDownloading(true);
     setFeedback(null);
 
     try {
-      await downloadRequestExport(filters);
-      setFeedback({
-        kind: "success",
-        message: "Request export downloaded.",
-      });
+      const result = await startRequestExport(filters);
+
+      if (result.kind === "downloaded") {
+        setFeedback({
+          kind: "success",
+          message: "Request export downloaded.",
+        });
+        setDownloading(false);
+        return;
+      }
+
+      setPendingJob(result.job);
     } catch (error) {
       setFeedback({
         kind: "error",
         message:
           error instanceof Error ? error.message : "Unable to export requests.",
       });
-    } finally {
       setDownloading(false);
     }
   };
@@ -182,6 +283,7 @@ export function RequestExportPage() {
           <RequestExportFeedback
             downloading={downloading}
             feedback={feedback}
+            jobStatus={pendingJob?.status ?? null}
           />
         </section>
       </div>

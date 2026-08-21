@@ -103,26 +103,28 @@ describe("request export URL", () => {
           headers: {
             "Content-Disposition":
               'attachment; filename="psf_requests_20260619_000506.xlsx"',
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           },
           status: 200,
         }),
     ) as typeof fetch;
-    const downloadRequestExport = Reflect.get(
+    const startRequestExport = Reflect.get(
       RequestExportClient,
-      "downloadRequestExport",
+      "startRequestExport",
     ) as (filters: {
       status: string;
       from: string;
       to: string;
-    }) => Promise<void>;
+    }) => Promise<{ kind: "downloaded" } | { kind: "queued" }>;
 
     await expect(
-      downloadRequestExport({
+      startRequestExport({
         status: "Submitted",
         from: "2026-06-01",
         to: "2026-06-30",
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ kind: "downloaded" });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "/api/requests/export.xlsx?status=Submitted&from=2026-06-01&to=2026-06-30",
@@ -150,17 +152,17 @@ describe("request export URL", () => {
           },
         ),
     ) as typeof fetch;
-    const downloadRequestExport = Reflect.get(
+    const startRequestExport = Reflect.get(
       RequestExportClient,
-      "downloadRequestExport",
+      "startRequestExport",
     ) as (filters: {
       status: string;
       from: string;
       to: string;
-    }) => Promise<void>;
+    }) => Promise<{ kind: "downloaded" } | { kind: "queued" }>;
 
     await expect(
-      downloadRequestExport({
+      startRequestExport({
         status: "",
         from: "",
         to: "",
@@ -201,7 +203,7 @@ describe("request export URL", () => {
     expect(html).toContain("<select");
     expect(html).toContain('type="date"');
     expect(loadingHtml).toContain('disabled=""');
-    expect(loadingHtml).toContain("Downloading…");
+    expect(loadingHtml).toContain("Preparing…");
 
     const formElement = form as {
       props: { onSubmit: (event: { preventDefault: () => void }) => void };
