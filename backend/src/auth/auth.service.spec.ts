@@ -50,7 +50,7 @@ describe('AuthService', () => {
     };
     originalFetch = global.fetch;
     fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
     service = new AuthService(
       { connect, query } as unknown as Pool,
       configService as unknown as ConfigService,
@@ -127,9 +127,14 @@ describe('AuthService', () => {
           username: ldapData.user,
           password: 'example-password',
         }),
-        signal: expect.anything(),
       }),
     );
+    const fetchCalls = fetchMock.mock.calls as unknown as [
+      unknown,
+      RequestInit | undefined,
+    ][];
+    const requestOptions = fetchCalls[0]?.[1];
+    expect(requestOptions?.signal).toBeInstanceOf(AbortSignal);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO app_users'),
       [
