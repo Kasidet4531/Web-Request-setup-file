@@ -3,10 +3,11 @@ import {
   Inject,
   Injectable,
   OnModuleInit,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Pool, PoolClient } from 'pg';
-import * as bcrypt from 'bcryptjs';
 import { DATABASE_POOL } from '../database/database.service';
 import { AuthenticatedUserProfile, UserRole } from './session.types';
 
@@ -14,17 +15,12 @@ interface UserRow {
   id: string;
   username: string;
   display_name: string;
-  password_hash: string;
+  password_hash: string | null;
   role: UserRole;
   setup_owner_department: 'GNTC' | 'MFG' | null;
-}
-
-interface SeedUser {
-  username: string;
-  displayName: string;
-  password: string;
-  role: UserRole;
-  setupOwnerDepartment: 'GNTC' | 'MFG' | null;
+  email: string | null;
+  employee_id: string | null;
+  title: string | null;
 }
 
 export interface UpdateUserProfileInput {
@@ -32,44 +28,29 @@ export interface UpdateUserProfileInput {
   setupOwnerDepartment: 'GNTC' | 'MFG' | null;
 }
 
-const SEED_USERS: SeedUser[] = [
-  {
-    username: 'requester.demo',
-    displayName: 'Requester Demo',
-    password: 'RequesterDemo123!',
-    role: 'requester',
-    setupOwnerDepartment: null,
-  },
-  {
-    username: 'setup.gntc.demo',
-    displayName: 'Setup Owner GNTC Demo',
-    password: 'SetupGntcDemo123!',
-    role: 'setup_owner',
-    setupOwnerDepartment: 'GNTC',
-  },
-  {
-    username: 'setup.mfg.demo',
-    displayName: 'Setup Owner MFG Demo',
-    password: 'SetupMfgDemo123!',
-    role: 'setup_owner',
-    setupOwnerDepartment: 'MFG',
-  },
-  {
-    username: 'admin.demo',
-    displayName: 'Admin Demo',
-    password: 'AdminDemo123!',
-    role: 'admin',
-    setupOwnerDepartment: null,
-  },
-];
+interface LdapUserData {
+  email: string;
+  name: string;
+  user: string;
+  employeeId: string;
+  title: string;
+}
+
+interface LdapAuthResponse {
+  status?: unknown;
+  data?: unknown;
+}
 
 @Injectable()
 export class AuthService implements OnModuleInit {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    private readonly configService: ConfigService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.ensureUsersTable();
-    await this.seedUsers();
+    await this.provisionInitialAdmin();
   }
 
   async validateCredentials(
@@ -82,19 +63,56 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid username or password');
     }
 
-    const user = await this.findUserByUsername(normalizedUsername);
+    const ldapUrl = this.configService.getOrThrow<string>('LDAP_AUTH_URL');
+    const configuredTimeout = Number(
+      this.configService.get<string>('LDAP_AUTH_TIMEOUT_MS', '10000'),
+    );
+    const timeoutMs =
+      Number.isSafeInteger(configuredTimeout) && configuredTimeout > 0
+        ? configuredTimeout
+        : 10000;
 
-    if (!user) {
+    let response: Response;
+    let ldapResponse: LdapAuthResponse;
+    try {
+      response = await fetch(ldapUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: normalizedUsername, password }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      ldapResponse = (await response.json()) as LdapAuthResponse;
+    } catch {
+      throw new ServiceUnavailableException(
+        'Authentication service is temporarily unavailable',
+      );
+    }
+
+    if (ldapResponse?.status === '401') {
       throw new UnauthorizedException('Invalid username or password');
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.password_hash);
-
-    if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid username or password');
+    if (!response.ok || ldapResponse?.status !== '200') {
+      throw new ServiceUnavailableException(
+        'Authentication service is temporarily unavailable',
+      );
     }
 
-    return this.toProfile(user);
+    const ldapData = ldapResponse?.data;
+    if (!this.isValidLdapUser(ldapData)) {
+      throw new ServiceUnavailableException(
+        'Authentication service is temporarily unavailable',
+      );
+    }
+
+    const ldapUsername = ldapData.user.trim().toLowerCase();
+    if (ldapUsername !== normalizedUsername) {
+      throw new ServiceUnavailableException(
+        'Authentication service is temporarily unavailable',
+      );
+    }
+
+    return this.upsertFromLdap(ldapUsername, ldapData);
   }
 
   async getProfile(userId: string): Promise<AuthenticatedUserProfile | null> {
@@ -175,9 +193,12 @@ export class AuthService implements OnModuleInit {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         username TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
+        password_hash TEXT,
         role TEXT NOT NULL CHECK (role IN ('requester', 'setup_owner', 'admin')),
         setup_owner_department TEXT CHECK (setup_owner_department IN ('GNTC', 'MFG')),
+        email TEXT,
+        employee_id TEXT,
+        title TEXT,
         CONSTRAINT app_users_role_department_consistency CHECK (
           (role = 'setup_owner' AND setup_owner_department IS NOT NULL AND setup_owner_department IN ('GNTC', 'MFG'))
           OR (role IN ('requester', 'admin') AND setup_owner_department IS NULL)
@@ -185,6 +206,14 @@ export class AuthService implements OnModuleInit {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await this.pool.query(`
+      ALTER TABLE app_users ALTER COLUMN password_hash DROP NOT NULL;
+      ALTER TABLE app_users ALTER COLUMN password_hash DROP DEFAULT;
+      ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE app_users ADD COLUMN IF NOT EXISTS employee_id TEXT;
+      ALTER TABLE app_users ADD COLUMN IF NOT EXISTS title TEXT;
     `);
 
     await this.pool.query(`
@@ -227,33 +256,74 @@ export class AuthService implements OnModuleInit {
     `);
   }
 
-  private async seedUsers(): Promise<void> {
-    for (const user of SEED_USERS) {
-      const passwordHash = await bcrypt.hash(user.password, 10);
-      await this.pool.query(
-        `INSERT INTO app_users (username, display_name, password_hash, role, setup_owner_department)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (username) DO NOTHING`,
-        [
-          user.username,
-          user.displayName,
-          passwordHash,
-          user.role,
-          user.setupOwnerDepartment,
-        ],
-      );
+  private isValidLdapUser(data: unknown): data is LdapUserData {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return false;
     }
+
+    const candidate = data as Record<string, unknown>;
+    return (
+      typeof candidate.user === 'string' &&
+      candidate.user.trim().length > 0 &&
+      typeof candidate.name === 'string' &&
+      candidate.name.trim().length > 0 &&
+      typeof candidate.email === 'string' &&
+      typeof candidate.employeeId === 'string' &&
+      typeof candidate.title === 'string'
+    );
   }
 
-  private async findUserByUsername(username: string): Promise<UserRow | null> {
+  private async upsertFromLdap(
+    username: string,
+    data: LdapUserData,
+  ): Promise<AuthenticatedUserProfile> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, username, display_name, password_hash, role, setup_owner_department
-       FROM app_users
-       WHERE username = $1`,
-      [username],
+      `INSERT INTO app_users (
+         username, display_name, password_hash, role, setup_owner_department,
+         email, employee_id, title
+       )
+       VALUES ($1, $2, NULL, 'requester', NULL, $3, $4, $5)
+       ON CONFLICT (username) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         email = EXCLUDED.email,
+         employee_id = EXCLUDED.employee_id,
+         title = EXCLUDED.title,
+         updated_at = NOW()
+       RETURNING *`,
+      [username, data.name, data.email, data.employeeId, data.title],
     );
 
-    return result.rows[0] ?? null;
+    return this.toProfile(result.rows[0]);
+  }
+
+  private async provisionInitialAdmin(): Promise<void> {
+    const configuredUsername = this.configService.get<string>(
+      'INITIAL_ADMIN_USERNAME',
+      '',
+    );
+    const adminUsername =
+      typeof configuredUsername === 'string'
+        ? configuredUsername.trim().toLowerCase()
+        : '';
+    if (!adminUsername) {
+      return;
+    }
+
+    const userCount = await this.pool.query<{ count: number }>(
+      'SELECT COUNT(*)::int AS count FROM app_users',
+    );
+    if (userCount.rows[0]?.count !== 0) {
+      return;
+    }
+
+    await this.pool.query(
+      `INSERT INTO app_users (
+         username, display_name, password_hash, role, setup_owner_department
+       )
+       VALUES ($1, $1, NULL, 'admin', NULL)
+       ON CONFLICT (username) DO NOTHING`,
+      [adminUsername],
+    );
   }
 
   private assertValidRoleDepartmentPairing(

@@ -1,13 +1,30 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
   const userId = '4cf63ae6-1488-4e15-a361-b2662f4a71ec';
+  const ldapData = {
+    email: 'ldap.user@example.test',
+    name: 'LDAP Example User',
+    user: 'ldap.user.example.test',
+    employeeId: 'example-123',
+    title: 'Example Engineer',
+  };
   let connect: jest.Mock;
   let query: jest.Mock;
   let release: jest.Mock;
+  let configService: {
+    get: jest.Mock;
+    getOrThrow: jest.Mock;
+  };
+  let fetchMock: jest.Mock;
+  let originalFetch: typeof global.fetch;
   let service: AuthService;
 
   beforeEach(() => {
@@ -15,7 +32,34 @@ describe('AuthService', () => {
     query = jest.fn();
     release = jest.fn();
     connect.mockResolvedValue({ query, release });
-    service = new AuthService({ connect, query } as unknown as Pool);
+    configService = {
+      get: jest.fn((key: string, fallback?: unknown) => {
+        if (key === 'LDAP_AUTH_TIMEOUT_MS') {
+          return '10000';
+        }
+
+        return fallback;
+      }),
+      getOrThrow: jest.fn((key: string) => {
+        if (key === 'LDAP_AUTH_URL') {
+          return 'https://ldap.example.test/login';
+        }
+
+        throw new Error(`Unexpected required configuration key: ${key}`);
+      }),
+    };
+    originalFetch = global.fetch;
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    service = new AuthService(
+      { connect, query } as unknown as Pool,
+      configService as unknown as ConfigService,
+    );
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
   function queryStatements(): string[] {
@@ -24,55 +68,313 @@ describe('AuthService', () => {
     );
   }
 
-  it('validates credentials against a bcrypt password hash', async () => {
-    const passwordHash = await bcrypt.hash('RequesterDemo123!', 10);
+  function mockSuccessfulLdapResponse(): void {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        status: '200',
+        message: null,
+        data: ldapData,
+      }),
+    });
+  }
+
+  function mockLdapUserRow(
+    role: 'requester' | 'setup_owner' | 'admin' = 'requester',
+    setupOwnerDepartment: 'GNTC' | 'MFG' | null = null,
+  ): void {
     query.mockResolvedValueOnce({
       rows: [
         {
           id: userId,
-          username: 'requester.demo',
-          display_name: 'Requester Demo',
-          password_hash: passwordHash,
-          role: 'requester',
-          setup_owner_department: null,
+          username: ldapData.user,
+          display_name: ldapData.name,
+          password_hash: null,
+          role,
+          setup_owner_department: setupOwnerDepartment,
+          email: ldapData.email,
+          employee_id: ldapData.employeeId,
+          title: ldapData.title,
         },
       ],
     });
+  }
+
+  it('authenticates a matching LDAP identity and creates a requester with a null password hash', async () => {
+    mockSuccessfulLdapResponse();
+    mockLdapUserRow();
 
     await expect(
-      service.validateCredentials(' requester.demo ', 'RequesterDemo123!'),
+      service.validateCredentials(
+        ' LDAP.USER.EXAMPLE.TEST ',
+        'example-password',
+      ),
     ).resolves.toEqual({
       id: userId,
-      username: 'requester.demo',
-      displayName: 'Requester Demo',
+      username: ldapData.user,
+      displayName: ldapData.name,
       role: 'requester',
       setupOwnerDepartment: null,
     });
 
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ldap.example.test/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: ldapData.user,
+          password: 'example-password',
+        }),
+        signal: expect.anything(),
+      }),
+    );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('WHERE username = $1'),
-      ['requester.demo'],
+      expect.stringContaining('INSERT INTO app_users'),
+      [
+        ldapData.user,
+        ldapData.name,
+        ldapData.email,
+        ldapData.employeeId,
+        ldapData.title,
+      ],
     );
   });
 
-  it('rejects invalid credentials without exposing which field failed', async () => {
-    const passwordHash = await bcrypt.hash('RequesterDemo123!', 10);
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          id: userId,
-          username: 'requester.demo',
-          display_name: 'Requester Demo',
-          password_hash: passwordHash,
-          role: 'requester',
-          setup_owner_department: null,
-        },
-      ],
+  it('refreshes LDAP metadata without changing local role or department', async () => {
+    mockSuccessfulLdapResponse();
+    mockLdapUserRow('setup_owner', 'GNTC');
+
+    await expect(
+      service.validateCredentials(ldapData.user, 'example-password'),
+    ).resolves.toEqual({
+      id: userId,
+      username: ldapData.user,
+      displayName: ldapData.name,
+      role: 'setup_owner',
+      setupOwnerDepartment: 'GNTC',
+    });
+
+    const upsert = queryStatements().find((statement) =>
+      statement.includes('ON CONFLICT (username) DO UPDATE'),
+    );
+    expect(upsert).toContain(
+      "VALUES ($1, $2, NULL, 'requester', NULL, $3, $4, $5)",
+    );
+    expect(upsert).toContain('display_name = EXCLUDED.display_name');
+    expect(upsert).toContain('email = EXCLUDED.email');
+    expect(upsert).toContain('employee_id = EXCLUDED.employee_id');
+    expect(upsert).toContain('title = EXCLUDED.title');
+    expect(upsert).toContain('updated_at = NOW()');
+    const conflictClause = upsert?.slice(upsert.indexOf('ON CONFLICT'));
+    expect(conflictClause).not.toContain('role');
+    expect(conflictClause).not.toContain('setup_owner_department');
+  });
+
+  it.each([
+    { ok: true, status: 200 },
+    { ok: false, status: 401 },
+  ])('maps LDAP body status 401 to UnauthorizedException', async (response) => {
+    fetchMock.mockResolvedValue({
+      ...response,
+      json: jest.fn().mockResolvedValue({
+        status: '401',
+        message: null,
+        data: null,
+      }),
     });
 
     await expect(
-      service.validateCredentials('requester.demo', 'wrong-password'),
-    ).rejects.toThrow(UnauthorizedException);
+      service.validateCredentials(ldapData.user, 'wrong-example-password'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('maps non-2xx LDAP responses to ServiceUnavailableException', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: jest.fn().mockResolvedValue({
+        status: '200',
+        message: null,
+        data: ldapData,
+      }),
+    });
+
+    await expect(
+      service.validateCredentials(ldapData.user, 'example-password'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: 'malformed LDAP data',
+      body: { status: '200', message: null, data: { user: ldapData.user } },
+    },
+    {
+      name: 'unexpected LDAP status',
+      body: { status: '500', message: null, data: null },
+    },
+  ])('maps $name to ServiceUnavailableException', async ({ body }) => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue(body),
+    });
+
+    await expect(
+      service.validateCredentials(ldapData.user, 'example-password'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('maps malformed LDAP JSON to ServiceUnavailableException', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockRejectedValue(new SyntaxError('invalid JSON')),
+    });
+
+    await expect(
+      service.validateCredentials(ldapData.user, 'example-password'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('rejects an LDAP response for a different normalized username', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        status: '200',
+        message: null,
+        data: { ...ldapData, user: 'other.user.example.test' },
+      }),
+    });
+
+    await expect(
+      service.validateCredentials(ldapData.user, 'example-password'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new TypeError('network failure'),
+    new DOMException('The operation timed out.', 'TimeoutError'),
+  ])(
+    'maps LDAP transport and timeout failures to ServiceUnavailableException',
+    async (error) => {
+      fetchMock.mockRejectedValue(error);
+
+      await expect(
+        service.validateCredentials(ldapData.user, 'example-password'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['', 'example-password'],
+    ['   ', 'example-password'],
+    [ldapData.user, ''],
+  ])(
+    'rejects blank credentials before calling LDAP',
+    async (username, password) => {
+      await expect(
+        service.validateCredentials(username, password),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+
+  it('uses a configured positive LDAP timeout', async () => {
+    const timeoutSpy = jest
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(new AbortController().signal);
+    configService.get.mockImplementation((key: string, fallback?: unknown) =>
+      key === 'LDAP_AUTH_TIMEOUT_MS' ? '2500' : fallback,
+    );
+    mockSuccessfulLdapResponse();
+    mockLdapUserRow();
+
+    await service.validateCredentials(ldapData.user, 'example-password');
+
+    expect(timeoutSpy).toHaveBeenCalledWith(2500);
+  });
+
+  it('falls back to the default LDAP timeout for a non-positive setting', async () => {
+    const timeoutSpy = jest
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(new AbortController().signal);
+    configService.get.mockImplementation((key: string, fallback?: unknown) =>
+      key === 'LDAP_AUTH_TIMEOUT_MS' ? '0' : fallback,
+    );
+    mockSuccessfulLdapResponse();
+    mockLdapUserRow();
+
+    await service.validateCredentials(ldapData.user, 'example-password');
+
+    expect(timeoutSpy).toHaveBeenCalledWith(10000);
+  });
+
+  it('creates the configured initial administrator only when app_users is empty', async () => {
+    configService.get.mockImplementation((key: string, fallback?: unknown) =>
+      key === 'INITIAL_ADMIN_USERNAME'
+        ? ' INITIAL.ADMIN.EXAMPLE.TEST '
+        : fallback,
+    );
+    query
+      .mockResolvedValueOnce({ rows: [{ count: 0 }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const provisionInitialAdmin = Reflect.get(
+      service,
+      'provisionInitialAdmin',
+    ) as () => Promise<void>;
+
+    await provisionInitialAdmin.call(service);
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT COUNT(*)::int AS count FROM app_users',
+    );
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining("VALUES ($1, $1, NULL, 'admin', NULL)"),
+      ['initial.admin.example.test'],
+    );
+  });
+
+  it('does not create an initial administrator when app_users already has rows', async () => {
+    configService.get.mockImplementation((key: string, fallback?: unknown) =>
+      key === 'INITIAL_ADMIN_USERNAME'
+        ? 'initial.admin.example.test'
+        : fallback,
+    );
+    query.mockResolvedValueOnce({ rows: [{ count: 1 }] });
+    const provisionInitialAdmin = Reflect.get(
+      service,
+      'provisionInitialAdmin',
+    ) as () => Promise<void>;
+
+    await provisionInitialAdmin.call(service);
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a blank initial administrator setting', async () => {
+    configService.get.mockImplementation((key: string, fallback?: unknown) =>
+      key === 'INITIAL_ADMIN_USERNAME' ? '   ' : fallback,
+    );
+    const provisionInitialAdmin = Reflect.get(
+      service,
+      'provisionInitialAdmin',
+    ) as () => Promise<void>;
+
+    await provisionInitialAdmin.call(service);
+
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('returns the authenticated profile by stored session user id', async () => {
@@ -352,6 +654,39 @@ describe('AuthService', () => {
       expect.stringContaining(
         'VALIDATE CONSTRAINT app_users_role_department_consistency',
       ),
+    );
+  });
+
+  it('makes password hashes nullable without defaults in fresh and existing user storage', async () => {
+    query.mockResolvedValue({ rows: [] });
+    const ensureUsersTable = Reflect.get(
+      service,
+      'ensureUsersTable',
+    ) as () => Promise<void>;
+
+    await ensureUsersTable.call(service);
+
+    const statements = queryStatements();
+    const createTable = statements.find((statement) =>
+      statement.includes('CREATE TABLE IF NOT EXISTS app_users'),
+    );
+    const passwordHashMigration = statements.find((statement) =>
+      statement.includes('ALTER COLUMN password_hash DROP NOT NULL'),
+    );
+
+    expect(createTable).toContain('password_hash TEXT,');
+    expect(createTable).not.toContain('password_hash TEXT NOT NULL');
+    expect(passwordHashMigration).toContain(
+      'ALTER COLUMN password_hash DROP DEFAULT',
+    );
+    expect(passwordHashMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS email TEXT',
+    );
+    expect(passwordHashMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS employee_id TEXT',
+    );
+    expect(passwordHashMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS title TEXT',
     );
   });
 
