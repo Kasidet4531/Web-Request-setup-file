@@ -1843,6 +1843,8 @@ describe('RequestsService draft flow', () => {
     );
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
     expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+    expect(dbClient.query).toHaveBeenCalledTimes(4);
+    expect(dbClient.query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
