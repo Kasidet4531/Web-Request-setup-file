@@ -325,15 +325,13 @@ describe('AuthService', () => {
     expect(timeoutSpy).toHaveBeenCalledWith(10000);
   });
 
-  it('creates the configured initial administrator only when app_users is empty', async () => {
+  it('creates the configured initial administrator', async () => {
     configService.get.mockImplementation((key: string, fallback?: unknown) =>
       key === 'INITIAL_ADMIN_USERNAME'
         ? ' INITIAL.ADMIN.EXAMPLE.TEST '
         : fallback,
     );
-    query
-      .mockResolvedValueOnce({ rows: [{ count: 0 }] })
-      .mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [] });
     const provisionInitialAdmin = Reflect.get(
       service,
       'provisionInitialAdmin',
@@ -341,23 +339,19 @@ describe('AuthService', () => {
 
     await provisionInitialAdmin.call(service);
 
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      'SELECT COUNT(*)::int AS count FROM app_users',
-    );
     expect(query).toHaveBeenLastCalledWith(
       expect.stringContaining("VALUES ($1, $1, NULL, 'admin', NULL)"),
       ['initial.admin.example.test'],
     );
   });
 
-  it('does not create an initial administrator when app_users already has rows', async () => {
+  it('provisions the configured initial administrator when app_users already has rows', async () => {
     configService.get.mockImplementation((key: string, fallback?: unknown) =>
       key === 'INITIAL_ADMIN_USERNAME'
         ? 'initial.admin.example.test'
         : fallback,
     );
-    query.mockResolvedValueOnce({ rows: [{ count: 1 }] });
+    query.mockResolvedValueOnce({ rows: [] });
     const provisionInitialAdmin = Reflect.get(
       service,
       'provisionInitialAdmin',
@@ -365,7 +359,14 @@ describe('AuthService', () => {
 
     await provisionInitialAdmin.call(service);
 
-    expect(query).toHaveBeenCalledTimes(1);
+    const provision = query.mock.calls[0]?.[0] as string;
+    expect(provision).toContain("VALUES ($1, $1, NULL, 'admin', NULL)");
+    expect(provision).toContain('ON CONFLICT (username) DO UPDATE SET');
+    expect(provision).toContain("role = 'admin'");
+    expect(query).toHaveBeenLastCalledWith(
+      provision,
+      ['initial.admin.example.test'],
+    );
   });
 
   it('ignores a blank initial administrator setting', async () => {

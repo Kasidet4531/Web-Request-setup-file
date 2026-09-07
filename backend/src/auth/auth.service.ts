@@ -309,19 +309,15 @@ export class AuthService implements OnModuleInit {
       return;
     }
 
-    const userCount = await this.pool.query<{ count: number }>(
-      'SELECT COUNT(*)::int AS count FROM app_users',
-    );
-    if (userCount.rows[0]?.count !== 0) {
-      return;
-    }
-
     await this.pool.query(
       `INSERT INTO app_users (
          username, display_name, password_hash, role, setup_owner_department
        )
        VALUES ($1, $1, NULL, 'admin', NULL)
-       ON CONFLICT (username) DO NOTHING`,
+       ON CONFLICT (username) DO UPDATE SET
+         role = 'admin',
+         setup_owner_department = NULL,
+         updated_at = NOW()`,
       [adminUsername],
     );
   }
