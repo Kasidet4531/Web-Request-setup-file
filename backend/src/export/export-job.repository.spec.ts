@@ -137,6 +137,7 @@ describe('ExportJobRepository', () => {
     expect(claimQuery).toContain('FOR UPDATE SKIP LOCKED');
     expect(claimQuery).toContain("SET status = 'running'");
     expect(claimQuery).toContain('attempt_count = job.attempt_count + 1');
+    expect(claimQuery).toContain('RETURNING job.id, job.owner_user_id');
   });
 
   it('renews only an active claim so long-running work is not reclaimed as stale', async () => {

@@ -185,7 +185,7 @@ export class ExportJobRepository implements OnModuleInit {
             attempt_count = job.attempt_count + 1
         FROM candidate
         WHERE job.id = candidate.id
-        RETURNING ${this.selectColumns(false)}
+        RETURNING ${this.selectColumns(false, 'job')}
       `,
       [randomUUID()],
     );
@@ -248,7 +248,7 @@ export class ExportJobRepository implements OnModuleInit {
     );
   }
 
-  private selectColumns(includeContent: boolean): string {
+  private selectColumns(includeContent: boolean, table?: string): string {
     return [
       'id',
       'owner_user_id',
@@ -265,7 +265,9 @@ export class ExportJobRepository implements OnModuleInit {
       ...(includeContent ? ['content'] : []),
       'failure_message',
       'claim_token',
-    ].join(', ');
+    ]
+      .map((column) => (table ? `${table}.${column}` : column))
+      .join(', ');
   }
 
   private requireRow(row: ExportJobRow | undefined): ExportJobRow {
