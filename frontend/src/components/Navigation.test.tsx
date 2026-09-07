@@ -10,11 +10,13 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 describe('Navigation', () => {
-  it('offers direct links to admin management and autofill rules', () => {
+  it('offers direct links to admin tools', () => {
     const html = renderToStaticMarkup(createElement(Navigation))
 
     expect(html).toContain('href="/admin/users"')
     expect(html).toContain('Admin management')
+    expect(html).toContain('href="/admin/form-config"')
+    expect(html).toContain('Form configuration')
     expect(html).toContain('href="/admin/autofill"')
     expect(html).toContain('Autofill rules')
   })
