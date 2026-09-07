@@ -8,6 +8,7 @@ const navItems = [
   { to: '/admin/export-profile', label: 'Export' },
   { to: '/admin', label: 'Admin' },
   { to: '/admin/users', label: 'Admin management' },
+  { to: '/admin/form-config', label: 'Form configuration' },
   { to: '/admin/autofill', label: 'Autofill rules' },
 ] as const
 
