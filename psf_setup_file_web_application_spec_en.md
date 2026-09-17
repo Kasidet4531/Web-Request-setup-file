@@ -2,6 +2,8 @@
 
 > This document consolidates the discussed requirements and architecture for a Web Application to manage PSF Setup File Requests, Dynamic Forms, Workflow Status, Search, Auto-fill, Excel Export, and Audit History.
 
+> **Implementation status:** This is a product specification, not a claim that every described component exists. The current source baseline is [`ADR 0014`](docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md). It overrides conflicting implementation claims in this document: the current runtime is `Web-Request-setup-file`; `UI_Web_Setup_file` is visual reference only; authentication is LDAP-backed with session-backed local authorization profiles; current auth routes are `/api/login`, `/api/logout`, and `/api/me`; and the current backend uses NestJS with Express. Deployment proxy/TLS, attachment runtime, export-profile CRUD, Monaco/CodeMirror, and several route/page capabilities remain unverified or unimplemented.
+
 ---
 
 ## Table of Contents
@@ -78,7 +80,7 @@ Frontend state -> stores only non-sensitive UI data
 ```text
 User logs in
   ↓
-Backend verifies credentials (Local Authentication)
+Backend verifies credentials through LDAP and resolves the local authorization profile
   ↓
 Backend sets HttpOnly Secure Cookie
   ↓

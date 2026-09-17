@@ -1,5 +1,7 @@
 # 13. Excel Export Schema Alignment and Layout Strategy
 
+> **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
+
 We decided that the Excel Export will use a single flat table format (one request per row), where the columns are structured and ordered according to the latest active/published Form Schema version. Data from requests on older form versions will be dynamically mapped to these columns using canonical keys.
 
 ## Context

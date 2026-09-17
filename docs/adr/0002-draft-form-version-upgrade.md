@@ -1,5 +1,7 @@
 # 2. Draft Form Version Upgrade Strategy
 
+> **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
+
 We decided to implement a hybrid strategy for handling Draft version upgrades, prompting the user when a newer form schema is published.
 
 ## Context

@@ -1,5 +1,7 @@
 # 5. Manual and Dynamic Workflow Status Transitions
 
+> **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
+
 We decided that all workflow status transitions (such as transitioning from Submitted to Setup In Progress, PSF Created, and Completed) must be set manually by the users (the requester/creator, setup owner, or admin) rather than being driven or automatically transitioned by system events. Furthermore, the list of statuses and permitted transitions must be dynamically configurable by administrators.
 
 ## Context

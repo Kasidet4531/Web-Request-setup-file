@@ -1,5 +1,7 @@
 # 10. Shared Queue Model for Setup File Owners
 
+> **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
+
 We decided to implement a shared queue model for the Dashboard and request processing, allowing any user with the Setup File Owner role to view, update, and transition any PSF Request in the system, rather than locking requests to a single assigned individual.
 
 ## Context

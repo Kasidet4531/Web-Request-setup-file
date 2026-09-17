@@ -2,6 +2,8 @@
 
 This repository contains the architecture, specification, and codebase for the **PSF Setup File Request Management Web Application**. The system streamlines the workflow of submitting PSF requests, managing dynamic form schemas, tracking setup status, performing search indexing, auto-filling fields, auditing changes, and exporting reports.
 
+> **Current implementation baseline (T01):** [`ADR 0014`](docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md) is the source for the current runtime, API, authentication, visual-reference boundary, and known release limits. The material below is historical target architecture unless ADR 0014 repeats it. In particular, current authentication is LDAP-backed with locally stored authorization profiles, the backend uses Express, and Nginx/proxy deployment is not verified by this repository.
+
 ---
 
 ## 🗺️ System Architecture
@@ -114,6 +116,8 @@ The core technologies selected for the MVP are:
 ---
 
 ## 📚 Key Architectural Decisions (ADRs)
+
+The historical records below retain original rationale. ADR 0014 amends their implementation-status claims; it does not claim that their proposed features exist.
 
 Detailed rationales for key technical decisions are recorded in the [docs/adr/](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/) directory:
 

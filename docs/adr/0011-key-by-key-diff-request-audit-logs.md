@@ -1,5 +1,7 @@
 # 11. Key-by-Key Diff Request-Specific Audit Logging
 
+> **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
+
 We decided that data modifications to PSF Requests will be audited at the individual field level using key-by-key JSON payload diffing during write operations. These audit records will be stored in a flat relational table and queried specifically on a per-request basis.
 
 ## Context

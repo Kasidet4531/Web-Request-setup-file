@@ -1,6 +1,6 @@
 # Production UI Integration Implementation Plan
 
-> **For agentic workers:** Use the `executing-plans` skill for approved execution, one task at a time. Subagent execution requires separate authorization and a verified non-Astra/non-shared-quota model; this plan does not authorize delegation. Checkboxes describe future work, not completed implementation.
+> **For agentic workers:** Use the `executing-plans` skill for approved execution, one task at a time. Subagent execution requires separate authorization and a verified non-Astra/non-shared-quota model; this plan does not authorize delegation. Checkboxes track documented task progress; only the scoped T01 documentation updates are complete in this revision.
 
 **Goal:** Integrate the selected prototype UI/UX into the existing API-backed application without replacing its domain boundaries or versioned-form architecture.
 
@@ -16,19 +16,19 @@ This document is a plan, not authorization to implement or deploy. Its creation 
 
 This plan preserves the completed audit/backlog evidence in the persistent baseline below; access to the original conversation is not required:
 
-- Main audit snapshot: `072e41019904b64a459904d739fb820b9664b9bf`, `/opt/data/Web-Request-setup-file`.
+- T01 current-source snapshot: `1a2d48aa00728eab4ba5a3931ec29ba0d1b4fde2`, `/opt/data/Web-Request-setup-file`.
 - Prototype reference: `0a71ea6e756995deac84ee225d3d28514e6d96ed`, `/opt/data/repos/UI_Web_Setup_file`.
 - The audit found a substantial production-oriented main frontend, not merely a backend-test scaffold.
 - Existing API/form/session/workflow/export behavior is retained unless a task explicitly changes it.
 - The prior audit reported successful isolated frontend/backend checks and prototype build/helper checks. These are historical evidence, not execution results for this plan, not live deployment proof, and not release acceptance.
 - Planning-only lookup was limited to exact package scripts, test/service/route filenames and write-scope verification. No new repository audit was performed.
-- Findings labeled CONFIRMED in the audit remain source or scoped-test findings. Request-number concurrency impact was LIKELY; real PostgreSQL concurrency, deployment topology, LDAP behavior and active production schema/data remain unverified.
+- Findings labeled CONFIRMED in the audit remain source or scoped-test findings. Request-number concurrency impact was LIKELY; real PostgreSQL concurrency, deployment topology, live LDAP endpoint/certificate behavior and active production schema/data remain unverified.
 
 ### Persistent execution baseline (B0)
 
-This is the minimum handoff record, not a claim that known defects are fixed. References below are relative to the main repository at `072e41019904b64a459904d739fb820b9664b9bf`; prototype references use the separately pinned SHA above. A narrow lookup during this revision confirmed only missing permission/API facts at the same main HEAD; no new repository audit or runtime verification was performed. At execution, read the named touched symbols/callers; if the workspace differs, record the relevant drift and stop only the affected contract, not restart the audit.
+This is the minimum handoff record, not a claim that known defects are fixed. References below are relative to the main repository at `1a2d48aa00728eab4ba5a3931ec29ba0d1b4fde2`; prototype references use the separately pinned SHA above. T01 verified this baseline against both current repositories. At execution, read the named touched symbols/callers; if the workspace differs, record the relevant drift and stop only the affected contract, not restart the audit.
 
-**Runtime/data authority:** Main React/TanStack frontend is already API-backed. LDAP authenticates; the local profile supplies `requester`, `setup_owner`, or `admin` authorization. PostgreSQL is authoritative for request data, snapshots, workflow, numbering and audit. Requester forms use persisted snapshots and explicit draft upgrades. PSF currently uses `PSF_CREATED_INFORMATION_SCHEMA`, not a configurable second form engine. Owner association is not exclusive queue assignment. Existing admin editors manage local users, transitions, autofill and schema JSON; the export-profile page is an export consumer, not profile CRUD.
+**Runtime/data authority:** Main React/TanStack frontend is already API-backed. LDAP authenticates; the local authorization profile supplies `requester`, `setup_owner`, or `admin` authorization. PostgreSQL is authoritative for request data, snapshots, workflow, numbering and audit. Requester forms use persisted snapshots and explicit draft upgrades. PSF currently uses `PSF_CREATED_INFORMATION_SCHEMA`, not a configurable second form engine. Owner association is not exclusive queue assignment. Existing admin editors manage local users, transitions, autofill and schema JSON; the export-profile page is an export consumer, not profile CRUD.
 
 **Current permission matrix — preserve until a named decision approves a change:**
 
@@ -53,7 +53,7 @@ Anonymous requests cannot gain protected API access. Request-controller identity
 - Form key is `psf-request`; status strings include exactly `Draft`, `Setup In Progress`, `Need More Information`, `Submitted`, `PSF Created`, `Completed`. Do not treat this illustrative list as a new complete status catalog; server options remain authoritative.
 - Draft save sends `formVersion` and `requesterData`; positive integer version validation already exists. Preserve submit/upgrade DTOs from the cited service rather than inventing a new body. Detail carries `schemaSnapshot`, `formVersion`, `psfCreatedInformationSchema`, `psfCreatedDataVisible`, `canEditPsfCreatedData`, and `updatedAt`.
 - PSF write body uses `psfCreatedData` plus the **unmodified** detail `updatedAt` string as `expectedUpdatedAt`; preserve microseconds. Status body is `{status}`; actor is resolved server-side. T07/T23 must not silently add a client concurrency field without an approved additive contract.
-- `/api/me` is the existing frontend session seam (`frontend/src/services/auth-session.ts`, `services/api.ts`); 401 invalidates protected state, 403 is not logout. Login stays LDAP-backed; no prototype persona authentication.
+- `/api/me` is the existing frontend session seam (`frontend/src/services/auth-session.ts`, `services/api.ts`); the current client does **not** broadcast a generic 401 invalidation, which is the T03 defect. 403 is not logout. Login is LDAP-backed and local roles are resolved from the profile; no prototype persona authentication.
 - `GET /api/requests/export.xlsx` returns XLSX or `202` with `id`, `status`, `statusUrl`; existing job reads are `GET /api/requests/export-jobs/:jobId` and `/download`. Source: `export.controller.ts`. Preserve API-relative URL handling and current default `>2000` async boundary until D07 approves a change; do not substitute client CSV.
 - Date-only business values must not be silently shifted by parsing them as instants. D02 must approve Bangkok day boundaries, inclusive filters, terminal exclusions, display timezone and workbook native-date interpretation with before/at/after-boundary tests. Concurrency timestamps are opaque independently of display formatting.
 
@@ -104,7 +104,26 @@ All decision records must identify the approver, selected behavior, affected tes
 
 ### Gate owners, timing and MVP manifest
 
-No approval is recorded by this revision. **Product approver:** project owner/user or explicitly named delegate. **Technical/security approver:** independent reviewer named by that owner. **Deployment/DB owner:** operator nominated by that owner, never inferred from local shell access. **Visual approver:** product owner or named UI delegate. T01 records actual people/handles and evidence links in this document; an unassigned required owner blocks the affected task.
+**T01 owner record:** **Product approver:** Kasidet. **Visual approver:** Kasidet. **Technical/security approver:** unassigned. **Deployment/DB owner:** unassigned. An unassigned technical/security or deployment/DB owner blocks only the decisions and tasks requiring that owner; it does not invalidate the current-baseline documentation.
+
+| Gate | T01 state | Product/visual approver | Technical/security reviewer | Deployment/DB owner | Selected contract / next evidence |
+|---|---|---|---|---|---|
+| D01 | Unresolved | Kasidet | Unassigned | — | Existing permissions remain; approve only before an affected expansion. |
+| D02 | Unresolved | Kasidet | Unassigned | — | Existing date/list behavior remains; approve before T12/T13/T24/T26. |
+| D03 | Unresolved | Kasidet | Unassigned | — | Existing workflow stays authoritative; approve same-status/correction policy before T07/T23. |
+| D04 | Unresolved | Kasidet | Unassigned | — | Existing snapshots/upgrades remain; approve mapping/PSF policy before T20–T22. |
+| D05 | Unresolved | Kasidet | Unassigned | Unassigned | Existing numbering remains; approve allocator policy before T08. |
+| D06 | Unresolved | Kasidet | Unassigned | Unassigned | Record real TLS/proxy/session-store topology before T05 or release. |
+| D07 | Unresolved | Kasidet | Unassigned | Unassigned | Current-role export reauthorization remains a T02/T04 safety requirement; approve artifact policy before coding. |
+| D08 | Unresolved | Kasidet | Unassigned | — | Preserve action-only audit behavior; approve redaction/diff policy before T18/T19. |
+| D09 | Unresolved | Kasidet | Unassigned | Unassigned when deployment is involved | Deferred scope remains absent. |
+| V06 | Unresolved | Kasidet | Unassigned | — | Approve the operation/fixture matrix before T06. |
+
+**Approved MVP manifest (Kasidet, T01):**
+- Include: `T01`–`T11`, `T14`–`T17`, `T30`
+- Defer: `T12`–`T13`, `T18`–`T29`, including `T21R` and `T25a`–`T25e`
+
+`T16` forces G-SAFE (`T02`–`T08`) and `T11`; `T11` forces `T09` and `T03`; `T17` forces `T16`, `T14`, and `T15`; `T10` is retained so core browse/detail release does not retain unverified PSF projection consistency/privacy; `T30` is the existing release-evidence gate. This approval does not approve unresolved D03/D05/D06/D07/V06 gates or assign unassigned owners. Release must not claim authoritative dashboard totals, richer audit/history, dynamic PSF schemas, export retention/recovery, admin visual migration, or schema publication/upgrade rollout beyond verified current behavior. **M/O:** deployment/DB owner unassigned. **V16:** Kasidet is visual approver; technical/security reviewer is unassigned. **Handoff/post-release:** owner unassigned. No unresolved gate is a default approval.
 
 - D01/D02/D03/D04/D05/D08: product approver owns behavior; technical reviewer ratifies enforcement/data compatibility before the task listed in the register. D03 same-status choice can be approved separately for T07 without deciding the full correction workflow. D04 requester-upgrade mapping can be approved for T20 while PSF expansion remains deferred.
 - D06: deployment owner plus security reviewer, before T05 configuration coding. Also approve worker count/topology, staging access, migration permissions, session-store schema initialization, production entry points and restart requirements.
@@ -385,10 +404,10 @@ T02 starts after AR1's fail-closed contract approval. T03 is independent of T02'
 **Dependencies:** implementation authorization; AR0. **Parallel:** approval gathering alongside T02/T03 preparation; no competing doc writer.
 
 **Steps:**
-- [ ] Record sole production frontend and pinned visual reference; distinguish LDAP authentication from local app authorization.
-- [ ] Correct current route/API/implemented-module statements using B0 and its pinned source references; retain historical ADR context through explicit supersession/amendment, not deletion.
-- [ ] Record each D01–D09/V06 decision as approved or unresolved with named approver, required timing, selected contract/tests and blocker list; approve the dependency-closed MVP manifest. Register M/O/V16/Handoff and post-release owners. Unresolved gated choices are not defaults.
-- [ ] Define current contract examples for status values, form key, identity fields, `/api/me`, status options/update and PSF concurrency string.
+- [x] Record the sole production frontend and pinned visual reference; distinguish LDAP authentication from the local authorization profile.
+- [x] Correct current route/API/implemented-module statements using the T01 source snapshot; retain historical ADR context through ADR 0014 rather than deletion.
+- [x] Record D01–D09/V06 as unresolved with Kasidet as product/visual approver and unassigned technical/security or deployment/DB owners where required; register M/O/V16/Handoff/post-release ownership as unresolved. Record Kasidet's approved dependency-closed MVP manifest without treating unresolved gates as approved.
+- [x] Define current contract examples for status values, form key, identity fields, `/api/me`, status options/update and PSF concurrency string in ADR 0014.
 
 **Tests to add/update:** No artificial code test. Reviewer checks contract examples against cited controllers/types and all decision rows against B0 and the approved scope; only targeted lookup for a missing identifier.
 

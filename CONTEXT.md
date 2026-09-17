@@ -46,9 +46,9 @@ _Avoid_: Global key, standardized key
 A structured database table storing pre-extracted canonical values for quick query, filter, and export performance.
 _Avoid_: Query table, view
 
-**Local Authentication**:
-The mechanism of validating user identities using credentials (username and hashed password) stored directly within the application's database.
-_Avoid_: SSO (in current phase), External Authentication
+**Local Authorization Profile**:
+The application-local user record that stores role and setup-owner department after LDAP authentication. It does not validate passwords in the current implementation.
+_Avoid_: Local Authentication, local password login
 
 **Form Schema**:
 The JSON-structured definition of a PSF Request form, specifying fields, input types, sections, layout configurations, and field-level visibility constraints.
@@ -59,7 +59,7 @@ A sequential integer indicating the revision of a Form Schema. Requests are lock
 _Avoid_: Version number, revision
 
 **Attachment**:
-An external file uploaded and linked to a PSF Request (e.g., specification sheets or probe cards layout files).
+Planned external file linked to a PSF Request (e.g., specification sheets or probe cards layout files). Attachment runtime support is not implemented in the current source baseline; see ADR 0014.
 _Avoid_: File upload, document
 
 **Master Data**:

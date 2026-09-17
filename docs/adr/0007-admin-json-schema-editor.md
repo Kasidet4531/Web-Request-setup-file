@@ -1,5 +1,7 @@
 # 7. Admin JSON Schema Editor with Verification Aids
 
+> **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
+
 We decided to implement a JSON Schema Editor for the MVP Admin page to manage form definitions, coupled with helper tools (syntax highlighting, templates, and validation checks), rejecting a visual drag-and-drop form builder for the initial phase.
 
 ## Context
