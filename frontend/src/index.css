@@ -1124,8 +1124,7 @@ input.input-with-clear {
 }
 
 .summary-card,
-.workflow-section,
-.detail-summary-grid > div {
+.workflow-section {
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1330,27 +1329,6 @@ input.input-with-clear {
   background-color: var(--status-draft-bg);
   color: var(--status-draft-text);
   border-color: var(--status-draft-border);
-}
-
-.detail-summary-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-}
-
-.detail-summary-grid > div {
-  display: grid;
-  gap: 4px;
-}
-
-.detail-summary-grid span {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.detail-summary-grid strong {
-  font-size: 14px;
 }
 
 .json-preview {
@@ -1687,6 +1665,95 @@ input.input-with-clear {
   max-width: 26rem;
   font-size: 12px;
   color: var(--muted-foreground);
+}
+
+.detail-summary {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.detail-summary__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detail-summary__heading h1 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.detail-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.detail-layout__main,
+.detail-layout__rail {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* The rail is narrower than the list view; let the shared table wrap instead
+   of forcing its list-view minimum width. */
+.detail-layout__rail .data-table table {
+  min-width: 0;
+}
+
+.detail-layout__rail .data-table th,
+.detail-layout__rail .data-table td {
+  padding: 8px 10px;
+  font-size: 11px;
+}
+
+.detail-topbar__id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.detail-summary-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.detail-summary-grid > div {
+  display: grid;
+  gap: 2px;
+}
+
+.detail-summary-grid span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.detail-summary-grid strong {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+@media (max-width: 1100px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ------------------------------------------------------------ responsive -- */

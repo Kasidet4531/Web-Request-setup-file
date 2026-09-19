@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import {
+  ArrowLeft,
   Calendar,
   FileSpreadsheet,
   FileText,
@@ -151,15 +152,19 @@ export function RequestHeaderSummary({ request }: { request: PsfRequestResponse 
   const summary = buildRequestDetailSummary(request)
 
   return (
-    <section className="detail-summary-grid" aria-label="Request header">
-      <div><span>Request No.</span><strong>{summary.requestNo}</strong></div>
-      <div><span>Title</span><strong>{summary.title}</strong></div>
-      <div><span>Product Type</span><strong>{summary.productType}</strong></div>
-      <div><span>Status</span><strong className={statusClassName(summary.status)}>{summary.status}</strong></div>
-      <div><span>Priority</span><strong>{summary.priority}</strong></div>
-      <div><span>Due Date</span><strong>{formatDate(summary.dueDate)}</strong></div>
-      <div><span>Requester</span><strong>{summary.requester}</strong></div>
-      <div><span>Owner / Dept</span><strong>{summary.owner}</strong></div>
+    <section className="detail-summary" aria-label="Request header">
+      <div className="detail-summary__heading">
+        <h1>{summary.title}</h1>
+        <span className={statusClassName(summary.status)}>{summary.status}</span>
+      </div>
+      <div className="detail-summary-grid">
+        <div><span>Request No.</span><strong className="font-mono-code">{summary.requestNo}</strong></div>
+        <div><span>Product Type</span><strong>{summary.productType}</strong></div>
+        <div><span>Priority</span><strong className={priorityClassName(summary.priority)}>{summary.priority}</strong></div>
+        <div><span>Due Date</span><strong>{formatDate(summary.dueDate)}</strong></div>
+        <div><span>Requester</span><strong>{summary.requester}</strong></div>
+        <div><span>Owner / Dept</span><strong>{summary.owner}</strong></div>
+      </div>
     </section>
   )
 }
@@ -826,70 +831,80 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
 
   return (
     <article className="page-card workflow-page">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">{request ? `Request ${request.requestNo}` : 'Workflow detail'}</p>
-          <h1>{request ? getRequestTitle(request) : 'PSF Request Detail'}</h1>
-          <p className="page-card__description">
-            Header summary, workflow actions, manual status transition, and schema-driven requester information.
-          </p>
+      <div className="page-header">
+        <div className="page-header__title">
+          <Link className="btn-ghost" to="/requests">
+            <ArrowLeft size={15} /> Back to Requests
+          </Link>
+          {request ? (
+            <span className="detail-topbar__id">
+              <span className="font-mono-code">{request.requestNo}</span>
+              <span className={statusClassName(request.status)}>{request.status}</span>
+            </span>
+          ) : (
+            <h1>PSF Request Detail</h1>
+          )}
         </div>
         <div className="button-row">
-          <Link className="secondary-button" to="/history">
+          <Link className="btn-secondary" to="/history">
             Global History
           </Link>
         </div>
       </div>
 
-      {loading ? <p className="page-card__description">Loading request detail…</p> : null}
+      {loading ? <p className="page-card__description" role="status">Loading request detail…</p> : null}
       {error ? <p className="status-pill status-pill--error" role="alert">{error}</p> : null}
       {message ? <p className="status-pill status-pill--success" role="status">{message}</p> : null}
 
       {request ? (
-        <>
-          <RequestHeaderSummary request={request} />
+        <div className="detail-layout">
+          <div className="detail-layout__main">
+            <RequestHeaderSummary request={request} />
 
-          <RequestHistoryPanel
-            entries={history.data}
-            error={history.error}
-            loading={history.loading}
-          />
+            <section className="workflow-section">
+              <h2>Requester Information</h2>
+              <ActiveSchemaForm key={`${request.id}-${request.status}`} mode="request" requestId={requestId} />
+            </section>
 
-          <section className="workflow-section">
-            <div className="section-heading">
-              <div>
-                <h2>Workflow actions</h2>
-                <p>Available status transitions are determined by your authenticated server session.</p>
-              </div>
-            </div>
-            <div className="workflow-actions">
-              <WorkflowStatusActions
-                allowedNextStatuses={allowedNextStatuses}
-                currentStatus={request.status}
-                onApply={() => void updateStatus()}
-                onStatusChange={setStatus}
-                saving={savingStatus}
-                selectedStatus={status}
+            <section className="workflow-section">
+              <h2>PSF Created Information</h2>
+              <PsfCreatedInformationPanel
+                onChange={updatePsfCreatedInformation}
+                onSave={(values) => void savePsfCreatedInformation(values)}
+                request={request}
+                saving={savingPsfCreatedData}
+                values={psfCreatedValues}
               />
-            </div>
-          </section>
+            </section>
+          </div>
 
-          <section className="workflow-section">
-            <h2>Requester Information</h2>
-            <ActiveSchemaForm key={`${request.id}-${request.status}`} mode="request" requestId={requestId} />
-          </section>
+          <aside className="detail-layout__rail">
+            <section className="workflow-section">
+              <div className="section-heading">
+                <div>
+                  <h2>Workflow actions</h2>
+                  <p>Available status transitions are determined by your authenticated server session.</p>
+                </div>
+              </div>
+              <div className="workflow-actions">
+                <WorkflowStatusActions
+                  allowedNextStatuses={allowedNextStatuses}
+                  currentStatus={request.status}
+                  onApply={() => void updateStatus()}
+                  onStatusChange={setStatus}
+                  saving={savingStatus}
+                  selectedStatus={status}
+                />
+              </div>
+            </section>
 
-          <section className="workflow-section">
-            <h2>PSF Created Information</h2>
-            <PsfCreatedInformationPanel
-              onChange={updatePsfCreatedInformation}
-              onSave={(values) => void savePsfCreatedInformation(values)}
-              request={request}
-              saving={savingPsfCreatedData}
-              values={psfCreatedValues}
+            <RequestHistoryPanel
+              entries={history.data}
+              error={history.error}
+              loading={history.loading}
             />
-          </section>
-        </>
+          </aside>
+        </div>
       ) : null}
     </article>
   )
