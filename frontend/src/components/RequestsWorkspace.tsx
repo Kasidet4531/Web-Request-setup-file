@@ -233,9 +233,12 @@ export function PsfCreatedInformationPanel({
 }: PsfCreatedInformationPanelProps) {
   if (!request.psfCreatedDataVisible) {
     return (
-      <p className="page-card__description" role="status">
-        {PSF_CREATED_INFORMATION_PLACEHOLDER}
-      </p>
+      <>
+        <h2>PSF Created Information</h2>
+        <p className="page-card__description" role="status">
+          {PSF_CREATED_INFORMATION_PLACEHOLDER}
+        </p>
+      </>
     )
   }
 
@@ -249,6 +252,7 @@ export function PsfCreatedInformationPanel({
         onSubmit={canEdit ? onSave : undefined}
         readOnly={!canEdit || saving}
         schema={request.psfCreatedInformationSchema}
+        showSchemaHeader={false}
         submitLabel="Save PSF Created Information"
         values={values}
       />
@@ -862,12 +866,10 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
             <RequestHeaderSummary request={request} />
 
             <section className="workflow-section">
-              <h2>Requester Information</h2>
               <ActiveSchemaForm key={`${request.id}-${request.status}`} mode="request" requestId={requestId} />
             </section>
 
             <section className="workflow-section">
-              <h2>PSF Created Information</h2>
               <PsfCreatedInformationPanel
                 onChange={updatePsfCreatedInformation}
                 onSave={(values) => void savePsfCreatedInformation(values)}

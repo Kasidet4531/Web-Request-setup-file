@@ -248,7 +248,7 @@ export function AppShell() {
           </div>
 
           <div className="header-actions">
-            {canCreateRequest ? (
+            {canCreateRequest && pathname !== '/requests/new' ? (
               <Link className="btn-primary" to="/requests/new">
                 <Plus size={14} /> New Request
               </Link>

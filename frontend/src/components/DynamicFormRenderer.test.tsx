@@ -63,6 +63,22 @@ describe('DynamicFormRenderer', () => {
     expect(html).toContain('type="radio"')
     expect(html).toContain('<select')
     expect(html).toContain('<textarea')
+    expect(html).toContain('dynamic-form__field dynamic-form__field--textarea')
+  })
+
+  it('can omit the schema-preview header when an enclosing requester screen supplies context', () => {
+    const html = renderToStaticMarkup(
+      <DynamicFormRenderer
+        schema={schema}
+        showSchemaHeader={false}
+        values={{ product_type: 'New Product' }}
+        onChange={() => undefined}
+      />,
+    )
+
+    expect(html).not.toContain('Schema preview')
+    expect(html).not.toContain('<h2>PSF Request Form</h2>')
+    expect(html).toContain('<h3>Requester Information</h3>')
   })
 
   it('shows required validation messages next to the related field', () => {

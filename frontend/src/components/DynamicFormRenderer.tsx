@@ -21,6 +21,7 @@ export interface DynamicFormRendererProps {
   values?: DynamicFormValues
   errors?: DynamicFormErrors
   readOnly?: boolean
+  showSchemaHeader?: boolean
   submitLabel?: string
   onChange?: (fieldKey: string, value: string) => void
   onSubmit?: (values: DynamicFormValues) => void
@@ -49,6 +50,7 @@ export function DynamicFormRenderer({
   onSubmit,
   readOnly = false,
   schema,
+  showSchemaHeader = true,
   submitLabel = 'Submit request',
   values = {},
 }: DynamicFormRendererProps) {
@@ -67,13 +69,15 @@ export function DynamicFormRenderer({
 
   return (
     <form className="dynamic-form" noValidate onSubmit={handleSubmit}>
-      <div className="dynamic-form__header">
-        <p className="page-card__eyebrow">Schema preview</p>
-        <h2>{schema.title}</h2>
-        <p className="dynamic-form__meta">
-          {schema.formKey} · version {schema.version}
-        </p>
-      </div>
+      {showSchemaHeader ? (
+        <div className="dynamic-form__header">
+          <p className="page-card__eyebrow">Schema preview</p>
+          <h2>{schema.title}</h2>
+          <p className="dynamic-form__meta">
+            {schema.formKey} · version {schema.version}
+          </p>
+        </div>
+      ) : null}
 
       {productTypeField ? (
         <div className="dynamic-form__product-type">
@@ -147,7 +151,14 @@ function FieldControl({ errors, field, fieldStatus, onChange, readOnly, value }:
     .join(' ') || undefined
 
   return (
-    <div aria-readonly={readOnly || undefined} className="dynamic-form__field">
+    <div
+      aria-readonly={readOnly || undefined}
+      className={
+        field.type === 'textarea'
+          ? 'dynamic-form__field dynamic-form__field--textarea'
+          : 'dynamic-form__field'
+      }
+    >
       <label className="dynamic-form__label" htmlFor={fieldId}>
         <span>{field.label}</span>
         {field.required ? <span className="dynamic-form__required">Required</span> : null}

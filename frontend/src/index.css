@@ -1066,12 +1066,23 @@ input.input-with-clear {
   font-weight: 600;
 }
 
+.dynamic-form__field--textarea {
+  grid-column: 1 / -1;
+}
+
+.dynamic-form__field--textarea textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+
 .dynamic-form__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .dynamic-form__actions > p {

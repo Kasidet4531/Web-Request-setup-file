@@ -747,6 +747,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         onSubmit={!formReadOnly ? saveDraft : undefined}
         readOnly={formReadOnly}
         schema={activeSchema.schema}
+        showSchemaHeader={false}
         submitLabel={saving ? 'Saving draft…' : submitLabel}
         values={values}
       />
