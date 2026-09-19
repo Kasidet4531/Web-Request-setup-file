@@ -214,9 +214,7 @@ export function AppShell() {
 
   return (
     <div className="app-layout">
-      <div className={sidebarOpen ? '' : 'app-sidebar--collapsed'}>
-        <NavSidebar role={role} />
-      </div>
+      <NavSidebar collapsed={!sidebarOpen} role={role} />
 
       <div className="app-layout__body">
         <header className="app-header">

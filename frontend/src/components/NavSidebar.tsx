@@ -2,7 +2,13 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import nxpLogo from '../assets/NXP.png'
 import { navSectionsForRole, resolveActivePath, type UserRole } from './navigationState'
 
-export function NavSidebar({ role }: { role: UserRole | null }) {
+export function NavSidebar({
+  collapsed = false,
+  role,
+}: {
+  collapsed?: boolean
+  role: UserRole | null
+}) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
@@ -10,7 +16,12 @@ export function NavSidebar({ role }: { role: UserRole | null }) {
   const activePath = resolveActivePath(pathname, sections)
 
   return (
-    <aside className="app-sidebar" aria-label="Primary">
+    <aside
+      aria-hidden={collapsed || undefined}
+      aria-label="Primary"
+      className={collapsed ? 'app-sidebar app-sidebar--collapsed' : 'app-sidebar'}
+      inert={collapsed || undefined}
+    >
       <div className="sidebar__brand">
         <img src={nxpLogo} alt="NXP Semiconductors" />
         <div>

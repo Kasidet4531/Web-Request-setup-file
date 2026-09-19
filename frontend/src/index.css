@@ -472,6 +472,7 @@ input.input-with-clear {
 
 .app-sidebar--collapsed {
   width: 0;
+  visibility: hidden;
   border-right: 0;
 }
 
@@ -1770,6 +1771,15 @@ input.input-with-clear {
 /* ------------------------------------------------------------ responsive -- */
 
 @media (max-width: 900px) {
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    box-shadow: var(--shadow-lg);
+  }
+
   .app-main {
     padding: 16px 12px 32px;
   }

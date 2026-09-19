@@ -21,6 +21,17 @@ describe('NavSidebar', () => {
     expect(html).toContain('href="/history"')
   })
 
+  it('removes collapsed navigation from presentation and keyboard interaction', () => {
+    const html = renderToStaticMarkup(
+      createElement(NavSidebar, { collapsed: true, role: 'admin' }),
+    )
+
+    expect(html).toContain('class="app-sidebar app-sidebar--collapsed"')
+    expect(html).toContain('aria-hidden="true"')
+    expect(html).toContain('inert=""')
+    expect(html).toContain('href="/admin/users"')
+  })
+
   it('hides admin-only and requester-only entries from setup owners', () => {
     const html = renderToStaticMarkup(createElement(NavSidebar, { role: 'setup_owner' }))
 
