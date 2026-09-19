@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, User } from 'lucide-react'
 import { ApiError, loginWithPassword } from '../../services/api'
+import nxpLogo from '../../assets/NXP.png'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const [username, setUsername] = useState('admin.demo')
-  const [password, setPassword] = useState('AdminDemo123!')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -30,64 +33,74 @@ export function LoginPage() {
   }
 
   return (
-    <section className="page-card login-card">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Local authentication</p>
-          <h1>Login</h1>
-          <p className="page-card__description">
-            Sign in with a seeded MVP testing account. The backend stores the
-            authenticated user id in an HTTP-only session cookie; no
-            localStorage is used.
-          </p>
+    <div className="login-page">
+      <section className="page-card login-card">
+        <div className="login-card__brand">
+          <img src={nxpLogo} alt="NXP Semiconductors" />
+          <div>
+            <h1>PSF Request Portal</h1>
+            <p>Sign in to manage PSF setup files and workflow requests</p>
+          </div>
         </div>
-      </div>
 
-      <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
-        <label className="form-field">
-          <span>Username</span>
-          <input
-            autoComplete="username"
-            onChange={(event) => setUsername(event.target.value)}
-            required
-            type="text"
-            value={username}
-          />
-        </label>
+        <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
+          <label className="form-field">
+            <span>Username</span>
+            <span className="login-form__control">
+              <User size={18} />
+              <input
+                autoComplete="username"
+                className="input-base input-with-icon"
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Enter your username"
+                required
+                type="text"
+                value={username}
+              />
+            </span>
+          </label>
 
-        <label className="form-field">
-          <span>Password</span>
-          <input
-            autoComplete="current-password"
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            type="password"
-            value={password}
-          />
-        </label>
+          <label className="form-field">
+            <span>Password</span>
+            <span className="login-form__control">
+              <Lock size={18} />
+              <input
+                autoComplete="current-password"
+                className="input-base input-with-icon input-with-clear"
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                required
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+              />
+              <button
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="login-form__toggle"
+                onClick={() => setShowPassword((current) => !current)}
+                type="button"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </span>
+          </label>
 
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
+          {error ? (
+            <p className="login-form__error" role="alert">
+              <AlertCircle size={15} />
+              <span>{error}</span>
+            </p>
+          ) : null}
 
-        <button className="primary-button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
-
-      <div className="page-card__body login-card__seeded-users">
-        <div className="page-card__section">
-          <h2>Seeded users for MVP testing</h2>
-          <ul>
-            <li>requester.demo / RequesterDemo123! — Requester</li>
-            <li>setup.gntc.demo / SetupGntcDemo123! — Setup Owner GNTC</li>
-            <li>setup.mfg.demo / SetupMfgDemo123! — Setup Owner MFG</li>
-            <li>admin.demo / AdminDemo123! — Admin</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+          <button
+            className="btn-primary login-form__submit"
+            disabled={isSubmitting}
+            type="submit"
+          >
+            {isSubmitting ? 'Signing in…' : 'Sign in to Portal'}
+            <ArrowRight size={16} />
+          </button>
+        </form>
+      </section>
+    </div>
   )
 }
