@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
+import {
+  Calendar,
+  FileSpreadsheet,
+  FileText,
+  Inbox,
+  RotateCcw,
+  Search,
+  User,
+} from 'lucide-react'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import {
@@ -334,9 +343,21 @@ async function loadCurrentUserOrNull(): Promise<AuthenticatedUserProfile | null>
   }
 }
 
+function priorityClassName(priority: string | null): string {
+  return `priority-badge priority-badge--${(priority ?? 'normal').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+}
+
 function RequestsTable({ items, compact = false }: { items: PsfRequestListItem[]; compact?: boolean }) {
   if (items.length === 0) {
-    return <p className="page-card__description">No PSF requests match the current view.</p>
+    return (
+      <div className="table-empty">
+        <span className="table-empty__icon">
+          <Inbox size={22} />
+        </span>
+        <h3>No PSF requests found</h3>
+        <p>No PSF requests match the current view.</p>
+      </div>
+    )
   }
 
   return (
@@ -357,18 +378,39 @@ function RequestsTable({ items, compact = false }: { items: PsfRequestListItem[]
         <tbody>
           {items.map((item) => (
             <tr key={item.requestId}>
-              <td>{item.requestNo}</td>
               <td>
-                <strong>{getRequestTitle(item)}</strong>
-                <span>{item.productType ?? 'No product type'}</span>
+                <span className="cell-strong font-mono-code">{item.requestNo}</span>
+              </td>
+              <td>
+                <span className="cell-strong">{getRequestTitle(item)}</span>
+                <span className="chip">{item.productType ?? 'No product type'}</span>
               </td>
               <td>
                 <span className={statusClassName(item.status)}>{item.status}</span>
               </td>
-              <td>{item.priority ?? 'Normal'}</td>
-              <td>{formatDate(item.dueDate)}</td>
-              {!compact ? <td>{item.requester ?? '—'}</td> : null}
-              <td>{getOwnerLabel(item)}</td>
+              <td>
+                <span className={priorityClassName(item.priority)}>
+                  {item.priority ?? 'Normal'}
+                </span>
+              </td>
+              <td>
+                <span className="cell-meta">
+                  <Calendar size={13} />
+                  {formatDate(item.dueDate)}
+                </span>
+              </td>
+              {!compact ? (
+                <td>
+                  <span className="cell-meta">
+                    <User size={12} />
+                    {item.requester ?? '—'}
+                  </span>
+                </td>
+              ) : null}
+              <td>
+                <span className="cell-strong">{item.setupOwner ?? 'Unassigned'}</span>
+                {item.setupOwnerRole ? <span className="chip">{item.setupOwnerRole}</span> : null}
+              </td>
               <td>
                 <Link className="table-action" to="/requests/$requestId" params={{ requestId: item.requestId }}>
                   Open detail
@@ -540,50 +582,79 @@ export function RequestsListPage() {
     }
   }, [filters.keyword, filters.productType, filters.status])
 
+  const hasActiveFilters = Boolean(
+    filters.keyword.trim() || filters.status || filters.productType.trim(),
+  )
+
   return (
     <article className="page-card workflow-page">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Search and browse</p>
-          <h1>PSF Requests</h1>
-          <p className="page-card__description">
-            API-backed list/search for all visible requests. Use Dashboard for focused queue work and this page for lookup.
-          </p>
+      <div className="page-header">
+        <div className="page-header__title">
+          <span className="page-header__icon">
+            <FileText size={20} />
+          </span>
+          <div>
+            <h1>All PSF Requests</h1>
+            <p className="page-card__description">
+              API-backed list/search for all visible requests. Use Dashboard for focused queue work and this page for lookup.
+            </p>
+          </div>
         </div>
         <div className="button-row">
-          <Link className="primary-button" to="/requests/new">
-            New request
-          </Link>
-          <Link className="secondary-button" to="/admin/export-profile">
-            Export entry point
+          <Link className="btn-secondary" to="/admin/export-profile">
+            <FileSpreadsheet size={16} /> Export to Excel
           </Link>
         </div>
       </div>
 
-      <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
-        <label>
-          Keyword
-          <input value={filters.keyword} onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))} placeholder="Request no, title, PSF name…" />
-        </label>
-        <label>
-          Status
-          <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-            <option value="">All statuses</option>
-            {WORKFLOW_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Product Type
-          <input value={filters.productType} onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))} placeholder="Existing Product" />
-        </label>
-      </form>
+      <section className="toolbar" aria-label="Request filters">
+        <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
+          <label>
+            Keyword
+            <span className="filter-bar__control">
+              <Search size={16} />
+              <input
+                className="input-base input-with-icon"
+                onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
+                placeholder="Request no, title, PSF name…"
+                value={filters.keyword}
+              />
+            </span>
+          </label>
+          <label>
+            Status
+            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+              <option value="">All statuses</option>
+              {WORKFLOW_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Product Type
+            <input value={filters.productType} onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))} placeholder="Existing Product" />
+          </label>
+        </form>
+        <div className="toolbar__actions">
+          <button
+            className="btn-secondary"
+            disabled={!hasActiveFilters}
+            onClick={() => setFilters({ keyword: '', status: '', productType: '' })}
+            type="button"
+          >
+            <RotateCcw size={14} /> Clear filters
+          </button>
+        </div>
+      </section>
 
-      {state.loading ? <p className="page-card__description">Loading request list…</p> : null}
-      {state.error ? <p className="status-pill status-pill--error">{state.error}</p> : null}
+      {state.loading ? <p className="page-card__description" role="status">Loading request list…</p> : null}
+      {state.error ? (
+        <p className="status-pill status-pill--error" role="alert">
+          {state.error}
+        </p>
+      ) : null}
       <p className="page-card__description">Showing {state.data.items.length} of {state.data.total} matched request(s).</p>
       <RequestsTable items={state.data.items} />
     </article>
