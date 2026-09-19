@@ -1122,6 +1122,44 @@ input.input-with-clear {
   gap: 12px;
 }
 
+.psf-created-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.psf-created-panel--hidden {
+  justify-items: start;
+  padding: 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background-color: var(--secondary);
+}
+
+.psf-created-panel--hidden h2 {
+  font-size: 16px;
+}
+
+.psf-created-panel--hidden .page-card__description {
+  margin: 0;
+}
+
+.psf-created-panel__notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--status-inprogress-border);
+  border-radius: var(--radius);
+  background-color: var(--status-inprogress-bg);
+  color: var(--status-inprogress-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.psf-created-panel--editable .psf-created-panel__notice {
+  border-color: var(--status-completed-border);
+  background-color: var(--status-completed-bg);
+  color: var(--status-completed-text);
+}
+
 /* ----------------------------------------------------- requests surfaces -- */
 
 .workflow-page {
@@ -1192,6 +1230,48 @@ input.input-with-clear {
 .button-row,
 .workflow-actions {
   justify-content: flex-start;
+}
+
+.workflow-actions {
+  align-items: stretch;
+}
+
+.workflow-actions__current,
+.workflow-actions__control,
+.workflow-actions__read-only {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--secondary);
+}
+
+.workflow-actions__current > span:first-child,
+.workflow-actions__control > span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.workflow-actions__control select {
+  min-width: 11rem;
+}
+
+.workflow-actions__apply {
+  align-self: end;
+}
+
+.workflow-actions__read-only {
+  width: 100%;
+}
+
+.workflow-actions__read-only .page-card__description {
+  margin: 0;
+  font-size: 12px;
 }
 
 .filter-bar {

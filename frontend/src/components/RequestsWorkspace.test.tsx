@@ -346,6 +346,8 @@ describe('WorkflowStatusActions', () => {
     )
 
     expect(html).toContain('Status')
+    expect(html).toContain('workflow-actions__control')
+    expect(html).toContain('status-badge--submitted')
     expect(html).toContain('<select')
     expect(html).toContain('Setup In Progress')
     expect(html).toContain('Need More Information')
@@ -443,6 +445,8 @@ describe('PsfCreatedInformationPanel', () => {
 
     expect(html).toContain('PSF Setup File Name')
     expect(html).toContain('visible-setup.psf')
+    expect(html).toContain('psf-created-panel--read-only')
+    expect(html).toContain('available read-only')
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*>/)
     expect(html).not.toContain('Save PSF Created Information')
   })

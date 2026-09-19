@@ -188,16 +188,23 @@ export function WorkflowStatusActions({
 }: WorkflowStatusActionsProps) {
   if (allowedNextStatuses.length === 0) {
     return (
-      <p className="page-card__description">
-        Workflow status: <strong>{currentStatus}</strong> (read-only)
-      </p>
+      <div className="workflow-actions__read-only">
+        <span className={statusClassName(currentStatus)}>{currentStatus}</span>
+        <p className="page-card__description">
+          Workflow status is read-only because the server returned no available transition.
+        </p>
+      </div>
     )
   }
 
   return (
     <>
-      <label>
-        Status
+      <div className="workflow-actions__current">
+        <span>Status</span>
+        <span className={statusClassName(currentStatus)}>{currentStatus}</span>
+      </div>
+      <label className="workflow-actions__control">
+        <span>Move to</span>
         <select disabled={saving} onChange={(event) => onStatusChange(event.target.value)} value={selectedStatus}>
           {allowedNextStatuses.map((status) => (
             <option key={status} value={status}>
@@ -206,7 +213,7 @@ export function WorkflowStatusActions({
           ))}
         </select>
       </label>
-      <button className="primary-button" disabled={saving || !selectedStatus} onClick={onApply} type="button">
+      <button className="btn-primary workflow-actions__apply" disabled={saving || !selectedStatus} onClick={onApply} type="button">
         {saving ? 'Applying status…' : 'Apply status'}
       </button>
     </>
@@ -233,19 +240,24 @@ export function PsfCreatedInformationPanel({
 }: PsfCreatedInformationPanelProps) {
   if (!request.psfCreatedDataVisible) {
     return (
-      <>
-        <h2>PSF Created Information</h2>
+      <section className="psf-created-panel psf-created-panel--hidden" aria-labelledby="psf-created-heading">
+        <h2 id="psf-created-heading">PSF Created Information</h2>
         <p className="page-card__description" role="status">
           {PSF_CREATED_INFORMATION_PLACEHOLDER}
         </p>
-      </>
+      </section>
     )
   }
 
   const canEdit = request.canEditPsfCreatedData
 
   return (
-    <>
+    <div className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`}>
+      <p className="psf-created-panel__notice" role="status">
+        {canEdit
+          ? 'Editing is enabled by the server for this request.'
+          : 'PSF Created Information is available read-only for this request.'}
+      </p>
       {saving ? <p className="page-card__description" role="status">Saving PSF Created Information…</p> : null}
       <DynamicFormRenderer
         onChange={canEdit ? onChange : undefined}
@@ -256,7 +268,7 @@ export function PsfCreatedInformationPanel({
         submitLabel="Save PSF Created Information"
         values={values}
       />
-    </>
+    </div>
   )
 }
 
