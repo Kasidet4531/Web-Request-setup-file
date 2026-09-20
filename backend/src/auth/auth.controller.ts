@@ -21,6 +21,10 @@ interface LoginBody {
   password?: string;
 }
 
+interface DevelopmentLoginBody {
+  identity?: string;
+}
+
 interface MeResponse {
   user: AuthenticatedUserProfile;
 }
@@ -41,6 +45,22 @@ export class AuthController {
     const user = await this.authService.validateCredentials(
       body.username ?? '',
       body.password ?? '',
+    );
+
+    request.session.userId = user.id;
+    await this.saveSession(request);
+
+    return { user };
+  }
+
+  @Post('dev/login')
+  @HttpCode(200)
+  async developmentLogin(
+    @Body() body: DevelopmentLoginBody,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<MeResponse> {
+    const user = await this.authService.loginWithDevelopmentIdentity(
+      body.identity ?? '',
     );
 
     request.session.userId = user.id;

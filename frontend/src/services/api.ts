@@ -481,6 +481,18 @@ export async function refreshCurrentUser() {
   return response
 }
 
+export type DevelopmentLoginIdentity =
+  | 'requester'
+  | 'setup_owner_gntc'
+  | 'setup_owner_mfg'
+  | 'admin';
+
+export async function loginWithDevelopmentIdentity(identity: DevelopmentLoginIdentity) {
+  const response = await api.post<AuthResponse>('/dev/login', { identity })
+  notifyAuthSessionChanged({ status: 'authenticated', user: response.user })
+  return response
+}
+
 export async function loginWithPassword(username: string, password: string) {
   const response = await api.post<AuthResponse>('/login', { username, password })
   notifyAuthSessionChanged({ status: 'authenticated', user: response.user })

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createApiClient,
   fetchCurrentUser,
+  loginWithDevelopmentIdentity,
   loginWithPassword,
   logout,
   refreshCurrentUser,
@@ -126,6 +127,41 @@ describe('createApiClient', () => {
         user: expect.objectContaining({ username: 'admin.demo' }),
       }),
     }))
+  })
+
+  it('uses the separate development endpoint and announces the normal authenticated session', async () => {
+    const user = {
+      id: 'dev-gntc-id',
+      username: 'dev.setup-gntc',
+      displayName: 'Development Setup Owner GNTC',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    }
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ user }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+    const eventTarget = new EventTarget()
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: eventTarget, writable: true })
+    Object.defineProperty(globalThis, 'CustomEvent', { configurable: true, value: TestCustomEvent, writable: true })
+    const listener = vi.fn()
+    eventTarget.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
+
+    await expect(loginWithDevelopmentIdentity('setup_owner_gntc')).resolves.toEqual({ user })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/dev/login',
+      expect.objectContaining({
+        body: JSON.stringify({ identity: 'setup_owner_gntc' }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: { status: 'authenticated', user } }),
+    )
   })
 
   it('fetches the active form schema for the requested form key', async () => {

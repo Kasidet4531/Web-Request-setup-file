@@ -2,8 +2,15 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, User } from 'lucide-react'
-import { ApiError, loginWithPassword } from '../../services/api'
+import { ApiError, loginWithDevelopmentIdentity, loginWithPassword, type DevelopmentLoginIdentity } from '../../services/api'
 import nxpLogo from '../../assets/NXP.png'
+
+const DEVELOPMENT_LOGIN_IDENTITIES: { identity: DevelopmentLoginIdentity; label: string }[] = [
+  { identity: 'requester', label: 'Requester' },
+  { identity: 'setup_owner_gntc', label: 'Setup Owner · GNTC' },
+  { identity: 'setup_owner_mfg', label: 'Setup Owner · MFG' },
+  { identity: 'admin', label: 'Administrator' },
+]
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -26,6 +33,21 @@ export function LoginPage() {
         caughtError instanceof ApiError
           ? caughtError.message
           : 'Unable to sign in'
+      setError(message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleDevelopmentLogin(identity: DevelopmentLoginIdentity) {
+    setError(null)
+    setIsSubmitting(true)
+
+    try {
+      await loginWithDevelopmentIdentity(identity)
+      await navigate({ to: '/dashboard' })
+    } catch (caughtError) {
+      const message = caughtError instanceof ApiError ? caughtError.message : 'Unable to sign in'
       setError(message)
     } finally {
       setIsSubmitting(false)
@@ -102,6 +124,28 @@ export function LoginPage() {
           </button>
           </form>
         </section>
+
+        {import.meta.env.DEV ? (
+          <section className="development-login" aria-label="Local test identities">
+            <div>
+              <h2>Local test identities</h2>
+              <p>Development only. These buttons never submit the LDAP password form.</p>
+            </div>
+            <div className="development-login__actions">
+              {DEVELOPMENT_LOGIN_IDENTITIES.map(({ identity, label }) => (
+                <button
+                  className="btn-secondary"
+                  disabled={isSubmitting}
+                  key={identity}
+                  onClick={() => void handleDevelopmentLogin(identity)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   )

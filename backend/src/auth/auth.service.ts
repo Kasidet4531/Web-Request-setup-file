@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  NotFoundException,
   OnModuleInit,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -40,6 +41,49 @@ interface LdapAuthResponse {
   status?: unknown;
   data?: unknown;
 }
+
+export type DevelopmentLoginIdentity =
+  | 'requester'
+  | 'setup_owner_gntc'
+  | 'setup_owner_mfg'
+  | 'admin';
+
+type DevelopmentIdentityDefinition = {
+  username: string;
+  displayName: string;
+  role: UserRole;
+  setupOwnerDepartment: 'GNTC' | 'MFG' | null;
+};
+
+const DEVELOPMENT_IDENTITIES: Record<
+  DevelopmentLoginIdentity,
+  DevelopmentIdentityDefinition
+> = {
+  requester: {
+    username: 'dev.requester',
+    displayName: 'Development Requester',
+    role: 'requester',
+    setupOwnerDepartment: null,
+  },
+  setup_owner_gntc: {
+    username: 'dev.setup-gntc',
+    displayName: 'Development Setup Owner GNTC',
+    role: 'setup_owner',
+    setupOwnerDepartment: 'GNTC',
+  },
+  setup_owner_mfg: {
+    username: 'dev.setup-mfg',
+    displayName: 'Development Setup Owner MFG',
+    role: 'setup_owner',
+    setupOwnerDepartment: 'MFG',
+  },
+  admin: {
+    username: 'dev.admin',
+    displayName: 'Development Administrator',
+    role: 'admin',
+    setupOwnerDepartment: null,
+  },
+};
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -113,6 +157,41 @@ export class AuthService implements OnModuleInit {
     }
 
     return this.upsertFromLdap(ldapUsername, ldapData);
+  }
+
+  async loginWithDevelopmentIdentity(
+    identity: string,
+  ): Promise<AuthenticatedUserProfile> {
+    if (!this.isDevelopmentAuthEnabled()) {
+      throw new NotFoundException();
+    }
+
+    const definition = DEVELOPMENT_IDENTITIES[identity as DevelopmentLoginIdentity];
+    if (!definition) {
+      throw new NotFoundException();
+    }
+
+    const result = await this.pool.query<UserRow>(
+      `INSERT INTO app_users (
+         username, display_name, password_hash, role, setup_owner_department,
+         email, employee_id, title
+       )
+       VALUES ($1, $2, NULL, $3, $4, NULL, NULL, 'Development test identity')
+       ON CONFLICT (username) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         role = EXCLUDED.role,
+         setup_owner_department = EXCLUDED.setup_owner_department,
+         updated_at = NOW()
+       RETURNING *`,
+      [
+        definition.username,
+        definition.displayName,
+        definition.role,
+        definition.setupOwnerDepartment,
+      ],
+    );
+
+    return this.toProfile(result.rows[0]);
   }
 
   async getProfile(userId: string): Promise<AuthenticatedUserProfile | null> {
@@ -254,6 +333,13 @@ export class AuthService implements OnModuleInit {
       ALTER TABLE app_users
       VALIDATE CONSTRAINT app_users_role_department_consistency
     `);
+  }
+
+  private isDevelopmentAuthEnabled(): boolean {
+    return (
+      process.env.NODE_ENV !== 'production' &&
+      this.configService.get<string>('DEV_AUTH_ENABLED', 'false') === 'true'
+    );
   }
 
   private isValidLdapUser(data: unknown): data is LdapUserData {

@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { AuthController } from './auth.controller';
@@ -14,7 +14,10 @@ describe('AuthController', () => {
     setupOwnerDepartment: null,
   };
 
-  let authService: Pick<AuthService, 'validateCredentials' | 'getProfile'>;
+  let authService: Pick<
+    AuthService,
+    'validateCredentials' | 'getProfile' | 'loginWithDevelopmentIdentity'
+  >;
   let configService: ConfigService;
   let controller: AuthController;
 
@@ -39,6 +42,7 @@ describe('AuthController', () => {
   beforeEach(() => {
     authService = {
       validateCredentials: jest.fn().mockResolvedValue(user),
+      loginWithDevelopmentIdentity: jest.fn().mockResolvedValue(user),
       getProfile: jest.fn().mockResolvedValue(user),
     };
     configService = {
@@ -63,6 +67,33 @@ describe('AuthController', () => {
     );
     expect(request.session.userId).toBe(user.id);
     expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores the development identity user id in the normal server session', async () => {
+    const { request, save } = createRequest();
+
+    await expect(
+      controller.developmentLogin({ identity: 'setup_owner_gntc' }, request),
+    ).resolves.toEqual({ user });
+
+    expect(authService.loginWithDevelopmentIdentity).toHaveBeenCalledWith('setup_owner_gntc');
+    expect(authService.validateCredentials).not.toHaveBeenCalled();
+    expect(request.session.userId).toBe(user.id);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mutate or save a session when development authentication is disabled', async () => {
+    const { request, save } = createRequest();
+    (authService.loginWithDevelopmentIdentity as jest.Mock).mockRejectedValueOnce(
+      new NotFoundException(),
+    );
+
+    await expect(
+      controller.developmentLogin({ identity: 'requester' }, request),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(request.session.userId).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('returns /api/me from the existing session cookie state', async () => {
