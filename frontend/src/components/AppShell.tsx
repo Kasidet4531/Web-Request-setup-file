@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
 import { NavSidebar } from './NavSidebar'
-import type { UserRole } from './navigationState'
+import { isStandaloneAuthenticationPath, type UserRole } from './navigationState'
 import { subscribeAuthSessionChanged } from '../services/auth-session'
 import {
   ApiError,
@@ -211,6 +211,14 @@ export function AppShell() {
   const role = authState.status === 'authenticated' ? authState.user.role : null
   const breadcrumbs = breadcrumbsForPath(pathname)
   const canCreateRequest = role === 'requester' || role === 'admin'
+
+  if (isStandaloneAuthenticationPath(pathname)) {
+    return (
+      <main className="auth-layout">
+        <Outlet />
+      </main>
+    )
+  }
 
   return (
     <div className="app-layout">

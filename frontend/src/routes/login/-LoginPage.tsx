@@ -34,7 +34,7 @@ export function LoginPage() {
 
   return (
     <div className="login-page">
-      <section className="page-card login-card">
+      <div className="login-page__content">
         <div className="login-card__brand">
           <img src={nxpLogo} alt="NXP Semiconductors" />
           <div>
@@ -43,7 +43,8 @@ export function LoginPage() {
           </div>
         </div>
 
-        <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
+        <section className="page-card login-card">
+          <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
           <label className="form-field">
             <span>Username</span>
             <span className="login-form__control">
@@ -99,8 +100,9 @@ export function LoginPage() {
             {isSubmitting ? 'Signing in…' : 'Sign in to Portal'}
             <ArrowRight size={16} />
           </button>
-        </form>
-      </section>
+          </form>
+        </section>
+      </div>
     </div>
   )
 }

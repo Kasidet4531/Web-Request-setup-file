@@ -67,6 +67,10 @@ export function navSectionsForRole(role: UserRole | null): NavSection[] {
   return sections
 }
 
+export function isStandaloneAuthenticationPath(pathname: string): boolean {
+  return pathname === '/login' || pathname === '/login/'
+}
+
 export function resolveActivePath(pathname: string, sections: NavSection[]): string | null {
   const normalised =
     pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
