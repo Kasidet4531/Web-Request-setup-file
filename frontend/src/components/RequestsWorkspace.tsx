@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import {
+  AlertTriangle,
   ArrowLeft,
   Calendar,
+  Clock3,
   FileSpreadsheet,
   FileText,
   Inbox,
   RotateCcw,
   Search,
   User,
+  Wrench,
 } from 'lucide-react'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
@@ -253,6 +256,13 @@ export function PsfCreatedInformationPanel({
 
   return (
     <div className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`}>
+      <div className="psf-created-panel__header">
+        <div>
+          <p className="page-card__eyebrow">Setup output</p>
+          <h2>PSF Created Information</h2>
+        </div>
+        <span>{canEdit ? 'Editable' : 'Read only'}</span>
+      </div>
       <p className="psf-created-panel__notice" role="status">
         {canEdit
           ? 'Editing is enabled by the server for this request.'
@@ -445,10 +455,25 @@ function RequestsTable({ items, compact = false }: { items: PsfRequestListItem[]
   )
 }
 
-function SummaryCard({ label, value, helper }: { label: string; value: number; helper: string }) {
+function SummaryCard({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone,
+}: {
+  label: string
+  value: number
+  helper: string
+  icon: typeof FileText
+  tone: 'open' | 'waiting' | 'progress' | 'overdue'
+}) {
   return (
-    <section className="summary-card">
-      <p>{label}</p>
+    <section className={`summary-card summary-card--${tone}`}>
+      <div className="summary-card__top">
+        <p>{label}</p>
+        <span aria-hidden="true" className="summary-card__icon"><Icon size={18} /></span>
+      </div>
       <strong>{value}</strong>
       <span>{helper}</span>
     </section>
@@ -498,57 +523,66 @@ export function DashboardPage() {
         label: 'My Open Requests',
         value: items.filter((item) => !['Completed', 'Rejected', 'Cancelled'].includes(item.status)).length,
         helper: state.data.user?.role === 'requester' ? 'Your active requester work' : 'Open requests in current view',
+        icon: FileText,
+        tone: 'open' as const,
       },
       {
         label: 'Waiting for Setup',
         value: items.filter((item) => item.status === 'Submitted').length,
         helper: 'Submitted and ready for setup owner action',
+        icon: Clock3,
+        tone: 'waiting' as const,
       },
       {
         label: 'Setup In Progress',
         value: items.filter((item) => item.status === 'Setup In Progress').length,
         helper: 'Requests already being prepared',
+        icon: Wrench,
+        tone: 'progress' as const,
       },
       {
         label: 'Overdue',
         value: items.filter((item) => item.dueDate && new Date(item.dueDate).getTime() < state.data.loadedAt).length,
         helper: 'Due date has passed',
+        icon: AlertTriangle,
+        tone: 'overdue' as const,
       },
     ]
   }, [state.data.items, state.data.loadedAt, state.data.user?.role])
 
   return (
-    <article className="page-card workflow-page">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Operational queue</p>
-          <h1>Dashboard</h1>
-          <p className="page-card__description">
-            Four-card Phase 2 queue view. Setup Owners and Admins see all statuses by default; cards are highlights, not visibility limits.
-          </p>
+    <article className="workflow-page dashboard-page">
+      <div className="page-header dashboard-page__header">
+        <div className="page-header__title">
+          <span className="page-header__icon"><FileText size={20} /></span>
+          <div>
+            <p className="page-card__eyebrow">Operational queue</p>
+            <h1>Dashboard</h1>
+            <p className="page-card__description">
+              Review the requests visible to your server-authorized session.
+            </p>
+          </div>
         </div>
-        <Link className="primary-button" to="/requests/new">
-          New request
-        </Link>
       </div>
 
       {state.loading ? <p className="page-card__description">Loading dashboard queue…</p> : null}
       {state.error ? <p className="status-pill status-pill--error">{state.error}</p> : null}
 
-      <div className="summary-grid">
+      <div className="summary-grid dashboard-summary-grid">
         {cards.map((card) => (
           <SummaryCard key={card.label} {...card} />
         ))}
       </div>
 
-      <section className="workflow-section">
-        <div className="section-heading">
+      <section className="workspace-panel dashboard-queue">
+        <div className="section-heading dashboard-queue__heading">
           <div>
-            <h2>Queue</h2>
+            <p className="page-card__eyebrow">Work queue</p>
+            <h2>Requests requiring attention</h2>
             <p>{state.data.items.length} visible request(s) across available statuses.</p>
           </div>
-          <Link className="secondary-button" to="/requests">
-            Full PSF Requests search
+          <Link className="btn-secondary" to="/requests">
+            Browse requests
           </Link>
         </div>
         <RequestsTable compact items={state.data.items} />
@@ -608,16 +642,17 @@ export function RequestsListPage() {
   )
 
   return (
-    <article className="page-card workflow-page">
-      <div className="page-header">
+    <article className="workflow-page requests-page">
+      <div className="page-header requests-page__header">
         <div className="page-header__title">
           <span className="page-header__icon">
             <FileText size={20} />
           </span>
           <div>
+            <p className="page-card__eyebrow">Request browser</p>
             <h1>All PSF Requests</h1>
             <p className="page-card__description">
-              API-backed list/search for all visible requests. Use Dashboard for focused queue work and this page for lookup.
+              Search the server-backed requests visible to your session.
             </p>
           </div>
         </div>
@@ -628,56 +663,60 @@ export function RequestsListPage() {
         </div>
       </div>
 
-      <section className="toolbar" aria-label="Request filters">
-        <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
-          <label>
-            Keyword
-            <span className="filter-bar__control">
-              <Search size={16} />
-              <input
-                className="input-base input-with-icon"
-                onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
-                placeholder="Request no, title, PSF name…"
-                value={filters.keyword}
-              />
-            </span>
-          </label>
-          <label>
-            Status
-            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-              <option value="">All statuses</option>
-              {WORKFLOW_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Product Type
-            <input value={filters.productType} onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))} placeholder="Existing Product" />
-          </label>
-        </form>
-        <div className="toolbar__actions">
-          <button
-            className="btn-secondary"
-            disabled={!hasActiveFilters}
-            onClick={() => setFilters({ keyword: '', status: '', productType: '' })}
-            type="button"
-          >
-            <RotateCcw size={14} /> Clear filters
-          </button>
+      <section className="request-browser" aria-label="PSF request browser">
+        <div className="toolbar request-browser__toolbar" aria-label="Request filters">
+          <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
+            <label>
+              Keyword
+              <span className="filter-bar__control">
+                <Search size={16} />
+                <input
+                  className="input-base input-with-icon"
+                  onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
+                  placeholder="Request no, title, PSF name…"
+                  value={filters.keyword}
+                />
+              </span>
+            </label>
+            <label>
+              Status
+              <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+                <option value="">All statuses</option>
+                {WORKFLOW_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Product Type
+              <input value={filters.productType} onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))} placeholder="Existing Product" />
+            </label>
+          </form>
+          <div className="toolbar__actions">
+            <button
+              className="btn-secondary"
+              disabled={!hasActiveFilters}
+              onClick={() => setFilters({ keyword: '', status: '', productType: '' })}
+              type="button"
+            >
+              <RotateCcw size={14} /> Clear filters
+            </button>
+          </div>
         </div>
-      </section>
 
-      {state.loading ? <p className="page-card__description" role="status">Loading request list…</p> : null}
-      {state.error ? (
-        <p className="status-pill status-pill--error" role="alert">
-          {state.error}
-        </p>
-      ) : null}
-      <p className="page-card__description">Showing {state.data.items.length} of {state.data.total} matched request(s).</p>
-      <RequestsTable items={state.data.items} />
+        <div className="request-browser__meta">
+          <span>{state.loading ? 'Loading request list…' : `Showing ${state.data.items.length} of ${state.data.total} matched request(s).`}</span>
+          {hasActiveFilters ? <span>Filters active</span> : null}
+        </div>
+        {state.error ? (
+          <p className="status-pill status-pill--error" role="alert">
+            {state.error}
+          </p>
+        ) : null}
+        <RequestsTable items={state.data.items} />
+      </section>
     </article>
   )
 }
@@ -846,7 +885,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
   }
 
   return (
-    <article className="page-card workflow-page">
+    <article className="workflow-page detail-page">
       <div className="page-header">
         <div className="page-header__title">
           <Link className="btn-ghost" to="/requests">
@@ -873,6 +912,19 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
       {message ? <p className="status-pill status-pill--success" role="status">{message}</p> : null}
 
       {request ? (
+        <section className="detail-workflow-strip" aria-label="Current workflow state">
+          <div>
+            <p className="page-card__eyebrow">Current workflow state</p>
+            <div className="detail-workflow-strip__status">
+              <span className={statusClassName(request.status)}>{request.status}</span>
+              <span>{allowedNextStatuses.length > 0 ? 'Actions are available in the action center.' : 'No next action is available for this session.'}</span>
+            </div>
+          </div>
+          <p>Workflow options are supplied by the server for this request and session.</p>
+        </section>
+      ) : null}
+
+      {request ? (
         <div className="detail-layout">
           <div className="detail-layout__main">
             <RequestHeaderSummary request={request} />
@@ -896,7 +948,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
             <section className="workflow-section">
               <div className="section-heading">
                 <div>
-                  <h2>Workflow actions</h2>
+                  <h2>Action center</h2>
                   <p>Available status transitions are determined by your authenticated server session.</p>
                 </div>
               </div>
