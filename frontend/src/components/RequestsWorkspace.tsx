@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -378,7 +378,17 @@ function priorityClassName(priority: string | null): string {
   return `priority-badge priority-badge--${(priority ?? 'normal').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
-function RequestsTable({ items, compact = false }: { items: PsfRequestListItem[]; compact?: boolean }) {
+export function RequestsTable({
+  items,
+  compact = false,
+  onOpenItem,
+}: {
+  items: PsfRequestListItem[]
+  compact?: boolean
+  onOpenItem?: (requestId: string) => void
+}) {
+  const interactiveRows = Boolean(onOpenItem)
+
   if (items.length === 0) {
     return (
       <div className="table-empty">
@@ -403,12 +413,24 @@ function RequestsTable({ items, compact = false }: { items: PsfRequestListItem[]
             <th>Due Date</th>
             {!compact ? <th>Requester</th> : null}
             <th>Owner / Dept</th>
-            <th>Action</th>
+            {!interactiveRows ? <th>Action</th> : null}
           </tr>
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.requestId}>
+            <tr
+              aria-label={interactiveRows ? `Open ${item.requestNo} details` : undefined}
+              className={interactiveRows ? 'data-table__row--interactive' : undefined}
+              key={item.requestId}
+              onClick={interactiveRows ? () => onOpenItem?.(item.requestId) : undefined}
+              onKeyDown={interactiveRows ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onOpenItem?.(item.requestId)
+                }
+              } : undefined}
+              tabIndex={interactiveRows ? 0 : undefined}
+            >
               <td>
                 <span className="cell-strong font-mono-code">{item.requestNo}</span>
               </td>
@@ -442,11 +464,13 @@ function RequestsTable({ items, compact = false }: { items: PsfRequestListItem[]
                 <span className="cell-strong">{item.setupOwner ?? 'Unassigned'}</span>
                 {item.setupOwnerRole ? <span className="chip">{item.setupOwnerRole}</span> : null}
               </td>
-              <td>
-                <Link className="table-action" to="/requests/$requestId" params={{ requestId: item.requestId }}>
-                  Open detail
-                </Link>
-              </td>
+              {!interactiveRows ? (
+                <td>
+                  <Link className="table-action" to="/requests/$requestId" params={{ requestId: item.requestId }}>
+                    Open detail
+                  </Link>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -481,6 +505,7 @@ function SummaryCard({
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const [state, setState] = useState<AsyncState<{ user: AuthenticatedUserProfile | null; items: PsfRequestListItem[]; loadedAt: number }>>({
     loading: true,
     error: null,
@@ -553,16 +578,7 @@ export function DashboardPage() {
   return (
     <article className="workflow-page dashboard-page">
       <div className="page-header dashboard-page__header">
-        <div className="page-header__title">
-          <span className="page-header__icon"><FileText size={20} /></span>
-          <div>
-            <p className="page-card__eyebrow">Operational queue</p>
-            <h1>Dashboard</h1>
-            <p className="page-card__description">
-              Review the requests visible to your server-authorized session.
-            </p>
-          </div>
-        </div>
+        <h1>Dashboard</h1>
       </div>
 
       {state.loading ? <p className="page-card__description">Loading dashboard queue…</p> : null}
@@ -574,19 +590,11 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <section className="workspace-panel dashboard-queue">
-        <div className="section-heading dashboard-queue__heading">
-          <div>
-            <p className="page-card__eyebrow">Work queue</p>
-            <h2>Requests requiring attention</h2>
-            <p>{state.data.items.length} visible request(s) across available statuses.</p>
-          </div>
-          <Link className="btn-secondary" to="/requests">
-            Browse requests
-          </Link>
-        </div>
-        <RequestsTable compact items={state.data.items} />
-      </section>
+      <RequestsTable
+        compact
+        items={state.data.items}
+        onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })}
+      />
     </article>
   )
 }
