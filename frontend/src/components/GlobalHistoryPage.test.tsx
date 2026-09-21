@@ -54,8 +54,9 @@ describe('GlobalAuditLogFilters', () => {
     expect(html).toContain('name="from"')
     expect(html).toContain('name="to"')
     expect(html).toContain('type="date"')
-    expect(html).toContain('Apply')
-    expect(html).toContain('Clear')
+    expect(html).toContain('global-history-filters__dates')
+    expect(html).toContain('global-history-filters__actions')
+    expect(html).toContain('btn-ghost')
 
     const form = controls as unknown as {
       props: {
@@ -67,10 +68,10 @@ describe('GlobalAuditLogFilters', () => {
     expect(onApply).toHaveBeenCalledTimes(1)
 
     const actions = form.props.children as unknown[]
-    const buttonRow = actions[5] as {
+    const buttonRow = actions[4] as {
       props: { children: Array<{ props: { children: string; onClick?: () => void } }> }
     }
-    const clearButton = buttonRow.props.children[1]
+    const clearButton = buttonRow.props.children[0]
     clearButton.props.onClick?.()
     expect(onClear).toHaveBeenCalledTimes(1)
   })

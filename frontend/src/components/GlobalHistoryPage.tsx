@@ -66,13 +66,13 @@ export function GlobalAuditLogFilters({
 }: GlobalAuditLogFiltersProps) {
   return (
     <form
-      className="filter-bar"
+      className="filter-bar global-history-filters"
       onSubmit={(event) => {
         event.preventDefault()
         onApply()
       }}
     >
-      <label>
+      <label className="global-history-filters__request-id">
         Request ID
         <input
           name="requestId"
@@ -81,7 +81,7 @@ export function GlobalAuditLogFilters({
           value={filters.requestId}
         />
       </label>
-      <label>
+      <label className="global-history-filters__user">
         User
         <input
           name="user"
@@ -90,7 +90,7 @@ export function GlobalAuditLogFilters({
           value={filters.user}
         />
       </label>
-      <label>
+      <label className="global-history-filters__action">
         Action
         <select
           name="actionType"
@@ -105,27 +105,29 @@ export function GlobalAuditLogFilters({
           ))}
         </select>
       </label>
-      <label>
-        From (UTC)
-        <input
-          name="from"
-          onChange={(event) => onChange('from', event.target.value)}
-          type="date"
-          value={filters.from}
-        />
-      </label>
-      <label>
-        To (UTC)
-        <input
-          name="to"
-          onChange={(event) => onChange('to', event.target.value)}
-          type="date"
-          value={filters.to}
-        />
-      </label>
-      <div className="button-row">
+      <div className="global-history-filters__dates">
+        <label>
+          From (UTC)
+          <input
+            name="from"
+            onChange={(event) => onChange('from', event.target.value)}
+            type="date"
+            value={filters.from}
+          />
+        </label>
+        <label>
+          To (UTC)
+          <input
+            name="to"
+            onChange={(event) => onChange('to', event.target.value)}
+            type="date"
+            value={filters.to}
+          />
+        </label>
+      </div>
+      <div className="button-row global-history-filters__actions">
+        <button className="btn-ghost" onClick={onClear} type="button">Clear</button>
         <button className="primary-button" type="submit">Apply</button>
-        <button className="secondary-button" onClick={onClear} type="button">Clear</button>
       </div>
     </form>
   )
@@ -256,21 +258,12 @@ export function GlobalHistoryPage() {
   return (
     <article className="page-card workflow-page">
       <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Administrator audit view</p>
-          <h1>Global History</h1>
-          <p className="page-card__description">
-            Review authorized request audit events across the application. Filters are applied by the server.
-          </p>
-        </div>
+        <h1>Global History</h1>
       </div>
 
       <section className="workflow-section" aria-labelledby="global-history-filters-heading">
         <div className="section-heading">
-          <div>
-            <h2 id="global-history-filters-heading">Filters</h2>
-            <p>From includes the UTC day start; To includes its UTC calendar day.</p>
-          </div>
+          <h2 id="global-history-filters-heading">Filters</h2>
         </div>
         <GlobalAuditLogFilters
           filters={filters}
@@ -282,10 +275,7 @@ export function GlobalHistoryPage() {
 
       <section className="workflow-section" aria-labelledby="global-history-results-heading">
         <div className="section-heading">
-          <div>
-            <h2 id="global-history-results-heading">Audit entries</h2>
-            <p>Newest entries appear first.</p>
-          </div>
+          <h2 id="global-history-results-heading">Audit entries</h2>
         </div>
         <GlobalAuditLogTable
           entries={history.data}
