@@ -1018,9 +1018,8 @@ input.input-with-clear {
   color: var(--muted-foreground);
 }
 
-.dynamic-form__product-type {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--ring);
+.dynamic-form__product-type:has(input[aria-invalid='true']) {
+  border-color: var(--destructive);
 }
 
 .dynamic-form__sections,
@@ -1083,6 +1082,18 @@ input.input-with-clear {
   border: 1px solid var(--border);
   border-radius: 9999px;
   font-size: 13px;
+}
+
+.dynamic-form__radio-option:has(input:checked) {
+  border-color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 10%, var(--card));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dynamic-form__radio-option:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .dynamic-form__radio-option input {
