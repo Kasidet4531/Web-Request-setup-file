@@ -285,6 +285,18 @@ function renderDraftForm() {
   return ActiveSchemaForm({ mode: 'request', requestId: 'request-1' })
 }
 
+function renderNewDraftForm() {
+  hookHarness.beginRender()
+  return ActiveSchemaForm({ mode: 'request' })
+}
+
+async function loadNewDraftForm() {
+  renderNewDraftForm()
+  hookHarness.runEffects()
+  await flushAsyncWork()
+  return renderNewDraftForm()
+}
+
 async function flushAsyncWork(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
@@ -306,12 +318,33 @@ function getFormRenderer(page: unknown): RenderedElement {
 
 function getSubmitButton(page: unknown): RenderedElement {
   return requireRenderedElement(
-    page,
+    getFormRenderer(page).props.footerActions,
     (element) => element.type === 'button' && element.props.children === 'Submit request',
   )
 }
 
 describe('ActiveSchemaForm draft schema upgrade interactions', () => {
+  it('persists an incomplete new draft without surfacing required-field validation', async () => {
+    requestApi.fetchActiveFormSchema.mockResolvedValue(currentActiveRequestSchema)
+    requestApi.createDraftRequest.mockResolvedValue(
+      buildDraft({ requesterData: { product_type: '', legacy_note: '' } }),
+    )
+
+    const page = await loadNewDraftForm()
+    const onSave = getFormRenderer(page).props.onSubmit
+    if (typeof onSave !== 'function') {
+      throw new Error('Expected new-draft save callback')
+    }
+
+    onSave({ product_type: '', legacy_note: '' })
+    await flushAsyncWork()
+
+    expect(requestApi.createDraftRequest).toHaveBeenCalledWith({
+      requesterData: { product_type: '', legacy_note: '' },
+    })
+    expect(getFormRenderer(renderNewDraftForm()).props.errors).toEqual({})
+  })
+
   beforeEach(() => {
     hookHarness.reset()
     requestApi.createDraftRequest.mockReset()

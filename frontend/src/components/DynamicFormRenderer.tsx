@@ -1,4 +1,4 @@
-import type { ChangeEvent, FormEvent } from 'react'
+import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type {
   DynamicFormErrors,
   DynamicFormValues,
@@ -16,6 +16,7 @@ export type {
 export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
 
 export interface DynamicFormRendererProps {
+  footerActions?: ReactNode
   fieldStatuses?: Partial<Record<string, DynamicFormFieldStatus>>
   schema: FormSchema
   values?: DynamicFormValues
@@ -46,6 +47,7 @@ function buildFieldId(field: FormSchemaField): string {
 export function DynamicFormRenderer({
   errors = {},
   fieldStatuses = {},
+  footerActions,
   onChange,
   onSubmit,
   readOnly = false,
@@ -126,6 +128,7 @@ export function DynamicFormRenderer({
           <button className="primary-button" type="submit">
             {submitLabel}
           </button>
+          {footerActions}
         </div>
       ) : null}
     </form>

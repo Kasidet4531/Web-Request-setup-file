@@ -1035,6 +1035,23 @@ input.input-with-clear {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.dynamic-form__field {
+  align-content: start;
+  gap: 6px;
+}
+
+.dynamic-form__error,
+.dynamic-form__autofill-status {
+  min-height: 14px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.dynamic-form__error {
+  color: var(--destructive);
+}
+
 .dynamic-form__label {
   display: flex;
   justify-content: space-between;

@@ -459,13 +459,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       return
     }
 
-    const nextErrors = validateRequiredFields(activeSchema.schema, currentValues)
-    setErrors(nextErrors)
-
-    if (Object.keys(nextErrors).length > 0) {
-      return
-    }
-
+    setErrors({})
     invalidateRuntimeAutofill()
     setSaving(true)
     setSaveError(null)
@@ -743,6 +737,26 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       <DynamicFormRenderer
         errors={errors}
         fieldStatuses={autofillStatuses}
+        footerActions={
+          currentRequest?.status === DRAFT_STATUS ? (
+            <>
+              <button
+                aria-describedby={submitIsBlockedBySchema ? 'draft-schema-submit-status' : undefined}
+                className="secondary-button"
+                disabled={saving || submitting || upgradePending || !canSubmitDraft}
+                onClick={() => void submitDraft()}
+                type="button"
+              >
+                {submitting ? 'Submitting request…' : 'Submit request'}
+              </button>
+              {submitIsBlockedBySchema && schemaSubmissionMessage ? (
+                <p id="draft-schema-submit-status" role="status">
+                  {schemaSubmissionMessage}
+                </p>
+              ) : null}
+            </>
+          ) : null
+        }
         onChange={!formReadOnly ? updateField : undefined}
         onSubmit={!formReadOnly ? saveDraft : undefined}
         readOnly={formReadOnly}
@@ -751,24 +765,6 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         submitLabel={saving ? 'Saving draft…' : submitLabel}
         values={values}
       />
-      {currentRequest?.status === DRAFT_STATUS ? (
-        <div className="dynamic-form__actions">
-          <button
-            aria-describedby={submitIsBlockedBySchema ? 'draft-schema-submit-status' : undefined}
-            className="secondary-button"
-            disabled={saving || submitting || upgradePending || !canSubmitDraft}
-            onClick={() => void submitDraft()}
-            type="button"
-          >
-            {submitting ? 'Submitting request…' : 'Submit request'}
-          </button>
-          {submitIsBlockedBySchema && schemaSubmissionMessage ? (
-            <p id="draft-schema-submit-status" role="status">
-              {schemaSubmissionMessage}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
     </>
   )
 }
