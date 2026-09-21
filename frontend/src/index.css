@@ -2154,6 +2154,107 @@ input.input-with-clear {
   text-align: right;
 }
 
+.workflow-status-rail {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--card);
+}
+
+.workflow-status-rail__current,
+.workflow-status-rail__options {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.workflow-status-rail__current > span:first-child,
+.workflow-status-rail__options > span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.workflow-status-rail__options > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.psf-created-panel {
+  gap: 16px;
+}
+
+.psf-created-panel > h2 {
+  font-size: 16px;
+}
+
+.psf-created-panel .dynamic-form__sections {
+  gap: 12px;
+}
+
+.psf-created-panel .dynamic-form__section {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.psf-created-panel .dynamic-form__section > h3 {
+  display: none;
+}
+
+.psf-created-panel .dynamic-form__grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.request-history__timeline {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.request-history__timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.6fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 0 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.request-history__timeline li::before {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: '';
+}
+
+.request-history__timeline li:last-child {
+  border-bottom: 0;
+}
+
+.request-history__timeline time,
+.request-history__timeline span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.request-history__timeline li > div {
+  display: grid;
+  gap: 4px;
+}
+
 .detail-page .detail-layout__rail > .workflow-section:first-child {
   border-color: var(--status-inprogress-border);
   box-shadow: var(--shadow-md);
@@ -2242,6 +2343,10 @@ input.input-with-clear {
 
   .form-workspace__rail {
     position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .psf-created-panel .dynamic-form__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2338,5 +2443,14 @@ input.input-with-clear {
 
   .global-history-filters__actions button {
     flex: 1;
+  }
+
+  .workflow-status-rail,
+  .request-history__timeline li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .psf-created-panel .dynamic-form__grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

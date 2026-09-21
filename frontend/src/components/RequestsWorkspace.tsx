@@ -223,6 +223,30 @@ export function WorkflowStatusActions({
   )
 }
 
+export function WorkflowStatusRail({
+  allowedNextStatuses,
+  currentStatus,
+}: Pick<WorkflowStatusActionsProps, 'allowedNextStatuses' | 'currentStatus'>) {
+  const availableStatuses = allowedNextStatuses.filter((status) => status !== currentStatus)
+
+  return (
+    <section className="workflow-status-rail" aria-label="Workflow status">
+      <div className="workflow-status-rail__current">
+        <span>Current status</span>
+        <span className={statusClassName(currentStatus)}>{currentStatus}</span>
+      </div>
+      {availableStatuses.length > 0 ? (
+        <div className="workflow-status-rail__options">
+          <span>Available transitions</span>
+          <div>
+            {availableStatuses.map((status) => <span className={statusClassName(status)} key={status}>{status}</span>)}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 export const PSF_CREATED_INFORMATION_PLACEHOLDER =
   'PSF Created Information is reserved for Setup Owners and becomes visible to Requesters after PSF Created or Completed.'
 
@@ -255,19 +279,8 @@ export function PsfCreatedInformationPanel({
   const canEdit = request.canEditPsfCreatedData
 
   return (
-    <div className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`}>
-      <div className="psf-created-panel__header">
-        <div>
-          <p className="page-card__eyebrow">Setup output</p>
-          <h2>PSF Created Information</h2>
-        </div>
-        <span>{canEdit ? 'Editable' : 'Read only'}</span>
-      </div>
-      <p className="psf-created-panel__notice" role="status">
-        {canEdit
-          ? 'Editing is enabled by the server for this request.'
-          : 'PSF Created Information is available read-only for this request.'}
-      </p>
+    <section className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`} aria-labelledby="psf-created-heading">
+      <h2 id="psf-created-heading">PSF Created Information</h2>
       {saving ? <p className="page-card__description" role="status">Saving PSF Created Information…</p> : null}
       <DynamicFormRenderer
         onChange={canEdit ? onChange : undefined}
@@ -278,7 +291,7 @@ export function PsfCreatedInformationPanel({
         submitLabel="Save PSF Created Information"
         values={values}
       />
-    </div>
+    </section>
   )
 }
 
@@ -303,12 +316,9 @@ export function RequestHistoryPanel({
   loading: boolean
 }) {
   return (
-    <section className="workflow-section" aria-labelledby="request-history-heading">
+    <section className="workflow-section request-history" aria-labelledby="request-history-heading">
       <div className="section-heading">
-        <div>
-          <h2 id="request-history-heading">History</h2>
-          <p>Recorded actions for this PSF Request.</p>
-        </div>
+        <h2 id="request-history-heading">History</h2>
       </div>
       {loading ? <p className="page-card__description" role="status">Loading request history…</p> : null}
       {error ? (
@@ -322,28 +332,17 @@ export function RequestHistoryPanel({
         </p>
       ) : null}
       {!loading && !error && entries.length > 0 ? (
-        <div className="data-table" role="region" aria-label="Request history" tabIndex={0}>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Timestamp</th>
-                <th scope="col">Action</th>
-                <th scope="col">Actor</th>
-                <th scope="col">Role</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry, index) => (
-                <tr key={`${entry.createdAt}-${entry.actionType}-${index}`}>
-                  <td><time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time></td>
-                  <td>{historyActionSummary(entry)}</td>
-                  <td>{entry.actorDisplayName}</td>
-                  <td>{entry.actorRole}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ol className="request-history__timeline">
+          {entries.map((entry, index) => (
+            <li key={`${entry.createdAt}-${entry.actionType}-${index}`}>
+              <time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time>
+              <div>
+                <strong>{historyActionSummary(entry)}</strong>
+                <span>{entry.actorDisplayName} · {entry.actorRole}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
       ) : null}
     </section>
   )
@@ -917,16 +916,10 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
       {message ? <p className="status-pill status-pill--success" role="status">{message}</p> : null}
 
       {request ? (
-        <section className="detail-workflow-strip" aria-label="Current workflow state">
-          <div>
-            <p className="page-card__eyebrow">Current workflow state</p>
-            <div className="detail-workflow-strip__status">
-              <span className={statusClassName(request.status)}>{request.status}</span>
-              <span>{allowedNextStatuses.length > 0 ? 'Actions are available in the action center.' : 'No next action is available for this session.'}</span>
-            </div>
-          </div>
-          <p>Workflow options are supplied by the server for this request and session.</p>
-        </section>
+        <WorkflowStatusRail
+          allowedNextStatuses={allowedNextStatuses}
+          currentStatus={request.status}
+        />
       ) : null}
 
       {request ? (
@@ -947,15 +940,18 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
                 values={psfCreatedValues}
               />
             </section>
+
+            <RequestHistoryPanel
+              entries={history.data}
+              error={history.error}
+              loading={history.loading}
+            />
           </div>
 
           <aside className="detail-layout__rail">
             <section className="workflow-section">
               <div className="section-heading">
-                <div>
-                  <h2>Action center</h2>
-                  <p>Available status transitions are determined by your authenticated server session.</p>
-                </div>
+                <h2>Action center</h2>
               </div>
               <div className="workflow-actions">
                 <WorkflowStatusActions
@@ -968,12 +964,6 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
                 />
               </div>
             </section>
-
-            <RequestHistoryPanel
-              entries={history.data}
-              error={history.error}
-              loading={history.loading}
-            />
           </aside>
         </div>
       ) : null}

@@ -5,6 +5,7 @@ import {
   RequestDetailShell,
   RequestHeaderSummary,
   WorkflowStatusActions,
+  WorkflowStatusRail,
 } from './RequestsWorkspace'
 import * as RequestsWorkspace from './RequestsWorkspace'
 import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
@@ -333,6 +334,22 @@ describe('RequestHeaderSummary', () => {
 })
 
 describe('WorkflowStatusActions', () => {
+  it('shows server-provided current and available statuses without implying a linear lifecycle', () => {
+    const html = renderToStaticMarkup(
+      <WorkflowStatusRail
+        allowedNextStatuses={['Custom review', 'Need More Information']}
+        currentStatus="Awaiting validation"
+      />,
+    )
+
+    expect(html).toContain('Current status')
+    expect(html).toContain('Awaiting validation')
+    expect(html).toContain('Available transitions')
+    expect(html).toContain('Custom review')
+    expect(html).toContain('Need More Information')
+    expect(html).not.toContain('progress')
+  })
+
   it('renders only server-authorized next statuses in the native status control', () => {
     const html = renderToStaticMarkup(
       <WorkflowStatusActions
@@ -446,7 +463,8 @@ describe('PsfCreatedInformationPanel', () => {
     expect(html).toContain('PSF Setup File Name')
     expect(html).toContain('visible-setup.psf')
     expect(html).toContain('psf-created-panel--read-only')
-    expect(html).toContain('available read-only')
+    expect(html).not.toContain('Editable')
+    expect(html).not.toContain('available read-only')
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*>/)
     expect(html).not.toContain('Save PSF Created Information')
   })
@@ -532,9 +550,9 @@ describe('RequestHistoryPanel', () => {
       loading: false,
     }))
 
-    expect(html).toContain('aria-label="Request history"')
-    expect(html).toContain('<table>')
-    expect(html).toContain('<th scope="col">Timestamp</th>')
+    expect(html).toContain('request-history__timeline')
+    expect(html).toContain('<ol')
+    expect(html).toContain('<time')
     expect(html).toContain('Draft created')
     expect(html).toContain('Submitted → Setup In Progress')
     expect(html).toContain('Requester Demo')
