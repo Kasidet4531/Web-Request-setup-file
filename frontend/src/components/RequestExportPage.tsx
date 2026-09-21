@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api, type PsfRequestListItem } from "../services/api";
 import {
   downloadCompletedRequestExport,
   fetchRequestExportJob,
@@ -29,26 +30,15 @@ export interface RequestExportFiltersFormProps {
   downloading: boolean;
   filters: RequestExportFilterValues;
   onChange: (field: keyof RequestExportFilterValues, value: string) => void;
-  onExport: () => void;
 }
 
 export function RequestExportFiltersForm({
   downloading,
   filters,
   onChange,
-  onExport,
 }: RequestExportFiltersFormProps) {
   return (
-    <form
-      className="filter-bar"
-      onSubmit={(event) => {
-        event.preventDefault();
-
-        if (!downloading) {
-          onExport();
-        }
-      }}
-    >
+    <div className="filter-bar">
       <label>
         Status
         <select
@@ -85,12 +75,7 @@ export function RequestExportFiltersForm({
           value={filters.to}
         />
       </label>
-      <div className="button-row">
-        <button className="primary-button" disabled={downloading} type="submit">
-          {downloading ? "Preparing…" : "Export XLSX"}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -130,6 +115,75 @@ export function RequestExportFeedback({
   );
 }
 
+type RequestExportPreviewState = {
+  error: string | null;
+  items: PsfRequestListItem[];
+  loading: boolean;
+  total: number;
+};
+
+function formatPreviewDate(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
+}
+
+export function RequestExportPreview({
+  error,
+  items,
+  loading,
+  total,
+}: RequestExportPreviewState) {
+  return (
+    <section className="request-export__preview" aria-live="polite">
+      <div className="request-export__preview-header">
+        <div>
+          <h2>Export preview</h2>
+          <p>{loading ? "Loading filtered requests…" : `First ${items.length} of ${total} matching request${total === 1 ? "" : "s"}.`}</p>
+        </div>
+      </div>
+      {error ? <p className="status-pill status-pill--error" role="alert">{error}</p> : null}
+      {!loading && !error && items.length === 0 ? (
+        <div className="table-empty">
+          <h3>No requests match these filters</h3>
+          <p>Adjust the filters to preview a different export set.</p>
+        </div>
+      ) : null}
+      {!loading && !error && items.length > 0 ? (
+        <div className="data-table" role="region" aria-label="Filtered request export preview" tabIndex={0}>
+          <table>
+            <thead>
+              <tr>
+                <th>Request No.</th>
+                <th>Title / Product Type</th>
+                <th>Status</th>
+                <th>Requester</th>
+                <th>Due Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.requestId}>
+                  <td>{item.requestNo}</td>
+                  <td>
+                    <span className="cell-strong">{item.title ?? "Untitled request"}</span>
+                    <span className="chip">{item.productType ?? "No product type"}</span>
+                  </td>
+                  <td><span className="status-badge">{item.status}</span></td>
+                  <td>{item.requester ?? "—"}</td>
+                  <td>{formatPreviewDate(item.dueDate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function RequestExportPage() {
   const [filters, setFilters] = useState<RequestExportFilterValues>({
     status: "",
@@ -143,6 +197,12 @@ export function RequestExportPage() {
   const [pendingJob, setPendingJob] = useState<PendingRequestExportJob | null>(
     null,
   );
+  const [preview, setPreview] = useState<RequestExportPreviewState>({
+    error: null,
+    items: [],
+    loading: true,
+    total: 0,
+  });
   const pendingJobStatusUrl = pendingJob?.statusUrl;
 
   const updateFilters = (
@@ -151,6 +211,37 @@ export function RequestExportPage() {
   ) => {
     setFilters((current) => ({ ...current, [field]: value }));
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void api.queryPsfRequests({
+      limit: 10,
+      requestDateFrom: filters.from || undefined,
+      requestDateTo: filters.to || undefined,
+      status: filters.status || undefined,
+    }).then(
+      (response) => {
+        if (!cancelled) {
+          setPreview({ error: null, items: response.items, loading: false, total: response.total });
+        }
+      },
+      (error: unknown) => {
+        if (!cancelled) {
+          setPreview({
+            error: error instanceof Error ? error.message : "Unable to load export preview.",
+            items: [],
+            loading: false,
+            total: 0,
+          });
+        }
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filters]);
 
   useEffect(() => {
     if (!pendingJobStatusUrl) {
@@ -260,32 +351,28 @@ export function RequestExportPage() {
   return (
     <article className="page-card workflow-page">
       <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Admin tools</p>
-          <h1>Request export</h1>
-          <p className="page-card__description">
-            Download a filtered XLSX copy of the current request list.
-          </p>
-        </div>
+        <h1>Request export</h1>
       </div>
-      <div className="page-card__body">
+      <div className="page-card__body request-export">
         <section className="page-card__section">
           <h2>Export filters</h2>
-          <p>
-            Use the same status and request-date criteria as the request list.
-          </p>
           <RequestExportFiltersForm
             downloading={downloading}
             filters={filters}
             onChange={updateFilters}
-            onExport={exportRequests}
           />
+        </section>
+        <RequestExportPreview {...preview} />
+        <div className="request-export__action">
+          <button className="primary-button" disabled={downloading} onClick={exportRequests} type="button">
+            {downloading ? "Preparing…" : "Export XLSX"}
+          </button>
           <RequestExportFeedback
             downloading={downloading}
             feedback={feedback}
             jobStatus={pendingJob?.status ?? null}
           />
-        </section>
+        </div>
       </div>
     </article>
   );

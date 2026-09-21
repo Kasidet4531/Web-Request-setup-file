@@ -170,8 +170,7 @@ describe("request export URL", () => {
     ).rejects.toThrow("Only admins can export requests.");
   });
 
-  it("renders native export filters and disables the export action while downloading", () => {
-    const onExport = vi.fn();
+  it("renders native export filters and disables them while an export is running", () => {
     const RequestExportFiltersForm = Reflect.get(
       RequestExportPageModule,
       "RequestExportFiltersForm",
@@ -179,7 +178,6 @@ describe("request export URL", () => {
       downloading: boolean;
       filters: { status: string; from: string; to: string };
       onChange: (field: string, value: string) => void;
-      onExport: () => void;
     }) => unknown;
     const props = {
       downloading: false,
@@ -189,7 +187,6 @@ describe("request export URL", () => {
         to: "2026-06-30",
       },
       onChange: vi.fn(),
-      onExport,
     };
     const form = RequestExportFiltersForm(props);
     const html = renderToStaticMarkup(form as never);
@@ -203,14 +200,6 @@ describe("request export URL", () => {
     expect(html).toContain("<select");
     expect(html).toContain('type="date"');
     expect(loadingHtml).toContain('disabled=""');
-    expect(loadingHtml).toContain("Preparing…");
-
-    const formElement = form as {
-      props: { onSubmit: (event: { preventDefault: () => void }) => void };
-    };
-    formElement.props.onSubmit({ preventDefault: vi.fn() });
-
-    expect(onExport).toHaveBeenCalledTimes(1);
   });
 
   it("renders accessible loading, success, and 403 error feedback", () => {
@@ -252,6 +241,49 @@ describe("request export URL", () => {
     expect(errorHtml).toContain('role="alert"');
   });
 
+  it("renders the filtered server-backed preview with its requested columns", () => {
+    const RequestExportPreview = Reflect.get(
+      RequestExportPageModule,
+      "RequestExportPreview",
+    ) as (props: {
+      error: string | null;
+      items: Array<{
+        dueDate: string | null;
+        productType: string | null;
+        requestId: string;
+        requestNo: string;
+        requester: string | null;
+        status: string;
+        title: string | null;
+      }>;
+      loading: boolean;
+      total: number;
+    }) => unknown;
+
+    const html = renderToStaticMarkup(
+      RequestExportPreview({
+        error: null,
+        items: [{
+          dueDate: "2026-06-30",
+          productType: "New Product",
+          requestId: "request-1",
+          requestNo: "PSF-001",
+          requester: "Request Owner",
+          status: "Submitted",
+          title: "Probe card update",
+        }],
+        loading: false,
+        total: 1,
+      }) as never,
+    );
+
+    expect(html).toContain("Export preview");
+    expect(html).toContain("Request No.");
+    expect(html).toContain("Title / Product Type");
+    expect(html).toContain("Requester");
+    expect(html).toContain("PSF-001");
+  });
+
   it("replaces the route placeholder with the request export page", () => {
     const RequestExportPage = Reflect.get(
       RequestExportPageModule,
@@ -266,9 +298,9 @@ describe("request export URL", () => {
 
     expect(routeOptions.component).toBe(RequestExportPage);
     expect(html).toContain("<h1>Request export</h1>");
-    expect(html).toContain(
-      "Download a filtered XLSX copy of the current request list.",
-    );
+    expect(html).not.toContain("Admin tools");
+    expect(html).not.toContain("Download a filtered XLSX copy of the current request list.");
+    expect(html).toContain("Export preview");
     expect(html).toContain("Export XLSX");
   });
 });

@@ -800,6 +800,40 @@ input.input-with-clear {
   margin-top: 20px;
 }
 
+.request-export {
+  display: grid;
+  gap: 16px;
+}
+
+.request-export__preview {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--card);
+}
+
+.request-export__preview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.request-export__preview-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.request-export__action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
 .page-card__actions {
   display: flex;
   flex-wrap: wrap;
