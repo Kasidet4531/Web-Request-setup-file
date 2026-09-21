@@ -35,6 +35,10 @@ function breadcrumbsForPath(pathname: string): Crumb[] {
   }
 
   if (segments[0] === 'requests') {
+    if (!segments[1]) {
+      return []
+    }
+
     const crumbs: Crumb[] = [{ label: 'PSF Requests', to: '/requests' }]
 
     if (segments[1] === 'new') {

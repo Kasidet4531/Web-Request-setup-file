@@ -20,7 +20,7 @@ function findRow(node: unknown): { props: Record<string, unknown> } | null {
   return findRow(element.props.children)
 }
 
-describe('Dashboard request rows', () => {
+describe('Request list rows', () => {
   it('uses the existing request id for click and keyboard detail navigation without an action column', () => {
     const onOpenItem = vi.fn()
     const request: PsfRequestListItem = {
@@ -41,7 +41,7 @@ describe('Dashboard request rows', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     }
 
-    const table = RequestsTable({ items: [request], compact: true, onOpenItem })
+    const table = RequestsTable({ items: [request], onOpenItem })
     const row = findRow(table)
     if (!row) throw new Error('Expected an interactive dashboard row')
 

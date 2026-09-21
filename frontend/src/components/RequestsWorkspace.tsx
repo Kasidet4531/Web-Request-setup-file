@@ -600,6 +600,7 @@ export function DashboardPage() {
 }
 
 export function RequestsListPage() {
+  const navigate = useNavigate()
   const [filters, setFilters] = useState({ keyword: '', status: '', productType: '' })
   const [state, setState] = useState<AsyncState<{ user: AuthenticatedUserProfile | null; items: PsfRequestListItem[]; total: number }>>({
     loading: true,
@@ -659,9 +660,6 @@ export function RequestsListPage() {
           <div>
             <p className="page-card__eyebrow">Request browser</p>
             <h1>All PSF Requests</h1>
-            <p className="page-card__description">
-              Search the server-backed requests visible to your session.
-            </p>
           </div>
         </div>
         <div className="button-row">
@@ -714,16 +712,15 @@ export function RequestsListPage() {
           </div>
         </div>
 
-        <div className="request-browser__meta">
-          <span>{state.loading ? 'Loading request list…' : `Showing ${state.data.items.length} of ${state.data.total} matched request(s).`}</span>
-          {hasActiveFilters ? <span>Filters active</span> : null}
-        </div>
         {state.error ? (
           <p className="status-pill status-pill--error" role="alert">
             {state.error}
           </p>
         ) : null}
-        <RequestsTable items={state.data.items} />
+        <RequestsTable
+          items={state.data.items}
+          onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })}
+        />
       </section>
     </article>
   )
