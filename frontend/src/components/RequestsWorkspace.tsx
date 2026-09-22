@@ -19,6 +19,7 @@ import {
   ApiError,
   api,
   fetchCurrentUser,
+  type AdminWorkflowTransitionConfiguration,
   type AuthenticatedUserProfile,
   type PsfRequestHistoryEntry,
   type PsfRequestListItem,
@@ -189,60 +190,56 @@ export function WorkflowStatusActions({
   saving,
   selectedStatus,
 }: WorkflowStatusActionsProps) {
-  if (allowedNextStatuses.length === 0) {
-    return (
-      <div className="workflow-actions__read-only">
-        <span className={statusClassName(currentStatus)}>{currentStatus}</span>
-        <p className="page-card__description">
-          Workflow status is read-only because the server returned no available transition.
-        </p>
-      </div>
-    )
-  }
+  const options = [currentStatus, ...allowedNextStatuses.filter((status) => status !== currentStatus)]
+  const canUpdate = selectedStatus !== currentStatus && allowedNextStatuses.includes(selectedStatus)
 
   return (
-    <>
-      <div className="workflow-actions__current">
+    <div className="workflow-actions__control">
+      <label>
         <span>Status</span>
-        <span className={statusClassName(currentStatus)}>{currentStatus}</span>
-      </div>
-      <label className="workflow-actions__control">
-        <span>Move to</span>
         <select disabled={saving} onChange={(event) => onStatusChange(event.target.value)} value={selectedStatus}>
-          {allowedNextStatuses.map((status) => (
+          {options.map((status) => (
             <option key={status} value={status}>
               {status}
             </option>
           ))}
         </select>
       </label>
-      <button className="btn-primary workflow-actions__apply" disabled={saving || !selectedStatus} onClick={onApply} type="button">
-        {saving ? 'Applying status…' : 'Apply status'}
+      <button className="btn-primary workflow-actions__apply" disabled={saving || !canUpdate} onClick={onApply} type="button">
+        {saving ? 'Updating status…' : 'Update status'}
       </button>
-    </>
+    </div>
   )
 }
 
 export function WorkflowStatusRail({
-  allowedNextStatuses,
+  configuration,
   currentStatus,
-}: Pick<WorkflowStatusActionsProps, 'allowedNextStatuses' | 'currentStatus'>) {
-  const availableStatuses = allowedNextStatuses.filter((status) => status !== currentStatus)
+}: {
+  configuration: AdminWorkflowTransitionConfiguration | null
+  currentStatus: string
+}) {
+  const statuses = configuration
+    ? [...new Set([...configuration.statuses, currentStatus])]
+    : [currentStatus]
 
   return (
-    <section className="workflow-status-rail" aria-label="Workflow status">
-      <div className="workflow-status-rail__current">
-        <span>Current status</span>
-        <span className={statusClassName(currentStatus)}>{currentStatus}</span>
+    <section className="workflow-status-rail" aria-labelledby="workflow-status-heading">
+      <div className="workflow-status-rail__heading">
+        <span id="workflow-status-heading">Workflow</span>
+        <strong className={statusClassName(currentStatus)}>{currentStatus}</strong>
       </div>
-      {availableStatuses.length > 0 ? (
-        <div className="workflow-status-rail__options">
-          <span>Available transitions</span>
-          <div>
-            {availableStatuses.map((status) => <span className={statusClassName(status)} key={status}>{status}</span>)}
-          </div>
-        </div>
-      ) : null}
+      <div className="workflow-status-rail__map" aria-label="Configured workflow statuses">
+        {statuses.map((status) => (
+          <span
+            aria-current={status === currentStatus ? 'step' : undefined}
+            className={`${statusClassName(status)}${status === currentStatus ? ' workflow-status-rail__status--current' : ''}`}
+            key={status}
+          >
+            {status}
+          </span>
+        ))}
+      </div>
     </section>
   )
 }
@@ -739,6 +736,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
   })
   const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
   const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
+  const [workflowConfiguration, setWorkflowConfiguration] = useState<AdminWorkflowTransitionConfiguration | null>(null)
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -763,11 +761,22 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
           }
         }
 
+        let nextWorkflowConfiguration: AdminWorkflowTransitionConfiguration | null = null
+        try {
+          const currentUser = await loadCurrentUserOrNull()
+          if (currentUser?.role === 'admin') {
+            nextWorkflowConfiguration = await api.fetchAdminWorkflowTransitionConfiguration()
+          }
+        } catch {
+          nextWorkflowConfiguration = null
+        }
+
         if (mounted) {
           setRequest(response)
           setPsfCreatedValues(buildPsfCreatedInformationValues(response))
           setAllowedNextStatuses(nextAllowedStatuses)
-          setStatus(nextAllowedStatuses[0] ?? '')
+          setWorkflowConfiguration(nextWorkflowConfiguration)
+          setStatus(response.status)
           setLoading(false)
         }
       } catch (loadError) {
@@ -824,10 +833,10 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
       try {
         const statusOptions = await api.fetchPsfRequestStatusOptions(request.id)
         setAllowedNextStatuses(statusOptions.allowedNextStatuses)
-        setStatus(statusOptions.allowedNextStatuses[0] ?? '')
+        setStatus(updatedRequest.status)
       } catch (statusOptionsError) {
         setAllowedNextStatuses([])
-        setStatus('')
+        setStatus(updatedRequest.status)
         setError(
           `Request status was updated, but workflow options could not be refreshed: ${
             statusOptionsError instanceof Error
@@ -917,7 +926,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
 
       {request ? (
         <WorkflowStatusRail
-          allowedNextStatuses={allowedNextStatuses}
+          configuration={workflowConfiguration}
           currentStatus={request.status}
         />
       ) : null}
@@ -940,12 +949,6 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
                 values={psfCreatedValues}
               />
             </section>
-
-            <RequestHistoryPanel
-              entries={history.data}
-              error={history.error}
-              loading={history.loading}
-            />
           </div>
 
           <aside className="detail-layout__rail">
@@ -964,6 +967,12 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
                 />
               </div>
             </section>
+
+            <RequestHistoryPanel
+              entries={history.data}
+              error={history.error}
+              loading={history.loading}
+            />
           </aside>
         </div>
       ) : null}

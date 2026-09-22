@@ -334,19 +334,22 @@ describe('RequestHeaderSummary', () => {
 })
 
 describe('WorkflowStatusActions', () => {
-  it('shows server-provided current and available statuses without implying a linear lifecycle', () => {
+  it('renders configured statuses in authoritative order without implying linear progress', () => {
     const html = renderToStaticMarkup(
       <WorkflowStatusRail
-        allowedNextStatuses={['Custom review', 'Need More Information']}
-        currentStatus="Awaiting validation"
+        configuration={{
+          statuses: ['Submitted', 'Custom review', 'Need More Information', 'Cancelled'],
+          transitions: [],
+        }}
+        currentStatus="Need More Information"
       />,
     )
 
-    expect(html).toContain('Current status')
-    expect(html).toContain('Awaiting validation')
-    expect(html).toContain('Available transitions')
+    expect(html).toContain('Workflow')
     expect(html).toContain('Custom review')
     expect(html).toContain('Need More Information')
+    expect(html).toContain('Cancelled')
+    expect(html).toContain('workflow-status-rail__status--current')
     expect(html).not.toContain('progress')
   })
 
@@ -364,16 +367,16 @@ describe('WorkflowStatusActions', () => {
 
     expect(html).toContain('Status')
     expect(html).toContain('workflow-actions__control')
-    expect(html).toContain('status-badge--submitted')
+    expect(html).toContain('<option value="Submitted">Submitted</option>')
     expect(html).toContain('<select')
     expect(html).toContain('Setup In Progress')
     expect(html).toContain('Need More Information')
     expect(html).toContain('Rejected')
     expect(html).not.toContain('Cancelled')
-    expect(html).toContain('Apply status')
+    expect(html).toContain('Update status')
   })
 
-  it('renders the current workflow status read-only when the server allows no transitions', () => {
+  it('keeps the only current status selected and disables Update status when no transition is available', () => {
     const html = renderToStaticMarkup(
       <WorkflowStatusActions
         allowedNextStatuses={[]}
@@ -381,15 +384,30 @@ describe('WorkflowStatusActions', () => {
         onApply={() => undefined}
         onStatusChange={() => undefined}
         saving={false}
-        selectedStatus=""
+        selectedStatus="Completed"
       />,
     )
 
-    expect(html).toContain('Workflow status')
+    expect(html).toContain('Status')
     expect(html).toContain('Completed')
-    expect(html).toContain('read-only')
-    expect(html).not.toContain('<select')
-    expect(html).not.toContain('Apply status')
+    expect(html).toContain('<select')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>/)
+    expect(html).toContain('Update status')
+  })
+
+  it('disables Update status until an authorized next status is selected', () => {
+    const html = renderToStaticMarkup(
+      <WorkflowStatusActions
+        allowedNextStatuses={['Setup In Progress']}
+        currentStatus="Submitted"
+        onApply={() => undefined}
+        onStatusChange={() => undefined}
+        saving={false}
+        selectedStatus="Submitted"
+      />,
+    )
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>/)
   })
 
   it('disables workflow controls while a status update is pending', () => {
@@ -406,7 +424,7 @@ describe('WorkflowStatusActions', () => {
 
     expect(html).toMatch(/<select[^>]*disabled=""[^>]*>/)
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>/)
-    expect(html).toContain('Applying status…')
+    expect(html).toContain('Updating status…')
   })
 })
 
@@ -671,7 +689,15 @@ describe('RequestDetailShell workflow actions', () => {
 
     let actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
     expect(actions.props.currentStatus).toBe('Submitted')
-    expect(actions.props.selectedStatus).toBe('Setup In Progress')
+    expect(actions.props.selectedStatus).toBe('Submitted')
+
+    const onStatusChange = actions.props.onStatusChange
+    if (typeof onStatusChange !== 'function') {
+      throw new Error('Expected workflow status callback')
+    }
+    onStatusChange('Setup In Progress')
+    shell = renderRequestDetailShell()
+    actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
 
     const apply = actions.props.onApply
     if (typeof apply !== 'function') {
@@ -691,7 +717,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(requestDetailApi.fetchPsfRequestStatusOptions).toHaveBeenCalledTimes(2)
     expect(summary.props.request).toMatchObject({ status: 'Setup In Progress' })
     expect(actions.props.allowedNextStatuses).toEqual(['PSF Created', 'Need More Information', 'Rejected'])
-    expect(actions.props.selectedStatus).toBe('PSF Created')
+    expect(actions.props.selectedStatus).toBe('Setup In Progress')
     expect(success.props.children).toBe('Request PSF-0001 moved to Setup In Progress.')
   })
 
@@ -867,7 +893,14 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
     let shell = renderRequestDetailShell()
 
-    const actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
+    let actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
+    const onStatusChange = actions.props.onStatusChange
+    if (typeof onStatusChange !== 'function') {
+      throw new Error('Expected workflow status callback')
+    }
+    onStatusChange('Setup In Progress')
+    shell = renderRequestDetailShell()
+    actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
     const apply = actions.props.onApply
     if (typeof apply !== 'function') {
       throw new Error('Expected workflow apply callback')
