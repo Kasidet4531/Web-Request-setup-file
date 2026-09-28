@@ -10,7 +10,11 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService, type UpdateUserProfileInput } from '../auth/auth.service';
+import {
+  AuthService,
+  type AdminUserProfile,
+  type UpdateUserProfileInput,
+} from '../auth/auth.service';
 import type {
   AuthenticatedRequest,
   AuthenticatedUserProfile,
@@ -27,7 +31,7 @@ export class UserManagementController {
   @Get()
   async listUsers(
     @Req() request: AuthenticatedRequest,
-  ): Promise<AuthenticatedUserProfile[]> {
+  ): Promise<AdminUserProfile[]> {
     await this.getAuthenticatedAdmin(request);
 
     return this.authService.listUsers();

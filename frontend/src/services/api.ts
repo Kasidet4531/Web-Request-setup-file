@@ -344,7 +344,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
         method: 'POST',
       }),
     fetchAdminUsers: () =>
-      request<AuthenticatedUserProfile[]>('/admin/users', {
+      request<AdminUserProfile[]>('/admin/users', {
         method: 'GET',
       }),
     updateAdminUser: (userId: string, payload: UpdateAdminUserPayload) =>
@@ -459,6 +459,8 @@ export interface AuthenticatedUserProfile {
   role: UserRole
   setupOwnerDepartment: SetupOwnerDepartment | null
 }
+
+export type AdminUserProfile = AuthenticatedUserProfile & { email: string | null }
 
 export interface UpdateAdminUserPayload {
   role: UserRole

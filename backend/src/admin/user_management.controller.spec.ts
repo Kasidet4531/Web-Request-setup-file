@@ -47,8 +47,11 @@ describe('UserManagementController', () => {
     controller = module.get(UserManagementController);
   });
 
-  it('lists every user for an administrator using the current server profile', async () => {
-    const users = [adminActor, managedSetupOwner];
+  it('lists users with email only for an administrator using the current server profile', async () => {
+    const users = [
+      { ...adminActor, email: null },
+      { ...managedSetupOwner, email: 'owner@example.test' },
+    ];
     authService.getProfile.mockResolvedValue(adminActor);
     authService.listUsers.mockResolvedValue(users);
 

@@ -28,6 +28,10 @@ export interface UpdateUserProfileInput {
   setupOwnerDepartment: 'GNTC' | 'MFG' | null;
 }
 
+export type AdminUserProfile = AuthenticatedUserProfile & {
+  email: string | null;
+};
+
 interface LdapUserData {
   email: string;
   name: string;
@@ -127,14 +131,17 @@ export class AuthService implements OnModuleInit {
     return user ? this.toProfile(user) : null;
   }
 
-  async listUsers(): Promise<AuthenticatedUserProfile[]> {
+  async listUsers(): Promise<AdminUserProfile[]> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, username, display_name, password_hash, role, setup_owner_department
+      `SELECT id, username, display_name, password_hash, role, setup_owner_department, email
        FROM app_users
        ORDER BY display_name ASC, username ASC`,
     );
 
-    return result.rows.map((user) => this.toProfile(user));
+    return result.rows.map((user) => ({
+      ...this.toProfile(user),
+      email: user.email,
+    }));
   }
 
   async updateUser(

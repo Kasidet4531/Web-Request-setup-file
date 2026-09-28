@@ -815,10 +815,11 @@ describe('createApiClient', () => {
       role: 'setup_owner',
       setupOwnerDepartment: 'GNTC',
     }
+    const listedUser = { ...updatedUser, email: 'owner@example.test' }
     globalThis.fetch = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify([updatedUser]), {
+        new Response(JSON.stringify([listedUser]), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -833,7 +834,7 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: '/api' })
     const fetchAdminUsers = Reflect.get(client, 'fetchAdminUsers') as
       | undefined
-      | (() => Promise<typeof updatedUser[]>)
+      | (() => Promise<typeof listedUser[]>)
     const updateAdminUser = Reflect.get(client, 'updateAdminUser') as
       | undefined
       | ((
@@ -847,7 +848,7 @@ describe('createApiClient', () => {
       return
     }
 
-    await expect(fetchAdminUsers()).resolves.toEqual([updatedUser])
+    await expect(fetchAdminUsers()).resolves.toEqual([listedUser])
     await expect(
       updateAdminUser(updatedUser.id, {
         role: 'setup_owner',

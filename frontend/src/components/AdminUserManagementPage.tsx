@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   api,
   refreshCurrentUser,
+  type AdminUserProfile,
   type AuthenticatedUserProfile,
   type UpdateAdminUserPayload,
   type UserRole,
@@ -70,125 +71,93 @@ export function AdminUserManagementFeedback({
 }
 
 export interface AdminUserManagementUsersTableProps {
-  drafts: Record<string, UpdateAdminUserPayload>
-  onChangeDepartment: (
-    userId: string,
-    department: SetupOwnerDepartment,
-  ) => void
-  onChangeRole: (userId: string, role: UserRole) => void
-  onSave: (userId: string) => void
+  onEdit: (user: AdminUserProfile, button: HTMLButtonElement) => void
   savingUserId: string | null
-  users: AuthenticatedUserProfile[]
+  users: AdminUserProfile[]
 }
 
 export function AdminUserManagementUsersTable({
-  drafts,
-  onChangeDepartment,
-  onChangeRole,
-  onSave,
+  onEdit,
   savingUserId,
   users,
 }: AdminUserManagementUsersTableProps) {
   return (
-    <div className="data-table admin-user-management__table">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">User</th>
-            <th scope="col">Role</th>
-            <th scope="col">Setup File Owner department</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => {
-            const draft = drafts[user.id] ?? toUpdatePayload(user)
-            const saving = savingUserId === user.id
-            const disabled = savingUserId !== null
-            const roleInputId = `admin-user-role-${user.id}`
-            const departmentInputId = `admin-user-department-${user.id}`
-
-            return (
+    <>
+      <div className="data-table admin-user-management__table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">User</th>
+              <th scope="col">Email</th>
+              <th scope="col">Role</th>
+              <th scope="col">Setup File Owner department</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => (
               <tr key={user.id}>
                 <td>
                   <strong>{user.displayName}</strong>
                   <span>{user.username}</span>
                 </td>
-                <td>
-                  <label className="admin-user-management__field" htmlFor={roleInputId}>
-                    <span className="sr-only">Role for {user.displayName}</span>
-                    <select
-                      disabled={disabled}
-                      id={roleInputId}
-                      onChange={(event) =>
-                        onChangeRole(user.id, event.target.value as UserRole)
-                      }
-                      value={draft.role}
-                    >
-                      {Object.entries(USER_ROLE_LABELS).map(([role, label]) => (
-                        <option key={role} value={role}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </td>
-                <td>
-                  <label
-                    className="admin-user-management__field"
-                    htmlFor={departmentInputId}
-                  >
-                    <span className="sr-only">
-                      Setup File Owner department for {user.displayName}
-                    </span>
-                    <select
-                      disabled={disabled || draft.role !== 'setup_owner'}
-                      id={departmentInputId}
-                      onChange={(event) => {
-                        const value = event.target.value
-                        onChangeDepartment(
-                          user.id,
-                          value === 'GNTC' || value === 'MFG' ? value : null,
-                        )
-                      }}
-                      value={draft.setupOwnerDepartment ?? ''}
-                    >
-                      <option value="">
-                        {draft.role === 'setup_owner'
-                          ? 'Choose a department'
-                          : 'No department'}
-                      </option>
-                      <option value="GNTC">GNTC</option>
-                      <option value="MFG">MFG</option>
-                    </select>
-                  </label>
-                </td>
+                <td className="admin-user-management__email">{user.email || '—'}</td>
+                <td>{USER_ROLE_LABELS[user.role]}</td>
+                <td>{user.setupOwnerDepartment ?? '—'}</td>
                 <td>
                   <button
-                    className="primary-button"
-                    disabled={disabled || !canSaveAdminUserUpdate(draft)}
-                    onClick={() => onSave(user.id)}
+                    aria-label={`Edit access for ${user.displayName}`}
+                    className="btn-secondary"
+                    disabled={savingUserId !== null}
+                    onClick={(event) => onEdit(user, event.currentTarget)}
                     type="button"
                   >
-                    {saving ? 'Saving user…' : 'Save user'}
+                    Edit
                   </button>
                 </td>
               </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="admin-user-management__cards">
+        {users.map((user) => (
+          <article className="admin-user-management__card" key={user.id}>
+            <strong>{user.displayName}</strong>
+            <span className="admin-user-management__username">{user.username}</span>
+            <dl>
+              <dt>Email</dt><dd className="admin-user-management__email">{user.email || '—'}</dd>
+              <dt>Role</dt><dd>{USER_ROLE_LABELS[user.role]}</dd>
+              {user.role === 'setup_owner' ? (
+                <><dt>Department</dt><dd>{user.setupOwnerDepartment ?? '—'}</dd></>
+              ) : null}
+            </dl>
+            <button
+              aria-label={`Edit access for ${user.displayName}`}
+              className="btn-secondary"
+              disabled={savingUserId !== null}
+              onClick={(event) => onEdit(user, event.currentTarget)}
+              type="button"
+            >
+              Edit
+            </button>
+          </article>
+        ))}
+      </div>
+    </>
   )
 }
 
 export function AdminUserManagementPage() {
   const [drafts, setDrafts] = useState<Record<string, UpdateAdminUserPayload>>({})
+  const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const [feedback, setFeedback] =
     useState<AdminUserManagementFeedbackValue | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingUserId, setSavingUserId] = useState<string | null>(null)
-  const [users, setUsers] = useState<AuthenticatedUserProfile[]>([])
+  const [users, setUsers] = useState<AdminUserProfile[]>([])
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const requestInFlight = useRef(false)
 
   useEffect(() => {
@@ -228,6 +197,30 @@ export function AdminUserManagementPage() {
       mounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (editingUserId && !dialogRef.current?.open) {
+      dialogRef.current?.showModal()
+    }
+  }, [editingUserId])
+
+  const editingUser = users.find((user) => user.id === editingUserId)
+  const editingDraft = editingUser ? drafts[editingUser.id] : null
+  const changed = !!editingUser && !!editingDraft && (
+    editingDraft.role !== editingUser.role ||
+    editingDraft.setupOwnerDepartment !== editingUser.setupOwnerDepartment
+  )
+
+  function openEditor(user: AdminUserProfile, button: HTMLButtonElement) {
+    if (savingUserId || requestInFlight.current) {
+      return
+    }
+
+    triggerRef.current = button
+    setDrafts((current) => ({ ...current, [user.id]: toUpdatePayload(user) }))
+    setFeedback(null)
+    setEditingUserId(user.id)
+  }
 
   function changeRole(userId: string, role: UserRole) {
     if (savingUserId || requestInFlight.current) {
@@ -269,8 +262,11 @@ export function AdminUserManagementPage() {
 
   async function saveUser(userId: string) {
     const draft = drafts[userId]
+    const original = users.find((user) => user.id === userId)
     if (
       !draft ||
+      !original ||
+      (draft.role === original.role && draft.setupOwnerDepartment === original.setupOwnerDepartment) ||
       !canSaveAdminUserUpdate(draft) ||
       savingUserId ||
       requestInFlight.current
@@ -288,7 +284,7 @@ export function AdminUserManagementPage() {
       updatedUser = nextUpdatedUser
       setUsers((current) =>
         current.map((user) =>
-          user.id === userId ? nextUpdatedUser : user,
+          user.id === userId ? { ...user, ...nextUpdatedUser } : user,
         ),
       )
       setDrafts((current) => ({
@@ -300,6 +296,7 @@ export function AdminUserManagementPage() {
         kind: 'success',
         message: `${nextUpdatedUser.displayName} was updated.`,
       })
+      dialogRef.current?.close()
     } catch (error) {
       const refreshPrefix = updatedUser
         ? `${updatedUser.displayName} was updated, but the current session could not refresh. `
@@ -321,31 +318,104 @@ export function AdminUserManagementPage() {
     <article className="page-card admin-user-management">
       <div className="page-card__header">
         <div>
-          <p className="page-card__eyebrow">Admin tools</p>
-          <h1>User management</h1>
-          <p className="page-card__description">
-            Manage user roles and Setup File Owner department assignments. Each
-            saved change is enforced by the server on later requests.
-          </p>
+          <h1>Users &amp; Roles</h1>
+          <p className="page-card__description">Review identities and manage access.</p>
         </div>
       </div>
 
       <div className="page-card__body admin-user-management__body">
-        <AdminUserManagementFeedback feedback={feedback} loading={loading} />
+        <AdminUserManagementFeedback feedback={editingUserId ? null : feedback} loading={loading} />
         {!loading && users.length === 0 && !feedback ? (
           <p className="page-card__description">No users are available.</p>
         ) : null}
         {!loading && users.length > 0 ? (
           <AdminUserManagementUsersTable
-            drafts={drafts}
-            onChangeDepartment={changeDepartment}
-            onChangeRole={changeRole}
-            onSave={(userId) => void saveUser(userId)}
+            onEdit={openEditor}
             savingUserId={savingUserId}
             users={users}
           />
         ) : null}
       </div>
+
+      <dialog
+        aria-labelledby="admin-user-edit-title"
+        className="admin-user-management__dialog"
+        onCancel={(event) => {
+          if (savingUserId) event.preventDefault()
+        }}
+        onClose={() => {
+          setEditingUserId(null)
+          triggerRef.current?.focus()
+        }}
+        ref={dialogRef}
+      >
+        {editingUser && editingDraft ? (
+          <form
+            className="admin-user-management__editor"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void saveUser(editingUser.id)
+            }}
+          >
+            <h2 id="admin-user-edit-title">Edit access</h2>
+            <div className="admin-user-management__identity">
+              <strong>{editingUser.displayName}</strong>
+              <span>{editingUser.username}</span>
+              <span>Email: {editingUser.email || '—'}</span>
+            </div>
+            <label className="admin-user-management__field" htmlFor="admin-user-edit-role">
+              Role
+              <select
+                disabled={savingUserId !== null}
+                id="admin-user-edit-role"
+                onChange={(event) => changeRole(editingUser.id, event.target.value as UserRole)}
+                value={editingDraft.role}
+              >
+                {Object.entries(USER_ROLE_LABELS).map(([role, label]) => (
+                  <option key={role} value={role}>{label}</option>
+                ))}
+              </select>
+            </label>
+            {editingDraft.role === 'setup_owner' ? (
+              <label className="admin-user-management__field" htmlFor="admin-user-edit-department">
+                Setup File Owner department
+                <select
+                  disabled={savingUserId !== null}
+                  id="admin-user-edit-department"
+                  onChange={(event) => {
+                    const value = event.target.value
+                    changeDepartment(editingUser.id, value === 'GNTC' || value === 'MFG' ? value : null)
+                  }}
+                  required
+                  value={editingDraft.setupOwnerDepartment ?? ''}
+                >
+                  <option value="">Choose a department</option>
+                  <option value="GNTC">GNTC</option>
+                  <option value="MFG">MFG</option>
+                </select>
+              </label>
+            ) : null}
+            <AdminUserManagementFeedback feedback={feedback?.kind === 'error' ? feedback : null} loading={false} />
+            <div className="admin-user-management__actions">
+              <button
+                className="btn-secondary"
+                disabled={savingUserId !== null}
+                onClick={() => dialogRef.current?.close()}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                disabled={!changed || !canSaveAdminUserUpdate(editingDraft) || savingUserId !== null}
+                type="submit"
+              >
+                {savingUserId ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </dialog>
     </article>
   )
 }
