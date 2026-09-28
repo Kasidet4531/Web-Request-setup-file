@@ -865,7 +865,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
         {request ? (
           <div className="detail-topbar__status">
             <span>Current status</span>
-            <span className="status-badge">{request.status}</span>
+            <span className={statusClassName(request.status)}>{request.status}</span>
           </div>
         ) : null}
       </div>

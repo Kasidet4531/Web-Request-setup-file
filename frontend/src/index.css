@@ -1488,9 +1488,8 @@ input.input-with-clear {
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 600;
-  background-color: var(--status-draft-bg);
-  color: var(--status-draft-text);
-  border-color: var(--status-draft-border);
+  background-color: var(--secondary);
+  color: var(--foreground);
 }
 
 /* Reference badge treatment: semantic dot + label in one pill. */
@@ -1961,9 +1960,6 @@ input.input-with-clear {
 .detail-topbar__status .status-badge {
   max-width: 100%;
   overflow-wrap: anywhere;
-  background-color: var(--secondary);
-  border-color: var(--border);
-  color: var(--foreground);
 }
 
 .detail-summary-grid {

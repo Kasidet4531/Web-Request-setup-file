@@ -590,6 +590,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(requestNumber.props.children).toBe('PSF-0001')
     expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('Current status')
     expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('Custom review')
+    expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('status-badge--custom-review')
     expect(requestDetailApi.fetchWorkflowStatuses).not.toHaveBeenCalled()
   })
 
