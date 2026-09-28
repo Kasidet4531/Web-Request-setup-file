@@ -382,6 +382,13 @@ button {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.dynamic-form__field > :is(input:not([type='radio']), select),
+.filter-bar :is(input, select),
+.workflow-actions select {
+  min-width: 0;
+  height: 40px;
+}
+
 .input-base:focus,
 .dynamic-form__field input:focus,
 .dynamic-form__field select:focus,
@@ -802,6 +809,7 @@ input.input-with-clear {
 
 .request-export {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -1367,7 +1375,7 @@ input.input-with-clear {
 }
 
 .global-history-filters {
-  grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(150px, 0.7fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
 }
 
@@ -2229,10 +2237,6 @@ input.input-with-clear {
 .psf-created-panel .dynamic-form__field > :is(input, select, textarea) {
   min-width: 0;
   width: 100%;
-}
-
-.psf-created-panel .dynamic-form__field > :is(input, select) {
-  height: 40px;
 }
 
 .request-history__timeline {
