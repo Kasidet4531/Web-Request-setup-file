@@ -281,6 +281,24 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigHookHarness.reset()
   })
 
+  it('keeps schema editing visible while the optional preview starts collapsed', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+
+    const page = await loadAdminFormConfigPage()
+    const preview = requireRenderedElement(
+      page,
+      (element) => element.type === 'details' && element.props.className === 'admin-form-config__preview',
+    )
+    const summary = requireRenderedElement(preview.props.children, (element) => element.type === 'summary')
+
+    expect(preview.props.open).not.toBe(true)
+    expect(summary.props.children).toBe('Live preview')
+    expect(getPreview(preview.props.children).props.schema).toMatchObject({ version: 2 })
+    expect(getEditor(page).props.id).toBe('form-config-json')
+    expect(getButton(page, 'Save draft').props.disabled).toBe(false)
+    expect(getButton(page, 'Reload versions').props.disabled).toBe(false)
+  })
+
   it('loads the draft, saves valid edited JSON once, refetches, and selects the returned draft', async () => {
     const active = buildVersion({ schema: { ...editableSchema, version: 1 }, status: 'active', version: 1 })
     const draft = buildVersion()

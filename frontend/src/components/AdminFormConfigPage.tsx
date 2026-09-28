@@ -287,11 +287,7 @@ export function AdminFormConfigPage() {
     <article className="page-card admin-form-config">
       <div className="page-card__header">
         <div>
-          <p className="page-card__eyebrow">Admin tools</p>
           <h1>Form configuration</h1>
-          <p className="page-card__description">
-            Edit a PSF Request Form schema draft and preview valid JSON before saving or publishing it.
-          </p>
         </div>
       </div>
 
@@ -304,10 +300,6 @@ export function AdminFormConfigPage() {
               <div className="admin-form-config__section-header">
                 <div>
                   <h2 id="form-config-editor-heading">Schema draft</h2>
-                  <p>
-                    Version status, identity, and publication metadata are server-managed. The JSON editor contains only the
-                    schema payload.
-                  </p>
                 </div>
                 <button className="secondary-button" disabled={busy} onClick={() => void reloadVersions()} type="button">
                   Reload versions
@@ -350,14 +342,14 @@ export function AdminFormConfigPage() {
               </div>
             </section>
 
-            <section className="admin-form-config__preview" aria-labelledby="form-config-preview-heading">
-              <h2 id="form-config-preview-heading">Live preview</h2>
+            <details className="admin-form-config__preview">
+              <summary>Live preview</summary>
               {previewSchema ? (
                 <AdminFormConfigPreview schema={previewSchema} />
               ) : (
                 <p className="page-card__description">Live preview is available after the schema JSON is valid.</p>
               )}
-            </section>
+            </details>
           </>
         ) : null}
       </div>
