@@ -17,6 +17,7 @@ import {
   formatFormSchemaDraft,
   getAdminFormConfigErrorMessage,
   parseFormSchemaDraft,
+  readFormSchemaEditorDraft,
   requiresUnsavedVersionConfirmation,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
@@ -87,6 +88,18 @@ describe('AdminFormConfigPage helpers', () => {
     expect(parsed.schema).toEqual(editableSchema)
   })
 
+  it('keeps incomplete labels editable but hides malformed JSON from the visual editor', () => {
+    const incomplete = { ...editableSchema, title: '', sections: [{ ...editableSchema.sections[0], fields: [
+      { ...editableSchema.sections[0].fields[0], label: '' },
+    ] }] }
+    expect(readFormSchemaEditorDraft(JSON.stringify(incomplete))).toEqual(incomplete)
+    expect(parseFormSchemaDraft(JSON.stringify(incomplete)).schema).toBeNull()
+    expect(readFormSchemaEditorDraft('{')).toBeNull()
+    expect(readFormSchemaEditorDraft(JSON.stringify({ ...editableSchema, sections: [{ fields: null }] }))).toBeNull()
+    expect(readFormSchemaEditorDraft(JSON.stringify({ ...editableSchema, sections: [{ ...editableSchema.sections[0], fields: [editableSchema.sections[0].fields[0], editableSchema.sections[0].fields[0]] }] }))).toBeNull()
+    expect(readFormSchemaEditorDraft(JSON.stringify({ ...editableSchema, sections: [{ ...editableSchema.sections[0], fields: [{ ...editableSchema.sections[0].fields[0], fieldKey: '__proto__' }] }] }))).toBeNull()
+  })
+
   it('reports a parse error and a renderer-protecting shape error without producing a preview schema', () => {
     const invalidJson = parseFormSchemaDraft('{')
     const invalidShape = parseFormSchemaDraft(
@@ -98,6 +111,17 @@ describe('AdminFormConfigPage helpers', () => {
 
     expect(invalidJson).toMatchObject({ error: expect.stringMatching(/^JSON is invalid:/), schema: null })
     expect(invalidShape).toEqual({ error: 'Section 1 must have a nonblank sectionKey.', schema: null })
+  })
+
+  it('catches duplicate keys, unsupported visibility, and empty choices before saving or publishing', () => {
+    const first = editableSchema.sections[0]
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [] })).error).toContain('at least one section')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [] }] })).error).toContain('at least one field')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [first, first] })).error).toContain('duplicate sectionKey')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [first.fields[0], first.fields[0]] }] })).error).toContain('duplicate fieldKey')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, visibleTo: ['unknown'] }] })).error).toContain('supported roles')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [''] }, first.fields[1]] }] })).error).toContain('nonblank options')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [] }, first.fields[1]] }] })).error).toContain('at least one option')
   })
 
   it('rejects prototype-reserved field keys before they can reach the shared live preview', () => {

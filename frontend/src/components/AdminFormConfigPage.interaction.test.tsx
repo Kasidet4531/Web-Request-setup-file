@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
+import { AdminFormConfigEditor } from './AdminFormConfigEditor'
 import type {
   FormSchemaDraft,
   FormSchemaVersionListResponse,
@@ -251,6 +252,10 @@ function getEditor(page: unknown): RenderedElement {
   return requireRenderedElement(page, (element) => element.type === 'textarea' && element.props.id === 'form-config-json')
 }
 
+function getVisualEditor(page: unknown): RenderedElement {
+  return requireRenderedElement(page, (element) => element.type === AdminFormConfigEditor)
+}
+
 function getFeedback(page: unknown): RenderedElement {
   return requireRenderedElement(page, (element) => element.type === AdminFormConfigFeedback)
 }
@@ -279,6 +284,25 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.publishAdminFormConfigDraft.mockReset()
     formConfigApi.saveAdminFormConfigDraft.mockReset()
     formConfigHookHarness.reset()
+  })
+
+  it('uses the visual editor as the primary draft editor and keeps advanced JSON optional', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    let page = await loadAdminFormConfigPage()
+    expect(getVisualEditor(page).props.schema).toEqual(editableSchema)
+    expect(requireRenderedElement(page, (element) => element.type === 'details' && element.props.className === 'admin-form-config__advanced').props.open).not.toBe(true)
+
+    const change = getVisualEditor(page).props.onChange as (draft: FormSchemaDraft) => void
+    change({ ...editableSchema, title: '' })
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).title).toBe('')
+    expect(getButton(page, 'Save draft').props.disabled).toBe(true)
+    expect(JSON.parse(getEditor(page).props.value as string).title).toBe('')
+
+    change({ ...editableSchema, title: 'Renamed form' })
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).title).toBe('Renamed form')
+    expect(getButton(page, 'Save draft').props.disabled).toBe(false)
   })
 
   it('keeps schema editing visible while the optional preview starts collapsed', async () => {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { AdminFormConfigEditor } from './AdminFormConfigEditor'
 import {
   buildAdminFormConfigSavePayload,
   buildPreviewSchema,
@@ -7,6 +8,7 @@ import {
   formatFormSchemaDraft,
   getAdminFormConfigErrorMessage,
   parseFormSchemaDraft,
+  readFormSchemaEditorDraft,
   requiresUnsavedVersionConfirmation,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
@@ -34,7 +36,7 @@ export function AdminFormConfigVersionSelector({
 }: AdminFormConfigVersionSelectorProps) {
   return (
     <label className="admin-form-config__field" htmlFor="form-config-version">
-      <span>Stored version</span>
+      <span>Version</span>
       <select
         disabled={disabled || versions.length === 0}
         id="form-config-version"
@@ -96,6 +98,7 @@ export function AdminFormConfigPage() {
   const requestInFlight = useRef(false)
 
   const parsed = useMemo(() => parseFormSchemaDraft(editorText), [editorText])
+  const visualSchema = useMemo(() => readFormSchemaEditorDraft(editorText), [editorText])
   const dirty = editorText !== savedEditorText
   const busy = loading || saving || publishing
   const previewSchema = useMemo(
@@ -299,7 +302,7 @@ export function AdminFormConfigPage() {
             <section className="page-card__section admin-form-config__editor" aria-labelledby="form-config-editor-heading">
               <div className="admin-form-config__section-header">
                 <div>
-                  <h2 id="form-config-editor-heading">Schema draft</h2>
+                  <h2 id="form-config-editor-heading">Edit form</h2>
                 </div>
                 <button className="secondary-button" disabled={busy} onClick={() => void reloadVersions()} type="button">
                   Reload versions
@@ -313,19 +316,31 @@ export function AdminFormConfigPage() {
                 versions={versions}
               />
 
-              <label className="admin-form-config__field" htmlFor="form-config-json">
-                <span>Schema JSON</span>
-                <textarea
-                  aria-describedby={parsed.error ? 'form-config-json-error' : undefined}
-                  aria-invalid={parsed.error ? true : undefined}
+              {visualSchema ? (
+                <AdminFormConfigEditor
                   disabled={busy}
-                  id="form-config-json"
-                  onChange={(event) => updateEditorText(event.target.value)}
-                  rows={20}
-                  spellCheck={false}
-                  value={editorText}
+                  onChange={(draft) => updateEditorText(formatFormSchemaDraft(draft))}
+                  schema={visualSchema}
                 />
-              </label>
+              ) : (
+                <p className="page-card__description">Fix the JSON below to return to the form editor.</p>
+              )}
+              <details className="admin-form-config__advanced">
+                <summary>Advanced · Edit schema JSON</summary>
+                <label className="admin-form-config__field" htmlFor="form-config-json">
+                  <span>Schema JSON</span>
+                  <textarea
+                    aria-describedby={parsed.error ? 'form-config-json-error' : undefined}
+                    aria-invalid={parsed.error ? true : undefined}
+                    disabled={busy}
+                    id="form-config-json"
+                    onChange={(event) => updateEditorText(event.target.value)}
+                    rows={20}
+                    spellCheck={false}
+                    value={editorText}
+                  />
+                </label>
+              </details>
               {parsed.error ? (
                 <p className="dynamic-form__error" id="form-config-json-error" role="alert">
                   {parsed.error}
@@ -347,7 +362,7 @@ export function AdminFormConfigPage() {
               {previewSchema ? (
                 <AdminFormConfigPreview schema={previewSchema} />
               ) : (
-                <p className="page-card__description">Live preview is available after the schema JSON is valid.</p>
+                <p className="page-card__description">Fix the form errors above to see the preview.</p>
               )}
             </details>
           </>

@@ -367,6 +367,7 @@ button {
 .filter-bar select,
 .workflow-actions select,
 .admin-form-config__field select,
+.admin-form-config__field input:not([type='checkbox']),
 .admin-form-config__field textarea,
 .admin-user-management__field select,
 .admin-autofill-rules__field select {
@@ -398,6 +399,7 @@ button {
 .filter-bar select:focus,
 .workflow-actions select:focus,
 .admin-form-config__field select:focus,
+.admin-form-config__field input:not([type='checkbox']):focus,
 .admin-form-config__field textarea:focus,
 .admin-user-management__field select:focus,
 .admin-autofill-rules__field select:focus {
@@ -421,6 +423,7 @@ input.input-with-clear {
 .filter-bar select:disabled,
 .workflow-actions select:disabled,
 .admin-form-config__field select:disabled,
+.admin-form-config__field input:not([type='checkbox']):disabled,
 .admin-form-config__field textarea:disabled,
 .admin-user-management__field select:disabled,
 .admin-autofill-rules__field select:disabled {
@@ -1613,6 +1616,119 @@ input.input-with-clear {
   font-family: var(--font-mono);
   line-height: 1.45;
   resize: vertical;
+}
+
+.admin-form-config__builder,
+.admin-form-config__section,
+.admin-form-config__fields,
+.admin-form-config__item-body,
+.admin-form-config__options {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-form-config__section {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+}
+
+.admin-form-config__section-top,
+.admin-form-config__controls,
+.admin-form-config__choice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-form-config__section-top {
+  justify-content: space-between;
+}
+
+.admin-form-config__section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.admin-form-config__roles,
+.admin-form-config__options {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-form-config__roles legend,
+.admin-form-config__options legend {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-form-config__roles label,
+.admin-form-config__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin-form-config__roles input,
+.admin-form-config__toggle input {
+  accent-color: var(--accent);
+}
+
+.admin-form-config__item {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.admin-form-config__item summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.admin-form-config__item summary::-webkit-details-marker { display: none; }
+.admin-form-config__item summary strong { font-size: 13px; }
+.admin-form-config__item summary span { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
+.admin-form-config__item:has(input[aria-invalid='true']) summary span { color: var(--destructive); }
+.admin-form-config__item summary::after { content: '⌄'; color: var(--muted-foreground); }
+.admin-form-config__item[open] summary::after { transform: rotate(180deg); }
+
+.admin-form-config__item-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.admin-form-config__options,
+.admin-form-config__item-body .admin-form-config__controls,
+.admin-form-config__key { grid-column: 1 / -1; }
+.admin-form-config__choice .admin-form-config__field { flex: 1; min-width: 150px; }
+.admin-form-config__choice { align-items: flex-end; }
+.admin-form-config__controls .secondary-button { min-height: 36px; }
+.admin-form-config__key { color: var(--muted-foreground); }
+.admin-form-config__add-field,
+.admin-form-config__add-section { justify-self: start; }
+.admin-form-config__field input[aria-invalid='true'] { border-color: var(--destructive); }
+.admin-form-config__advanced { padding-top: 16px; border-top: 1px solid var(--border); }
+.admin-form-config__advanced summary { color: var(--muted-foreground); font-size: 13px; cursor: pointer; }
+.admin-form-config__advanced .admin-form-config__field { margin-top: 14px; }
+
+@media (max-width: 640px) {
+  .admin-form-config__section { padding: 14px; }
+  .admin-form-config__item-body { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .admin-form-config__section-top { align-items: flex-start; }
 }
 
 .admin-form-config__actions,

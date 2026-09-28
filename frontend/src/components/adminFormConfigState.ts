@@ -9,6 +9,7 @@ import type {
 
 const PSF_REQUEST_FORM_KEY = 'psf-request'
 const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'date', 'select', 'radio'])
+const SUPPORTED_VISIBLE_TO = new Set(['requester', 'setup_owner', 'admin'])
 
 export interface FormSchemaDraftParseResult {
   error: string | null
@@ -73,6 +74,11 @@ function validateField(field: unknown, sectionIndex: number, fieldIndex: number)
     return `${fieldPrefix} must provide string options for ${field.type} controls.`
   }
 
+  if ((field.type === 'select' || field.type === 'radio') && isStringArray(field.options)) {
+    if (field.options.length === 0) return `${fieldPrefix} must have at least one option.`
+    if (field.options.some((option) => !option.trim())) return `${fieldPrefix} must have nonblank options.`
+  }
+
   if (field.options !== undefined && !isStringArray(field.options)) {
     return `${fieldPrefix} options must be an array of strings.`
   }
@@ -95,6 +101,10 @@ function validateSection(section: unknown, sectionIndex: number): string | null 
 
   if (!isStringArray(section.visibleTo)) {
     return `Section ${sectionIndex + 1} visibleTo must be an array of strings.`
+  }
+
+  if (section.visibleTo.length === 0 || section.visibleTo.some((role) => !SUPPORTED_VISIBLE_TO.has(role))) {
+    return `Section ${sectionIndex + 1} visibleTo must use supported roles.`
   }
 
   if (!Array.isArray(section.fields)) {
@@ -121,6 +131,45 @@ function toFormSchemaDraft(schema: FormSchema | FormSchemaDraft): FormSchemaDraf
 
 export function formatFormSchemaDraft(schema: FormSchema | FormSchemaDraft): string {
   return JSON.stringify(toFormSchemaDraft(schema), null, 2)
+}
+
+export function readFormSchemaEditorDraft(text: string): FormSchemaDraft | null {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (
+    !isRecord(value) || value.formKey !== PSF_REQUEST_FORM_KEY ||
+    typeof value.title !== 'string' || !Array.isArray(value.sections)
+  ) return null
+
+  const sectionKeys = new Set<string>()
+  const fieldKeys = new Set<string>()
+  for (const section of value.sections) {
+    if (
+      !isRecord(section) || typeof section.sectionKey !== 'string' ||
+      typeof section.title !== 'string' || !isStringArray(section.visibleTo) ||
+      !Array.isArray(section.fields)
+    ) return null
+    if (!section.sectionKey.trim() || sectionKeys.has(section.sectionKey)) return null
+    sectionKeys.add(section.sectionKey)
+
+    for (const field of section.fields) {
+      if (
+        !isRecord(field) || typeof field.fieldKey !== 'string' ||
+        typeof field.canonicalKey !== 'string' || typeof field.label !== 'string' ||
+        typeof field.type !== 'string' || !SUPPORTED_FORM_CONTROL_TYPES.has(field.type as FormControlType) ||
+        typeof field.required !== 'boolean' ||
+        (field.options !== undefined && !isStringArray(field.options))
+      ) return null
+      if (!field.fieldKey.trim() || !isRendererSafeFieldKey(field.fieldKey) || fieldKeys.has(field.fieldKey)) return null
+      fieldKeys.add(field.fieldKey)
+    }
+  }
+
+  return value as unknown as FormSchemaDraft
 }
 
 export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
@@ -150,12 +199,31 @@ export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
   if (!Array.isArray(parsed.sections)) {
     return { error: 'Schema sections must be an array.', schema: null }
   }
+  if (parsed.sections.length === 0) {
+    return { error: 'Schema must have at least one section.', schema: null }
+  }
 
+  const sectionKeys = new Set<string>()
+  const fieldKeys = new Set<string>()
   for (const [sectionIndex, section] of parsed.sections.entries()) {
     const error = validateSection(section, sectionIndex)
     if (error) {
       return { error, schema: null }
     }
+    const typedSection = section as FormSchemaDraft['sections'][number]
+    if (sectionKeys.has(typedSection.sectionKey)) {
+      return { error: `Section ${sectionIndex + 1} has a duplicate sectionKey "${typedSection.sectionKey}".`, schema: null }
+    }
+    sectionKeys.add(typedSection.sectionKey)
+    for (const field of typedSection.fields) {
+      if (fieldKeys.has(field.fieldKey)) {
+        return { error: `Field "${field.fieldKey}" has a duplicate fieldKey.`, schema: null }
+      }
+      fieldKeys.add(field.fieldKey)
+    }
+  }
+  if (fieldKeys.size === 0) {
+    return { error: 'Schema must have at least one field.', schema: null }
   }
 
   return {
