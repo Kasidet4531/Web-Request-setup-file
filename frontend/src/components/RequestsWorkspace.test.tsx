@@ -5,7 +5,6 @@ import {
   RequestDetailShell,
   RequestHeaderSummary,
   WorkflowStatusActions,
-  WorkflowStatusRail,
 } from './RequestsWorkspace'
 import * as RequestsWorkspace from './RequestsWorkspace'
 import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
@@ -335,27 +334,6 @@ describe('RequestHeaderSummary', () => {
 })
 
 describe('WorkflowStatusActions', () => {
-  it('renders configured statuses in authoritative order without implying linear progress', () => {
-    const html = renderToStaticMarkup(
-      <WorkflowStatusRail
-        configuration={{
-          statuses: ['Submitted', 'Custom review', 'Need More Information', 'Cancelled'],
-        }}
-        currentStatus="Need More Information"
-      />,
-    )
-
-    expect(html).toContain('Workflow')
-    expect(html).toContain('4 statuses')
-    expect(html).toContain('Custom review')
-    expect(html).toContain('Need More Information')
-    expect(html).toContain('Cancelled')
-    expect(html).toContain('workflow-status-rail__status--current')
-    expect(html.match(/Need More Information/g)).toHaveLength(1)
-    expect(html.indexOf('Custom review')).toBeLessThan(html.indexOf('Need More Information'))
-    expect(html).not.toContain('progress')
-  })
-
   it('renders only server-authorized next statuses in the native status control', () => {
     const html = renderToStaticMarkup(
       <WorkflowStatusActions
@@ -591,10 +569,28 @@ describe('RequestDetailShell workflow actions', () => {
     requestDetailApi.fetchPsfRequestHistory.mockReset()
     requestDetailApi.fetchPsfRequestStatusOptions.mockReset()
     requestDetailApi.fetchWorkflowStatuses.mockReset()
-    requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Submitted', 'Setup In Progress', 'Need More Information'] })
     requestDetailApi.updatePsfCreatedData.mockReset()
     requestDetailApi.updatePsfRequestStatus.mockReset()
     requestDetailHookHarness.reset()
+  })
+
+  it('shows the persisted status beside the request number without loading the workflow map', async () => {
+    const request = { ...buildSubmittedRequest(), status: 'Custom review' }
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const header = requireRenderedElement(renderRequestDetailShell(), (element) => element.props.className === 'page-header')
+    const requestNumber = requireRenderedElement(header, (element) => element.props.className === 'detail-topbar__id font-mono-code')
+    const status = requireRenderedElement(header, (element) => element.props.className === 'detail-topbar__status')
+
+    expect(requestNumber.props.children).toBe('PSF-0001')
+    expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('Current status')
+    expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('Custom review')
+    expect(requestDetailApi.fetchWorkflowStatuses).not.toHaveBeenCalled()
   })
 
   it('loads request history inside the existing detail shell through the request-scoped API', async () => {
@@ -629,10 +625,7 @@ describe('RequestDetailShell workflow actions', () => {
       shell,
       (element) => element.type === panel,
     )
-    const workflowRail = requireRenderedElement(shell, (element) => element.type === WorkflowStatusRail)
 
-    expect(requestDetailApi.fetchWorkflowStatuses).toHaveBeenCalledTimes(1)
-    expect(workflowRail.props.configuration).toEqual({ statuses: ['Submitted', 'Setup In Progress', 'Need More Information'] })
     expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledWith('request-1')
     expect(historyPanel.props).toMatchObject({
       entries: history,
@@ -717,6 +710,7 @@ describe('RequestDetailShell workflow actions', () => {
 
     actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
     const summary = requireRenderedElement(shell, (element) => element.type === RequestHeaderSummary)
+    const currentStatus = requireRenderedElement(shell, (element) => element.props.className === 'detail-topbar__status')
     const success = requireRenderedElement(shell, (element) => element.props.role === 'status')
 
     expect(requestDetailApi.updatePsfRequestStatus).toHaveBeenCalledWith('request-1', {
@@ -724,6 +718,7 @@ describe('RequestDetailShell workflow actions', () => {
     })
     expect(requestDetailApi.fetchPsfRequestStatusOptions).toHaveBeenCalledTimes(2)
     expect(summary.props.request).toMatchObject({ status: 'Setup In Progress' })
+    expect(renderToStaticMarkup(<>{currentStatus.props.children}</>)).toContain('Setup In Progress')
     expect(actions.props.allowedNextStatuses).toEqual(['PSF Created', 'Need More Information', 'Rejected'])
     expect(actions.props.selectedStatus).toBe('Setup In Progress')
     expect(success.props.children).toBe('Request PSF-0001 moved to Setup In Progress.')

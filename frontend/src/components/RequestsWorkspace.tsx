@@ -19,7 +19,6 @@ import {
   ApiError,
   api,
   fetchCurrentUser,
-  type WorkflowStatusesResponse,
   type AuthenticatedUserProfile,
   type PsfRequestHistoryEntry,
   type PsfRequestListItem,
@@ -206,39 +205,6 @@ export function WorkflowStatusActions({
         {saving ? 'Updating status…' : 'Update status'}
       </button>
     </div>
-  )
-}
-
-export function WorkflowStatusRail({
-  configuration,
-  currentStatus,
-}: {
-  configuration: WorkflowStatusesResponse | null
-  currentStatus: string
-}) {
-  const statuses = configuration
-    ? [...new Set([...configuration.statuses, currentStatus])]
-    : [currentStatus]
-
-  return (
-    <section className="workflow-status-rail" aria-labelledby="workflow-status-heading">
-      <div className="workflow-status-rail__heading">
-        <span id="workflow-status-heading">Workflow</span>
-        {configuration ? <span>{statuses.length} statuses</span> : null}
-      </div>
-      <div className="workflow-status-rail__map" aria-label="Configured workflow statuses">
-        {statuses.map((status) => (
-          <span
-            aria-current={status === currentStatus ? 'step' : undefined}
-            className={`${statusClassName(status)}${status === currentStatus ? ' workflow-status-rail__status--current' : ''}`}
-            key={status}
-          >
-            {status}
-          </span>
-        ))}
-      </div>
-      {!configuration ? <p className="page-card__description" role="status">Configured workflow is unavailable.</p> : null}
-    </section>
   )
 }
 
@@ -734,7 +700,6 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
   })
   const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
   const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
-  const [workflowConfiguration, setWorkflowConfiguration] = useState<WorkflowStatusesResponse | null>(null)
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -759,18 +724,10 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
           }
         }
 
-        let nextWorkflowConfiguration: WorkflowStatusesResponse | null = null
-        try {
-          nextWorkflowConfiguration = await api.fetchWorkflowStatuses()
-        } catch {
-          nextWorkflowConfiguration = null
-        }
-
         if (mounted) {
           setRequest(response)
           setPsfCreatedValues(buildPsfCreatedInformationValues(response))
           setAllowedNextStatuses(nextAllowedStatuses)
-          setWorkflowConfiguration(nextWorkflowConfiguration)
           setStatus(response.status)
           setLoading(false)
         }
@@ -905,18 +862,17 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
             <h1>PSF Request Detail</h1>
           )}
         </div>
+        {request ? (
+          <div className="detail-topbar__status">
+            <span>Current status</span>
+            <span className="status-badge">{request.status}</span>
+          </div>
+        ) : null}
       </div>
 
       {loading ? <p className="page-card__description" role="status">Loading request detail…</p> : null}
       {error ? <p className="status-pill status-pill--error" role="alert">{error}</p> : null}
       {message ? <p className="status-pill status-pill--success" role="status">{message}</p> : null}
-
-      {request ? (
-        <WorkflowStatusRail
-          configuration={workflowConfiguration}
-          currentStatus={request.status}
-        />
-      ) : null}
 
       {request ? (
         <div className="detail-layout">
