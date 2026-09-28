@@ -346,6 +346,7 @@ describe('WorkflowStatusActions', () => {
     )
 
     expect(html).toContain('Workflow')
+    expect(html).toContain('4 statuses')
     expect(html).toContain('Custom review')
     expect(html).toContain('Need More Information')
     expect(html).toContain('Cancelled')

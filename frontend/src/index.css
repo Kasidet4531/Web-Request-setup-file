@@ -2219,6 +2219,22 @@ input.input-with-clear {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.psf-created-panel .dynamic-form__grid > .dynamic-form__field {
+  min-width: 0;
+  width: 100%;
+  grid-template-rows: minmax(max-content, 1fr) auto;
+  align-content: stretch;
+}
+
+.psf-created-panel .dynamic-form__field > :is(input, select, textarea) {
+  min-width: 0;
+  width: 100%;
+}
+
+.psf-created-panel .dynamic-form__field > :is(input, select) {
+  height: 40px;
+}
+
 .request-history__timeline {
   display: grid;
   gap: 0;

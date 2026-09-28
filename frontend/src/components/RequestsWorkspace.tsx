@@ -224,6 +224,7 @@ export function WorkflowStatusRail({
     <section className="workflow-status-rail" aria-labelledby="workflow-status-heading">
       <div className="workflow-status-rail__heading">
         <span id="workflow-status-heading">Workflow</span>
+        {configuration ? <span>{statuses.length} statuses</span> : null}
       </div>
       <div className="workflow-status-rail__map" aria-label="Configured workflow statuses">
         {statuses.map((status) => (
