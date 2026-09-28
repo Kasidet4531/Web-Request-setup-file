@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../auth/auth.service';
-import { WorkflowTransitionController } from './workflow_transition.controller';
+import {
+  WorkflowStatusController,
+  WorkflowTransitionController,
+} from './workflow_transition.controller';
 import { WorkflowTransitionService } from './workflow_transition.service';
 
 const adminActor = {
@@ -31,6 +34,7 @@ const replacement = {
 describe('WorkflowTransitionController', () => {
   let authService: { getProfile: jest.Mock };
   let controller: WorkflowTransitionController;
+  let statusController: WorkflowStatusController;
   let workflowTransitionService: {
     getConfiguration: jest.Mock;
     replaceConfiguration: jest.Mock;
@@ -44,7 +48,7 @@ describe('WorkflowTransitionController', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [WorkflowTransitionController],
+      controllers: [WorkflowTransitionController, WorkflowStatusController],
       providers: [
         { provide: AuthService, useValue: authService },
         {
@@ -55,6 +59,7 @@ describe('WorkflowTransitionController', () => {
     }).compile();
 
     controller = module.get(WorkflowTransitionController);
+    statusController = module.get(WorkflowStatusController);
   });
 
   it('returns the saved configuration only after resolving the current administrator profile', async () => {
@@ -73,6 +78,45 @@ describe('WorkflowTransitionController', () => {
 
     expect(authService.getProfile).toHaveBeenCalledWith(adminActor.id);
     expect(workflowTransitionService.getConfiguration).toHaveBeenCalledWith();
+  });
+
+  it.each([
+    adminActor,
+    { ...adminActor, id: 'requester-1', role: 'requester' as const },
+    { ...adminActor, id: 'owner-1', role: 'setup_owner' as const },
+  ])(
+    'returns only configured statuses to an authenticated $role',
+    async (actor) => {
+      authService.getProfile.mockResolvedValue(actor);
+      workflowTransitionService.getConfiguration.mockResolvedValue({
+        statuses: ['Custom review', 'Need More Information'],
+        transitions: replacement.transitions,
+      });
+
+      await expect(
+        statusController.getStatuses({
+          session: { userId: actor.id },
+        } as never),
+      ).resolves.toEqual({
+        statuses: ['Custom review', 'Need More Information'],
+      });
+      expect(workflowTransitionService.getConfiguration).toHaveBeenCalledTimes(
+        1,
+      );
+    },
+  );
+
+  it('rejects missing or stale sessions before exposing statuses', async () => {
+    await expect(
+      statusController.getStatuses({ session: {} } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const stale = { session: { userId: 'missing-user' as string | undefined } };
+    authService.getProfile.mockResolvedValue(null);
+    await expect(
+      statusController.getStatuses(stale as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(stale.session.userId).toBeUndefined();
+    expect(workflowTransitionService.getConfiguration).not.toHaveBeenCalled();
   });
 
   it('atomically replaces the complete configuration only for an administrator', async () => {

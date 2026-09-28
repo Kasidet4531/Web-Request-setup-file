@@ -158,6 +158,10 @@ export interface AdminWorkflowTransitionConfiguration {
   transitions: WorkflowTransitionRule[]
 }
 
+export interface WorkflowStatusesResponse {
+  statuses: string[]
+}
+
 export interface ReplaceAdminWorkflowTransitionConfigurationPayload {
   transitions: WorkflowTransitionRule[]
 }
@@ -348,6 +352,8 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    fetchWorkflowStatuses: () =>
+      request<WorkflowStatusesResponse>('/workflow/statuses', { method: 'GET' }),
     fetchAdminWorkflowTransitionConfiguration: () =>
       request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
         method: 'GET',

@@ -93,3 +93,30 @@ export class WorkflowTransitionController {
     return { transitions: body.transitions as never };
   }
 }
+
+@Controller('workflow')
+export class WorkflowStatusController {
+  constructor(
+    private readonly workflowTransitionService: WorkflowTransitionService,
+    private readonly authService: AuthService,
+  ) {}
+
+  @Get('statuses')
+  async getStatuses(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ statuses: string[] }> {
+    const userId = request.session.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+    const actor = await this.authService.getProfile(userId);
+    if (!actor) {
+      request.session.userId = undefined;
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    const { statuses } =
+      await this.workflowTransitionService.getConfiguration();
+    return { statuses };
+  }
+}

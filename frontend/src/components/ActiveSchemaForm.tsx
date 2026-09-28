@@ -685,7 +685,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   if (isSchemaChoicePending && currentRequest && activeRequestSchema) {
     return (
       <>
-        <RequestDraftStatus request={currentRequest} />
+        {!requestId ? <RequestDraftStatus request={currentRequest} /> : null}
         <DraftSchemaUpgradeDecision
           activeVersion={activeRequestSchema.version}
           currentVersion={currentRequest.formVersion}
@@ -701,7 +701,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
 
   return (
     <>
-      {currentRequest ? <RequestDraftStatus request={currentRequest} /> : null}
+      {currentRequest && !requestId ? <RequestDraftStatus request={currentRequest} /> : null}
       {saveMessage ? (
         <p className="status-pill status-pill--success" role="status">
           {saveMessage}

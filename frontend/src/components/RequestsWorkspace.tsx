@@ -19,7 +19,7 @@ import {
   ApiError,
   api,
   fetchCurrentUser,
-  type AdminWorkflowTransitionConfiguration,
+  type WorkflowStatusesResponse,
   type AuthenticatedUserProfile,
   type PsfRequestHistoryEntry,
   type PsfRequestListItem,
@@ -132,7 +132,6 @@ interface RequestDetailSummary {
   requestNo: string
   title: string
   productType: string
-  status: string
   priority: string
   dueDate: string | null
   requester: string
@@ -144,7 +143,6 @@ function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSu
     requestNo: request.requestNo,
     title: getRequestTitle(request),
     productType: request.productType ?? requesterValueForCanonicalKey(request, 'product_type') ?? '—',
-    status: request.status,
     priority: requesterValueForCanonicalKey(request, 'priority') ?? 'Normal',
     dueDate: requesterValueForCanonicalKey(request, 'due_date'),
     requester: request.requester ?? requesterValueForCanonicalKey(request, 'requester') ?? '—',
@@ -159,7 +157,6 @@ export function RequestHeaderSummary({ request }: { request: PsfRequestResponse 
     <section className="detail-summary" aria-label="Request header">
       <div className="detail-summary__heading">
         <h1>{summary.title}</h1>
-        <span className={statusClassName(summary.status)}>{summary.status}</span>
       </div>
       <div className="detail-summary-grid">
         <div><span>Request No.</span><strong className="font-mono-code">{summary.requestNo}</strong></div>
@@ -216,7 +213,7 @@ export function WorkflowStatusRail({
   configuration,
   currentStatus,
 }: {
-  configuration: AdminWorkflowTransitionConfiguration | null
+  configuration: WorkflowStatusesResponse | null
   currentStatus: string
 }) {
   const statuses = configuration
@@ -227,7 +224,6 @@ export function WorkflowStatusRail({
     <section className="workflow-status-rail" aria-labelledby="workflow-status-heading">
       <div className="workflow-status-rail__heading">
         <span id="workflow-status-heading">Workflow</span>
-        <strong className={statusClassName(currentStatus)}>{currentStatus}</strong>
       </div>
       <div className="workflow-status-rail__map" aria-label="Configured workflow statuses">
         {statuses.map((status) => (
@@ -240,6 +236,7 @@ export function WorkflowStatusRail({
           </span>
         ))}
       </div>
+      {!configuration ? <p className="page-card__description" role="status">Configured workflow is unavailable.</p> : null}
     </section>
   )
 }
@@ -736,7 +733,7 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
   })
   const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
   const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
-  const [workflowConfiguration, setWorkflowConfiguration] = useState<AdminWorkflowTransitionConfiguration | null>(null)
+  const [workflowConfiguration, setWorkflowConfiguration] = useState<WorkflowStatusesResponse | null>(null)
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -761,12 +758,9 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
           }
         }
 
-        let nextWorkflowConfiguration: AdminWorkflowTransitionConfiguration | null = null
+        let nextWorkflowConfiguration: WorkflowStatusesResponse | null = null
         try {
-          const currentUser = await loadCurrentUserOrNull()
-          if (currentUser?.role === 'admin') {
-            nextWorkflowConfiguration = await api.fetchAdminWorkflowTransitionConfiguration()
-          }
+          nextWorkflowConfiguration = await api.fetchWorkflowStatuses()
         } catch {
           nextWorkflowConfiguration = null
         }
@@ -905,18 +899,10 @@ export function RequestDetailShell({ requestId }: { requestId: string }) {
             <ArrowLeft size={15} /> Back to Requests
           </Link>
           {request ? (
-            <span className="detail-topbar__id">
-              <span className="font-mono-code">{request.requestNo}</span>
-              <span className={statusClassName(request.status)}>{request.status}</span>
-            </span>
+            <span className="detail-topbar__id font-mono-code">{request.requestNo}</span>
           ) : (
             <h1>PSF Request Detail</h1>
           )}
-        </div>
-        <div className="button-row">
-          <Link className="btn-secondary" to="/history">
-            Global History
-          </Link>
         </div>
       </div>
 

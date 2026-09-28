@@ -686,6 +686,23 @@ describe('createApiClient', () => {
     )
   })
 
+  it('reads configured workflow status order without using the admin-management route', async () => {
+    const statuses = ['Submitted', 'Need More Information', 'Custom Review']
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ statuses }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    const client = createApiClient({ baseUrl: '/api' })
+    await expect(client.fetchWorkflowStatuses()).resolves.toEqual({ statuses })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/workflow/statuses',
+      expect.objectContaining({ credentials: 'include', method: 'GET' }),
+    )
+  })
+
   it('lists, creates, and edits administrator autofill rules through canonical-key endpoints', async () => {
     const rule = {
       id: 'f0e9b091-8ee5-4d92-90ed-c4ac8ec01845',

@@ -718,6 +718,35 @@ describe('AppController (e2e)', () => {
     await request(server).get('/api/admin/workflow').expect(403);
   });
 
+  it('exposes ordered workflow statuses without transition rules to every authenticated role', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    activeUserId = undefined;
+    await request(server).get('/api/workflow/statuses').expect(401);
+
+    for (const role of ['requester', 'setup_owner', 'admin']) {
+      activeUserId = `${role}-1`;
+      authService.getProfile.mockResolvedValue({
+        id: activeUserId,
+        username: `${role}.demo`,
+        displayName: 'Test User',
+        role,
+        setupOwnerDepartment: null,
+      });
+      await request(server)
+        .get('/api/workflow/statuses')
+        .expect(200)
+        .expect(({ body }: { body: Record<string, unknown> }) => {
+          expect(body).toEqual({ statuses: MANUAL_WORKFLOW_STATUSES });
+        });
+      if (role !== 'admin') {
+        await request(server)
+          .put('/api/admin/workflow')
+          .send(buildWorkflowConfiguration())
+          .expect(403);
+      }
+    }
+  });
+
   it('registers admin autofill rules that validate canonical keys, persist atomically, and are readable through the runtime service', async () => {
     const activeDefinition: FormDefinitionRow = {
       form_key: 'psf-request',

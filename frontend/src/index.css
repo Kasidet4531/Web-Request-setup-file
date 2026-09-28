@@ -1342,6 +1342,15 @@ input.input-with-clear {
   width: 100%;
 }
 
+.detail-page .workflow-actions__apply:disabled,
+.detail-page .workflow-actions__apply:disabled:hover {
+  background-color: var(--secondary);
+  color: var(--muted-foreground);
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 1;
+}
+
 .filter-bar {
   display: grid;
   gap: 16px;
@@ -2446,6 +2455,15 @@ input.input-with-clear {
   .workflow-status-rail,
   .request-history__timeline li {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .request-history__timeline li {
+    gap: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .request-history__timeline li > div {
+    order: -1;
   }
 
   .psf-created-panel .dynamic-form__grid {

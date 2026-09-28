@@ -15,6 +15,7 @@ const requestDetailApi = vi.hoisted(() => ({
   fetchPsfRequest: vi.fn(),
   fetchPsfRequestHistory: vi.fn(),
   fetchPsfRequestStatusOptions: vi.fn(),
+  fetchWorkflowStatuses: vi.fn(),
   updatePsfCreatedData: vi.fn(),
   updatePsfRequestStatus: vi.fn(),
 }))
@@ -314,7 +315,7 @@ describe('RequestHeaderSummary', () => {
     expect(html).toContain('PSF-0001')
     expect(html).toContain('Production probe card setup')
     expect(html).toContain('Existing Product')
-    expect(html).toContain('status-badge--submitted')
+    expect(html).not.toContain('status-badge--submitted')
     expect(html).toContain('Urgent')
     expect(html).toContain('05/08/2026')
     expect(html).toContain('Fook')
@@ -339,7 +340,6 @@ describe('WorkflowStatusActions', () => {
       <WorkflowStatusRail
         configuration={{
           statuses: ['Submitted', 'Custom review', 'Need More Information', 'Cancelled'],
-          transitions: [],
         }}
         currentStatus="Need More Information"
       />,
@@ -350,6 +350,8 @@ describe('WorkflowStatusActions', () => {
     expect(html).toContain('Need More Information')
     expect(html).toContain('Cancelled')
     expect(html).toContain('workflow-status-rail__status--current')
+    expect(html.match(/Need More Information/g)).toHaveLength(1)
+    expect(html.indexOf('Custom review')).toBeLessThan(html.indexOf('Need More Information'))
     expect(html).not.toContain('progress')
   })
 
@@ -587,6 +589,8 @@ describe('RequestDetailShell workflow actions', () => {
     requestDetailApi.fetchPsfRequest.mockReset()
     requestDetailApi.fetchPsfRequestHistory.mockReset()
     requestDetailApi.fetchPsfRequestStatusOptions.mockReset()
+    requestDetailApi.fetchWorkflowStatuses.mockReset()
+    requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Submitted', 'Setup In Progress', 'Need More Information'] })
     requestDetailApi.updatePsfCreatedData.mockReset()
     requestDetailApi.updatePsfRequestStatus.mockReset()
     requestDetailHookHarness.reset()
@@ -624,7 +628,10 @@ describe('RequestDetailShell workflow actions', () => {
       shell,
       (element) => element.type === panel,
     )
+    const workflowRail = requireRenderedElement(shell, (element) => element.type === WorkflowStatusRail)
 
+    expect(requestDetailApi.fetchWorkflowStatuses).toHaveBeenCalledTimes(1)
+    expect(workflowRail.props.configuration).toEqual({ statuses: ['Submitted', 'Setup In Progress', 'Need More Information'] })
     expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledWith('request-1')
     expect(historyPanel.props).toMatchObject({
       entries: history,

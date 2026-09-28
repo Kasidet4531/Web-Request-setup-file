@@ -5,7 +5,10 @@ import { AuthModule } from '../auth/auth.module';
 import { FormSchemaController } from './form_schema.controller';
 import { FormSchemaService } from './form_schema.service';
 import { UserManagementController } from './user_management.controller';
-import { WorkflowTransitionController } from './workflow_transition.controller';
+import {
+  WorkflowStatusController,
+  WorkflowTransitionController,
+} from './workflow_transition.controller';
 import { WorkflowTransitionService } from './workflow_transition.service';
 
 @Module({
@@ -19,6 +22,7 @@ import { WorkflowTransitionService } from './workflow_transition.service';
     FormSchemaController,
     UserManagementController,
     WorkflowTransitionController,
+    WorkflowStatusController,
     AutofillRuleController,
   ],
   exports: [FormSchemaService, WorkflowTransitionService, AutofillRuleService],
