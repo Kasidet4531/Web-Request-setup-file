@@ -258,7 +258,7 @@ describe('FormSchemaService', () => {
     });
 
     expect(pool.query).toHaveBeenCalledWith(
-      expect.stringContaining('ORDER BY version DESC'),
+      expect.stringContaining("status <> 'discarded'"),
       [PSF_REQUEST_FORM_KEY],
     );
   });
@@ -271,94 +271,108 @@ describe('FormSchemaService', () => {
     );
   });
 
-  it('locks the managed form before allocating its first draft, normalizes server-owned fields, and records the server actor', async () => {
-    const active = makeRow(1, 'active');
-    const created = makeRow(2, 'draft', {
-      title: 'Updated PSF Request Form',
-      description: 'Editable draft',
-      schema_json: makeValidSchema(2, 'Updated PSF Request Form'),
-      created_at: new Date('2026-06-02T00:00:00.000Z'),
-      published_at: null,
+  it('duplicates a historical version into a new draft without modifying the source', async () => {
+    const old = makeRow(1, 'published');
+    const active = makeRow(2, 'active');
+    const copy = makeRow(3, 'draft', {
+      schema_json: makeValidSchema(3, old.title),
+      title: old.title,
     });
     configureTransaction((query) => {
-      if (query.includes('ORDER BY version ASC')) {
+      if (query.includes('ORDER BY version ASC'))
         return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
-      }
-
-      if (query.includes('FOR UPDATE')) {
-        return { rows: [active] };
-      }
-
-      if (query.includes('INSERT INTO form_definitions')) {
-        return { rows: [created] };
-      }
-
+      if (query.includes('FOR UPDATE')) return { rows: [active, old] };
+      if (query.includes('INSERT INTO form_definitions'))
+        return { rows: [copy] };
       throw new Error(`Unexpected query: ${query}`);
     });
-    const suppliedSchema = {
-      ...makeValidSchema(999, '  Updated PSF Request Form  '),
-      formKey: PSF_REQUEST_FORM_KEY,
-      version: 999,
-      status: 'active',
-      createdBy: 'client-controlled',
-    };
+    await expect(
+      service.duplicateVersion(1, adminActor),
+    ).resolves.toMatchObject({ version: 3, status: 'draft' });
+    const insert = transactionClient.query.mock.calls.find(([sql]) =>
+      (sql as string).includes('INSERT INTO form_definitions'),
+    ) as [string, unknown[]] | undefined;
+    expect(insert?.[1]).toEqual(
+      expect.arrayContaining([
+        3,
+        old.title,
+        { ...old.schema_json, version: 3 },
+      ]),
+    );
+  });
 
+  it('never reuses a discarded draft version number when duplicating', async () => {
+    const active = makeRow(1, 'active');
+    const discarded = makeRow(2, 'discarded');
+    const next = makeRow(3, 'draft');
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE')) return { rows: [discarded, active] };
+      if (query.includes('INSERT INTO form_definitions'))
+        return { rows: [next] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await expect(
+      service.duplicateVersion(1, adminActor),
+    ).resolves.toMatchObject({ version: 3 });
+    expect(transactionClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO form_definitions'),
+      expect.arrayContaining([3]),
+    );
+  });
+
+  it('rejects duplication while another draft exists without overwriting it', async () => {
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE'))
+        return {
+          rows: [
+            makeRow(3, 'draft'),
+            makeRow(2, 'active'),
+            makeRow(1, 'published'),
+          ],
+        };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await expect(
+      service.duplicateVersion(1, adminActor),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
+  it('refuses to save when no draft exists rather than silently creating one', async () => {
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE')) return { rows: [makeRow(1, 'active')] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
     await expect(
       service.saveDraft(
-        {
-          description: 'Editable draft',
-          schema: suppliedSchema,
-        },
+        { draftVersion: 2, schema: makeValidSchema(1) },
         adminActor,
       ),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        formKey: PSF_REQUEST_FORM_KEY,
-        version: 2,
-        status: 'draft',
-        createdBy: 'admin.demo',
-        createdAt: '2026-06-02T00:00:00.000Z',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        schema: expect.objectContaining({
-          formKey: PSF_REQUEST_FORM_KEY,
-          version: 2,
-          title: 'Updated PSF Request Form',
-        }),
-      }),
-    );
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
 
-    expect(transactionClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
-    expect(transactionClient.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('ORDER BY version ASC'),
-      [PSF_REQUEST_FORM_KEY],
-    );
-    expect(transactionClient.query).toHaveBeenNthCalledWith(
-      3,
-      expect.stringContaining('ORDER BY version DESC'),
-      [PSF_REQUEST_FORM_KEY],
-    );
-    expect(transactionClient.query).toHaveBeenNthCalledWith(
-      4,
-      expect.stringContaining('INSERT INTO form_definitions'),
-      [
-        expect.any(String),
-        PSF_REQUEST_FORM_KEY,
-        2,
-        'Updated PSF Request Form',
-        'Editable draft',
-        {
-          formKey: PSF_REQUEST_FORM_KEY,
-          version: 2,
-          title: 'Updated PSF Request Form',
-          sections: suppliedSchema.sections,
-        },
-        'draft',
-        'admin.demo',
-      ],
-    );
-    expect(transactionClient.query).toHaveBeenLastCalledWith('COMMIT');
-    expect(transactionClient.release).toHaveBeenCalledTimes(1);
+  it('never updates an existing draft unless its exact version was supplied', async () => {
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE'))
+        return { rows: [makeRow(2, 'draft'), makeRow(1, 'active')] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await expect(
+      service.saveDraft(
+        { schema: makeValidSchema(1), draftVersion: 1 },
+        adminActor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('rereads managed rows after a stable anchor lock before updating a concurrent draft', async () => {
@@ -392,6 +406,7 @@ describe('FormSchemaService', () => {
     await expect(
       service.saveDraft(
         {
+          draftVersion: 2,
           schema: {
             formKey: PSF_REQUEST_FORM_KEY,
             title: 'Concurrent Draft',
@@ -454,6 +469,7 @@ describe('FormSchemaService', () => {
     await expect(
       service.saveDraft(
         {
+          draftVersion: 2,
           schema: {
             formKey: PSF_REQUEST_FORM_KEY,
             title: 'Retitled Draft',
@@ -509,6 +525,7 @@ describe('FormSchemaService', () => {
     await expect(
       service.saveDraft(
         {
+          draftVersion: 2,
           schema: {
             formKey: PSF_REQUEST_FORM_KEY,
             title: 'Draft',
@@ -521,6 +538,36 @@ describe('FormSchemaService', () => {
 
     expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
     expect(transactionClient.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards only the selected draft while keeping its version number reserved', async () => {
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE'))
+        return { rows: [makeRow(2, 'draft'), makeRow(1, 'active')] };
+      if (query.includes("SET status = 'discarded'"))
+        return { rows: [{ version: 2 }] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await expect(service.discardDraft(2)).resolves.toBeUndefined();
+    expect(transactionClient.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'discarded'"),
+      [PSF_REQUEST_FORM_KEY, 2],
+    );
+  });
+
+  it('refuses to discard an active or historical version', async () => {
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE'))
+        return { rows: [makeRow(2, 'active'), makeRow(1, 'published')] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await expect(service.discardDraft(2)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
 
   it('demotes the locked active schema before atomically promoting a valid draft while preserving the prior publication timestamp', async () => {
@@ -711,40 +758,25 @@ describe('FormSchemaService', () => {
   );
 
   it('preserves the original database error when rollback itself fails', async () => {
-    const active = makeRow(1, 'active');
-    const insertFailure = new Error('draft insert failed');
+    const updateFailure = new Error('draft update failed');
     transactionClient.query.mockImplementation((query: string) => {
-      if (query === 'BEGIN') {
-        return Promise.resolve({ rows: [] });
-      }
-
-      if (query.includes('FOR UPDATE')) {
-        return Promise.resolve({ rows: [active] });
-      }
-
-      if (query.includes('INSERT INTO form_definitions')) {
-        return Promise.reject(insertFailure);
-      }
-
-      if (query === 'ROLLBACK') {
+      if (query === 'BEGIN') return Promise.resolve({ rows: [] });
+      if (query.includes('FOR UPDATE'))
+        return Promise.resolve({
+          rows: [makeRow(2, 'draft'), makeRow(1, 'active')],
+        });
+      if (query.includes('UPDATE form_definitions'))
+        return Promise.reject(updateFailure);
+      if (query === 'ROLLBACK')
         return Promise.reject(new Error('rollback failed'));
-      }
-
       throw new Error(`Unexpected query: ${query}`);
     });
-
     await expect(
       service.saveDraft(
-        {
-          schema: {
-            formKey: PSF_REQUEST_FORM_KEY,
-            title: 'Draft',
-            sections: [],
-          },
-        },
+        { draftVersion: 2, schema: makeValidSchema(2) },
         adminActor,
       ),
-    ).rejects.toBe(insertFailure);
+    ).rejects.toBe(updateFailure);
     expect(transactionClient.release).toHaveBeenCalledTimes(1);
   });
 });

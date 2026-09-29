@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Put,
   Req,
@@ -67,6 +69,36 @@ export class FormSchemaController {
     return this.formSchemaService.publishDraft(this.parsePublishVersion(body));
   }
 
+  @Post('duplicate')
+  async duplicateVersion(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<FormSchemaVersionResponse> {
+    const actor = await this.getAuthenticatedAdmin(request);
+    return this.formSchemaService.duplicateVersion(
+      this.parsePublishVersion(body),
+      actor,
+    );
+  }
+
+  @Delete('draft/:version')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async discardDraft(
+    @Param('version') version: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<void> {
+    await this.getAuthenticatedAdmin(request);
+    const numericVersion = Number(version);
+    if (
+      !/^\d+$/.test(version) ||
+      !Number.isSafeInteger(numericVersion) ||
+      numericVersion <= 0
+    ) {
+      throw new BadRequestException('version must be a positive safe integer.');
+    }
+    await this.formSchemaService.discardDraft(numericVersion);
+  }
+
   private async getAuthenticatedAdmin(
     request: AuthenticatedRequest,
   ): Promise<AuthenticatedUserProfile> {
@@ -119,9 +151,13 @@ export class FormSchemaController {
     if (!Array.isArray(schema.sections)) {
       throw new BadRequestException('schema.sections must be an array.');
     }
+    const draftVersion = this.parsePublishVersion({
+      version: body.draftVersion,
+    });
 
     return {
       description: description ?? undefined,
+      draftVersion,
       schema: {
         formKey: PSF_REQUEST_FORM_KEY,
         title: schema.title.trim(),

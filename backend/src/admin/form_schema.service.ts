@@ -68,6 +68,7 @@ export interface FormSchemaVersionListResponse {
 
 export interface SaveFormSchemaDraftDto {
   description?: string | null;
+  draftVersion: number;
   schema: Omit<FormSchemaJson, 'version'>;
 }
 
@@ -288,7 +289,7 @@ export class FormSchemaService implements OnModuleInit {
           created_at,
           published_at
         FROM form_definitions
-        WHERE form_key = $1
+        WHERE form_key = $1 AND status <> 'discarded'
         ORDER BY version DESC
       `,
       [PSF_REQUEST_FORM_KEY],
@@ -311,7 +312,7 @@ export class FormSchemaService implements OnModuleInit {
     actor: AuthenticatedUserProfile,
   ): Promise<FormSchemaVersionResponse> {
     const normalizedDto = this.assertDraftInput(dto);
-    const createdBy = this.getActorUsername(actor);
+    this.getActorUsername(actor);
 
     return this.withTransaction(async (client) => {
       const lockedRows = await this.lockManagedForm(client);
@@ -323,89 +324,96 @@ export class FormSchemaService implements OnModuleInit {
       }
 
       const existingDraft = draftRows[0];
-      const version =
-        existingDraft?.version ?? this.nextDraftVersion(lockedRows);
+      if (
+        !existingDraft ||
+        existingDraft.version !== normalizedDto.draftVersion
+      ) {
+        throw new ConflictException(
+          'The selected draft no longer exists. Reload versions before saving.',
+        );
+      }
+      const version = existingDraft.version;
       const schema = this.normalizeDraftSchema(normalizedDto.schema, version);
       const description = normalizedDto.description ?? null;
 
-      if (existingDraft) {
-        const result = await client.query<FormDefinitionRow>(
-          `
-            UPDATE form_definitions
-            SET title = $1, description = $2, schema_json = $3::jsonb
-            WHERE form_key = $4 AND version = $5 AND status = 'draft'
-            RETURNING
-              form_key,
-              version,
-              title,
-              description,
-              status,
-              schema_json,
-              created_by,
-              created_at,
-              published_at
-          `,
-          [
-            schema.title,
-            description,
-            schema,
-            PSF_REQUEST_FORM_KEY,
-            existingDraft.version,
-          ],
-        );
-        const updated = result.rows[0];
-        if (!updated) {
-          throw new ConflictException(
-            'The schema draft changed before it could be saved.',
-          );
-        }
-
-        return this.toVersionResponse(updated);
-      }
-
       const result = await client.query<FormDefinitionRow>(
         `
-          INSERT INTO form_definitions (
-            id,
-            form_key,
-            version,
-            title,
-            description,
-            schema_json,
-            status,
-            created_by,
-            created_at,
-            published_at
-          )
-          VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, $7, $8, NOW(), NULL)
-          RETURNING
-            form_key,
-            version,
-            title,
-            description,
-            status,
-            schema_json,
-            created_by,
-            created_at,
-            published_at
+          UPDATE form_definitions
+          SET title = $1, description = $2, schema_json = $3::jsonb
+          WHERE form_key = $4 AND version = $5 AND status = 'draft'
+          RETURNING form_key, version, title, description, status, schema_json, created_by, created_at, published_at
         `,
+        [schema.title, description, schema, PSF_REQUEST_FORM_KEY, version],
+      );
+      if (!result.rows[0])
+        throw new ConflictException(
+          'The schema draft changed before it could be saved.',
+        );
+      return this.toVersionResponse(result.rows[0]);
+    });
+  }
+
+  async duplicateVersion(
+    sourceVersion: number,
+    actor: AuthenticatedUserProfile,
+  ): Promise<FormSchemaVersionResponse> {
+    this.assertPublishVersion(sourceVersion);
+    const createdBy = this.getActorUsername(actor);
+    return this.withTransaction(async (client) => {
+      const rows = await this.lockManagedForm(client);
+      const source = rows.find(
+        (row) => row.version === sourceVersion && row.status !== 'discarded',
+      );
+      if (!source)
+        throw new NotFoundException(
+          `Form schema version ${sourceVersion} was not found.`,
+        );
+      if (rows.some((row) => row.status === 'draft')) {
+        throw new ConflictException(
+          'Open or discard the existing draft before duplicating a version.',
+        );
+      }
+      const version = this.nextDraftVersion(rows);
+      const result = await client.query<FormDefinitionRow>(
+        `INSERT INTO form_definitions (id, form_key, version, title, description, schema_json, status, created_by, created_at, published_at)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, 'draft', $7, NOW(), NULL)
+         RETURNING form_key, version, title, description, status, schema_json, created_by, created_at, published_at`,
         [
           randomUUID(),
           PSF_REQUEST_FORM_KEY,
           version,
-          schema.title,
-          description,
-          schema,
-          'draft',
+          source.title,
+          source.description,
+          this.normalizeDraftSchema(source.schema_json, version),
           createdBy,
         ],
       );
-      const created = result.rows[0];
-      if (!created) {
+      if (!result.rows[0])
         throw new ConflictException('The schema draft could not be created.');
-      }
+      return this.toVersionResponse(result.rows[0]);
+    });
+  }
 
-      return this.toVersionResponse(created);
+  async discardDraft(version: number): Promise<void> {
+    this.assertPublishVersion(version);
+    await this.withTransaction(async (client) => {
+      const rows = await this.lockManagedForm(client);
+      if (
+        !rows.some((row) => row.version === version && row.status === 'draft')
+      ) {
+        throw new ConflictException(
+          `Version ${version} is not a draft that can be discarded.`,
+        );
+      }
+      const result = await client.query<{ version: number }>(
+        `UPDATE form_definitions SET status = 'discarded'
+         WHERE form_key = $1 AND version = $2 AND status = 'draft' RETURNING version`,
+        [PSF_REQUEST_FORM_KEY, version],
+      );
+      if (!result.rows[0])
+        throw new ConflictException(
+          'The draft changed before it could be discarded.',
+        );
     });
   }
 
@@ -680,8 +688,11 @@ export class FormSchemaService implements OnModuleInit {
       throw new BadRequestException('schema.sections must be an array.');
     }
 
+    this.assertPublishVersion(dto.draftVersion);
+
     return {
       description: description ?? null,
+      draftVersion: dto.draftVersion,
       schema: {
         formKey: PSF_REQUEST_FORM_KEY,
         title: schema.title.trim(),
