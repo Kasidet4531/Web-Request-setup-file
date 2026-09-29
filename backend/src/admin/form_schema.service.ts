@@ -289,7 +289,7 @@ export class FormSchemaService implements OnModuleInit {
           created_at,
           published_at
         FROM form_definitions
-        WHERE form_key = $1 AND status <> 'discarded'
+        WHERE form_key = $1
         ORDER BY version DESC
       `,
       [PSF_REQUEST_FORM_KEY],
@@ -361,9 +361,7 @@ export class FormSchemaService implements OnModuleInit {
     const createdBy = this.getActorUsername(actor);
     return this.withTransaction(async (client) => {
       const rows = await this.lockManagedForm(client);
-      const source = rows.find(
-        (row) => row.version === sourceVersion && row.status !== 'discarded',
-      );
+      const source = rows.find((row) => row.version === sourceVersion);
       if (!source)
         throw new NotFoundException(
           `Form schema version ${sourceVersion} was not found.`,
@@ -406,8 +404,8 @@ export class FormSchemaService implements OnModuleInit {
         );
       }
       const result = await client.query<{ version: number }>(
-        `UPDATE form_definitions SET status = 'discarded'
-         WHERE form_key = $1 AND version = $2 AND status = 'draft' RETURNING version`,
+        `DELETE FROM form_definitions
+         WHERE form_key = $1 AND version = $2 AND status = 'draft' AND published_at IS NULL RETURNING version`,
         [PSF_REQUEST_FORM_KEY, version],
       );
       if (!result.rows[0])

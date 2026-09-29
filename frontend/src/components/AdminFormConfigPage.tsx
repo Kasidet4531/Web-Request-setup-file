@@ -321,7 +321,7 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
 
   async function discardDraft(version: number) {
     if (busy || requestInFlight.current || !versions.some((item) => item.version === version && item.status === 'draft')) return
-    if (!window.confirm(`Discard draft v${version}? This draft will no longer be available, but its version record is retained.`)) return
+    if (!window.confirm(`Discard draft v${version}? This unpublished draft will be permanently deleted.`)) return
     requestInFlight.current = true
     setLoading(true)
     setFeedback(null)

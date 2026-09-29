@@ -364,7 +364,7 @@ describe('AdminFormConfigPage interactions', () => {
     await flushAsyncWork()
     page = renderAdminFormConfigPage(null)
     expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(3)
-    expect(window.confirm).toHaveBeenCalledWith('Discard draft v3? This draft will no longer be available, but its version record is retained.')
+    expect(window.confirm).toHaveBeenCalledWith('Discard draft v3? This unpublished draft will be permanently deleted.')
     expect(getVersionSelector(page).props.versions).toEqual([active])
   })
 
