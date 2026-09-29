@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
 import { NavSidebar } from './NavSidebar'
+import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
 import { isStandaloneAuthenticationPath, type UserRole } from './navigationState'
 import { subscribeAuthSessionChanged } from '../services/auth-session'
 import {
@@ -20,10 +21,10 @@ type AuthState =
 type Crumb = { label: string; to?: string }
 
 /**
- * Breadcrumbs are derived from the route path only. The shell has no request
- * lookup, so a request id is never rendered as a fabricated request number.
+ * Request crumbs use route paths only; form versions use the version already
+ * loaded by the editor so their status is not guessed from the URL.
  */
-function breadcrumbsForPath(pathname: string): Crumb[] {
+function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb | null): Crumb[] {
   const segments = pathname.split('/').filter(Boolean)
 
   if (segments.length === 0 || segments[0] === 'dashboard') {
@@ -68,7 +69,13 @@ function breadcrumbsForPath(pathname: string): Crumb[] {
       'master-data': 'Master Data',
     }
 
-    if (segments[1] && labels[segments[1]] && !(segments[1] === 'form-config' && segments[2])) {
+    if (segments[1] === 'form-config' && segments[2]) {
+      crumbs.push({ label: labels['form-config'], to: '/admin/form-config' })
+      const status = formVersion && String(formVersion.version) === segments[2]
+        ? formVersion.status === 'published' ? 'Inactive' : formVersion.status === 'active' ? 'Active' : 'Draft'
+        : null
+      crumbs.push({ label: `v${segments[2]}${status ? ` (${status})` : ''}` })
+    } else if (segments[1] && labels[segments[1]]) {
       crumbs.push({ label: labels[segments[1]] })
     }
 
@@ -150,6 +157,7 @@ export function AppShell() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const [authState, setAuthState] = useState<AuthState>({ status: 'loading' })
+  const [formVersionBreadcrumb, setFormVersionBreadcrumb] = useState<FormVersionBreadcrumb | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches,
   )
@@ -213,8 +221,9 @@ export function AppShell() {
   }
 
   const role = authState.status === 'authenticated' ? authState.user.role : null
-  const breadcrumbs = breadcrumbsForPath(pathname)
+  const breadcrumbs = breadcrumbsForPath(pathname, formVersionBreadcrumb)
   const canCreateRequest = role === 'requester' || role === 'admin'
+  const isFormVersion = pathname.startsWith('/admin/form-config/')
 
   if (isStandaloneAuthenticationPath(pathname)) {
     return (
@@ -229,7 +238,7 @@ export function AppShell() {
       <NavSidebar collapsed={!sidebarOpen} role={role} />
 
       <div className="app-layout__body">
-        <header className="app-header">
+        <header className={isFormVersion ? 'app-header app-header--form-version' : 'app-header'}>
           <div className="header-left">
             <button
               aria-expanded={sidebarOpen}
@@ -246,7 +255,11 @@ export function AppShell() {
                 <span className="breadcrumbs" key={`${crumb.label}-${index}`}>
                   {index > 0 ? <ChevronRight className="breadcrumbs__sep" size={13} /> : null}
                   {crumb.to ? (
-                    <Link className="breadcrumbs__link" to={crumb.to}>
+                    <Link className="breadcrumbs__link" onClick={crumb.to === '/admin/form-config' && isFormVersion && formVersionBreadcrumb?.dirty
+                      ? (event) => {
+                        if (!window.confirm('Discard unsaved form changes and return to Form management?')) event.preventDefault()
+                      }
+                      : undefined} to={crumb.to}>
                       {crumb.label}
                     </Link>
                   ) : (
@@ -295,7 +308,9 @@ export function AppShell() {
 
         <main className="app-main">
           <div className="app-main__inner">
-            <Outlet />
+            <FormVersionBreadcrumbContext.Provider value={setFormVersionBreadcrumb}>
+              <Outlet />
+            </FormVersionBreadcrumbContext.Provider>
           </div>
         </main>
       </div>

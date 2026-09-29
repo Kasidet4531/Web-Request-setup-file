@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
+import { FormVersionBreadcrumbContext } from './formVersionBreadcrumb'
 import {
   buildAdminFormConfigSavePayload,
   buildPreviewSchema,
@@ -105,6 +106,7 @@ export function AdminFormConfigVersionPage() {
 
 export function AdminFormConfigPage({ version }: { version?: string }) {
   const navigate = useNavigate()
+  const setFormVersionBreadcrumb = useContext(FormVersionBreadcrumbContext)
   const isEditor = version !== undefined
   const [editorText, setEditorText] = useState('')
   const [feedback, setFeedback] = useState<AdminFormConfigFeedbackValue | null>(null)
@@ -127,6 +129,11 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
   const dirty = editorText !== savedEditorText
   const busy = loading || saving || publishing
   const editable = selectedVersion?.status === 'draft'
+  useEffect(() => {
+    if (!isEditor || !selectedVersion) return
+    setFormVersionBreadcrumb({ version: selectedVersion.version, status: selectedVersion.status, dirty })
+    return () => setFormVersionBreadcrumb(null)
+  }, [dirty, isEditor, selectedVersion, setFormVersionBreadcrumb])
   const previewSchema = useMemo(
     () => (parsed.schema && selectedVersion ? buildPreviewSchema(parsed.schema, selectedVersion) : null),
     [parsed.schema, selectedVersion],
@@ -358,12 +365,6 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
         {!loading && isEditor && !selectedVersion ? <Link to="/admin/form-config">Back to Form management</Link> : null}
         {!loading && isEditor && selectedVersion ? (
           <>
-            <nav aria-label="Form version breadcrumbs" className="admin-form-config__breadcrumb">
-              <Link onClick={(event) => {
-                if (dirty && !window.confirm('Discard unsaved form changes and return to Form management?')) event.preventDefault()
-              }} to="/admin/form-config">Form management</Link>
-              <span aria-hidden="true">›</span><span aria-current="page">v{selectedVersion.version} ({selectedVersion.status === 'published' ? 'Inactive' : editable ? 'Draft' : 'Active'})</span>
-            </nav>
             <div className="admin-form-config__section-header">
               <h1 id="form-config-editor-heading">v{selectedVersion.version} · {selectedVersion.title}</h1>
               <button className="secondary-button" disabled={busy} onClick={(event) => {

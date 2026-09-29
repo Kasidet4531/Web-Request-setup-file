@@ -21,6 +21,7 @@ const formConfigApi = vi.hoisted(() => ({
   saveAdminFormConfigDraft: vi.fn(),
 }))
 const navigate = vi.hoisted(() => vi.fn())
+const setBreadcrumb = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-router')>(),
@@ -123,6 +124,7 @@ vi.mock('react', async (importOriginal) => {
 
   return {
     ...actual,
+    useContext: () => setBreadcrumb,
     useEffect: formConfigHookHarness.useEffect,
     useMemo: formConfigHookHarness.useMemo,
     useRef: formConfigHookHarness.useRef,
@@ -373,6 +375,14 @@ describe('AdminFormConfigPage interactions', () => {
     expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config/$version', params: { version: '3' } })
   })
 
+  it('does not duplicate the version breadcrumb inside the editor body', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    const page = await loadAdminFormConfigPage()
+    expect(findRenderedElement(page, (element) => element.type === 'nav' && element.props['aria-label'] === 'Form version breadcrumbs')).toBeNull()
+    formConfigHookHarness.runEffects()
+    expect(setBreadcrumb).toHaveBeenCalledWith({ version: 2, status: 'draft', dirty: false })
+  })
+
   it('uses the visual editor as the primary draft editor and keeps advanced JSON optional', async () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
     let page = await loadAdminFormConfigPage()
@@ -599,12 +609,8 @@ describe('AdminFormConfigPage interactions', () => {
     page = renderAdminFormConfigPage()
 
     expect(getButton(page, 'Publish').props.disabled).toBe(true)
-    const preventDefault = vi.fn()
-    const back = requireRenderedElement(page, (element) => element.type === 'nav' && element.props['aria-label'] === 'Form version breadcrumbs')
-    const link = requireRenderedElement(back.props.children, (element) => element.props.to === '/admin/form-config')
-    ;(link.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
-    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and return to Form management?')
-    expect(preventDefault).toHaveBeenCalledOnce()
+    formConfigHookHarness.runEffects()
+    expect(setBreadcrumb).toHaveBeenCalledWith({ version: 2, status: 'draft', dirty: true })
     expect(getEditor(page).props.value).toBe(editedText)
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(1)
 
