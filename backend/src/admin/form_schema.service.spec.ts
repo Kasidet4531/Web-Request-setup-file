@@ -258,9 +258,11 @@ describe('FormSchemaService', () => {
     });
 
     expect(pool.query).toHaveBeenCalledWith(
-      expect.stringContaining("status <> 'discarded'"),
+      expect.stringContaining('WHERE form_key = $1'),
       [PSF_REQUEST_FORM_KEY],
     );
+    const calls = pool.query.mock.calls as [string, unknown[]][];
+    expect(calls[0][0]).not.toContain('discarded');
   });
 
   it('raises NotFoundException when the fixed form has no stored versions', async () => {
@@ -298,27 +300,6 @@ describe('FormSchemaService', () => {
         old.title,
         { ...old.schema_json, version: 3 },
       ]),
-    );
-  });
-
-  it('never reuses a discarded draft version number when duplicating', async () => {
-    const active = makeRow(1, 'active');
-    const discarded = makeRow(2, 'discarded');
-    const next = makeRow(3, 'draft');
-    configureTransaction((query) => {
-      if (query.includes('ORDER BY version ASC'))
-        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
-      if (query.includes('FOR UPDATE')) return { rows: [discarded, active] };
-      if (query.includes('INSERT INTO form_definitions'))
-        return { rows: [next] };
-      throw new Error(`Unexpected query: ${query}`);
-    });
-    await expect(
-      service.duplicateVersion(1, adminActor),
-    ).resolves.toMatchObject({ version: 3 });
-    expect(transactionClient.query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO form_definitions'),
-      expect.arrayContaining([3]),
     );
   });
 
@@ -540,19 +521,35 @@ describe('FormSchemaService', () => {
     expect(transactionClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('discards only the selected draft while keeping its version number reserved', async () => {
+  it('deletes only the unpublished draft so its version can be used again', async () => {
+    let rows = [makeRow(2, 'draft'), makeRow(1, 'active')];
     configureTransaction((query) => {
       if (query.includes('ORDER BY version ASC'))
         return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
-      if (query.includes('FOR UPDATE'))
-        return { rows: [makeRow(2, 'draft'), makeRow(1, 'active')] };
-      if (query.includes("SET status = 'discarded'"))
+      if (query.includes('FOR UPDATE')) return { rows };
+      if (query.includes('DELETE FROM form_definitions')) {
+        rows = rows.filter((row) => row.version !== 2);
         return { rows: [{ version: 2 }] };
+      }
+      if (query.includes('INSERT INTO form_definitions')) {
+        const next = makeRow(2, 'draft');
+        rows = [next, ...rows];
+        return { rows: [next] };
+      }
       throw new Error(`Unexpected query: ${query}`);
     });
     await expect(service.discardDraft(2)).resolves.toBeUndefined();
+    expect(rows.map((row) => row.version)).toEqual([1]);
+    await expect(
+      service.duplicateVersion(1, adminActor),
+    ).resolves.toMatchObject({ version: 2 });
+    expect(rows.map((row) => row.version)).toEqual([2, 1]);
     expect(transactionClient.query).toHaveBeenCalledWith(
-      expect.stringContaining("SET status = 'discarded'"),
+      expect.stringContaining('DELETE FROM form_definitions'),
+      [PSF_REQUEST_FORM_KEY, 2],
+    );
+    expect(transactionClient.query).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'draft' AND published_at IS NULL"),
       [PSF_REQUEST_FORM_KEY, 2],
     );
   });
