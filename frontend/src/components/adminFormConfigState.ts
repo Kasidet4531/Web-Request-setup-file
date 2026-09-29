@@ -287,14 +287,6 @@ export function canPublishFormConfig({
   return !busy && !dirty && parsedSchema !== null && selectedVersion?.status === 'draft'
 }
 
-export function requiresUnsavedVersionConfirmation(
-  dirty: boolean,
-  currentVersion: number | null,
-  nextVersion: number,
-): boolean {
-  return dirty && currentVersion !== nextVersion
-}
-
 export function getAdminFormConfigErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback
 

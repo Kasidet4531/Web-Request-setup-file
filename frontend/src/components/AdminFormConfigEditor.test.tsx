@@ -32,6 +32,14 @@ const fieldEditor = (field: FormSchemaField, onChange = vi.fn()) => AdminFormCon
 })
 
 describe('visual form configuration editor', () => {
+  it('shows read-only versions as text, without editable controls or actions', () => {
+    const html = renderToStaticMarkup(<AdminFormConfigEditor schema={schema} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
+    expect(html).toContain('Form title:')
+    expect(html).toContain('Requester Information')
+    expect(html).toContain('Visible to:')
+    expect(html).toContain('Choices: Low, High')
+    expect(html).not.toMatch(/<input|<textarea|<button|<fieldset/)
+  })
   it('shows compact field rows with edit actions, and shows field errors inside the editor', () => {
     const invalid: FormSchemaDraft = { ...schema, title: '', sections: [{ ...schema.sections[0], fields: [
       { ...schema.sections[0].fields[0], label: '' },

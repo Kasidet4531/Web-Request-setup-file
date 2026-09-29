@@ -68,7 +68,7 @@ function breadcrumbsForPath(pathname: string): Crumb[] {
       'master-data': 'Master Data',
     }
 
-    if (segments[1] && labels[segments[1]]) {
+    if (segments[1] && labels[segments[1]] && !(segments[1] === 'form-config' && segments[2])) {
       crumbs.push({ label: labels[segments[1]] })
     }
 
@@ -259,7 +259,7 @@ export function AppShell() {
 
           <div className="header-actions">
             {canCreateRequest && pathname !== '/requests/new' ? (
-              <Link className="btn-primary" to="/requests/new">
+              <Link className={pathname.startsWith('/admin') ? 'btn-secondary' : 'btn-primary'} to="/requests/new">
                 <Plus size={14} /> New Request
               </Link>
             ) : null}

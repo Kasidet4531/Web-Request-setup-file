@@ -1,12 +1,12 @@
-import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
 import type { FormSchemaDraft, FormSchemaVersionResponse } from '../types/forms'
 import * as FormConfigRoute from '../routes/admin/form-config'
+import * as FormConfigIndexRoute from '../routes/admin/form-config.index'
+import * as FormConfigVersionRoute from '../routes/admin/form-config.$version'
 import {
   AdminFormConfigFeedback,
-  AdminFormConfigPage,
   AdminFormConfigPreview,
   AdminFormConfigVersionSelector,
 } from './AdminFormConfigPage'
@@ -18,7 +18,6 @@ import {
   getAdminFormConfigErrorMessage,
   parseFormSchemaDraft,
   readFormSchemaEditorDraft,
-  requiresUnsavedVersionConfirmation,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
@@ -202,23 +201,23 @@ describe('AdminFormConfigPage helpers', () => {
     ).toBe(false)
   })
 
-  it('requires an explicit unsaved-change guard before switching away from a selected version', () => {
-    expect(requiresUnsavedVersionConfirmation(true, 2, 3)).toBe(true)
-    expect(requiresUnsavedVersionConfirmation(true, 2, 2)).toBe(false)
-    expect(requiresUnsavedVersionConfirmation(false, 2, 3)).toBe(false)
-  })
-
   it('lists active and historical versions without destructive actions and creates drafts only when none exists', () => {
     const active = buildVersion({ status: 'active', version: 2 })
     const old = buildVersion({ status: 'published', version: 1 })
     const draft = buildVersion({ status: 'draft', version: 3 })
-    const props = { disabled: false, onSelect: vi.fn(), onDuplicate: vi.fn(), onDiscard: vi.fn(), selectedVersion: active }
+    const props = { disabled: false, onSelect: vi.fn(), onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
     const history = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[active, old]} />)
     const pending = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[draft, active, old]} />)
     expect(history.match(/Duplicate as draft/g)).toHaveLength(2)
+    expect(history).toContain('<table')
+    expect(history).toContain('<th scope="col">Created</th>')
+    expect(history).toContain('<th scope="col">Published</th>')
+    expect(history).toContain('Inactive')
+    expect(history).not.toContain('Selected')
     expect(history).not.toContain('Discard draft')
-    expect(pending).not.toContain('Duplicate as draft')
-    expect(pending).toContain('Discard draft')
+    expect(pending).toContain('Duplicate as draft')
+    expect(pending).toMatch(/disabled=""[^>]*>Duplicate as draft/)
+    expect(pending).toContain('>Discard</button>')
   })
 
   it('renders native version selection and accessible request feedback', () => {
@@ -229,7 +228,7 @@ describe('AdminFormConfigPage helpers', () => {
         onSelect={vi.fn()}
         onDuplicate={vi.fn()}
         onDiscard={vi.fn()}
-        selectedVersion={draft}
+        onPublish={vi.fn()}
         versions={[draft]}
       />,
     )
@@ -242,8 +241,10 @@ describe('AdminFormConfigPage helpers', () => {
     )
 
     expect(selectorHtml).toContain('Form versions')
-    expect(selectorHtml).toContain('Version 2 · PSF Request Form')
-    expect(selectorHtml).toContain('Discard draft')
+    expect(selectorHtml).toContain('>v2</th>')
+    expect(selectorHtml).toContain('PSF Request Form')
+    expect(selectorHtml).toContain('>—</td>')
+    expect(selectorHtml).toContain('>Discard</button>')
     expect(loadingHtml).toContain('Loading form schema versions…')
     expect(loadingHtml).toContain('role="status"')
     expect(successHtml).toContain('role="status"')
@@ -266,11 +267,12 @@ describe('AdminFormConfigPage helpers', () => {
     expect(forbidden).toContain('Only admins can manage form schema configurations.')
   })
 
-  it('wires only the admin form-config route to the dedicated page', () => {
+  it('wires a list and separate version editor beneath the admin form-config route', () => {
     const routeOptions = Reflect.get(FormConfigRoute.Route, 'options') as { component: unknown }
-    const html = renderToStaticMarkup(createElement(AdminFormConfigPage))
-
-    expect(routeOptions.component).toBe(AdminFormConfigPage)
-    expect(html).toContain('<h1>Form management</h1>')
+    const indexOptions = Reflect.get(FormConfigIndexRoute.Route, 'options') as { component: unknown }
+    const versionOptions = Reflect.get(FormConfigVersionRoute.Route, 'options') as { component: unknown }
+    expect(routeOptions.component).toBeDefined()
+    expect(indexOptions.component).toBeDefined()
+    expect(versionOptions.component).toBeDefined()
   })
 })

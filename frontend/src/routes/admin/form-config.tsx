@@ -1,6 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { AdminFormConfigPage } from '../../components/AdminFormConfigPage'
+import { Outlet, createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/admin/form-config')({
-  component: AdminFormConfigPage,
+  component: Outlet,
 })

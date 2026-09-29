@@ -20,6 +20,12 @@ const formConfigApi = vi.hoisted(() => ({
   publishAdminFormConfigDraft: vi.fn(),
   saveAdminFormConfigDraft: vi.fn(),
 }))
+const navigate = vi.hoisted(() => vi.fn())
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@tanstack/react-router')>(),
+  useNavigate: () => navigate,
+}))
 
 const formConfigHookHarness = vi.hoisted(() => {
   let effectDependencies: Array<readonly unknown[] | undefined> = []
@@ -227,20 +233,20 @@ function requireRenderedElement(
   return element
 }
 
-function renderAdminFormConfigPage() {
+function renderAdminFormConfigPage(version: string | null = '2') {
   formConfigHookHarness.beginRender()
-  return AdminFormConfigPage()
+  return AdminFormConfigPage({ version: version ?? undefined })
 }
 
 async function flushAsyncWork(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
-async function loadAdminFormConfigPage() {
-  renderAdminFormConfigPage()
+async function loadAdminFormConfigPage(version: string | null = '2') {
+  renderAdminFormConfigPage(version)
   formConfigHookHarness.runEffects()
   await flushAsyncWork()
-  return renderAdminFormConfigPage()
+  return renderAdminFormConfigPage(version)
 }
 
 function getButton(page: unknown, label: string): RenderedElement {
@@ -287,7 +293,9 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.fetchAdminFormConfig.mockReset()
     formConfigApi.publishAdminFormConfigDraft.mockReset()
     formConfigApi.saveAdminFormConfigDraft.mockReset()
+    navigate.mockReset()
     formConfigHookHarness.reset()
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
   })
 
   it('shows the selected active version read-only and duplicates it into a fresh draft', async () => {
@@ -296,19 +304,16 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([active])).mockResolvedValueOnce(buildList([copied, active]))
     formConfigApi.duplicateAdminFormConfigVersion.mockResolvedValue(copied)
     let page = await loadAdminFormConfigPage()
-    expect(getVisualEditor(page).props.disabled).toBe(true)
-    expect(getEditor(page).props.disabled).toBe(true)
+    expect(getVisualEditor(page).props.readOnly).toBe(true)
+    expect(findRenderedElement(page, (element) => element.type === 'textarea' && element.props.id === 'form-config-json')).toBeNull()
     ;(getVisualEditor(page).props.onChange as (draft: FormSchemaDraft) => void)({ ...editableSchema, title: 'Should not change' })
     page = renderAdminFormConfigPage()
     expect((getVisualEditor(page).props.schema as FormSchemaDraft).title).toBe(editableSchema.title)
     expect(findRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Save draft')).toBeNull()
-    const duplicate = getVersionSelector(page).props.onDuplicate as (version: number) => void
-    duplicate(2)
+    ;(getButton(page, 'Duplicate as draft').props.onClick as () => void)()
     await flushAsyncWork()
-    page = renderAdminFormConfigPage()
     expect(formConfigApi.duplicateAdminFormConfigVersion).toHaveBeenCalledWith({ version: 2 })
-    expect(getVersionSelector(page).props.selectedVersion).toBe(copied)
-    expect(getVisualEditor(page).props.disabled).toBe(false)
+    expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config/$version', params: { version: '3' } })
   })
 
   it('keeps the selected version and shows the server conflict when a draft appears concurrently', async () => {
@@ -316,10 +321,11 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([active]))
     formConfigApi.duplicateAdminFormConfigVersion.mockRejectedValue(new ApiError('Open or discard the existing draft before duplicating a version.', 409, 'Conflict', null))
     let page = await loadAdminFormConfigPage()
-    ;(getVersionSelector(page).props.onDuplicate as (version: number) => void)(2)
+    ;(getButton(page, 'Duplicate as draft').props.onClick as () => void)()
     await flushAsyncWork()
     page = renderAdminFormConfigPage()
-    expect(getVersionSelector(page).props.selectedVersion).toBe(active)
+    expect(getVisualEditor(page).props.readOnly).toBe(true)
+    expect(navigate).not.toHaveBeenCalled()
     expect(getFeedback(page).props.feedback).toMatchObject({ kind: 'error', message: 'Open or discard the existing draft before duplicating a version.' })
   })
 
@@ -329,13 +335,42 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([draft, active])).mockResolvedValueOnce(buildList([active]))
     formConfigApi.discardAdminFormConfigDraft.mockResolvedValue(undefined)
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
-    let page = await loadAdminFormConfigPage()
+    let page = await loadAdminFormConfigPage(null)
     ;(getVersionSelector(page).props.onDiscard as (version: number) => void)(3)
     await flushAsyncWork()
-    page = renderAdminFormConfigPage()
+    page = renderAdminFormConfigPage(null)
     expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(3)
-    expect(getVersionSelector(page).props.selectedVersion).toBe(active)
+    expect(window.confirm).toHaveBeenCalledWith('Discard draft v3? This draft will no longer be available, but its version record is retained.')
     expect(getVersionSelector(page).props.versions).toEqual([active])
+  })
+
+  it('publishes a saved Draft from the list only after the version and Draft-request impact are confirmed', async () => {
+    const draft = buildVersion()
+    const active = buildVersion({ status: 'active', version: 1 })
+    const published = buildVersion({ status: 'active', publishedAt: '2026-08-06T00:00:00.000Z' })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([draft, active])).mockResolvedValueOnce(buildList([published, { ...active, status: 'published' }]))
+    formConfigApi.publishAdminFormConfigDraft.mockResolvedValue(published)
+    let page = await loadAdminFormConfigPage(null)
+    ;(getVersionSelector(page).props.onPublish as (version: number) => void)(2)
+    await flushAsyncWork()
+    page = renderAdminFormConfigPage(null)
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('New requests will use v2'))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Already submitted requests keep their saved form snapshot'))
+    expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 2 })
+    expect(getVersionSelector(page).props.versions).toEqual([published, { ...active, status: 'published' }])
+  })
+
+  it('duplicates from the list once and opens the new Draft editor', async () => {
+    const active = buildVersion({ status: 'active', version: 2 })
+    const draft = buildVersion({ version: 3 })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([active])).mockResolvedValueOnce(buildList([draft, active]))
+    formConfigApi.duplicateAdminFormConfigVersion.mockResolvedValue(draft)
+    const page = await loadAdminFormConfigPage(null)
+    ;(getVersionSelector(page).props.onDuplicate as (version: number) => void)(2)
+    ;(getVersionSelector(page).props.onDuplicate as (version: number) => void)(2)
+    await flushAsyncWork()
+    expect(formConfigApi.duplicateAdminFormConfigVersion).toHaveBeenCalledTimes(1)
+    expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config/$version', params: { version: '3' } })
   })
 
   it('uses the visual editor as the primary draft editor and keeps advanced JSON optional', async () => {
@@ -373,7 +408,7 @@ describe('AdminFormConfigPage interactions', () => {
     expect(getPreview(page).props.schema).toMatchObject({ title: 'Unsaved form' })
     expect(getEditor(page).props.id).toBe('form-config-json')
     expect(getButton(page, 'Save draft').props.disabled).toBe(false)
-    expect(getButton(page, 'Reload versions').props.disabled).toBe(false)
+    expect(findRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Reload versions')).toBeNull()
   })
 
   it('applies a field edit to the page draft only after confirmation and discards cancelled edits', async () => {
@@ -430,9 +465,9 @@ describe('AdminFormConfigPage interactions', () => {
     const active = buildVersion({ schema: { ...editableSchema, version: 1 }, status: 'active', version: 1 })
     const draft = buildVersion()
     const savedDraft = buildVersion({
-      schema: { ...editableSchema, title: 'Updated PSF Request Form', version: 4 },
+      schema: { ...editableSchema, title: 'Updated PSF Request Form', version: 2 },
       title: 'Updated PSF Request Form',
-      version: 4,
+      version: 2,
     })
     formConfigApi.fetchAdminFormConfig
       .mockResolvedValueOnce(buildList([draft, active]))
@@ -440,7 +475,7 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.saveAdminFormConfigDraft.mockResolvedValue(savedDraft)
 
     let page = await loadAdminFormConfigPage()
-    expect(getVersionSelector(page).props.selectedVersion).toBe(draft)
+    expect(getVisualEditor(page).props.schema).toEqual(editableSchema)
     expect(getPreview(page).props.schema).toMatchObject({ version: 2 })
 
     const editor = getEditor(page)
@@ -469,12 +504,12 @@ describe('AdminFormConfigPage interactions', () => {
       schema: { ...editableSchema, title: 'Updated PSF Request Form' },
     })
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(2)
-    expect(getVersionSelector(page).props.selectedVersion).toBe(savedDraft)
+    expect(getVisualEditor(page).props.schema).toMatchObject({ title: savedDraft.title })
     expect(JSON.parse(getEditor(page).props.value as string)).toEqual({
       ...editableSchema,
       title: 'Updated PSF Request Form',
     })
-    expect(getFeedback(page).props.feedback).toEqual({ kind: 'success', message: 'Draft version 4 saved.' })
+    expect(getFeedback(page).props.feedback).toEqual({ kind: 'success', message: 'Draft version 2 saved.' })
   })
 
   it('keeps edited text and surfaces a save failure accessibly', async () => {
@@ -518,9 +553,9 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.publishAdminFormConfigDraft.mockResolvedValue(published)
 
     let page = await loadAdminFormConfigPage()
-    expect(getButton(page, 'Publish selected draft').props.disabled).toBe(false)
+    expect(getButton(page, 'Publish').props.disabled).toBe(false)
 
-    const publish = getButton(page, 'Publish selected draft').props.onClick
+    const publish = getButton(page, 'Publish').props.onClick
     if (typeof publish !== 'function') {
       throw new Error('Expected publish callback')
     }
@@ -534,7 +569,8 @@ describe('AdminFormConfigPage interactions', () => {
 
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 2 })
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(2)
-    expect(getVersionSelector(page).props.selectedVersion).toBe(published)
+    expect(getVisualEditor(page).props.readOnly).toBe(true)
+    expect(findRenderedElement(page, (element) => element.type === 'textarea' && element.props.id === 'form-config-json')).toBeNull()
     expect(getPreview(page).props.schema).toMatchObject({ version: 2 })
     expect(getFeedback(page).props.feedback).toEqual({
       kind: 'success',
@@ -542,7 +578,7 @@ describe('AdminFormConfigPage interactions', () => {
     })
   })
 
-  it('disables publish for dirty or invalid JSON, preserves unsaved text when a version switch is declined, and surfaces publish failures', async () => {
+  it('blocks dirty or invalid publish, confirms navigation and publish, and surfaces server failures', async () => {
     const draft = buildVersion()
     const active = buildVersion({ schema: { ...editableSchema, version: 1 }, status: 'active', version: 1 })
     const editedText = JSON.stringify({ ...editableSchema, title: 'Unsaved changes' })
@@ -562,34 +598,24 @@ describe('AdminFormConfigPage interactions', () => {
     onChange({ target: { value: editedText } })
     page = renderAdminFormConfigPage()
 
-    expect(getButton(page, 'Publish selected draft').props.disabled).toBe(true)
-    const selectVersion = getVersionSelector(page).props.onSelect
-    if (typeof selectVersion !== 'function') {
-      throw new Error('Expected version selector callback')
-    }
-    selectVersion(1)
-    page = renderAdminFormConfigPage()
-
-    expect(confirm).toHaveBeenCalledWith('Discard unsaved schema changes and switch versions?')
-    expect(getVersionSelector(page).props.selectedVersion).toBe(draft)
+    expect(getButton(page, 'Publish').props.disabled).toBe(true)
+    const preventDefault = vi.fn()
+    const back = requireRenderedElement(page, (element) => element.type === 'nav' && element.props['aria-label'] === 'Form version breadcrumbs')
+    const link = requireRenderedElement(back.props.children, (element) => element.props.to === '/admin/form-config')
+    ;(link.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and return to Form management?')
+    expect(preventDefault).toHaveBeenCalledOnce()
     expect(getEditor(page).props.value).toBe(editedText)
-
-    const reload = getButton(page, 'Reload versions').props.onClick
-    if (typeof reload !== 'function') {
-      throw new Error('Expected reload callback')
-    }
-    reload()
-    expect(confirm).toHaveBeenLastCalledWith('Discard unsaved schema changes and reload stored versions?')
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(1)
 
     onChange({ target: { value: '{' } })
     page = renderAdminFormConfigPage()
     expect(getButton(page, 'Save draft').props.disabled).toBe(true)
-    expect(getButton(page, 'Publish selected draft').props.disabled).toBe(true)
+    expect(getButton(page, 'Publish').props.disabled).toBe(true)
 
     onChange({ target: { value: JSON.stringify(editableSchema, null, 2) } })
     page = renderAdminFormConfigPage()
-    const publish = getButton(page, 'Publish selected draft').props.onClick
+    const publish = getButton(page, 'Publish').props.onClick
     if (typeof publish !== 'function') {
       throw new Error('Expected publish callback')
     }
@@ -597,10 +623,14 @@ describe('AdminFormConfigPage interactions', () => {
       new ApiError('Draft is no longer publishable.', 409, 'Conflict', null),
     )
     publish()
+    expect(formConfigApi.publishAdminFormConfigDraft).not.toHaveBeenCalled()
+    ;(window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true)
+    publish()
     await flushAsyncWork()
     page = renderAdminFormConfigPage()
 
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 2 })
+    expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('Existing Draft requests keep their current version and must be explicitly upgraded'))
     expect(getFeedback(page).props.feedback).toEqual({ kind: 'error', message: 'Draft is no longer publishable.' })
   })
 

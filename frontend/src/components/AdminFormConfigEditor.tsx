@@ -7,11 +7,12 @@ const FIELD_TYPE_LABELS: Record<FormControlType, string> = {
 interface AdminFormConfigEditorProps {
   schema: FormSchemaDraft
   disabled: boolean
+  readOnly?: boolean
   onChange: (schema: FormSchemaDraft) => void
   onEditField: (sectionIndex: number, fieldIndex: number | null, field: FormSchemaField, trigger: HTMLButtonElement) => void
 }
 
-export function AdminFormConfigEditor({ schema, disabled, onChange, onEditField }: AdminFormConfigEditorProps) {
+export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onChange, onEditField }: AdminFormConfigEditorProps) {
   function edit(update: (draft: FormSchemaDraft) => void) {
     const next = structuredClone(schema)
     update(next)
@@ -39,6 +40,24 @@ export function AdminFormConfigEditor({ schema, disabled, onChange, onEditField 
     })
   }
 
+  if (readOnly) return (
+    <div className="admin-form-config__builder admin-form-config__builder--readonly">
+      <p><strong>Form title:</strong> {schema.title}</p>
+      {schema.sections.map((section) => (
+        <section className="admin-form-config__section" key={section.sectionKey}>
+          <h2>{section.title}</h2>
+          <p><strong>Visible to:</strong> {section.visibleTo.map((role) => role === 'setup_owner' ? 'Setup owner' : role === 'requester' ? 'Requester' : 'Admin').join(', ')}</p>
+          <ol className="admin-form-config__read-fields">
+            {section.fields.map((field) => <li key={field.fieldKey}>
+              <strong>{field.label}</strong>
+              <span>{FIELD_TYPE_LABELS[field.type]} · {field.required ? 'Required' : 'Optional'}</span>
+              {field.options?.length ? <span>Choices: {field.options.join(', ')}</span> : null}
+            </li>)}
+          </ol>
+        </section>
+      ))}
+    </div>
+  )
   return (
     <div className="admin-form-config__builder">
       <label className="admin-form-config__field" htmlFor="form-config-title">

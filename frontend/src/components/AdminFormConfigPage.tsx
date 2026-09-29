@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import {
@@ -9,7 +10,6 @@ import {
   getAdminFormConfigErrorMessage,
   parseFormSchemaDraft,
   readFormSchemaEditorDraft,
-  requiresUnsavedVersionConfirmation,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
@@ -26,7 +26,7 @@ export interface AdminFormConfigVersionSelectorProps {
   onSelect: (version: number) => void
   onDuplicate: (version: number) => void
   onDiscard: (version: number) => void
-  selectedVersion: FormSchemaVersionResponse | null
+  onPublish: (version: number) => void
   versions: FormSchemaVersionResponse[]
 }
 
@@ -35,29 +35,33 @@ export function AdminFormConfigVersionSelector({
   onSelect,
   onDuplicate,
   onDiscard,
-  selectedVersion,
+  onPublish,
   versions,
 }: AdminFormConfigVersionSelectorProps) {
   const hasDraft = versions.some((version) => version.status === 'draft')
   return (
-    <section aria-labelledby="form-config-versions-heading" className="admin-form-config__versions">
-      <h2 id="form-config-versions-heading">Form versions</h2>
-      <div className="admin-form-config__version-list">
-        {versions.map((version) => (
-          <div className="admin-form-config__version-row" key={version.version}>
-            <div>
-              <strong>Version {version.version} · {version.title}</strong>
-              <span className={`admin-form-config__status admin-form-config__status--${version.status}`}>{version.status}</span>
-            </div>
-            <div className="admin-form-config__controls">
-              <button aria-label={`${selectedVersion?.version === version.version ? 'Selected' : version.status === 'draft' ? 'Edit draft' : 'View'} version ${version.version}`} aria-current={selectedVersion?.version === version.version ? 'true' : undefined} className="secondary-button" disabled={disabled} onClick={() => onSelect(version.version)} type="button">
-                {selectedVersion?.version === version.version ? 'Selected' : version.status === 'draft' ? 'Edit draft' : 'View'}
-              </button>
-              {version.status !== 'draft' && !hasDraft ? <button aria-label={`Duplicate version ${version.version} as draft`} className="secondary-button" disabled={disabled} onClick={() => onDuplicate(version.version)} type="button">Duplicate as draft</button> : null}
-              {version.status === 'draft' ? <button aria-label={`Discard draft version ${version.version}`} className="secondary-button admin-form-config__danger" disabled={disabled} onClick={() => onDiscard(version.version)} type="button">Discard draft</button> : null}
-            </div>
-          </div>
-        ))}
+    <section className="admin-form-config__versions">
+      <div className="admin-form-config__table-scroll">
+        <table className="admin-form-config__version-table">
+          <caption className="sr-only">Form versions</caption>
+          <thead><tr><th scope="col">Version</th><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col">Published</th><th scope="col">Actions</th></tr></thead>
+          <tbody>{versions.map((version) => (
+            <tr className={version.status === 'active' ? 'admin-form-config__version-row admin-form-config__version-row--active' : 'admin-form-config__version-row'} key={version.version}>
+              <th scope="row">v{version.version}</th>
+              <td>{version.title}</td>
+              <td><span className={`admin-form-config__status admin-form-config__status--${version.status}`}>{version.status === 'published' ? 'Inactive' : version.status === 'active' ? 'Active' : 'Draft'}</span></td>
+              <td><time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleDateString()}</time></td>
+              <td>{version.publishedAt ? <time dateTime={version.publishedAt}>{new Date(version.publishedAt).toLocaleDateString()}</time> : '—'}</td>
+              <td><div className="admin-form-config__controls">
+                <button aria-label={`${version.status === 'draft' ? 'Edit' : 'View'} version ${version.version}`} className="secondary-button" disabled={disabled} onClick={() => onSelect(version.version)} type="button">{version.status === 'draft' ? 'Edit' : 'View'}</button>
+                {version.status === 'draft' ? <>
+                  <button aria-label={`Publish version ${version.version}`} className="primary-button" disabled={disabled} onClick={() => onPublish(version.version)} type="button">Publish</button>
+                  <button aria-label={`Discard draft version ${version.version}`} className="secondary-button admin-form-config__danger" disabled={disabled} onClick={() => onDiscard(version.version)} type="button">Discard</button>
+                </> : <button aria-label={`Duplicate version ${version.version} as draft`} className="secondary-button" disabled={disabled || hasDraft} title={hasDraft ? 'Open or discard the existing draft before duplicating another version.' : undefined} onClick={() => onDuplicate(version.version)} type="button">Duplicate as draft</button>}
+              </div></td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
       {hasDraft ? <p className="page-card__description">A draft already exists. Open or discard it before duplicating another version.</p> : <p className="page-card__description">To make an older form active, duplicate it as a draft and publish the new version.</p>}
     </section>
@@ -94,7 +98,14 @@ export function AdminFormConfigFeedback({
   )
 }
 
-export function AdminFormConfigPage() {
+export function AdminFormConfigVersionPage() {
+  const { version } = useParams({ from: '/admin/form-config/$version' })
+  return <AdminFormConfigPage key={version} version={version} />
+}
+
+export function AdminFormConfigPage({ version }: { version?: string }) {
+  const navigate = useNavigate()
+  const isEditor = version !== undefined
   const [editorText, setEditorText] = useState('')
   const [feedback, setFeedback] = useState<AdminFormConfigFeedbackValue | null>(null)
   const [loading, setLoading] = useState(true)
@@ -145,10 +156,12 @@ export function AdminFormConfigPage() {
           return
         }
 
-        const nextVersion = selectInitialFormConfigVersion(response.versions)
+        const nextVersion = isEditor
+          ? response.versions.find((item) => String(item.version) === version)
+          : selectInitialFormConfigVersion(response.versions)
         setVersions(response.versions)
         if (!nextVersion) {
-          setFeedback({ kind: 'error', message: 'No saved form schema versions are available.' })
+          setFeedback({ kind: 'error', message: isEditor ? 'This form version is unavailable.' : 'No saved form schema versions are available.' })
           return
         }
 
@@ -173,7 +186,7 @@ export function AdminFormConfigPage() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [isEditor, version])
 
   useEffect(() => {
     if (fieldEdit && !fieldDialogRef.current?.open) {
@@ -218,63 +231,9 @@ export function AdminFormConfigPage() {
     closeFieldEditor()
   }
 
-  async function reloadVersions() {
-    if (busy || requestInFlight.current) {
-      return
-    }
-
-    if (dirty && !window.confirm('Discard unsaved schema changes and reload stored versions?')) {
-      return
-    }
-
-    requestInFlight.current = true
-    setLoading(true)
-    setFeedback(null)
-
-    try {
-      const response = await api.fetchAdminFormConfig()
-      const nextVersion = selectedVersion
-        ? response.versions.find((version) => version.version === selectedVersion.version)
-          ?? selectInitialFormConfigVersion(response.versions)
-        : selectInitialFormConfigVersion(response.versions)
-
-      setVersions(response.versions)
-      if (!nextVersion) {
-        setFeedback({ kind: 'error', message: 'No saved form schema versions are available.' })
-        return
-      }
-
-      applySelectedVersion(nextVersion)
-    } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: getAdminFormConfigErrorMessage(error, 'Unable to reload form configuration.'),
-      })
-    } finally {
-      requestInFlight.current = false
-      setLoading(false)
-    }
-  }
-
   function selectVersion(nextVersionNumber: number) {
-    if (busy || requestInFlight.current || nextVersionNumber === selectedVersion?.version) {
-      return
-    }
-
-    if (requiresUnsavedVersionConfirmation(dirty, selectedVersion?.version ?? null, nextVersionNumber)) {
-      const shouldDiscard = window.confirm('Discard unsaved schema changes and switch versions?')
-      if (!shouldDiscard) {
-        return
-      }
-    }
-
-    const nextVersion = versions.find((version) => version.version === nextVersionNumber)
-    if (!nextVersion) {
-      return
-    }
-
-    setFeedback(null)
-    applySelectedVersion(nextVersion)
+    if (busy || requestInFlight.current) return
+    void navigate({ to: '/admin/form-config/$version', params: { version: String(nextVersionNumber) } })
   }
 
   function updateEditorText(nextEditorText: string) {
@@ -316,22 +275,22 @@ export function AdminFormConfigPage() {
     }
   }
 
-  async function publishDraft() {
-    if (!publishAllowed || !selectedVersion || requestInFlight.current) {
-      return
-    }
+  async function publishDraft(versionNumber: number) {
+    const target = versions.find((item) => item.version === versionNumber && item.status === 'draft')
+    if (!target || busy || requestInFlight.current || (isEditor && !publishAllowed)) return
+    if (!window.confirm(`Publish v${versionNumber}? New requests will use v${versionNumber}. Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted. Already submitted requests keep their saved form snapshot and do not change.`)) return
 
     requestInFlight.current = true
     setPublishing(true)
     setFeedback(null)
 
     try {
-      const publishedVersion = await api.publishAdminFormConfigDraft({ version: selectedVersion.version })
+      const publishedVersion = await api.publishAdminFormConfigDraft({ version: versionNumber })
       const refreshed = await api.fetchAdminFormConfig()
       const nextVersion = selectRefreshedFormConfigVersion(refreshed.versions, publishedVersion)
 
       setVersions(refreshed.versions)
-      applySelectedVersion(nextVersion)
+      if (isEditor) applySelectedVersion(nextVersion)
       setFeedback({ kind: 'success', message: `Version ${nextVersion.version} published and is now active.` })
     } catch (error) {
       setFeedback({
@@ -346,16 +305,12 @@ export function AdminFormConfigPage() {
 
   async function duplicateVersion(version: number) {
     if (busy || requestInFlight.current || versions.some((item) => item.status === 'draft')) return
-    if (dirty && !window.confirm('Discard unsaved changes and create a draft from this version?')) return
     requestInFlight.current = true
     setLoading(true)
     setFeedback(null)
     try {
       const created = await api.duplicateAdminFormConfigVersion({ version })
-      const refreshed = await api.fetchAdminFormConfig()
-      setVersions(refreshed.versions)
-      applySelectedVersion(selectRefreshedFormConfigVersion(refreshed.versions, created))
-      setFeedback({ kind: 'success', message: `Draft version ${created.version} created from version ${version}.` })
+      await navigate({ to: '/admin/form-config/$version', params: { version: String(created.version) } })
     } catch (error) {
       setFeedback({ kind: 'error', message: getAdminFormConfigErrorMessage(error, 'Unable to duplicate form version.') })
     } finally {
@@ -366,7 +321,7 @@ export function AdminFormConfigPage() {
 
   async function discardDraft(version: number) {
     if (busy || requestInFlight.current || !versions.some((item) => item.version === version && item.status === 'draft')) return
-    if (!window.confirm(`Discard draft version ${version}? Its unsaved and saved changes will no longer be available.`)) return
+    if (!window.confirm(`Discard draft v${version}? This draft will no longer be available, but its version record is retained.`)) return
     requestInFlight.current = true
     setLoading(true)
     setFeedback(null)
@@ -374,9 +329,8 @@ export function AdminFormConfigPage() {
       await api.discardAdminFormConfigDraft(version)
       const refreshed = await api.fetchAdminFormConfig()
       setVersions(refreshed.versions)
-      const next = refreshed.versions.find((item) => item.version === selectedVersion?.version)
-        ?? selectInitialFormConfigVersion(refreshed.versions)
-      if (next) applySelectedVersion(next)
+      const next = selectInitialFormConfigVersion(refreshed.versions)
+      if (next && !isEditor) applySelectedVersion(next)
       setFeedback({ kind: 'success', message: `Draft version ${version} discarded.` })
     } catch (error) {
       setFeedback({ kind: 'error', message: getAdminFormConfigErrorMessage(error, 'Unable to discard draft.') })
@@ -388,53 +342,51 @@ export function AdminFormConfigPage() {
 
   return (
     <article className="page-card admin-form-config">
-      <div className="page-card__header">
-        <div>
-          <h1>Form management</h1>
-        </div>
-      </div>
+      {!isEditor ? <div className="page-card__header"><h1>Form management</h1></div> : null}
 
       <div className="page-card__body admin-form-config__body">
         <AdminFormConfigFeedback feedback={feedback} loading={loading} />
 
-        {!loading && selectedVersion ? (
+        {!loading && !isEditor && selectedVersion ? <AdminFormConfigVersionSelector
+          disabled={busy}
+          onSelect={selectVersion}
+          onDuplicate={(number) => void duplicateVersion(number)}
+          onDiscard={(number) => void discardDraft(number)}
+          onPublish={(number) => void publishDraft(number)}
+          versions={versions}
+        /> : null}
+        {!loading && isEditor && !selectedVersion ? <Link to="/admin/form-config">Back to Form management</Link> : null}
+        {!loading && isEditor && selectedVersion ? (
           <>
-            <AdminFormConfigVersionSelector
-              disabled={busy}
-              onSelect={selectVersion}
-              onDuplicate={(version) => void duplicateVersion(version)}
-              onDiscard={(version) => void discardDraft(version)}
-              selectedVersion={selectedVersion}
-              versions={versions}
-            />
-            <section className="page-card__section admin-form-config__editor" aria-labelledby="form-config-editor-heading">
-              <div className="admin-form-config__section-header">
-                <div>
-                  <h2 id="form-config-editor-heading">{editable ? `Edit draft · Version ${selectedVersion.version}` : `View version ${selectedVersion.version} · ${selectedVersion.status}`}</h2>
-                </div>
-                <button className="secondary-button" disabled={busy} onClick={() => void reloadVersions()} type="button">
-                  Reload versions
-                </button>
+            <nav aria-label="Form version breadcrumbs" className="admin-form-config__breadcrumb">
+              <Link onClick={(event) => {
+                if (dirty && !window.confirm('Discard unsaved form changes and return to Form management?')) event.preventDefault()
+              }} to="/admin/form-config">Form management</Link>
+              <span aria-hidden="true">›</span><span aria-current="page">v{selectedVersion.version} ({selectedVersion.status === 'published' ? 'Inactive' : editable ? 'Draft' : 'Active'})</span>
+            </nav>
+            <div className="admin-form-config__section-header">
+              <h1 id="form-config-editor-heading">v{selectedVersion.version} · {selectedVersion.title}</h1>
+              <button className="secondary-button" disabled={busy} onClick={(event) => {
+                previewTriggerRef.current = event.currentTarget
+                previewDialogRef.current?.showModal()
+              }} type="button">Preview form</button>
+            </div>
+            {!editable ? <div className="admin-form-config__view-banner" role="status">
+              <p>You're viewing v{selectedVersion.version} ({selectedVersion.status === 'active' ? 'Active' : 'Inactive'}). This version is read-only.</p>
+              <button className="primary-button" disabled={busy || versions.some((item) => item.status === 'draft')} title={versions.some((item) => item.status === 'draft') ? 'Open or discard the existing draft before duplicating another version.' : undefined} onClick={() => void duplicateVersion(selectedVersion.version)} type="button">Duplicate as draft</button>
+            </div> : null}
+            {editable ? <div className="admin-form-config__toolbar">
+              <span role="status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+              <div className="admin-form-config__actions">
+                <button className="secondary-button" disabled={busy || !parsed.schema || !dirty} onClick={() => void saveDraft()} type="button">{saving ? 'Saving draft…' : 'Save draft'}</button>
+                <button className="primary-button" disabled={!publishAllowed} onClick={() => void publishDraft(selectedVersion.version)} type="button">{publishing ? 'Publishing…' : 'Publish'}</button>
               </div>
-
-              <div className="admin-form-config__toolbar">
-                <button className="secondary-button" disabled={busy} onClick={(event) => {
-                  previewTriggerRef.current = event.currentTarget
-                  previewDialogRef.current?.showModal()
-                }} type="button">Preview form</button>
-                <div className="admin-form-config__actions">
-                  {editable ? <button className="primary-button" disabled={busy || !parsed.schema} onClick={() => void saveDraft()} type="button">
-                    {saving ? 'Saving draft…' : 'Save draft'}
-                  </button> : null}
-                  {editable ? <button className="secondary-button" disabled={!publishAllowed} onClick={() => void publishDraft()} type="button">
-                    {publishing ? 'Publishing…' : 'Publish selected draft'}
-                  </button> : null}
-                </div>
-              </div>
-
+            </div> : null}
+            <div className="admin-form-config__editor" aria-labelledby="form-config-editor-heading">
               {visualSchema ? (
                 <AdminFormConfigEditor
-                  disabled={busy || !editable}
+                  disabled={busy}
+                  readOnly={!editable}
                   onChange={(draft) => updateEditorText(formatFormSchemaDraft(draft))}
                   onEditField={(sectionIndex, fieldIndex, field, trigger) => {
                     if (busy || !editable) return
@@ -447,14 +399,14 @@ export function AdminFormConfigPage() {
               ) : (
                 <p className="page-card__description">Fix the JSON below to return to the form editor.</p>
               )}
-              <details className="admin-form-config__advanced">
+              {editable ? <details className="admin-form-config__advanced">
                 <summary>Advanced · Edit schema JSON</summary>
                 <label className="admin-form-config__field" htmlFor="form-config-json">
                   <span>Schema JSON</span>
                   <textarea
                     aria-describedby={parsed.error ? 'form-config-json-error' : undefined}
                     aria-invalid={parsed.error ? true : undefined}
-                    disabled={busy || !editable}
+                    disabled={busy}
                     id="form-config-json"
                     onChange={(event) => updateEditorText(event.target.value)}
                     rows={20}
@@ -462,14 +414,14 @@ export function AdminFormConfigPage() {
                     value={editorText}
                   />
                 </label>
-              </details>
+              </details> : null}
               {parsed.error ? (
                 <p className="dynamic-form__error" id="form-config-json-error" role="alert">
                   {parsed.error}
                 </p>
               ) : null}
 
-            </section>
+            </div>
 
             <dialog aria-labelledby="form-config-field-dialog-title" className="admin-form-config__field-dialog" onClose={() => {
               setFieldEdit(null)
