@@ -338,6 +338,15 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    duplicateAdminFormConfigVersion: (payload: { version: number }) =>
+      request<FormSchemaVersionResponse>('/admin/form-config/duplicate', {
+        body: payload,
+        method: 'POST',
+      }),
+    discardAdminFormConfigDraft: (version: number) =>
+      request<null>(`/admin/form-config/draft/${encodeURIComponent(version)}`, {
+        method: 'DELETE',
+      }),
     publishAdminFormConfigDraft: (payload: PublishFormSchemaDraftPayload) =>
       request<FormSchemaVersionResponse>('/admin/form-config/publish', {
         body: payload,

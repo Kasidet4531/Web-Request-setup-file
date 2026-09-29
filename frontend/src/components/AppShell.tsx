@@ -61,7 +61,7 @@ function breadcrumbsForPath(pathname: string): Crumb[] {
     const crumbs: Crumb[] = [{ label: 'Admin Console' }]
     const labels: Record<string, string> = {
       users: 'Users & Roles',
-      'form-config': 'Form Configuration',
+      'form-config': 'Form Management',
       workflow: 'Status Management',
       autofill: 'Auto-fill Rules',
       'export-profile': 'Export to Excel',

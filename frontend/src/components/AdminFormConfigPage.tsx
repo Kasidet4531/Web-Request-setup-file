@@ -24,6 +24,8 @@ type AdminFormConfigFeedbackValue = {
 export interface AdminFormConfigVersionSelectorProps {
   disabled: boolean
   onSelect: (version: number) => void
+  onDuplicate: (version: number) => void
+  onDiscard: (version: number) => void
   selectedVersion: FormSchemaVersionResponse | null
   versions: FormSchemaVersionResponse[]
 }
@@ -31,28 +33,34 @@ export interface AdminFormConfigVersionSelectorProps {
 export function AdminFormConfigVersionSelector({
   disabled,
   onSelect,
+  onDuplicate,
+  onDiscard,
   selectedVersion,
   versions,
 }: AdminFormConfigVersionSelectorProps) {
+  const hasDraft = versions.some((version) => version.status === 'draft')
   return (
-    <label className="admin-form-config__field admin-form-config__version" htmlFor="form-config-version">
-      <span>Version</span>
-      <select
-        disabled={disabled || versions.length === 0}
-        id="form-config-version"
-        onChange={(event) => onSelect(Number(event.target.value))}
-        value={selectedVersion?.version ?? ''}
-      >
-        <option disabled value="">
-          Select a form schema version
-        </option>
+    <section aria-labelledby="form-config-versions-heading" className="admin-form-config__versions">
+      <h2 id="form-config-versions-heading">Form versions</h2>
+      <div className="admin-form-config__version-list">
         {versions.map((version) => (
-          <option key={`${version.version}-${version.status}`} value={version.version}>
-            Version {version.version} · {version.status} · {version.title}
-          </option>
+          <div className="admin-form-config__version-row" key={version.version}>
+            <div>
+              <strong>Version {version.version} · {version.title}</strong>
+              <span className={`admin-form-config__status admin-form-config__status--${version.status}`}>{version.status}</span>
+            </div>
+            <div className="admin-form-config__controls">
+              <button aria-label={`${selectedVersion?.version === version.version ? 'Selected' : version.status === 'draft' ? 'Edit draft' : 'View'} version ${version.version}`} aria-current={selectedVersion?.version === version.version ? 'true' : undefined} className="secondary-button" disabled={disabled} onClick={() => onSelect(version.version)} type="button">
+                {selectedVersion?.version === version.version ? 'Selected' : version.status === 'draft' ? 'Edit draft' : 'View'}
+              </button>
+              {version.status !== 'draft' && !hasDraft ? <button aria-label={`Duplicate version ${version.version} as draft`} className="secondary-button" disabled={disabled} onClick={() => onDuplicate(version.version)} type="button">Duplicate as draft</button> : null}
+              {version.status === 'draft' ? <button aria-label={`Discard draft version ${version.version}`} className="secondary-button admin-form-config__danger" disabled={disabled} onClick={() => onDiscard(version.version)} type="button">Discard draft</button> : null}
+            </div>
+          </div>
         ))}
-      </select>
-    </label>
+      </div>
+      {hasDraft ? <p className="page-card__description">A draft already exists. Open or discard it before duplicating another version.</p> : <p className="page-card__description">To make an older form active, duplicate it as a draft and publish the new version.</p>}
+    </section>
   )
 }
 
@@ -107,6 +115,7 @@ export function AdminFormConfigPage() {
   const visualSchema = useMemo(() => readFormSchemaEditorDraft(editorText), [editorText])
   const dirty = editorText !== savedEditorText
   const busy = loading || saving || publishing
+  const editable = selectedVersion?.status === 'draft'
   const previewSchema = useMemo(
     () => (parsed.schema && selectedVersion ? buildPreviewSchema(parsed.schema, selectedVersion) : null),
     [parsed.schema, selectedVersion],
@@ -185,7 +194,7 @@ export function AdminFormConfigPage() {
   }
 
   function applyFieldEdit() {
-    if (!visualSchema || !fieldEdit || busy || !fieldEdit.field.label.trim()) return
+    if (!visualSchema || !fieldEdit || busy || !editable || !fieldEdit.field.label.trim()) return
     if ((fieldEdit.field.type === 'select' || fieldEdit.field.type === 'radio') &&
       (!fieldEdit.field.options?.length || fieldEdit.field.options.some((choice) => !choice.trim()))) return
     const next = structuredClone(visualSchema)
@@ -199,7 +208,7 @@ export function AdminFormConfigPage() {
   }
 
   function removeField() {
-    if (!visualSchema || !fieldEdit || fieldEdit.fieldIndex === null || busy) return
+    if (!visualSchema || !fieldEdit || fieldEdit.fieldIndex === null || busy || !editable) return
     if (visualSchema.sections.reduce((count, section) => count + section.fields.length, 0) <= 1) return
     if (!window.confirm(`Remove ${fieldEdit.field.label}?`)) return
     const next = structuredClone(visualSchema)
@@ -269,7 +278,7 @@ export function AdminFormConfigPage() {
   }
 
   function updateEditorText(nextEditorText: string) {
-    if (busy) {
+    if (busy || !editable) {
       return
     }
 
@@ -278,7 +287,7 @@ export function AdminFormConfigPage() {
   }
 
   async function saveDraft() {
-    if (!selectedVersion || !parsed.schema || busy || requestInFlight.current) {
+    if (!selectedVersion || !editable || !parsed.schema || busy || requestInFlight.current) {
       return
     }
 
@@ -335,11 +344,53 @@ export function AdminFormConfigPage() {
     }
   }
 
+  async function duplicateVersion(version: number) {
+    if (busy || requestInFlight.current || versions.some((item) => item.status === 'draft')) return
+    if (dirty && !window.confirm('Discard unsaved changes and create a draft from this version?')) return
+    requestInFlight.current = true
+    setLoading(true)
+    setFeedback(null)
+    try {
+      const created = await api.duplicateAdminFormConfigVersion({ version })
+      const refreshed = await api.fetchAdminFormConfig()
+      setVersions(refreshed.versions)
+      applySelectedVersion(selectRefreshedFormConfigVersion(refreshed.versions, created))
+      setFeedback({ kind: 'success', message: `Draft version ${created.version} created from version ${version}.` })
+    } catch (error) {
+      setFeedback({ kind: 'error', message: getAdminFormConfigErrorMessage(error, 'Unable to duplicate form version.') })
+    } finally {
+      requestInFlight.current = false
+      setLoading(false)
+    }
+  }
+
+  async function discardDraft(version: number) {
+    if (busy || requestInFlight.current || !versions.some((item) => item.version === version && item.status === 'draft')) return
+    if (!window.confirm(`Discard draft version ${version}? Its unsaved and saved changes will no longer be available.`)) return
+    requestInFlight.current = true
+    setLoading(true)
+    setFeedback(null)
+    try {
+      await api.discardAdminFormConfigDraft(version)
+      const refreshed = await api.fetchAdminFormConfig()
+      setVersions(refreshed.versions)
+      const next = refreshed.versions.find((item) => item.version === selectedVersion?.version)
+        ?? selectInitialFormConfigVersion(refreshed.versions)
+      if (next) applySelectedVersion(next)
+      setFeedback({ kind: 'success', message: `Draft version ${version} discarded.` })
+    } catch (error) {
+      setFeedback({ kind: 'error', message: getAdminFormConfigErrorMessage(error, 'Unable to discard draft.') })
+    } finally {
+      requestInFlight.current = false
+      setLoading(false)
+    }
+  }
+
   return (
     <article className="page-card admin-form-config">
       <div className="page-card__header">
         <div>
-          <h1>Form configuration</h1>
+          <h1>Form management</h1>
         </div>
       </div>
 
@@ -348,22 +399,23 @@ export function AdminFormConfigPage() {
 
         {!loading && selectedVersion ? (
           <>
+            <AdminFormConfigVersionSelector
+              disabled={busy}
+              onSelect={selectVersion}
+              onDuplicate={(version) => void duplicateVersion(version)}
+              onDiscard={(version) => void discardDraft(version)}
+              selectedVersion={selectedVersion}
+              versions={versions}
+            />
             <section className="page-card__section admin-form-config__editor" aria-labelledby="form-config-editor-heading">
               <div className="admin-form-config__section-header">
                 <div>
-                  <h2 id="form-config-editor-heading">Edit form</h2>
+                  <h2 id="form-config-editor-heading">{editable ? `Edit draft · Version ${selectedVersion.version}` : `View version ${selectedVersion.version} · ${selectedVersion.status}`}</h2>
                 </div>
                 <button className="secondary-button" disabled={busy} onClick={() => void reloadVersions()} type="button">
                   Reload versions
                 </button>
               </div>
-
-              <AdminFormConfigVersionSelector
-                disabled={busy}
-                onSelect={selectVersion}
-                selectedVersion={selectedVersion}
-                versions={versions}
-              />
 
               <div className="admin-form-config__toolbar">
                 <button className="secondary-button" disabled={busy} onClick={(event) => {
@@ -371,21 +423,21 @@ export function AdminFormConfigPage() {
                   previewDialogRef.current?.showModal()
                 }} type="button">Preview form</button>
                 <div className="admin-form-config__actions">
-                  <button className="primary-button" disabled={busy || !parsed.schema} onClick={() => void saveDraft()} type="button">
+                  {editable ? <button className="primary-button" disabled={busy || !parsed.schema} onClick={() => void saveDraft()} type="button">
                     {saving ? 'Saving draft…' : 'Save draft'}
-                  </button>
-                  <button className="secondary-button" disabled={!publishAllowed} onClick={() => void publishDraft()} type="button">
+                  </button> : null}
+                  {editable ? <button className="secondary-button" disabled={!publishAllowed} onClick={() => void publishDraft()} type="button">
                     {publishing ? 'Publishing…' : 'Publish selected draft'}
-                  </button>
+                  </button> : null}
                 </div>
               </div>
 
               {visualSchema ? (
                 <AdminFormConfigEditor
-                  disabled={busy}
+                  disabled={busy || !editable}
                   onChange={(draft) => updateEditorText(formatFormSchemaDraft(draft))}
                   onEditField={(sectionIndex, fieldIndex, field, trigger) => {
-                    if (busy) return
+                    if (busy || !editable) return
                     fieldTriggerRef.current = trigger
                     fieldFallbackRef.current = trigger.closest?.('.admin-form-config__section')?.querySelector('.admin-form-config__add-field') ?? null
                     setFieldEdit({ sectionIndex, fieldIndex, field: structuredClone(field) })
@@ -402,7 +454,7 @@ export function AdminFormConfigPage() {
                   <textarea
                     aria-describedby={parsed.error ? 'form-config-json-error' : undefined}
                     aria-invalid={parsed.error ? true : undefined}
-                    disabled={busy}
+                    disabled={busy || !editable}
                     id="form-config-json"
                     onChange={(event) => updateEditorText(event.target.value)}
                     rows={20}

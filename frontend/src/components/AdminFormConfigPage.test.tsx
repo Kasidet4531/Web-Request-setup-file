@@ -164,6 +164,7 @@ describe('AdminFormConfigPage helpers', () => {
     const payload = buildAdminFormConfigSavePayload(buildVersion(), editableSchema)
 
     expect(payload).toEqual({
+      draftVersion: 2,
       description: 'Editable form configuration',
       schema: editableSchema,
     })
@@ -207,12 +208,27 @@ describe('AdminFormConfigPage helpers', () => {
     expect(requiresUnsavedVersionConfirmation(false, 2, 3)).toBe(false)
   })
 
+  it('lists active and historical versions without destructive actions and creates drafts only when none exists', () => {
+    const active = buildVersion({ status: 'active', version: 2 })
+    const old = buildVersion({ status: 'published', version: 1 })
+    const draft = buildVersion({ status: 'draft', version: 3 })
+    const props = { disabled: false, onSelect: vi.fn(), onDuplicate: vi.fn(), onDiscard: vi.fn(), selectedVersion: active }
+    const history = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[active, old]} />)
+    const pending = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[draft, active, old]} />)
+    expect(history.match(/Duplicate as draft/g)).toHaveLength(2)
+    expect(history).not.toContain('Discard draft')
+    expect(pending).not.toContain('Duplicate as draft')
+    expect(pending).toContain('Discard draft')
+  })
+
   it('renders native version selection and accessible request feedback', () => {
     const draft = buildVersion()
     const selectorHtml = renderToStaticMarkup(
       <AdminFormConfigVersionSelector
         disabled={false}
         onSelect={vi.fn()}
+        onDuplicate={vi.fn()}
+        onDiscard={vi.fn()}
         selectedVersion={draft}
         versions={[draft]}
       />,
@@ -225,8 +241,9 @@ describe('AdminFormConfigPage helpers', () => {
       <AdminFormConfigFeedback feedback={{ kind: 'error', message: 'Only admins can manage form schema configurations.' }} loading={false} />,
     )
 
-    expect(selectorHtml).toContain('<select')
-    expect(selectorHtml).toContain('Version 2 · draft · PSF Request Form')
+    expect(selectorHtml).toContain('Form versions')
+    expect(selectorHtml).toContain('Version 2 · PSF Request Form')
+    expect(selectorHtml).toContain('Discard draft')
     expect(loadingHtml).toContain('Loading form schema versions…')
     expect(loadingHtml).toContain('role="status"')
     expect(successHtml).toContain('role="status"')
@@ -254,6 +271,6 @@ describe('AdminFormConfigPage helpers', () => {
     const html = renderToStaticMarkup(createElement(AdminFormConfigPage))
 
     expect(routeOptions.component).toBe(AdminFormConfigPage)
-    expect(html).toContain('<h1>Form configuration</h1>')
+    expect(html).toContain('<h1>Form management</h1>')
   })
 })

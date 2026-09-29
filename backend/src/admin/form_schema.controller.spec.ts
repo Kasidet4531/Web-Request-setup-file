@@ -34,6 +34,8 @@ const adminActor = {
 describe('FormSchemaController', () => {
   let controller: FormSchemaController;
   let formSchemaService: {
+    duplicateVersion: jest.Mock;
+    discardDraft: jest.Mock;
     listVersions: jest.Mock;
     publishDraft: jest.Mock;
     saveDraft: jest.Mock;
@@ -42,6 +44,8 @@ describe('FormSchemaController', () => {
 
   beforeEach(async () => {
     formSchemaService = {
+      duplicateVersion: jest.fn(),
+      discardDraft: jest.fn(),
       listVersions: jest.fn(),
       publishDraft: jest.fn(),
       saveDraft: jest.fn(),
@@ -89,6 +93,7 @@ describe('FormSchemaController', () => {
       controller.saveDraft(
         {
           description: 'Editable draft',
+          draftVersion: 2,
           schema: {
             ...validSchema,
             title: '  PSF Request Form  ',
@@ -106,6 +111,7 @@ describe('FormSchemaController', () => {
     expect(formSchemaService.saveDraft).toHaveBeenCalledWith(
       {
         description: 'Editable draft',
+        draftVersion: 2,
         schema: {
           formKey: PSF_REQUEST_FORM_KEY,
           title: 'PSF Request Form',
@@ -132,6 +138,45 @@ describe('FormSchemaController', () => {
     ).resolves.toEqual(response);
 
     expect(formSchemaService.publishDraft).toHaveBeenCalledWith(2);
+  });
+
+  it('allows only an admin to duplicate a version or discard an exact draft', async () => {
+    authService.getProfile.mockResolvedValue(adminActor);
+    const request = { session: { userId: 'admin-1' } } as never;
+    formSchemaService.duplicateVersion.mockResolvedValue({
+      version: 3,
+      status: 'draft',
+    });
+    await expect(
+      controller.duplicateVersion({ version: 1 }, request),
+    ).resolves.toMatchObject({ version: 3 });
+    expect(formSchemaService.duplicateVersion).toHaveBeenCalledWith(
+      1,
+      adminActor,
+    );
+    await controller.discardDraft('3', request);
+    expect(formSchemaService.discardDraft).toHaveBeenCalledWith(3);
+    authService.getProfile.mockResolvedValue({
+      ...adminActor,
+      role: 'requester',
+    });
+    await expect(controller.discardDraft('3', request)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(formSchemaService.discardDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects malformed duplicate and discard version identifiers before changing data', async () => {
+    authService.getProfile.mockResolvedValue(adminActor);
+    const request = { session: { userId: 'admin-1' } } as never;
+    await expect(
+      controller.duplicateVersion({ version: '2' }, request),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.discardDraft('2x', request)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(formSchemaService.duplicateVersion).not.toHaveBeenCalled();
+    expect(formSchemaService.discardDraft).not.toHaveBeenCalled();
   });
 
   it('rejects a missing session before reading form schema versions', async () => {

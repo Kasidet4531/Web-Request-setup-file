@@ -272,6 +272,7 @@ export function buildAdminFormConfigSavePayload(
   schema: FormSchemaDraft,
 ): SaveFormSchemaDraftPayload {
   return {
+    draftVersion: selectedVersion.version,
     description: selectedVersion.description,
     schema: toFormSchemaDraft(schema),
   }

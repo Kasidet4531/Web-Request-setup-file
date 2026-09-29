@@ -190,7 +190,7 @@ describe('createApiClient', () => {
     const fetchAdminFormConfig = Reflect.get(client, 'fetchAdminFormConfig') as undefined | (() => Promise<unknown>)
     const saveAdminFormConfigDraft = Reflect.get(client, 'saveAdminFormConfigDraft') as
       | undefined
-      | ((payload: { description?: string | null; schema: typeof schema }) => Promise<unknown>)
+      | ((payload: { draftVersion: number; description?: string | null; schema: typeof schema }) => Promise<unknown>)
     const publishAdminFormConfigDraft = Reflect.get(client, 'publishAdminFormConfigDraft') as
       | undefined
       | ((payload: { version: number }) => Promise<unknown>)
@@ -203,7 +203,7 @@ describe('createApiClient', () => {
     }
 
     await expect(fetchAdminFormConfig()).resolves.toEqual({ formKey: 'psf-request', versions: [draft] })
-    await expect(saveAdminFormConfigDraft({ description: 'Editable schema', schema })).resolves.toEqual(draft)
+    await expect(saveAdminFormConfigDraft({ draftVersion: 2, description: 'Editable schema', schema })).resolves.toEqual(draft)
     await expect(publishAdminFormConfigDraft({ version: 2 })).resolves.toEqual({ ...draft, status: 'active' })
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
@@ -215,7 +215,7 @@ describe('createApiClient', () => {
       2,
       '/api/admin/form-config',
       expect.objectContaining({
-        body: JSON.stringify({ description: 'Editable schema', schema }),
+        body: JSON.stringify({ draftVersion: 2, description: 'Editable schema', schema }),
         credentials: 'include',
         method: 'PUT',
       }),
@@ -229,6 +229,18 @@ describe('createApiClient', () => {
         method: 'POST',
       }),
     )
+  })
+
+  it('calls the admin form-management duplicate and discard endpoints', async () => {
+    const draft = { version: 3, status: 'draft' }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(draft), { status: 201, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 })) as typeof fetch
+    const client = createApiClient({ baseUrl: '/api' })
+    await expect(client.duplicateAdminFormConfigVersion({ version: 1 })).resolves.toEqual(draft)
+    await expect(client.discardAdminFormConfigDraft(3)).resolves.toBeNull()
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/admin/form-config/duplicate', expect.objectContaining({ body: JSON.stringify({ version: 1 }), credentials: 'include', method: 'POST' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/form-config/draft/3', expect.objectContaining({ credentials: 'include', method: 'DELETE' }))
   })
 
   it('propagates the backend admin authorization error without client-side authority claims', async () => {
@@ -281,7 +293,7 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: '/api' })
 
     await expect(
-      client.saveAdminFormConfigDraft({ description: 'Editable schema', schema }),
+      client.saveAdminFormConfigDraft({ draftVersion: 2, description: 'Editable schema', schema }),
     ).rejects.toMatchObject({ message: 'Schema validation failed.', name: 'ApiError', status: 400 })
     await expect(client.publishAdminFormConfigDraft({ version: 2 })).rejects.toMatchObject({
       message: 'Draft is no longer publishable.',
@@ -292,7 +304,7 @@ describe('createApiClient', () => {
       1,
       '/api/admin/form-config',
       expect.objectContaining({
-        body: JSON.stringify({ description: 'Editable schema', schema }),
+        body: JSON.stringify({ draftVersion: 2, description: 'Editable schema', schema }),
         credentials: 'include',
         method: 'PUT',
       }),

@@ -58,6 +58,7 @@ export interface FormSchemaVersionListResponse {
 }
 
 export interface SaveFormSchemaDraftPayload {
+  draftVersion: number
   description?: string | null
   schema: FormSchemaDraft
 }

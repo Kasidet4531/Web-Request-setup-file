@@ -14,6 +14,8 @@ import {
 } from './AdminFormConfigPage'
 
 const formConfigApi = vi.hoisted(() => ({
+  duplicateAdminFormConfigVersion: vi.fn(),
+  discardAdminFormConfigDraft: vi.fn(),
   fetchAdminFormConfig: vi.fn(),
   publishAdminFormConfigDraft: vi.fn(),
   saveAdminFormConfigDraft: vi.fn(),
@@ -280,10 +282,60 @@ afterEach(() => {
 
 describe('AdminFormConfigPage interactions', () => {
   beforeEach(() => {
+    formConfigApi.duplicateAdminFormConfigVersion.mockReset()
+    formConfigApi.discardAdminFormConfigDraft.mockReset()
     formConfigApi.fetchAdminFormConfig.mockReset()
     formConfigApi.publishAdminFormConfigDraft.mockReset()
     formConfigApi.saveAdminFormConfigDraft.mockReset()
     formConfigHookHarness.reset()
+  })
+
+  it('shows the selected active version read-only and duplicates it into a fresh draft', async () => {
+    const active = buildVersion({ status: 'active', version: 2 })
+    const copied = buildVersion({ status: 'draft', version: 3, schema: { ...editableSchema, version: 3 } })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([active])).mockResolvedValueOnce(buildList([copied, active]))
+    formConfigApi.duplicateAdminFormConfigVersion.mockResolvedValue(copied)
+    let page = await loadAdminFormConfigPage()
+    expect(getVisualEditor(page).props.disabled).toBe(true)
+    expect(getEditor(page).props.disabled).toBe(true)
+    ;(getVisualEditor(page).props.onChange as (draft: FormSchemaDraft) => void)({ ...editableSchema, title: 'Should not change' })
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).title).toBe(editableSchema.title)
+    expect(findRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Save draft')).toBeNull()
+    const duplicate = getVersionSelector(page).props.onDuplicate as (version: number) => void
+    duplicate(2)
+    await flushAsyncWork()
+    page = renderAdminFormConfigPage()
+    expect(formConfigApi.duplicateAdminFormConfigVersion).toHaveBeenCalledWith({ version: 2 })
+    expect(getVersionSelector(page).props.selectedVersion).toBe(copied)
+    expect(getVisualEditor(page).props.disabled).toBe(false)
+  })
+
+  it('keeps the selected version and shows the server conflict when a draft appears concurrently', async () => {
+    const active = buildVersion({ status: 'active', version: 2 })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([active]))
+    formConfigApi.duplicateAdminFormConfigVersion.mockRejectedValue(new ApiError('Open or discard the existing draft before duplicating a version.', 409, 'Conflict', null))
+    let page = await loadAdminFormConfigPage()
+    ;(getVersionSelector(page).props.onDuplicate as (version: number) => void)(2)
+    await flushAsyncWork()
+    page = renderAdminFormConfigPage()
+    expect(getVersionSelector(page).props.selectedVersion).toBe(active)
+    expect(getFeedback(page).props.feedback).toMatchObject({ kind: 'error', message: 'Open or discard the existing draft before duplicating a version.' })
+  })
+
+  it('confirms discarding a draft and returns to the preserved active version', async () => {
+    const draft = buildVersion({ version: 3, schema: { ...editableSchema, version: 3 } })
+    const active = buildVersion({ status: 'active', version: 2 })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([draft, active])).mockResolvedValueOnce(buildList([active]))
+    formConfigApi.discardAdminFormConfigDraft.mockResolvedValue(undefined)
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
+    let page = await loadAdminFormConfigPage()
+    ;(getVersionSelector(page).props.onDiscard as (version: number) => void)(3)
+    await flushAsyncWork()
+    page = renderAdminFormConfigPage()
+    expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(3)
+    expect(getVersionSelector(page).props.selectedVersion).toBe(active)
+    expect(getVersionSelector(page).props.versions).toEqual([active])
   })
 
   it('uses the visual editor as the primary draft editor and keeps advanced JSON optional', async () => {
@@ -412,6 +464,7 @@ describe('AdminFormConfigPage interactions', () => {
     page = renderAdminFormConfigPage()
 
     expect(formConfigApi.saveAdminFormConfigDraft).toHaveBeenCalledWith({
+      draftVersion: 2,
       description: 'Keep this description',
       schema: { ...editableSchema, title: 'Updated PSF Request Form' },
     })
