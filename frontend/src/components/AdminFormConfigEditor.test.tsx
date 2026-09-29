@@ -1,18 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { FormSchemaDraft } from '../types/forms'
-import { AdminFormConfigEditor } from './AdminFormConfigEditor'
+import type { FormSchemaDraft, FormSchemaField } from '../types/forms'
+import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 
-interface ElementNode {
-  type: unknown
-  props: Record<string, unknown>
-}
-
+interface ElementNode { type: unknown; props: Record<string, unknown> }
 function find(node: unknown, match: (element: ElementNode) => boolean): ElementNode {
   if (Array.isArray(node)) {
-    for (const child of node) {
-      try { return find(child, match) } catch { /* continue */ }
-    }
+    for (const child of node) { try { return find(child, match) } catch { /* continue */ } }
   } else if (node && typeof node === 'object' && 'props' in node && 'type' in node) {
     const element = node as ElementNode
     if (match(element)) return element
@@ -22,40 +16,41 @@ function find(node: unknown, match: (element: ElementNode) => boolean): ElementN
 }
 
 const schema: FormSchemaDraft = {
-  formKey: 'psf-request',
-  title: 'PSF Request Form',
+  formKey: 'psf-request', title: 'PSF Request Form',
   sections: [{
-    sectionKey: 'requester_information',
-    title: 'Requester Information',
-    visibleTo: ['requester', 'setup_owner', 'admin'],
+    sectionKey: 'requester_information', title: 'Requester Information', visibleTo: ['requester', 'setup_owner', 'admin'],
     fields: [
       { fieldKey: 'field_1', canonicalKey: 'field_1', label: 'Name', type: 'text', required: true, searchable: true },
       { fieldKey: 'choice', canonicalKey: 'choice', label: 'Priority', type: 'select', required: false, options: ['Low', 'High'] },
     ],
   }],
 }
+const onEditField = vi.fn()
+const editor = (draft = schema, onChange = vi.fn()) => AdminFormConfigEditor({ schema: draft, disabled: false, onChange, onEditField })
+const fieldEditor = (field: FormSchemaField, onChange = vi.fn()) => AdminFormConfigFieldEditor({
+  field, isNew: false, canRemove: true, onChange, onApply: vi.fn(), onCancel: vi.fn(), onRemove: vi.fn(),
+})
 
 describe('visual form configuration editor', () => {
-  it('shows friendly field types and inline errors while preserving editability', () => {
+  it('shows compact field rows with edit actions, and shows field errors inside the editor', () => {
     const invalid: FormSchemaDraft = { ...schema, title: '', sections: [{ ...schema.sections[0], fields: [
       { ...schema.sections[0].fields[0], label: '' },
       { ...schema.sections[0].fields[1], options: [''] },
     ] }] }
-    const html = renderToStaticMarkup(<AdminFormConfigEditor schema={invalid} disabled={false} onChange={vi.fn()} />)
-    expect(html).toContain('Short text')
-    expect(html).toContain('Dropdown')
+    const html = renderToStaticMarkup(<AdminFormConfigEditor schema={invalid} disabled={false} onChange={vi.fn()} onEditField={onEditField} />)
     expect(html).toContain('id="form-config-title-error"')
-    expect(html).toContain('id="form-config-field-label-0-0-error"')
-    expect(html).toContain('id="form-config-option-0-1-0-error"')
     expect(html).toContain('Needs attention')
-    expect(html).toContain('aria-label="Move field_1 up"')
-    const details = find(AdminFormConfigEditor({ schema: invalid, disabled: false, onChange: vi.fn() }), (element) => element.type === 'details' && element.props.className === 'admin-form-config__item')
-    expect(details.props).not.toHaveProperty('open')
+    expect(html).toContain('aria-label="Edit field_1"')
+    expect(html).not.toContain('<details class="admin-form-config__item"')
+    const dialogHtml = renderToStaticMarkup(<AdminFormConfigFieldEditor field={invalid.sections[0].fields[1]} isNew={false} canRemove onChange={vi.fn()} onApply={vi.fn()} onCancel={vi.fn()} onRemove={vi.fn()} />)
+    expect(dialogHtml).toContain('Dropdown')
+    expect(dialogHtml).toContain('id="form-config-option-0-error"')
+    expect(dialogHtml).toContain('disabled="" type="submit"')
   })
 
-  it('edits the form title and section visibility without changing field identities', () => {
+  it('edits form title and section visibility without changing field identities', () => {
     const onChange = vi.fn()
-    const tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
+    const tree = editor(schema, onChange)
     const title = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-title')
     ;(title.props.onChange as (event: unknown) => void)({ target: { value: 'New title' } })
     expect(onChange.mock.calls[0][0]).toEqual({ ...schema, title: 'New title' })
@@ -65,96 +60,71 @@ describe('visual form configuration editor', () => {
     expect((onChange.mock.calls[1][0] as FormSchemaDraft).sections[0].fields).toEqual(schema.sections[0].fields)
   })
 
-  it('edits field label, type, required flag and choice options without dropping metadata', () => {
+  it('edits a field label, type, required flag and options without dropping metadata or choice values', () => {
     const onChange = vi.fn()
-    let tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
-    const label = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-field-label-0-0')
+    let tree = fieldEditor(schema.sections[0].fields[0], onChange)
+    const label = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-field-label')
     ;(label.props.onChange as (event: unknown) => void)({ target: { value: 'Full name' } })
-    expect((onChange.mock.calls[0][0] as FormSchemaDraft).sections[0].fields[0]).toEqual({ ...schema.sections[0].fields[0], label: 'Full name' })
-    const updated = onChange.mock.calls[0][0] as FormSchemaDraft
-    tree = AdminFormConfigEditor({ schema: updated, disabled: false, onChange })
-    const type = find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type-0-0')
+    expect(onChange.mock.calls[0][0]).toEqual({ ...schema.sections[0].fields[0], label: 'Full name' })
+    tree = fieldEditor(onChange.mock.calls[0][0] as FormSchemaField, onChange)
+    const type = find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type')
     ;(type.props.onChange as (event: unknown) => void)({ target: { value: 'radio' } })
-    const withRadio = onChange.mock.calls[1][0] as FormSchemaDraft
-    expect(withRadio.sections[0].fields[0]).toMatchObject({ type: 'radio', options: ['Option 1'], searchable: true })
-    tree = AdminFormConfigEditor({ schema: withRadio, disabled: false, onChange })
-    const option = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-option-0-0-0')
+    const withRadio = onChange.mock.calls[1][0] as FormSchemaField
+    expect(withRadio).toMatchObject({ type: 'radio', options: ['Option 1'], searchable: true })
+    tree = fieldEditor(withRadio, onChange)
+    const option = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-option-0')
     ;(option.props.onChange as (event: unknown) => void)({ target: { value: 'Yes' } })
-    expect((onChange.mock.calls[2][0] as FormSchemaDraft).sections[0].fields[0].options).toEqual(['Yes'])
+    expect((onChange.mock.calls[2][0] as FormSchemaField).options).toEqual(['Yes'])
+    const priority = schema.sections[0].fields[1]
+    tree = fieldEditor(priority, onChange)
+    ;(find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type').props.onChange as (event: unknown) => void)({ target: { value: 'text' } })
+    const asText = onChange.mock.calls[3][0] as FormSchemaField
+    expect(asText.options).toEqual(['Low', 'High'])
+    tree = fieldEditor(asText, onChange)
+    ;(find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type').props.onChange as (event: unknown) => void)({ target: { value: 'radio' } })
+    expect((onChange.mock.calls[4][0] as FormSchemaField).options).toEqual(['Low', 'High'])
   })
 
-  it('keeps choice values when a field type is changed and changed back', () => {
+  it('adds and removes choices in the dialog without affecting another field', () => {
     const onChange = vi.fn()
-    let tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
-    const type = find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type-0-1')
-    ;(type.props.onChange as (event: unknown) => void)({ target: { value: 'text' } })
-    const asText = onChange.mock.calls[0][0] as FormSchemaDraft
-    expect(asText.sections[0].fields[1].options).toEqual(['Low', 'High'])
-    tree = AdminFormConfigEditor({ schema: asText, disabled: false, onChange })
-    const typeAgain = find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type-0-1')
-    ;(typeAgain.props.onChange as (event: unknown) => void)({ target: { value: 'radio' } })
-    expect((onChange.mock.calls[1][0] as FormSchemaDraft).sections[0].fields[1].options).toEqual(['Low', 'High'])
-  })
-
-  it('adds and removes choice options without affecting other fields', () => {
-    const onChange = vi.fn()
-    let tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
-    const add = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add choice to Priority')
-    ;(add.props.onClick as () => void)()
-    const withChoice = onChange.mock.calls[0][0] as FormSchemaDraft
-    expect(withChoice.sections[0].fields[1].options).toEqual(['Low', 'High', 'Option 3'])
-    tree = AdminFormConfigEditor({ schema: withChoice, disabled: false, onChange })
-    const remove = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove choice 2 from Priority')
-    ;(remove.props.onClick as () => void)()
-    expect((onChange.mock.calls[1][0] as FormSchemaDraft).sections[0].fields[1].options).toEqual(['Low', 'Option 3'])
+    let tree = fieldEditor(schema.sections[0].fields[1], onChange)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add choice to Priority').props.onClick as () => void)()
+    const withChoice = onChange.mock.calls[0][0] as FormSchemaField
+    expect(withChoice.options).toEqual(['Low', 'High', 'Option 3'])
+    tree = fieldEditor(withChoice, onChange)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove choice 2 from Priority').props.onClick as () => void)()
+    expect((onChange.mock.calls[1][0] as FormSchemaField).options).toEqual(['Low', 'Option 3'])
     expect(schema.sections[0].fields[1].options).toEqual(['Low', 'High'])
   })
 
-  it('reorders fields without changing their keys and asks before removing a field', () => {
+  it('reorders fields without changing their keys and opens the same editor for existing and new fields', () => {
     const onChange = vi.fn()
-    let tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
-    const move = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Move Priority up')
-    ;(move.props.onClick as () => void)()
+    let tree = editor(schema, onChange)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Move Priority up').props.onClick as () => void)()
     const moved = onChange.mock.calls[0][0] as FormSchemaDraft
     expect(moved.sections[0].fields.map((field) => field.fieldKey)).toEqual(['choice', 'field_1'])
-    const confirm = vi.fn(() => false)
-    vi.stubGlobal('window', { confirm })
-    tree = AdminFormConfigEditor({ schema: moved, disabled: false, onChange })
-    const remove = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove Priority')
-    ;(remove.props.onClick as () => void)()
-    expect(onChange).toHaveBeenCalledTimes(1)
-    confirm.mockReturnValue(true)
-    ;(remove.props.onClick as () => void)()
-    expect((onChange.mock.calls[1][0] as FormSchemaDraft).sections[0].fields.map((field) => field.fieldKey)).toEqual(['field_1'])
-    vi.unstubAllGlobals()
+    const trigger = { focus: vi.fn() } as unknown as HTMLButtonElement
+    onEditField.mockReset()
+    tree = editor(moved)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Edit Priority').props.onClick as (event: unknown) => void)({ currentTarget: trigger })
+    expect(onEditField).toHaveBeenCalledWith(0, 0, moved.sections[0].fields[0], trigger)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add field to Requester Information').props.onClick as (event: unknown) => void)({ currentTarget: trigger })
+    expect(onEditField).toHaveBeenCalledWith(0, null, { fieldKey: 'field_2', canonicalKey: 'field_2', label: 'New field', type: 'text', required: false }, trigger)
+    expect(moved.sections[0].fields).toHaveLength(2)
   })
 
   it('adds, reorders and removes sections with stable keys', () => {
     const onChange = vi.fn()
-    let tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
-    const add = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add section')
-    ;(add.props.onClick as () => void)()
+    let tree = editor(schema, onChange)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add section').props.onClick as () => void)()
     const added = onChange.mock.calls[0][0] as FormSchemaDraft
     expect(added.sections[1]).toEqual({ sectionKey: 'section_1', title: 'New section', visibleTo: ['requester', 'setup_owner', 'admin'], fields: [] })
-    tree = AdminFormConfigEditor({ schema: added, disabled: false, onChange })
-    const move = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Move New section up')
-    ;(move.props.onClick as () => void)()
+    tree = editor(added, onChange)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Move New section up').props.onClick as () => void)()
     const moved = onChange.mock.calls[1][0] as FormSchemaDraft
     expect(moved.sections.map((section) => section.sectionKey)).toEqual(['section_1', 'requester_information'])
-    tree = AdminFormConfigEditor({ schema: moved, disabled: false, onChange })
-    const remove = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove New section')
-    ;(remove.props.onClick as () => void)()
+    tree = editor(moved, onChange)
+    ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove New section').props.onClick as () => void)()
     expect((onChange.mock.calls[2][0] as FormSchemaDraft).sections).toEqual(schema.sections)
-  })
-
-  it('adds a field with a unique stable key without altering existing field metadata', () => {
-    const onChange = vi.fn()
-    const tree = AdminFormConfigEditor({ schema, disabled: false, onChange })
-    const add = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add field to Requester Information')
-    ;(add.props.onClick as () => void)()
-    const next = onChange.mock.calls[0][0] as FormSchemaDraft
-    expect(next.sections[0].fields[2]).toEqual({ fieldKey: 'field_2', canonicalKey: 'field_2', label: 'New field', type: 'text', required: false })
-    expect(next.sections[0].fields[0]).toEqual(schema.sections[0].fields[0])
-    expect(schema.sections[0].fields).toHaveLength(2)
   })
 })

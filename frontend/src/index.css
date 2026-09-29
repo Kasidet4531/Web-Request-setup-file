@@ -1568,7 +1568,6 @@ input.input-with-clear {
 
 .admin-form-config__body,
 .admin-form-config__editor,
-.admin-form-config__preview,
 .admin-form-config__field,
 .admin-user-management__body,
 .admin-workflow-transition__body,
@@ -1591,7 +1590,6 @@ input.input-with-clear {
 }
 
 .admin-form-config__section-header h2,
-.admin-form-config__preview > h2,
 .admin-autofill-rules__editor-header h2,
 .admin-autofill-rules__editor-header p {
   margin: 0;
@@ -1621,7 +1619,6 @@ input.input-with-clear {
 .admin-form-config__builder,
 .admin-form-config__section,
 .admin-form-config__fields,
-.admin-form-config__item-body,
 .admin-form-config__options {
   display: grid;
   gap: 14px;
@@ -1689,31 +1686,23 @@ input.input-with-clear {
   background: var(--card);
 }
 
-.admin-form-config__item summary {
+.admin-form-config__item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 13px 16px;
-  list-style: none;
-  cursor: pointer;
+  padding: 10px 14px;
 }
 
-.admin-form-config__item summary::-webkit-details-marker { display: none; }
-.admin-form-config__item summary strong { font-size: 13px; }
-.admin-form-config__item summary span { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
-.admin-form-config__item:has(input[aria-invalid='true']) summary span { color: var(--destructive); }
-.admin-form-config__item summary::after { content: '⌄'; color: var(--muted-foreground); }
-.admin-form-config__item[open] summary::after { transform: rotate(180deg); }
-
-.admin-form-config__item-body {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 18px;
-  border-top: 1px solid var(--border);
+.admin-form-config__item-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
-.admin-form-config__options,
-.admin-form-config__item-body .admin-form-config__controls,
-.admin-form-config__key { grid-column: 1 / -1; }
+.admin-form-config__item-summary strong { font-size: 13px; overflow-wrap: anywhere; }
+.admin-form-config__item-summary span { color: var(--muted-foreground); font-size: 12px; }
 .admin-form-config__choice .admin-form-config__field { flex: 1; min-width: 150px; }
 .admin-form-config__choice { align-items: flex-end; }
 .admin-form-config__controls .secondary-button { min-height: 36px; }
@@ -1725,10 +1714,60 @@ input.input-with-clear {
 .admin-form-config__advanced summary { color: var(--muted-foreground); font-size: 13px; cursor: pointer; }
 .admin-form-config__advanced .admin-form-config__field { margin-top: 14px; }
 
+.admin-form-config__toolbar {
+  position: sticky;
+  top: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-form-config__field-dialog,
+.admin-form-config__preview-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-lg);
+}
+
+.admin-form-config__preview-dialog { width: min(900px, calc(100% - 32px)); }
+.admin-form-config__field-dialog::backdrop,
+.admin-form-config__preview-dialog::backdrop { background: rgb(0 0 0 / 50%); }
+.admin-form-config__modal-body { display: grid; gap: 18px; }
+.admin-form-config__modal-head,
+.admin-form-config__modal-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.admin-form-config__modal-head { margin-bottom: 16px; }
+.admin-form-config__modal-head h2 { margin: 0; font-size: 20px; }
+.admin-form-config__modal-head p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 13px; }
+.admin-form-config__modal-actions { flex-wrap: wrap; align-items: center; padding-top: 16px; border-top: 1px solid var(--border); }
+.admin-form-config__modal-actions .admin-form-config__actions { margin-left: auto; }
+.admin-form-config__danger { color: var(--destructive); }
+.admin-form-config__field-dialog .admin-form-config__options { gap: 12px; }
+.admin-form-config__field-dialog .admin-form-config__options legend { margin-bottom: 12px; }
+
 @media (max-width: 640px) {
   .admin-form-config__section { padding: 14px; }
-  .admin-form-config__item-body { grid-template-columns: minmax(0, 1fr); padding: 14px; }
   .admin-form-config__section-top { align-items: flex-start; }
+  .admin-form-config__toolbar { top: 0; }
+  .admin-form-config__field-dialog, .admin-form-config__preview-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); padding: 16px; }
 }
 
 .admin-form-config__actions,

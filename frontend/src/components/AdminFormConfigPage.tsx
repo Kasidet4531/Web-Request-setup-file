@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
-import { AdminFormConfigEditor } from './AdminFormConfigEditor'
+import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import {
   buildAdminFormConfigSavePayload,
   buildPreviewSchema,
@@ -14,7 +14,7 @@ import {
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
 import { api } from '../services/api'
-import type { FormSchema, FormSchemaVersionResponse } from '../types/forms'
+import type { FormSchema, FormSchemaField, FormSchemaVersionResponse } from '../types/forms'
 
 type AdminFormConfigFeedbackValue = {
   kind: 'success' | 'error'
@@ -95,7 +95,13 @@ export function AdminFormConfigPage() {
   const [saving, setSaving] = useState(false)
   const [selectedVersion, setSelectedVersion] = useState<FormSchemaVersionResponse | null>(null)
   const [versions, setVersions] = useState<FormSchemaVersionResponse[]>([])
+  const [fieldEdit, setFieldEdit] = useState<{ sectionIndex: number; fieldIndex: number | null; field: FormSchemaField } | null>(null)
   const requestInFlight = useRef(false)
+  const fieldDialogRef = useRef<HTMLDialogElement>(null)
+  const previewDialogRef = useRef<HTMLDialogElement>(null)
+  const fieldTriggerRef = useRef<HTMLButtonElement>(null)
+  const fieldFallbackRef = useRef<HTMLButtonElement>(null)
+  const previewTriggerRef = useRef<HTMLButtonElement>(null)
 
   const parsed = useMemo(() => parseFormSchemaDraft(editorText), [editorText])
   const visualSchema = useMemo(() => readFormSchemaEditorDraft(editorText), [editorText])
@@ -159,6 +165,49 @@ export function AdminFormConfigPage() {
       mounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (fieldEdit && !fieldDialogRef.current?.open) {
+      fieldDialogRef.current?.showModal()
+      fieldDialogRef.current?.querySelector<HTMLInputElement>('#form-config-field-label')?.focus()
+    }
+  }, [fieldEdit])
+
+  function closeFieldEditor() {
+    if (fieldDialogRef.current?.open) fieldDialogRef.current.close()
+    setFieldEdit(null)
+    restoreFieldFocus()
+  }
+
+  function restoreFieldFocus() {
+    if (fieldTriggerRef.current?.isConnected === false) fieldFallbackRef.current?.focus()
+    else fieldTriggerRef.current?.focus()
+  }
+
+  function applyFieldEdit() {
+    if (!visualSchema || !fieldEdit || busy || !fieldEdit.field.label.trim()) return
+    if ((fieldEdit.field.type === 'select' || fieldEdit.field.type === 'radio') &&
+      (!fieldEdit.field.options?.length || fieldEdit.field.options.some((choice) => !choice.trim()))) return
+    const next = structuredClone(visualSchema)
+    const fields = next.sections[fieldEdit.sectionIndex]?.fields
+    if (!fields) return
+    if (fieldEdit.fieldIndex === null) fields.push(fieldEdit.field)
+    else if (fields[fieldEdit.fieldIndex]?.fieldKey === fieldEdit.field.fieldKey) fields[fieldEdit.fieldIndex] = fieldEdit.field
+    else return
+    updateEditorText(formatFormSchemaDraft(next))
+    closeFieldEditor()
+  }
+
+  function removeField() {
+    if (!visualSchema || !fieldEdit || fieldEdit.fieldIndex === null || busy) return
+    if (visualSchema.sections.reduce((count, section) => count + section.fields.length, 0) <= 1) return
+    if (!window.confirm(`Remove ${fieldEdit.field.label}?`)) return
+    const next = structuredClone(visualSchema)
+    if (next.sections[fieldEdit.sectionIndex]?.fields[fieldEdit.fieldIndex]?.fieldKey !== fieldEdit.field.fieldKey) return
+    next.sections[fieldEdit.sectionIndex].fields.splice(fieldEdit.fieldIndex, 1)
+    updateEditorText(formatFormSchemaDraft(next))
+    closeFieldEditor()
+  }
 
   async function reloadVersions() {
     if (busy || requestInFlight.current) {
@@ -316,10 +365,31 @@ export function AdminFormConfigPage() {
                 versions={versions}
               />
 
+              <div className="admin-form-config__toolbar">
+                <button className="secondary-button" disabled={busy} onClick={(event) => {
+                  previewTriggerRef.current = event.currentTarget
+                  previewDialogRef.current?.showModal()
+                }} type="button">Preview form</button>
+                <div className="admin-form-config__actions">
+                  <button className="primary-button" disabled={busy || !parsed.schema} onClick={() => void saveDraft()} type="button">
+                    {saving ? 'Saving draft…' : 'Save draft'}
+                  </button>
+                  <button className="secondary-button" disabled={!publishAllowed} onClick={() => void publishDraft()} type="button">
+                    {publishing ? 'Publishing…' : 'Publish selected draft'}
+                  </button>
+                </div>
+              </div>
+
               {visualSchema ? (
                 <AdminFormConfigEditor
                   disabled={busy}
                   onChange={(draft) => updateEditorText(formatFormSchemaDraft(draft))}
+                  onEditField={(sectionIndex, fieldIndex, field, trigger) => {
+                    if (busy) return
+                    fieldTriggerRef.current = trigger
+                    fieldFallbackRef.current = trigger.closest?.('.admin-form-config__section')?.querySelector('.admin-form-config__add-field') ?? null
+                    setFieldEdit({ sectionIndex, fieldIndex, field: structuredClone(field) })
+                  }}
                   schema={visualSchema}
                 />
               ) : (
@@ -347,24 +417,34 @@ export function AdminFormConfigPage() {
                 </p>
               ) : null}
 
-              <div className="admin-form-config__actions">
-                <button className="primary-button" disabled={busy || !parsed.schema} onClick={() => void saveDraft()} type="button">
-                  {saving ? 'Saving draft…' : 'Save draft'}
-                </button>
-                <button className="secondary-button" disabled={!publishAllowed} onClick={() => void publishDraft()} type="button">
-                  {publishing ? 'Publishing…' : 'Publish selected draft'}
-                </button>
-              </div>
             </section>
 
-            <details className="admin-form-config__preview">
-              <summary>Live preview</summary>
+            <dialog aria-labelledby="form-config-field-dialog-title" className="admin-form-config__field-dialog" onClose={() => {
+              setFieldEdit(null)
+              restoreFieldFocus()
+            }} ref={fieldDialogRef}>
+              {fieldEdit ? <AdminFormConfigFieldEditor
+                canRemove={!!visualSchema && visualSchema.sections.reduce((count, section) => count + section.fields.length, 0) > 1}
+                field={fieldEdit.field}
+                isNew={fieldEdit.fieldIndex === null}
+                onApply={applyFieldEdit}
+                onCancel={closeFieldEditor}
+                onChange={(field) => setFieldEdit((current) => current ? { ...current, field } : null)}
+                onRemove={removeField}
+              /> : null}
+            </dialog>
+
+            <dialog aria-labelledby="form-config-preview-title" className="admin-form-config__preview-dialog" onClose={() => previewTriggerRef.current?.focus()} ref={previewDialogRef}>
+              <div className="admin-form-config__modal-head">
+                <div><h2 id="form-config-preview-title">Form preview</h2><p>{dirty ? 'Unsaved page draft' : 'Selected version'} · preview only</p></div>
+                <button aria-label="Close preview" className="secondary-button" onClick={() => previewDialogRef.current?.close()} type="button">×</button>
+              </div>
               {previewSchema ? (
                 <AdminFormConfigPreview schema={previewSchema} />
               ) : (
                 <p className="page-card__description">Fix the form errors above to see the preview.</p>
               )}
-            </details>
+            </dialog>
           </>
         ) : null}
       </div>

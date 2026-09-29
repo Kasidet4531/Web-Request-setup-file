@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
-import { AdminFormConfigEditor } from './AdminFormConfigEditor'
+import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import type {
   FormSchemaDraft,
   FormSchemaVersionListResponse,
@@ -305,22 +305,73 @@ describe('AdminFormConfigPage interactions', () => {
     expect(getButton(page, 'Save draft').props.disabled).toBe(false)
   })
 
-  it('keeps schema editing visible while the optional preview starts collapsed', async () => {
+  it('opens preview from the toolbar and uses the unsaved draft', async () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
 
-    const page = await loadAdminFormConfigPage()
+    let page = await loadAdminFormConfigPage()
     const preview = requireRenderedElement(
       page,
-      (element) => element.type === 'details' && element.props.className === 'admin-form-config__preview',
+      (element) => element.type === 'dialog' && element.props.className === 'admin-form-config__preview-dialog',
     )
-    const summary = requireRenderedElement(preview.props.children, (element) => element.type === 'summary')
-
-    expect(preview.props.open).not.toBe(true)
-    expect(summary.props.children).toBe('Live preview')
+    expect(preview.props['aria-labelledby']).toBe('form-config-preview-title')
     expect(getPreview(preview.props.children).props.schema).toMatchObject({ version: 2 })
+    expect(getButton(page, 'Preview form').props.disabled).toBe(false)
+    ;(getVisualEditor(page).props.onChange as (draft: FormSchemaDraft) => void)({ ...editableSchema, title: 'Unsaved form' })
+    page = renderAdminFormConfigPage()
+    expect(getPreview(page).props.schema).toMatchObject({ title: 'Unsaved form' })
     expect(getEditor(page).props.id).toBe('form-config-json')
     expect(getButton(page, 'Save draft').props.disabled).toBe(false)
     expect(getButton(page, 'Reload versions').props.disabled).toBe(false)
+  })
+
+  it('applies a field edit to the page draft only after confirmation and discards cancelled edits', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    let page = await loadAdminFormConfigPage()
+    let open = getVisualEditor(page).props.onEditField as (section: number, index: number | null, field: FormSchemaDraft['sections'][number]['fields'][number], trigger: HTMLButtonElement) => void
+    open(0, 0, editableSchema.sections[0].fields[0], { focus: vi.fn() } as unknown as HTMLButtonElement)
+    page = renderAdminFormConfigPage()
+    const fieldEditor = requireRenderedElement(page, (element) => element.type === AdminFormConfigFieldEditor)
+    ;(fieldEditor.props.onChange as (field: FormSchemaDraft['sections'][number]['fields'][number]) => void)({ ...editableSchema.sections[0].fields[0], label: 'Edited label' })
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).sections[0].fields[0].label).toBe('Product Type')
+    ;(requireRenderedElement(page, (element) => element.type === AdminFormConfigFieldEditor).props.onApply as () => void)()
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).sections[0].fields[0].label).toBe('Edited label')
+    expect(formConfigApi.saveAdminFormConfigDraft).not.toHaveBeenCalled()
+
+    open = getVisualEditor(page).props.onEditField as typeof open
+    open(0, 1, editableSchema.sections[0].fields[1], { focus: vi.fn() } as unknown as HTMLButtonElement)
+    page = renderAdminFormConfigPage()
+    ;(requireRenderedElement(page, (element) => element.type === AdminFormConfigFieldEditor).props.onChange as (field: FormSchemaDraft['sections'][number]['fields'][number]) => void)({ ...editableSchema.sections[0].fields[1], label: 'Discarded' })
+    page = renderAdminFormConfigPage()
+    ;(requireRenderedElement(page, (element) => element.type === 'dialog' && element.props.className === 'admin-form-config__field-dialog').props.onClose as () => void)()
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).sections[0].fields[1].label).toBe('Request note')
+  })
+
+  it('keeps new fields out of the draft until Apply and confirms removal in the modal', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => false) } })
+    let page = await loadAdminFormConfigPage()
+    const open = getVisualEditor(page).props.onEditField as (section: number, index: number | null, field: FormSchemaDraft['sections'][number]['fields'][number], trigger: HTMLButtonElement) => void
+    const newField = { fieldKey: 'field_1', canonicalKey: 'field_1', label: 'New field', type: 'text' as const, required: false }
+    open(0, null, newField, { focus: vi.fn() } as unknown as HTMLButtonElement)
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).sections[0].fields).toHaveLength(2)
+    ;(requireRenderedElement(page, (element) => element.type === AdminFormConfigFieldEditor).props.onApply as () => void)()
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).sections[0].fields[2]).toEqual(newField)
+    expect(formConfigApi.saveAdminFormConfigDraft).not.toHaveBeenCalled()
+
+    open(0, 2, newField, { focus: vi.fn() } as unknown as HTMLButtonElement)
+    page = renderAdminFormConfigPage()
+    const remove = requireRenderedElement(page, (element) => element.type === AdminFormConfigFieldEditor).props.onRemove as () => void
+    remove()
+    expect((getVisualEditor(renderAdminFormConfigPage()).props.schema as FormSchemaDraft).sections[0].fields).toHaveLength(3)
+    ;(window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true)
+    remove()
+    page = renderAdminFormConfigPage()
+    expect((getVisualEditor(page).props.schema as FormSchemaDraft).sections[0].fields).toHaveLength(2)
   })
 
   it('loads the draft, saves valid edited JSON once, refetches, and selects the returned draft', async () => {
