@@ -300,6 +300,28 @@ describe('AdminFormConfigPage interactions', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
   })
 
+  it('provides an editor Back button that guards unsaved draft changes', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    let page = await loadAdminFormConfigPage()
+    const findBack = (tree: unknown) => requireRenderedElement(tree, (element) => element.props.to === '/admin/form-config' && element.props.className === 'secondary-button')
+    const confirm = window.confirm as ReturnType<typeof vi.fn>
+    const preventDefault = vi.fn()
+
+    ;(findBack(page).props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+    expect(confirm).not.toHaveBeenCalled()
+
+    ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: JSON.stringify({ ...editableSchema, title: 'Unsaved' }) } })
+    page = renderAdminFormConfigPage()
+    confirm.mockReturnValue(false)
+    ;(findBack(page).props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and return to Form management?')
+    expect(preventDefault).toHaveBeenCalledOnce()
+
+    confirm.mockReturnValue(true)
+    ;(findBack(page).props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledOnce()
+  })
+
   it('shows the selected active version read-only and duplicates it into a fresh draft', async () => {
     const active = buildVersion({ status: 'active', version: 2 })
     const copied = buildVersion({ status: 'draft', version: 3, schema: { ...editableSchema, version: 3 } })

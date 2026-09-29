@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
 import { NavSidebar } from './NavSidebar'
-import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
+import { FormVersionBreadcrumbContext, guardUnsavedFormExit, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
 import { isStandaloneAuthenticationPath, type UserRole } from './navigationState'
 import { subscribeAuthSessionChanged } from '../services/auth-session'
 import {
@@ -255,10 +255,8 @@ export function AppShell() {
                 <span className="breadcrumbs" key={`${crumb.label}-${index}`}>
                   {index > 0 ? <ChevronRight className="breadcrumbs__sep" size={13} /> : null}
                   {crumb.to ? (
-                    <Link className="breadcrumbs__link" onClick={crumb.to === '/admin/form-config' && isFormVersion && formVersionBreadcrumb?.dirty
-                      ? (event) => {
-                        if (!window.confirm('Discard unsaved form changes and return to Form management?')) event.preventDefault()
-                      }
+                    <Link className="breadcrumbs__link" onClick={crumb.to === '/admin/form-config' && isFormVersion
+                      ? (event) => guardUnsavedFormExit(!!formVersionBreadcrumb?.dirty, event)
                       : undefined} to={crumb.to}>
                       {crumb.label}
                     </Link>

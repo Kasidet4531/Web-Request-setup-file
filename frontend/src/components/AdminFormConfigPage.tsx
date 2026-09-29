@@ -1,8 +1,9 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { ArrowLeft } from 'lucide-react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
-import { FormVersionBreadcrumbContext } from './formVersionBreadcrumb'
+import { FormVersionBreadcrumbContext, guardUnsavedFormExit } from './formVersionBreadcrumb'
 import {
   buildAdminFormConfigSavePayload,
   buildPreviewSchema,
@@ -344,6 +345,7 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
       {!isEditor ? <div className="page-card__header"><h1>Form management</h1></div> : null}
 
       <div className="page-card__body admin-form-config__body">
+        {isEditor ? <div><Link className="secondary-button" onClick={(event) => guardUnsavedFormExit(dirty, event)} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link></div> : null}
         <AdminFormConfigFeedback feedback={feedback} loading={loading} />
 
         {!loading && !isEditor && selectedVersion ? <AdminFormConfigVersionSelector
@@ -353,7 +355,6 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
           onPublish={(number) => void publishDraft(number)}
           versions={versions}
         /> : null}
-        {!loading && isEditor && !selectedVersion ? <Link to="/admin/form-config">Back to Form management</Link> : null}
         {!loading && isEditor && selectedVersion ? (
           <>
             <div className="admin-form-config__section-header">
