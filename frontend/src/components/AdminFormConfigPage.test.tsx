@@ -1,3 +1,4 @@
+import type { AnchorHTMLAttributes } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
@@ -21,6 +22,12 @@ import {
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@tanstack/react-router')>(),
+  Link: ({ to, params, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; params: { version: string } }) =>
+    <a {...props} href={to.replace('$version', params.version)} />,
+}))
 
 const editableSchema: FormSchemaDraft = {
   formKey: 'psf-request',
@@ -205,7 +212,7 @@ describe('AdminFormConfigPage helpers', () => {
     const active = buildVersion({ status: 'active', version: 2 })
     const old = buildVersion({ status: 'published', version: 1 })
     const draft = buildVersion({ status: 'draft', version: 3 })
-    const props = { disabled: false, onSelect: vi.fn(), onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
     const history = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[active, old]} />)
     const pending = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[draft, active, old]} />)
     expect(history.match(/Duplicate as draft/g)).toHaveLength(2)
@@ -220,12 +227,22 @@ describe('AdminFormConfigPage helpers', () => {
     expect(pending).toContain('>Discard</button>')
   })
 
+  it('opens versions from the table instead of View or Edit actions', () => {
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const html = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[
+      buildVersion({ status: 'active', version: 2 }),
+      buildVersion({ status: 'draft', version: 3 }),
+    ]} />)
+    expect(html).toContain('href="/admin/form-config/2"')
+    expect(html).toContain('href="/admin/form-config/3"')
+    expect(html).not.toMatch(/>(View|Edit)<\/button>/)
+  })
+
   it('renders native version selection and accessible request feedback', () => {
     const draft = buildVersion()
     const selectorHtml = renderToStaticMarkup(
       <AdminFormConfigVersionSelector
         disabled={false}
-        onSelect={vi.fn()}
         onDuplicate={vi.fn()}
         onDiscard={vi.fn()}
         onPublish={vi.fn()}
@@ -241,7 +258,7 @@ describe('AdminFormConfigPage helpers', () => {
     )
 
     expect(selectorHtml).toContain('Form versions')
-    expect(selectorHtml).toContain('>v2</th>')
+    expect(selectorHtml).toContain('>v2</a></th>')
     expect(selectorHtml).toContain('PSF Request Form')
     expect(selectorHtml).toContain('>—</td>')
     expect(selectorHtml).toContain('>Discard</button>')

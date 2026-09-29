@@ -1622,7 +1622,13 @@ input.input-with-clear {
 .admin-form-config__version-table th, .admin-form-config__version-table td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .admin-form-config__version-table thead { background: var(--muted); color: var(--muted-foreground); }
 .admin-form-config__version-table tbody th { white-space: nowrap; }
+.admin-form-config__version-row { position: relative; }
+.admin-form-config__version-row:hover { background: var(--muted); }
 .admin-form-config__version-row--active { background: var(--muted); box-shadow: inset 3px 0 var(--accent); }
+.admin-form-config__version-link { color: inherit; text-decoration: none; }
+.admin-form-config__version-link::after { content: ''; position: absolute; inset: 0; }
+.admin-form-config__version-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
+.admin-form-config__version-row td:last-child { position: relative; z-index: 1; }
 .admin-form-config__version-table time { white-space: nowrap; }
 .admin-form-config__version-table .admin-form-config__controls { flex-wrap: nowrap; white-space: nowrap; }
 .admin-form-config__version-table button { min-height: 36px; }

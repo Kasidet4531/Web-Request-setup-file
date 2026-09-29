@@ -24,7 +24,6 @@ type AdminFormConfigFeedbackValue = {
 
 export interface AdminFormConfigVersionSelectorProps {
   disabled: boolean
-  onSelect: (version: number) => void
   onDuplicate: (version: number) => void
   onDiscard: (version: number) => void
   onPublish: (version: number) => void
@@ -33,7 +32,6 @@ export interface AdminFormConfigVersionSelectorProps {
 
 export function AdminFormConfigVersionSelector({
   disabled,
-  onSelect,
   onDuplicate,
   onDiscard,
   onPublish,
@@ -48,13 +46,12 @@ export function AdminFormConfigVersionSelector({
           <thead><tr><th scope="col">Version</th><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col">Published</th><th scope="col">Actions</th></tr></thead>
           <tbody>{versions.map((version) => (
             <tr className={version.status === 'active' ? 'admin-form-config__version-row admin-form-config__version-row--active' : 'admin-form-config__version-row'} key={version.version}>
-              <th scope="row">v{version.version}</th>
+              <th scope="row">{disabled ? `v${version.version}` : <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ version: String(version.version) }} to="/admin/form-config/$version">v{version.version}</Link>}</th>
               <td>{version.title}</td>
               <td><span className={`admin-form-config__status admin-form-config__status--${version.status}`}>{version.status === 'published' ? 'Inactive' : version.status === 'active' ? 'Active' : 'Draft'}</span></td>
               <td><time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleDateString()}</time></td>
               <td>{version.publishedAt ? <time dateTime={version.publishedAt}>{new Date(version.publishedAt).toLocaleDateString()}</time> : '—'}</td>
               <td><div className="admin-form-config__controls">
-                <button aria-label={`${version.status === 'draft' ? 'Edit' : 'View'} version ${version.version}`} className="secondary-button" disabled={disabled} onClick={() => onSelect(version.version)} type="button">{version.status === 'draft' ? 'Edit' : 'View'}</button>
                 {version.status === 'draft' ? <>
                   <button aria-label={`Publish version ${version.version}`} className="primary-button" disabled={disabled} onClick={() => onPublish(version.version)} type="button">Publish</button>
                   <button aria-label={`Discard draft version ${version.version}`} className="secondary-button admin-form-config__danger" disabled={disabled} onClick={() => onDiscard(version.version)} type="button">Discard</button>
@@ -238,11 +235,6 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
     closeFieldEditor()
   }
 
-  function selectVersion(nextVersionNumber: number) {
-    if (busy || requestInFlight.current) return
-    void navigate({ to: '/admin/form-config/$version', params: { version: String(nextVersionNumber) } })
-  }
-
   function updateEditorText(nextEditorText: string) {
     if (busy || !editable) {
       return
@@ -356,7 +348,6 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
 
         {!loading && !isEditor && selectedVersion ? <AdminFormConfigVersionSelector
           disabled={busy}
-          onSelect={selectVersion}
           onDuplicate={(number) => void duplicateVersion(number)}
           onDiscard={(number) => void discardDraft(number)}
           onPublish={(number) => void publishDraft(number)}
