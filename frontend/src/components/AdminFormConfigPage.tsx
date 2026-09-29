@@ -35,7 +35,7 @@ export function AdminFormConfigVersionSelector({
   versions,
 }: AdminFormConfigVersionSelectorProps) {
   return (
-    <label className="admin-form-config__field" htmlFor="form-config-version">
+    <label className="admin-form-config__field admin-form-config__version" htmlFor="form-config-version">
       <span>Version</span>
       <select
         disabled={disabled || versions.length === 0}

@@ -390,6 +390,11 @@ button {
   height: 40px;
 }
 
+.admin-form-config__field > :is(input:not([type='checkbox']):not([type='radio']), select) {
+  min-width: 0;
+  height: 40px;
+}
+
 .input-base:focus,
 .dynamic-form__field input:focus,
 .dynamic-form__field select:focus,
@@ -1609,6 +1614,10 @@ input.input-with-clear {
   font-weight: 600;
   color: var(--foreground);
 }
+
+.admin-form-config__version { width: min(100%, 440px); }
+.admin-form-config__builder > .admin-form-config__field,
+.admin-form-config__section > .admin-form-config__field { width: min(100%, 680px); }
 
 .admin-form-config__field textarea {
   font-family: var(--font-mono);
