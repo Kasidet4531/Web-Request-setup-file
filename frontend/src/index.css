@@ -1151,6 +1151,24 @@ input.input-with-clear {
   accent-color: var(--accent);
 }
 
+.dynamic-form__sections .dynamic-form__radio-group {
+  display: grid;
+  gap: 6px;
+}
+
+.dynamic-form__sections .dynamic-form__radio-option {
+  align-items: flex-start;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+}
+
+.dynamic-form__sections .dynamic-form__radio-option input { flex: none; }
+.dynamic-form__sections .dynamic-form__radio-option span { min-width: 0; overflow-wrap: anywhere; }
+
 .dynamic-form__autofill-status {
   color: var(--accent);
   font-weight: 600;
@@ -1647,7 +1665,7 @@ input.input-with-clear {
 .admin-form-config__builder,
 .admin-form-config__section,
 .admin-form-config__fields,
-.admin-form-config__options {
+.admin-form-config__choice-list {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -1661,8 +1679,7 @@ input.input-with-clear {
 }
 
 .admin-form-config__section-top,
-.admin-form-config__controls,
-.admin-form-config__choice {
+.admin-form-config__controls {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1726,8 +1743,11 @@ input.input-with-clear {
 
 .admin-form-config__item-summary strong { font-size: 13px; overflow-wrap: anywhere; }
 .admin-form-config__item-summary span { color: var(--muted-foreground); font-size: 12px; }
-.admin-form-config__choice .admin-form-config__field { flex: 1; min-width: 150px; }
-.admin-form-config__choice { align-items: flex-end; }
+.admin-form-config__choice { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.admin-form-config__choice .admin-form-config__field { grid-template-columns: 64px minmax(0, 1fr); align-items: center; min-width: 0; }
+.admin-form-config__choice .dynamic-form__error { grid-column: 2; }
+.admin-form-config__choice > button { min-height: 40px; }
+.admin-form-config__choice-list > button { justify-self: start; }
 .admin-form-config__controls .secondary-button { min-height: 36px; }
 .admin-form-config__key { color: var(--muted-foreground); }
 .admin-form-config__add-field,
@@ -1790,7 +1810,7 @@ input.input-with-clear {
 .admin-form-config__modal-actions { flex-wrap: wrap; align-items: center; padding-top: 16px; border-top: 1px solid var(--border); }
 .admin-form-config__modal-actions .admin-form-config__actions { margin-left: auto; }
 .admin-form-config__danger { color: var(--destructive); }
-.admin-form-config__field-dialog .admin-form-config__options { gap: 12px; }
+.admin-form-config__field-dialog .admin-form-config__choice-list { gap: 12px; }
 .admin-form-config__field-dialog .admin-form-config__options legend { margin-bottom: 12px; }
 
 @media (max-width: 640px) {

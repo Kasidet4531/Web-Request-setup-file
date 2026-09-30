@@ -91,6 +91,20 @@ describe('visual form configuration editor', () => {
     expect((onChange.mock.calls[4][0] as FormSchemaField).options).toEqual(['Low', 'High'])
   })
 
+  it('keeps the Choices heading above a separate list of labeled choice rows', () => {
+    const tree = fieldEditor(schema.sections[0].fields[1])
+    const group = find(tree, (element) => element.type === 'fieldset')
+    const list = find(group, (element) => element.props.className === 'admin-form-config__choice-list')
+    const html = renderToStaticMarkup(tree)
+    expect(html.indexOf('<legend>Choices</legend>')).toBeLessThan(html.indexOf('admin-form-config__choice-list'))
+    expect(find(list, (element) => element.props['aria-label'] === 'Add choice to Priority').type).toBe('button')
+    expect(html).toContain('for="form-config-option-0"')
+    expect(html).toContain('Choice 1')
+    expect(html).toContain('Choice 2')
+    const single = fieldEditor({ ...schema.sections[0].fields[1], options: ['Only choice'] })
+    expect(find(single, (element) => element.props['aria-label'] === 'Remove choice 1 from Priority').props.disabled).toBe(true)
+  })
+
   it('adds and removes choices in the dialog without affecting another field', () => {
     const onChange = vi.fn()
     let tree = fieldEditor(schema.sections[0].fields[1], onChange)

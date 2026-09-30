@@ -152,22 +152,24 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
       {choiceField ? (
         <fieldset className="admin-form-config__options">
           <legend>Choices</legend>
-          {(field.options ?? []).map((option, index) => (
-            <div className="admin-form-config__choice" key={index}>
-              <label className="admin-form-config__field" htmlFor={`form-config-option-${index}`}>
-                <span>Choice {index + 1}</span>
-                <input aria-describedby={!option.trim() ? `form-config-option-${index}-error` : undefined} aria-invalid={!option.trim()} id={`form-config-option-${index}`} onChange={(event) => edit((draft) => { draft.options![index] = event.target.value })} value={option} />
-                {!option.trim() ? <small className="dynamic-form__error" id={`form-config-option-${index}-error`}>Enter a choice.</small> : null}
-              </label>
-              <button aria-label={`Remove choice ${index + 1} from ${field.label || field.fieldKey}`} className="secondary-button" disabled={field.options?.length === 1} onClick={() => edit((draft) => { draft.options!.splice(index, 1) })} type="button">Remove</button>
-            </div>
-          ))}
-          <button aria-label={`Add choice to ${field.label || field.fieldKey}`} className="secondary-button" onClick={() => edit((draft) => {
-            const options = draft.options ?? (draft.options = [])
-            let number = options.length + 1
-            while (options.includes(`Option ${number}`)) number += 1
-            options.push(`Option ${number}`)
-          })} type="button">+ Add choice</button>
+          <div className="admin-form-config__choice-list">
+            {(field.options ?? []).map((option, index) => (
+              <div className="admin-form-config__choice" key={index}>
+                <label className="admin-form-config__field" htmlFor={`form-config-option-${index}`}>
+                  <span>Choice {index + 1}</span>
+                  <input aria-describedby={!option.trim() ? `form-config-option-${index}-error` : undefined} aria-invalid={!option.trim()} id={`form-config-option-${index}`} onChange={(event) => edit((draft) => { draft.options![index] = event.target.value })} value={option} />
+                  {!option.trim() ? <small className="dynamic-form__error" id={`form-config-option-${index}-error`}>Enter a choice.</small> : null}
+                </label>
+                <button aria-label={`Remove choice ${index + 1} from ${field.label || field.fieldKey}`} className="secondary-button" disabled={field.options?.length === 1} onClick={() => edit((draft) => { draft.options!.splice(index, 1) })} type="button">Remove</button>
+              </div>
+            ))}
+            <button aria-label={`Add choice to ${field.label || field.fieldKey}`} className="secondary-button" onClick={() => edit((draft) => {
+              const options = draft.options ?? (draft.options = [])
+              let number = options.length + 1
+              while (options.includes(`Option ${number}`)) number += 1
+              options.push(`Option ${number}`)
+            })} type="button">+ Add choice</button>
+          </div>
         </fieldset>
       ) : null}
       <small className="admin-form-config__key">Key: {field.fieldKey}</small>
