@@ -20,6 +20,11 @@ import {
   FormSchemaService,
 } from '../admin/form_schema.service';
 import {
+  PSF_CREATED_INFORMATION_FORM_KEY,
+  PSF_CREATED_INFORMATION_SCHEMA,
+  resolvePsfCreatedInformationSchema,
+} from '../admin/form_schema.constants';
+import {
   MANUAL_WORKFLOW_STATUSES,
   WorkflowTransitionService,
 } from '../admin/workflow_transition.service';
@@ -60,91 +65,7 @@ export function canActorViewPsfCreatedData(
   );
 }
 
-export const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
-  formKey: 'psf-created-information',
-  version: 1,
-  title: 'PSF Created Information',
-  sections: [
-    {
-      sectionKey: 'psf_created_information',
-      title: 'PSF Created Information',
-      fields: [
-        {
-          fieldKey: 'first_die_ref_xy',
-          canonicalKey: 'first_die_ref_xy',
-          label: 'First Die Ref. (X,Y)',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'probe_coordinate_quadrant',
-          canonicalKey: 'probe_coordinate_quadrant',
-          label: 'Probe & Coordinate Quadrant',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'wafer_id_format',
-          canonicalKey: 'wafer_id_format',
-          label: 'Wafer ID Format',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'mirror_die_available',
-          canonicalKey: 'mirror_die_available',
-          label: 'Mirror Die Available',
-          type: 'select',
-          required: false,
-          options: ['Yes', 'No'],
-        },
-        {
-          fieldKey: 'prepare_fpc_and_physical_wafer_to_psf_cabinet_e2',
-          canonicalKey: 'prepare_fpc_and_physical_wafer_to_psf_cabinet_e2',
-          label: 'Prepare FPC & Physical Wafer to PSF Cabinet E2',
-          type: 'select',
-          required: false,
-          options: ['Yes', 'No'],
-        },
-        {
-          fieldKey: 'psf_setup_file_name',
-          canonicalKey: 'psf_setup_file_name',
-          label: 'PSF Setup File Name',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'job_file_name',
-          canonicalKey: 'job_file_name',
-          label: 'Job File Name',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'template',
-          canonicalKey: 'template',
-          label: 'Template',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'layout',
-          canonicalKey: 'layout',
-          label: 'Layout',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'attachment_reference',
-          canonicalKey: 'attachment_reference',
-          label: 'Attachment Reference',
-          type: 'text',
-          required: false,
-        },
-      ],
-    },
-  ],
-};
+export { PSF_CREATED_INFORMATION_SCHEMA };
 
 export type RequesterData = Record<string, unknown>;
 
@@ -229,6 +150,7 @@ interface PsfRequestRow {
   requester_data_json: RequesterData;
   psf_created_data_json: RequesterData;
   schema_snapshot_json: FormSchemaJson;
+  psf_created_schema_snapshot_json?: FormSchemaJson | null;
   created_at: Date | string;
   updated_at: Date | string;
   updated_at_version?: string;
@@ -268,6 +190,11 @@ export class RequestsService implements OnModuleInit {
     );
 
     return this.withTransaction(async (client) => {
+      const psfCreatedSchema =
+        await this.formSchemaService.getActiveSchemaForUpdate(
+          PSF_CREATED_INFORMATION_FORM_KEY,
+          client,
+        );
       const requestNo = await this.nextDraftRequestNo(client);
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -284,10 +211,11 @@ export class RequestsService implements OnModuleInit {
             requester_data_json,
             psf_created_data_json,
             schema_snapshot_json,
+            psf_created_schema_snapshot_json,
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -301,6 +229,7 @@ export class RequestsService implements OnModuleInit {
           productType,
           requesterData,
           activeSchema.schema,
+          psfCreatedSchema.schema,
         ],
       );
 
@@ -648,12 +577,20 @@ export class RequestsService implements OnModuleInit {
     this.assertCanEditPsfCreatedData(dto.actor);
 
     const current = await this.pool.query<
-      Pick<PsfRequestRow, 'id' | 'status' | 'updated_at' | 'updated_at_version'>
+      Pick<
+        PsfRequestRow,
+        | 'id'
+        | 'status'
+        | 'updated_at'
+        | 'updated_at_version'
+        | 'psf_created_schema_snapshot_json'
+      >
     >(
       `
         SELECT id,
                status,
                updated_at,
+               psf_created_schema_snapshot_json,
                ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         FROM psf_requests
         WHERE id = $1
@@ -687,6 +624,9 @@ export class RequestsService implements OnModuleInit {
 
     const psfCreatedData = this.normalizePsfCreatedDataToSchema(
       dto.psfCreatedData,
+      resolvePsfCreatedInformationSchema(
+        request.psf_created_schema_snapshot_json,
+      ),
     );
     const actorName =
       dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
@@ -727,10 +667,21 @@ export class RequestsService implements OnModuleInit {
   ): Promise<PsfRequestResponse> {
     return this.withTransaction(async (client) => {
       const current = await client.query<
-        Pick<PsfRequestRow, 'id' | 'status' | 'requester_user_id'>
+        Pick<
+          PsfRequestRow,
+          | 'id'
+          | 'status'
+          | 'requester_user_id'
+          | 'psf_created_data_json'
+          | 'psf_created_schema_snapshot_json'
+        >
       >(
         `
-          SELECT id, status, requester_user_id
+          SELECT id,
+                 status,
+                 requester_user_id,
+                 psf_created_data_json,
+                 psf_created_schema_snapshot_json
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -751,6 +702,18 @@ export class RequestsService implements OnModuleInit {
         dto.status,
         client,
       );
+
+      if (
+        dto.status === PSF_CREATED_STATUS &&
+        currentRequest.status !== PSF_CREATED_STATUS
+      ) {
+        this.assertRequiredPsfCreatedFieldsPresent(
+          resolvePsfCreatedInformationSchema(
+            currentRequest.psf_created_schema_snapshot_json,
+          ),
+          currentRequest.psf_created_data_json ?? {},
+        );
+      }
 
       const actorName =
         dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
@@ -1176,6 +1139,7 @@ export class RequestsService implements OnModuleInit {
         requester_data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         psf_created_data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         schema_snapshot_json JSONB NOT NULL,
+        psf_created_schema_snapshot_json JSONB NULL,
         created_at TIMESTAMP NOT NULL,
         updated_at TIMESTAMP NOT NULL,
         submitted_at TIMESTAMP,
@@ -1187,6 +1151,11 @@ export class RequestsService implements OnModuleInit {
     await queryRunner.query(`
       ALTER TABLE psf_requests
       ADD COLUMN IF NOT EXISTS requester_user_id UUID
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE psf_requests
+      ADD COLUMN IF NOT EXISTS psf_created_schema_snapshot_json JSONB NULL
     `);
 
     await queryRunner.query(`
@@ -1263,26 +1232,49 @@ export class RequestsService implements OnModuleInit {
 
   private normalizePsfCreatedDataToSchema(
     psfCreatedData: RequesterData,
+    schema: FormSchemaJson,
   ): RequesterData {
+    const fields = new Map(
+      schema.sections.flatMap((section) =>
+        section.fields.map((field) => [field.fieldKey, field] as const),
+      ),
+    );
     const nextData: RequesterData = {};
 
-    PSF_CREATED_INFORMATION_SCHEMA.sections.forEach((section) => {
-      section.fields.forEach((field) => {
-        if (!Object.hasOwn(psfCreatedData, field.fieldKey)) {
-          return;
-        }
+    for (const [fieldKey, rawValue] of Object.entries(psfCreatedData)) {
+      const field = fields.get(fieldKey);
+      if (!field) {
+        throw new BadRequestException(
+          `Unknown PSF Created Information field: ${fieldKey}.`,
+        );
+      }
+      if (rawValue === null || rawValue === undefined) continue;
+      if (typeof rawValue !== 'string') {
+        throw new BadRequestException(`${field.label} must be a string.`);
+      }
 
-        const value = this.normalizeString(psfCreatedData[field.fieldKey]);
-        if (
-          value === null ||
-          (field.options && !field.options.includes(value))
-        ) {
-          return;
-        }
-
-        nextData[field.fieldKey] = value;
+      const value = rawValue.trim();
+      if (!value) continue;
+      if (field.type === 'date' && !this.isValidPsfCreatedCalendarDate(value)) {
+        throw new BadRequestException(
+          `${field.label} must be a valid ISO calendar date.`,
+        );
+      }
+      if (
+        (field.type === 'select' || field.type === 'radio') &&
+        !field.options?.includes(value)
+      ) {
+        throw new BadRequestException(
+          `${field.label} must be one of the configured options.`,
+        );
+      }
+      Object.defineProperty(nextData, fieldKey, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
       });
-    });
+    }
 
     return nextData;
   }
@@ -1330,6 +1322,47 @@ export class RequestsService implements OnModuleInit {
         `Draft request is missing required fields for the active schema: ${missingLabels.join(', ')}`,
       );
     }
+  }
+
+  private assertRequiredPsfCreatedFieldsPresent(
+    schema: FormSchemaJson,
+    psfCreatedData: RequesterData,
+  ): void {
+    const missingLabels = schema.sections.flatMap((section) =>
+      section.fields
+        .filter((field) => {
+          const value = Object.hasOwn(psfCreatedData, field.fieldKey)
+            ? psfCreatedData[field.fieldKey]
+            : undefined;
+          return (
+            field.required &&
+            (typeof value !== 'string' ||
+              value.trim().length === 0 ||
+              ((field.type === 'select' || field.type === 'radio') &&
+                !field.options?.includes(value.trim())) ||
+              (field.type === 'date' &&
+                !this.isValidPsfCreatedCalendarDate(value.trim())))
+          );
+        })
+        .map((field) => field.label),
+    );
+
+    if (missingLabels.length > 0) {
+      throw new BadRequestException(
+        `PSF Created Information is missing required fields: ${missingLabels.join(', ')}.`,
+      );
+    }
+  }
+
+  private isValidPsfCreatedCalendarDate(value: string): boolean {
+    const normalizedValue = value.trim();
+    const parsedDate = new Date(`${normalizedValue}T00:00:00.000Z`);
+
+    return (
+      /^\d{4}-\d{2}-\d{2}$/.test(normalizedValue) &&
+      !Number.isNaN(parsedDate.getTime()) &&
+      parsedDate.toISOString().slice(0, 10) === normalizedValue
+    );
   }
 
   private hasSubmittedValue(value: unknown): boolean {
@@ -1380,7 +1413,9 @@ export class RequestsService implements OnModuleInit {
         : {},
       psfCreatedDataVisible,
       canEditPsfCreatedData: this.canActorEditPsfCreatedData(row.status, actor),
-      psfCreatedInformationSchema: PSF_CREATED_INFORMATION_SCHEMA,
+      psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
+        row.psf_created_schema_snapshot_json,
+      ),
       schemaSnapshot: row.schema_snapshot_json,
       createdAt: this.serializeTimestamp(row.created_at),
       updatedAt:

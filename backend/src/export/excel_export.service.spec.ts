@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { PayloadTooLargeException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { FormSchemaService } from '../admin/form_schema.service';
+import { LEGACY_PSF_CREATED_INFORMATION_SCHEMA } from '../admin/form_schema.constants';
 import { SearchIndexService } from '../requests/search-index.service';
 import {
   ExcelExportService,
@@ -50,20 +51,28 @@ describe('ExcelExportService', () => {
       ),
     };
     formSchemaService = {
-      getActiveSchema: jest.fn().mockResolvedValue({
-        formKey: 'psf-request',
-        version: 1,
-        title: 'PSF Request Form',
-        description: null,
-        status: 'active',
-        publishedAt: null,
-        schema: {
-          formKey: 'psf-request',
+      getActiveSchema: jest.fn().mockImplementation((formKey: string) =>
+        Promise.resolve({
+          formKey,
           version: 1,
-          title: 'PSF Request Form',
-          sections: [],
-        },
-      }),
+          title:
+            formKey === 'psf-request'
+              ? 'PSF Request Form'
+              : 'PSF Created Information',
+          description: null,
+          status: 'active',
+          publishedAt: null,
+          schema:
+            formKey === 'psf-request'
+              ? {
+                  formKey,
+                  version: 1,
+                  title: 'PSF Request Form',
+                  sections: [],
+                }
+              : LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+        }),
+      ),
     };
     service = Reflect.construct(ExcelExportService, [
       searchIndexService,
@@ -119,6 +128,9 @@ describe('ExcelExportService', () => {
     );
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
+    );
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-created-information',
     );
   });
 
@@ -378,6 +390,160 @@ describe('ExcelExportService', () => {
     expect(searchIndexService.serializeCanonicalValue).toHaveBeenCalledWith([]);
     expect(searchIndexService.serializeCanonicalValue).toHaveBeenCalledWith(
       null,
+    );
+  });
+
+  it('exports active PSF fields first and retains historic fields by canonical identity', async () => {
+    const requesterSchema = {
+      formKey: 'psf-request',
+      version: 10,
+      title: 'PSF Request Form',
+      sections: [],
+    };
+    const activePsfSchema = {
+      formKey: 'psf-created-information',
+      version: 8,
+      title: 'Current PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'current',
+          title: 'Current fields',
+          fields: [
+            {
+              fieldKey: 'setup_file_name_v8',
+              canonicalKey: 'psf_setup_file_name',
+              label: 'Current Setup File',
+              type: 'text' as const,
+              required: false,
+            },
+            {
+              fieldKey: 'new_active_field',
+              canonicalKey: 'new_active_field',
+              label: 'New Active Field',
+              type: 'text' as const,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    const historicalSchema = {
+      formKey: 'psf-created-information',
+      version: 3,
+      title: 'Historical PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'historic',
+          title: 'Historic fields',
+          fields: [
+            {
+              fieldKey: 'old_setup_file_name',
+              canonicalKey: 'psf_setup_file_name',
+              label: 'Old Setup File',
+              type: 'text' as const,
+              required: false,
+            },
+            {
+              fieldKey: 'deleted_field',
+              canonicalKey: 'deleted_field',
+              label: 'Removed From Current',
+              type: 'text' as const,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    formSchemaService.getActiveSchema.mockImplementation((formKey: string) => ({
+      formKey,
+      version: formKey === 'psf-request' ? 10 : 8,
+      title:
+        formKey === 'psf-request'
+          ? requesterSchema.title
+          : activePsfSchema.title,
+      description: null,
+      status: 'active',
+      publishedAt: null,
+      schema: formKey === 'psf-request' ? requesterSchema : activePsfSchema,
+    }));
+    searchIndexService.queryExportRequests.mockResolvedValueOnce({
+      items: [
+        {
+          requestId: 'request-old',
+          requestNo: 'PSF-OLD',
+          status: 'PSF Created',
+          requester: 'Requester Demo',
+          setupOwner: 'Setup Owner Demo',
+          setupOwnerRole: 'GNTC',
+          productType: 'New Product',
+          requestDate: '2026-06-18T01:02:03.000Z',
+          updatedAt: '2026-06-18T01:05:03.000Z',
+          requesterData: {},
+          psfCreatedData: {
+            old_setup_file_name: 'historical.psf',
+            deleted_field: 'still exported',
+          },
+          psfCreatedInformationSchema: historicalSchema,
+          schemaSnapshot: requesterSchema,
+          canonicalValues: {},
+        },
+        {
+          requestId: 'request-legacy',
+          requestNo: 'PSF-LEGACY',
+          status: 'PSF Created',
+          requester: 'Requester Demo',
+          setupOwner: 'Setup Owner Demo',
+          setupOwnerRole: 'GNTC',
+          productType: 'New Product',
+          requestDate: '2026-06-19T01:02:03.000Z',
+          updatedAt: '2026-06-19T01:05:03.000Z',
+          requesterData: {},
+          psfCreatedData: { psf_setup_file_name: 'legacy.psf' },
+          psfCreatedInformationSchema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+          schemaSnapshot: requesterSchema,
+          canonicalValues: {},
+        },
+      ],
+      total: 2,
+      limit: 2000,
+      offset: 0,
+    });
+
+    const result = await service.exportRequests({}, adminActor);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
+    const worksheet = workbook.getWorksheet('PSF Requests');
+    if (!worksheet) throw new Error('Expected PSF Requests worksheet');
+    const headers = Array.from(
+      { length: worksheet.columnCount },
+      (_, index) => worksheet.getRow(1).getCell(index + 1).value,
+    );
+    const psfHeaders = headers.slice(6);
+
+    expect(psfHeaders.slice(0, 3)).toEqual([
+      'Current Setup File',
+      'New Active Field',
+      'Removed From Current',
+    ]);
+    expect(
+      psfHeaders.filter((header) => header === 'Current Setup File'),
+    ).toHaveLength(1);
+    expect(
+      worksheet.getRow(2).getCell(headers.indexOf('Current Setup File') + 1)
+        .value,
+    ).toBe('historical.psf');
+    expect(
+      worksheet.getRow(2).getCell(headers.indexOf('Removed From Current') + 1)
+        .value,
+    ).toBe('still exported');
+    expect(
+      worksheet.getRow(3).getCell(headers.indexOf('Current Setup File') + 1)
+        .value,
+    ).toBe('legacy.psf');
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-created-information',
     );
   });
 

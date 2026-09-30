@@ -22,6 +22,27 @@ const requesterActor = {
   setupOwnerDepartment: null,
 };
 
+const psfCreatedSchemaSnapshot = {
+  formKey: 'psf-created-information',
+  version: 4,
+  title: 'PSF Created Information v4',
+  sections: [
+    {
+      sectionKey: 'setup',
+      title: 'Setup',
+      fields: [
+        {
+          fieldKey: 'file_name_v4',
+          canonicalKey: 'file_name',
+          label: 'PSF Setup File Name',
+          type: 'text' as const,
+          required: true,
+        },
+      ],
+    },
+  ],
+};
+
 const oldSchema = {
   formKey: 'psf-request',
   version: 3,
@@ -112,6 +133,7 @@ const lockedDraft = {
     product_type: 'Existing Product',
     requester_name: 'Client supplied name',
   },
+  psf_created_schema_snapshot_json: psfCreatedSchemaSnapshot,
   schema_snapshot_json: oldSchema,
 };
 
@@ -244,6 +266,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
       formVersion: activeSchema.version,
       id: lockedDraft.id,
       requesterData: upgradedRow.requester_data_json,
+      psfCreatedInformationSchema: psfCreatedSchemaSnapshot,
       schemaSnapshot: activeSchema.schema,
       status: 'Draft',
     });
@@ -273,6 +296,10 @@ describe('RequestsService explicit draft schema upgrade', () => {
         lockedDraft.form_version,
       ],
     );
+    const updateCall = dbClient.query.mock.calls[2] as
+      | [string, unknown[]?]
+      | undefined;
+    expect(updateCall?.[0]).not.toContain('psf_created_schema_snapshot_json');
     expect(auditLogService.record).toHaveBeenCalledWith(
       {
         requestId: lockedDraft.id,
