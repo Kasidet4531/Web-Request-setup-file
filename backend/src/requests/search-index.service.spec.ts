@@ -1,4 +1,5 @@
 import { FormSchemaJson } from '../admin/form_schema.service';
+import { LEGACY_PSF_CREATED_INFORMATION_SCHEMA } from '../admin/form_schema.constants';
 import { SearchIndexService } from './search-index.service';
 
 const schema: FormSchemaJson = {
@@ -309,6 +310,7 @@ describe('SearchIndexService canonical extraction', () => {
           updated_at: new Date('2026-06-18T01:05:03.000Z'),
           requester_data_json: { legacy_title: 'Legacy title' },
           psf_created_data_json: { psf_setup_file_name: 'final.psf' },
+          psf_created_schema_snapshot_json: null,
           schema_snapshot_json: {
             formKey: 'psf-request',
             version: 1,
@@ -338,6 +340,7 @@ describe('SearchIndexService canonical extraction', () => {
         items: Array<{
           requestId: string;
           canonicalValues: Record<string, unknown> | null;
+          psfCreatedInformationSchema: FormSchemaJson;
         }>;
         total: number;
         limit: number;
@@ -361,6 +364,7 @@ describe('SearchIndexService canonical extraction', () => {
         {
           requestId: 'request-1',
           canonicalValues: { title: 'Current title' },
+          psfCreatedInformationSchema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
         },
       ],
       total: 1,
@@ -377,6 +381,7 @@ describe('SearchIndexService canonical extraction', () => {
     expect(query).toContain('canonical_submission_values');
     expect(query).toContain('requester_data_json');
     expect(query).toContain('schema_snapshot_json');
+    expect(query).toContain('psf_created_schema_snapshot_json');
     expect(query).toContain('requester_user_id = $2');
   });
 
@@ -400,6 +405,60 @@ describe('SearchIndexService canonical extraction', () => {
     ]);
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).not.toContain('requester_user_id = $');
+  });
+
+  it('returns the stored PSF Created Information descriptor in each export record', async () => {
+    const storedSchema: FormSchemaJson = {
+      formKey: 'psf-created-information',
+      version: 5,
+      title: 'Historical PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'historic',
+          title: 'Historic fields',
+          fields: [
+            {
+              fieldKey: 'legacy_setup_name',
+              canonicalKey: 'setup_name',
+              label: 'Legacy Setup Name',
+              type: 'text',
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          request_id: 'request-1',
+          request_no: 'PSF-0001',
+          status: 'PSF Created',
+          requester: 'Requester Demo',
+          setup_owner: 'Setup Owner Demo',
+          setup_owner_role: 'GNTC',
+          product_type: 'New Product',
+          request_date: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:05:03.000Z'),
+          requester_data_json: {},
+          psf_created_data_json: { legacy_setup_name: 'old.psf' },
+          psf_created_schema_snapshot_json: storedSchema,
+          schema_snapshot_json: schema,
+          canonical_values_json: null,
+          total_count: 1,
+        },
+      ],
+    });
+
+    const result = await service.queryExportRequests(
+      {},
+      { id: 'admin-1', role: 'admin' },
+    );
+
+    expect(result.items[0]).toMatchObject({
+      psfCreatedData: { legacy_setup_name: 'old.psf' },
+      psfCreatedInformationSchema: storedSchema,
+    });
   });
 
   it('counts an export through the same status, date, and requester ownership scope without loading rows', async () => {

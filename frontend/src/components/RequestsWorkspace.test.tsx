@@ -9,6 +9,7 @@ import {
 import * as RequestsWorkspace from './RequestsWorkspace'
 import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
 import { ApiError, type PsfRequestResponse } from '../services/api'
+import { DynamicFormRenderer } from './DynamicFormRenderer'
 
 const requestDetailApi = vi.hoisted(() => ({
   fetchPsfRequest: vi.fn(),
@@ -464,6 +465,42 @@ describe('PsfCreatedInformationPanel', () => {
     expect(html).not.toContain('available read-only')
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*>/)
     expect(html).not.toContain('Save PSF Created Information')
+  })
+
+  it('renders custom returned PSF fields and permits partial editable saves without client validation', () => {
+    const panel = getPsfCreatedInformationPanel()
+    if (!panel) return
+    const request: PsfRequestResponse = {
+      ...buildSubmittedRequest(),
+      status: 'Setup In Progress',
+      psfCreatedDataVisible: true,
+      canEditPsfCreatedData: true,
+      psfCreatedInformationSchema: {
+        formKey: 'psf-created-information',
+        version: 7,
+        title: 'Created details',
+        sections: [{
+          sectionKey: 'created_details',
+          title: 'Created details',
+          fields: [
+            { fieldKey: 'custom_lot_ref', canonicalKey: 'custom_lot_ref', label: 'Custom lot reference', type: 'text' as const, required: true },
+            { fieldKey: 'review_lane', canonicalKey: 'review_lane', label: 'Review lane', type: 'radio' as const, required: false, options: ['A', 'B'] },
+          ],
+        }],
+      },
+    }
+    const onSave = vi.fn()
+    const element = panel({ request, values: {}, saving: false, onChange: vi.fn(), onSave })
+    const renderer = requireRenderedElement(element, (candidate) => candidate.type === DynamicFormRenderer)
+    const html = renderToStaticMarkup(element)
+
+    expect(html).toContain('Custom lot reference')
+    expect(html).toContain('dynamic-form__radio-group')
+    expect(html).not.toContain('dynamic-form__product-type')
+    expect(html).toContain('noValidate=""')
+    expect(renderer.props.readOnly).toBe(false)
+    ;(renderer.props.onSubmit as (values: Record<string, string>) => void)({})
+    expect(onSave).toHaveBeenCalledWith({})
   })
 })
 

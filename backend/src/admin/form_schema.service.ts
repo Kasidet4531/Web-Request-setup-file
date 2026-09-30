@@ -10,31 +10,21 @@ import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
 import { DATABASE_POOL } from '../database/database.service';
+import {
+  DEFAULT_PSF_REQUEST_SCHEMA,
+  LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+  PSF_REQUEST_FORM_KEY,
+  SUPPORTED_FORM_KEYS,
+  type FormSchemaField,
+  type FormSchemaJson,
+  type FormSchemaSection,
+} from './form_schema.constants';
 
-export interface FormSchemaField {
-  fieldKey: string;
-  canonicalKey: string;
-  label: string;
-  type: 'text' | 'textarea' | 'date' | 'select' | 'radio';
-  required: boolean;
-  options?: string[];
-  searchable?: boolean;
-  exportable?: boolean;
-  autofillTrigger?: boolean;
-}
-
-export interface FormSchemaSection {
-  sectionKey: string;
-  title: string;
-  fields: FormSchemaField[];
-}
-
-export interface FormSchemaJson {
-  formKey: string;
-  version: number;
-  title: string;
-  sections: FormSchemaSection[];
-}
+export type {
+  FormSchemaField,
+  FormSchemaJson,
+  FormSchemaSection,
+} from './form_schema.constants';
 
 export interface ActiveFormSchemaResponse {
   formKey: string;
@@ -83,7 +73,6 @@ interface FormDefinitionRow {
   published_at: Date | string | null;
 }
 
-const PSF_REQUEST_FORM_KEY = 'psf-request';
 const FORM_SCHEMA_STATUSES = new Set<FormSchemaStatus>([
   'active',
   'draft',
@@ -95,6 +84,11 @@ const SUPPORTED_FIELD_TYPES = new Set<FormSchemaField['type']>([
   'date',
   'select',
   'radio',
+]);
+const UNSAFE_SCHEMA_IDENTITY_KEYS = new Set([
+  ...Object.getOwnPropertyNames(Object.prototype),
+  '__proto__',
+  'prototype',
 ]);
 
 type QueryRunner = Pick<PoolClient, 'query'>;
@@ -112,122 +106,19 @@ function hasRestrictedLegacySection(section: unknown): boolean {
   );
 }
 
-const DEFAULT_PSF_REQUEST_SCHEMA: FormSchemaJson = {
-  formKey: PSF_REQUEST_FORM_KEY,
-  version: 1,
-  title: 'PSF Request Form',
-  sections: [
-    {
-      sectionKey: 'requester_information',
-      title: 'Requester Information',
-      fields: [
-        {
-          fieldKey: 'product_type',
-          canonicalKey: 'product_type',
-          label: 'Product Type',
-          type: 'radio',
-          required: true,
-          options: ['New Product', 'Transfer Product', 'Existing Product'],
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'title',
-          canonicalKey: 'title',
-          label: 'Title',
-          type: 'text',
-          required: true,
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'requester_name',
-          canonicalKey: 'requester',
-          label: 'Requester Name',
-          type: 'text',
-          required: true,
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'due_date',
-          canonicalKey: 'due_date',
-          label: 'Due Date',
-          type: 'date',
-          required: true,
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'priority',
-          canonicalKey: 'priority',
-          label: 'Priority',
-          type: 'select',
-          required: true,
-          options: ['Low', 'Normal', 'High', 'Urgent'],
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'product',
-          canonicalKey: 'product',
-          label: 'Product',
-          type: 'text',
-          required: true,
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'wafer_fab',
-          canonicalKey: 'wafer_fab',
-          label: 'Wafer FAB',
-          type: 'text',
-          required: true,
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'probecard_name',
-          canonicalKey: 'probecard_name',
-          label: 'Probecard Name',
-          type: 'text',
-          required: true,
-          searchable: true,
-          exportable: true,
-        },
-        {
-          fieldKey: 'reference_psf_name',
-          canonicalKey: 'reference_psf_name',
-          label: 'Reference PSF Name',
-          type: 'text',
-          required: false,
-          searchable: true,
-          exportable: true,
-          autofillTrigger: true,
-        },
-        {
-          fieldKey: 'request_note',
-          canonicalKey: 'request_note',
-          label: 'Request Note',
-          type: 'textarea',
-          required: false,
-          exportable: true,
-        },
-      ],
-    },
-  ],
-};
-
 @Injectable()
 export class FormSchemaService implements OnModuleInit {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
 
   async onModuleInit(): Promise<void> {
     await this.ensureFormDefinitionsStorage();
-    await this.seedDefaultActivePsfRequestSchema();
+    await this.seedDefaultActiveSchemas();
   }
 
-  async getActiveSchema(formKey: string): Promise<ActiveFormSchemaResponse> {
+  async getActiveSchema(
+    formKey: string = PSF_REQUEST_FORM_KEY,
+  ): Promise<ActiveFormSchemaResponse> {
+    this.assertSupportedFormKey(formKey);
     const result = await this.pool.query<FormDefinitionRow>(
       `
         SELECT form_key, version, title, description, status, schema_json, published_at
@@ -261,11 +152,8 @@ export class FormSchemaService implements OnModuleInit {
     formKey: string,
     client: QueryRunner,
   ): Promise<ActiveFormSchemaResponse> {
-    if (formKey !== PSF_REQUEST_FORM_KEY) {
-      throw new NotFoundException(`No active form schema found for ${formKey}`);
-    }
-
-    const lockedRows = await this.lockManagedForm(client);
+    this.assertSupportedFormKey(formKey);
+    const lockedRows = await this.lockManagedForm(client, formKey);
     const activeSchema = lockedRows.find((row) => row.status === 'active');
 
     if (!activeSchema) {
@@ -284,7 +172,10 @@ export class FormSchemaService implements OnModuleInit {
     };
   }
 
-  async listVersions(): Promise<FormSchemaVersionListResponse> {
+  async listVersions(
+    formKey: string = PSF_REQUEST_FORM_KEY,
+  ): Promise<FormSchemaVersionListResponse> {
+    this.assertSupportedFormKey(formKey);
     const result = await this.pool.query<FormDefinitionRow>(
       `
         SELECT
@@ -301,17 +192,17 @@ export class FormSchemaService implements OnModuleInit {
         WHERE form_key = $1
         ORDER BY version DESC
       `,
-      [PSF_REQUEST_FORM_KEY],
+      [formKey],
     );
 
     if (result.rows.length === 0) {
       throw new NotFoundException(
-        `No form schema versions found for ${PSF_REQUEST_FORM_KEY}`,
+        `No form schema versions found for ${formKey}`,
       );
     }
 
     return {
-      formKey: PSF_REQUEST_FORM_KEY,
+      formKey,
       versions: result.rows.map((row) => this.toVersionResponse(row)),
     };
   }
@@ -319,16 +210,18 @@ export class FormSchemaService implements OnModuleInit {
   async saveDraft(
     dto: SaveFormSchemaDraftDto,
     actor: AuthenticatedUserProfile,
+    formKey: string = PSF_REQUEST_FORM_KEY,
   ): Promise<FormSchemaVersionResponse> {
-    const normalizedDto = this.assertDraftInput(dto);
+    this.assertSupportedFormKey(formKey);
+    const normalizedDto = this.assertDraftInput(dto, formKey);
     this.getActorUsername(actor);
 
     return this.withTransaction(async (client) => {
-      const lockedRows = await this.lockManagedForm(client);
+      const lockedRows = await this.lockManagedForm(client, formKey);
       const draftRows = lockedRows.filter((row) => row.status === 'draft');
       if (draftRows.length > 1) {
         throw new ConflictException(
-          'Multiple draft schema versions exist for the managed form.',
+          `Multiple draft schema versions exist for ${formKey}.`,
         );
       }
 
@@ -343,7 +236,12 @@ export class FormSchemaService implements OnModuleInit {
       }
       this.assertNoRestrictedLegacySections(existingDraft.schema_json.sections);
       const version = existingDraft.version;
-      const schema = this.normalizeDraftSchema(normalizedDto.schema, version);
+      const schema = this.normalizeDraftSchema(
+        normalizedDto.schema,
+        version,
+        formKey,
+      );
+      this.assertRuntimeSafeSchema(schema, version, schema.title, formKey);
       const description = normalizedDto.description ?? null;
 
       const result = await client.query<FormDefinitionRow>(
@@ -353,7 +251,7 @@ export class FormSchemaService implements OnModuleInit {
           WHERE form_key = $4 AND version = $5 AND status = 'draft'
           RETURNING form_key, version, title, description, status, schema_json, created_by, created_at, published_at
         `,
-        [schema.title, description, schema, PSF_REQUEST_FORM_KEY, version],
+        [schema.title, description, schema, formKey, version],
       );
       if (!result.rows[0])
         throw new ConflictException(
@@ -366,11 +264,13 @@ export class FormSchemaService implements OnModuleInit {
   async duplicateVersion(
     sourceVersion: number,
     actor: AuthenticatedUserProfile,
+    formKey: string = PSF_REQUEST_FORM_KEY,
   ): Promise<FormSchemaVersionResponse> {
+    this.assertSupportedFormKey(formKey);
     this.assertPublishVersion(sourceVersion);
     const createdBy = this.getActorUsername(actor);
     return this.withTransaction(async (client) => {
-      const rows = await this.lockManagedForm(client);
+      const rows = await this.lockManagedForm(client, formKey);
       const source = rows.find((row) => row.version === sourceVersion);
       if (!source)
         throw new NotFoundException(
@@ -381,18 +281,18 @@ export class FormSchemaService implements OnModuleInit {
           'Open or discard the existing draft before duplicating a version.',
         );
       }
-      const version = this.nextDraftVersion(rows);
+      const version = this.nextDraftVersion(rows, formKey);
       const result = await client.query<FormDefinitionRow>(
         `INSERT INTO form_definitions (id, form_key, version, title, description, schema_json, status, created_by, created_at, published_at)
          VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, 'draft', $7, NOW(), NULL)
          RETURNING form_key, version, title, description, status, schema_json, created_by, created_at, published_at`,
         [
           randomUUID(),
-          PSF_REQUEST_FORM_KEY,
+          formKey,
           version,
           source.title,
           source.description,
-          this.normalizeDraftSchema(source.schema_json, version),
+          this.normalizeDraftSchema(source.schema_json, version, formKey),
           createdBy,
         ],
       );
@@ -402,10 +302,14 @@ export class FormSchemaService implements OnModuleInit {
     });
   }
 
-  async discardDraft(version: number): Promise<void> {
+  async discardDraft(
+    version: number,
+    formKey: string = PSF_REQUEST_FORM_KEY,
+  ): Promise<void> {
     this.assertPublishVersion(version);
+    this.assertSupportedFormKey(formKey);
     await this.withTransaction(async (client) => {
-      const rows = await this.lockManagedForm(client);
+      const rows = await this.lockManagedForm(client, formKey);
       if (
         !rows.some((row) => row.version === version && row.status === 'draft')
       ) {
@@ -416,7 +320,7 @@ export class FormSchemaService implements OnModuleInit {
       const result = await client.query<{ version: number }>(
         `DELETE FROM form_definitions
          WHERE form_key = $1 AND version = $2 AND status = 'draft' AND published_at IS NULL RETURNING version`,
-        [PSF_REQUEST_FORM_KEY, version],
+        [formKey, version],
       );
       if (!result.rows[0])
         throw new ConflictException(
@@ -425,16 +329,20 @@ export class FormSchemaService implements OnModuleInit {
     });
   }
 
-  async publishDraft(version: number): Promise<FormSchemaVersionResponse> {
+  async publishDraft(
+    version: number,
+    formKey: string = PSF_REQUEST_FORM_KEY,
+  ): Promise<FormSchemaVersionResponse> {
     this.assertPublishVersion(version);
+    this.assertSupportedFormKey(formKey);
 
     return this.withTransaction(async (client) => {
-      const lockedRows = await this.lockManagedForm(client);
+      const lockedRows = await this.lockManagedForm(client, formKey);
       const target = lockedRows.find((row) => row.version === version);
 
       if (!target) {
         throw new NotFoundException(
-          `Form schema version ${version} was not found for ${PSF_REQUEST_FORM_KEY}`,
+          `Form schema version ${version} was not found for ${formKey}`,
         );
       }
 
@@ -448,6 +356,7 @@ export class FormSchemaService implements OnModuleInit {
         target.schema_json,
         target.version,
         target.title,
+        formKey,
       );
 
       await client.query(
@@ -456,7 +365,7 @@ export class FormSchemaService implements OnModuleInit {
           SET status = 'published'
           WHERE form_key = $1 AND status = 'active'
         `,
-        [PSF_REQUEST_FORM_KEY],
+        [formKey],
       );
 
       const result = await client.query<FormDefinitionRow>(
@@ -475,7 +384,7 @@ export class FormSchemaService implements OnModuleInit {
             created_at,
             published_at
         `,
-        [PSF_REQUEST_FORM_KEY, version],
+        [formKey, version],
       );
       const promoted = result.rows[0];
       if (!promoted) {
@@ -522,48 +431,46 @@ export class FormSchemaService implements OnModuleInit {
     `);
   }
 
-  private async seedDefaultActivePsfRequestSchema(): Promise<void> {
-    await this.pool.query(
-      `
-        INSERT INTO form_definitions (
+  private async seedDefaultActiveSchemas(): Promise<void> {
+    const schemas = [
+      {
+        id: '00000000-0000-4000-8000-000000000001',
+        schema: DEFAULT_PSF_REQUEST_SCHEMA,
+        description:
+          'Default requester-facing MVP schema for local PSF request creation.',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000002',
+        schema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+        description: 'Initial PSF Created Information schema.',
+      },
+    ];
+
+    for (const { id, schema, description } of schemas) {
+      await this.pool.query(
+        `
+          INSERT INTO form_definitions (
+            id, form_key, version, title, description, schema_json,
+            status, created_by, created_at, published_at
+          )
+          SELECT $1::uuid, $2, $3, $4, $5, $6::jsonb, $7, $8, NOW(), NOW()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM form_definitions
+            WHERE form_key = $2 AND status = 'active'
+          )
+        `,
+        [
           id,
-          form_key,
-          version,
-          title,
+          schema.formKey,
+          schema.version,
+          schema.title,
           description,
-          schema_json,
-          status,
-          created_by,
-          created_at,
-          published_at
-        )
-        SELECT
-          '00000000-0000-4000-8000-000000000001',
-          $1,
-          $2,
-          $3,
-          $4,
-          $5::jsonb,
-          $6,
-          $7,
-          NOW(),
-          NOW()
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM form_definitions
-          WHERE form_key = $1 AND status = 'active'
-        )
-      `,
-      [
-        PSF_REQUEST_FORM_KEY,
-        DEFAULT_PSF_REQUEST_SCHEMA.version,
-        DEFAULT_PSF_REQUEST_SCHEMA.title,
-        'Default requester-facing MVP schema for local PSF request creation.',
-        DEFAULT_PSF_REQUEST_SCHEMA,
-        'active',
-        'system-seed',
-      ],
-    );
+          schema,
+          'active',
+          'system-seed',
+        ],
+      );
+    }
   }
 
   private async withTransaction<T>(
@@ -594,9 +501,9 @@ export class FormSchemaService implements OnModuleInit {
 
   private async lockManagedForm(
     client: QueryRunner,
+    formKey: string,
   ): Promise<FormDefinitionRow[]> {
-    // Acquire the stable per-form anchor first. The second locked read then
-    // starts with a fresh READ COMMITTED snapshot after any waiter is released.
+    // Each form's earliest version is its stable lifecycle lock anchor.
     const anchor = await client.query<{ form_key: string }>(
       `
         SELECT form_key
@@ -606,13 +513,11 @@ export class FormSchemaService implements OnModuleInit {
         LIMIT 1
         FOR UPDATE
       `,
-      [PSF_REQUEST_FORM_KEY],
+      [formKey],
     );
 
     if (anchor.rows.length === 0) {
-      throw new NotFoundException(
-        `No active form schema found for ${PSF_REQUEST_FORM_KEY}`,
-      );
+      throw new NotFoundException(`No active form schema found for ${formKey}`);
     }
 
     const result = await client.query<FormDefinitionRow>(
@@ -632,26 +537,24 @@ export class FormSchemaService implements OnModuleInit {
         ORDER BY version DESC
         FOR UPDATE
       `,
-      [PSF_REQUEST_FORM_KEY],
+      [formKey],
     );
     const activeRows = result.rows.filter((row) => row.status === 'active');
 
     if (activeRows.length === 0) {
-      throw new NotFoundException(
-        `No active form schema found for ${PSF_REQUEST_FORM_KEY}`,
-      );
+      throw new NotFoundException(`No active form schema found for ${formKey}`);
     }
 
     if (activeRows.length !== 1) {
       throw new ConflictException(
-        `Multiple active form schemas exist for ${PSF_REQUEST_FORM_KEY}.`,
+        `Multiple active form schemas exist for ${formKey}.`,
       );
     }
 
     return result.rows;
   }
 
-  private nextDraftVersion(rows: FormDefinitionRow[]): number {
+  private nextDraftVersion(rows: FormDefinitionRow[], formKey: string): number {
     const maxVersion = Math.max(...rows.map((row) => row.version));
 
     if (
@@ -660,14 +563,30 @@ export class FormSchemaService implements OnModuleInit {
       maxVersion >= Number.MAX_SAFE_INTEGER
     ) {
       throw new ConflictException(
-        `Cannot allocate a new schema version for ${PSF_REQUEST_FORM_KEY}.`,
+        `Cannot allocate a new schema version for ${formKey}.`,
       );
     }
 
     return maxVersion + 1;
   }
 
-  private assertDraftInput(dto: unknown): SaveFormSchemaDraftDto {
+  private assertSupportedFormKey(
+    value: unknown,
+  ): asserts value is (typeof SUPPORTED_FORM_KEYS)[number] {
+    if (
+      typeof value !== 'string' ||
+      !SUPPORTED_FORM_KEYS.includes(
+        value as (typeof SUPPORTED_FORM_KEYS)[number],
+      )
+    ) {
+      throw new BadRequestException(`Unsupported formKey: ${String(value)}`);
+    }
+  }
+
+  private assertDraftInput(
+    dto: unknown,
+    formKey: string,
+  ): SaveFormSchemaDraftDto {
     if (!isRecord(dto) || !isRecord(dto.schema)) {
       throw new BadRequestException('A form schema object is required.');
     }
@@ -682,10 +601,8 @@ export class FormSchemaService implements OnModuleInit {
     }
 
     const schema = dto.schema;
-    if (schema.formKey !== PSF_REQUEST_FORM_KEY) {
-      throw new BadRequestException(
-        `schema.formKey must be ${PSF_REQUEST_FORM_KEY}.`,
-      );
+    if (schema.formKey !== formKey) {
+      throw new BadRequestException(`schema.formKey must be ${formKey}.`);
     }
 
     if (typeof schema.title !== 'string' || schema.title.trim().length === 0) {
@@ -702,7 +619,7 @@ export class FormSchemaService implements OnModuleInit {
       description: description ?? null,
       draftVersion: dto.draftVersion,
       schema: {
-        formKey: PSF_REQUEST_FORM_KEY,
+        formKey,
         title: schema.title.trim(),
         sections: schema.sections as FormSchemaSection[],
       },
@@ -725,10 +642,11 @@ export class FormSchemaService implements OnModuleInit {
   private normalizeDraftSchema(
     schema: Omit<FormSchemaJson, 'version'>,
     version: number,
+    formKey: string,
   ): FormSchemaJson {
     this.assertNoRestrictedLegacySections(schema.sections);
     return {
-      formKey: PSF_REQUEST_FORM_KEY,
+      formKey,
       version,
       title: schema.title,
       sections: this.stripLegacySectionMetadata(schema.sections),
@@ -771,13 +689,14 @@ export class FormSchemaService implements OnModuleInit {
     schema: unknown,
     version: number,
     title: string,
+    formKey: string,
   ): void {
     if (!isRecord(schema)) {
       throw new BadRequestException('Draft schema must be an object.');
     }
 
     if (
-      schema.formKey !== PSF_REQUEST_FORM_KEY ||
+      schema.formKey !== formKey ||
       schema.version !== version ||
       schema.title !== title
     ) {
@@ -795,6 +714,7 @@ export class FormSchemaService implements OnModuleInit {
 
     const sectionKeys = new Set<string>();
     const fieldKeys = new Set<string>();
+    const canonicalKeys = new Set<string>();
 
     for (const section of schema.sections) {
       if (!isRecord(section)) {
@@ -806,6 +726,7 @@ export class FormSchemaService implements OnModuleInit {
       if (
         typeof section.sectionKey !== 'string' ||
         section.sectionKey.trim().length === 0 ||
+        UNSAFE_SCHEMA_IDENTITY_KEYS.has(section.sectionKey.trim()) ||
         sectionKeys.has(section.sectionKey)
       ) {
         throw new BadRequestException(
@@ -836,6 +757,7 @@ export class FormSchemaService implements OnModuleInit {
         if (
           typeof field.fieldKey !== 'string' ||
           field.fieldKey.trim().length === 0 ||
+          UNSAFE_SCHEMA_IDENTITY_KEYS.has(field.fieldKey.trim()) ||
           fieldKeys.has(field.fieldKey)
         ) {
           throw new BadRequestException(
@@ -847,6 +769,8 @@ export class FormSchemaService implements OnModuleInit {
         if (
           typeof field.canonicalKey !== 'string' ||
           field.canonicalKey.trim().length === 0 ||
+          UNSAFE_SCHEMA_IDENTITY_KEYS.has(field.canonicalKey.trim()) ||
+          canonicalKeys.has(field.canonicalKey.trim()) ||
           typeof field.label !== 'string' ||
           field.label.trim().length === 0
         ) {
@@ -854,6 +778,7 @@ export class FormSchemaService implements OnModuleInit {
             'Schema fields must have nonempty canonical keys and labels.',
           );
         }
+        canonicalKeys.add(field.canonicalKey.trim());
 
         if (
           typeof field.type !== 'string' ||
@@ -868,13 +793,47 @@ export class FormSchemaService implements OnModuleInit {
           );
         }
 
-        if (
-          (field.type === 'select' || field.type === 'radio') &&
-          (!Array.isArray(field.options) ||
-            !field.options.every((option) => typeof option === 'string'))
-        ) {
+        if (field.type === 'select' || field.type === 'radio') {
+          const options = field.options;
+          if (
+            !Array.isArray(options) ||
+            options.length === 0 ||
+            !options.every(
+              (option) =>
+                typeof option === 'string' &&
+                option.trim().length > 0 &&
+                option === option.trim(),
+            ) ||
+            new Set(
+              options.map((option: unknown) =>
+                typeof option === 'string' ? option.trim() : option,
+              ),
+            ).size !== options.length
+          ) {
+            throw new BadRequestException(
+              'Select and radio schema field options must be nonempty, trimmed, unique strings.',
+            );
+          }
+        }
+      }
+    }
+
+    if (formKey === PSF_REQUEST_FORM_KEY) {
+      const fields: Record<string, unknown>[] = [];
+      for (const section of schema.sections as unknown[]) {
+        if (!isRecord(section) || !Array.isArray(section.fields)) continue;
+        for (const candidate of section.fields as unknown[]) {
+          if (isRecord(candidate)) fields.push(candidate);
+        }
+      }
+
+      for (const requiredFieldKey of ['product_type', 'requester_name']) {
+        const field = fields.find(
+          (candidate) => candidate.fieldKey === requiredFieldKey,
+        );
+        if (!isRecord(field) || field.required !== true) {
           throw new BadRequestException(
-            'Select and radio schema field options must be strings.',
+            `Requester schema must keep ${requiredFieldKey} required.`,
           );
         }
       }

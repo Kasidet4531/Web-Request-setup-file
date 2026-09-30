@@ -25,6 +25,7 @@ export class PSFRequest {
   requesterDataJson: any;
   psfCreatedDataJson: any;
   schemaSnapshotJson: any;
+  psfCreatedSchemaSnapshotJson: any;
   createdAt: Date;
   updatedAt: Date;
   submittedAt: Date;

@@ -1,13 +1,15 @@
 import { ApiError } from '../services/api'
 import type {
   FormControlType,
+  FormKey,
   FormSchema,
   FormSchemaDraft,
+  FormSchemaVersionListResponse,
   FormSchemaVersionResponse,
   SaveFormSchemaDraftPayload,
 } from '../types/forms'
+import { isFormKey } from '../types/forms'
 
-const PSF_REQUEST_FORM_KEY = 'psf-request'
 const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'date', 'select', 'radio'])
 
 export interface FormSchemaDraftParseResult {
@@ -24,6 +26,15 @@ export interface FormConfigPublishState {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isAdminFormConfigVersionForKey(value: unknown, formKey: FormKey): value is FormSchemaVersionResponse {
+  return isRecord(value) && value.formKey === formKey && isRecord(value.schema) && value.schema.formKey === formKey
+}
+
+export function isAdminFormConfigVersionListForKey(value: unknown, formKey: FormKey): value is FormSchemaVersionListResponse {
+  return isRecord(value) && value.formKey === formKey && Array.isArray(value.versions) &&
+    value.versions.every((version) => isAdminFormConfigVersionForKey(version, formKey))
 }
 
 function isNonblankString(value: unknown): value is string {
@@ -140,7 +151,7 @@ export function formatFormSchemaDraft(schema: FormSchema | FormSchemaDraft): str
   return JSON.stringify(toFormSchemaDraft(schema), null, 2)
 }
 
-export function readFormSchemaEditorDraft(text: string): FormSchemaDraft | null {
+export function readFormSchemaEditorDraft(text: string, expectedFormKey?: FormKey): FormSchemaDraft | null {
   let value: unknown
   try {
     value = JSON.parse(text)
@@ -148,7 +159,7 @@ export function readFormSchemaEditorDraft(text: string): FormSchemaDraft | null 
     return null
   }
   if (
-    !isRecord(value) || value.formKey !== PSF_REQUEST_FORM_KEY ||
+    !isRecord(value) || !isFormKey(value.formKey) || (expectedFormKey !== undefined && value.formKey !== expectedFormKey) ||
     typeof value.title !== 'string' || !Array.isArray(value.sections)
   ) return null
 
@@ -180,7 +191,7 @@ export function readFormSchemaEditorDraft(text: string): FormSchemaDraft | null 
   return value as unknown as FormSchemaDraft
 }
 
-export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
+export function parseFormSchemaDraft(text: string, expectedFormKey?: FormKey): FormSchemaDraftParseResult {
   let parsed: unknown
 
   try {
@@ -196,8 +207,9 @@ export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
     return { error: 'Schema JSON must be an object.', schema: null }
   }
 
-  if (parsed.formKey !== PSF_REQUEST_FORM_KEY) {
-    return { error: `Schema formKey must be exactly "${PSF_REQUEST_FORM_KEY}".`, schema: null }
+  if (!isFormKey(parsed.formKey) || (expectedFormKey !== undefined && parsed.formKey !== expectedFormKey)) {
+    const expected = expectedFormKey ?? 'psf-request or psf-created-information'
+    return { error: `Schema formKey must match the selected form (expected "${expected}").`, schema: null }
   }
 
   if (!isNonblankString(parsed.title)) {
@@ -237,7 +249,7 @@ export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
   return {
     error: null,
     schema: toFormSchemaDraft({
-      formKey: PSF_REQUEST_FORM_KEY,
+      formKey: parsed.formKey,
       title: parsed.title,
       sections: parsed.sections as FormSchemaDraft['sections'],
     }),
@@ -266,7 +278,8 @@ export function selectRefreshedFormConfigVersion(
 export function buildPreviewSchema(
   schema: FormSchemaDraft,
   selectedVersion: FormSchemaVersionResponse,
-): FormSchema {
+): FormSchema | null {
+  if (schema.formKey !== selectedVersion.formKey) return null
   return {
     formKey: selectedVersion.formKey,
     version: selectedVersion.version,
@@ -279,6 +292,7 @@ export function buildAdminFormConfigSavePayload(
   selectedVersion: FormSchemaVersionResponse,
   schema: FormSchemaDraft,
 ): SaveFormSchemaDraftPayload {
+  if (selectedVersion.formKey !== schema.formKey) throw new Error('Cannot save a schema for a different form family.')
   return {
     draftVersion: selectedVersion.version,
     description: selectedVersion.description,

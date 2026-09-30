@@ -27,7 +27,7 @@ _Avoid_: Type of product, product category
 
 
 **PSF Created Information**:
-The section of the PSF Request filled in by the Setup File Owner containing the final setup details.
+The section of the PSF Request filled in by the Setup File Owner containing the final setup details. Administrators configure its structure through Form Management using the independent `psf-created-information` form family and the existing draft/publish lifecycle. New requests capture its active schema when created; published changes do not alter existing requests. Legacy requests without a PSF snapshot use the immutable original descriptor without rewriting their values. Saving incomplete work is allowed; required PSF fields must be completed before the `PSF Created` transition.
 _Avoid_: Setup Information, Completed Info
 
 **Draft**:
@@ -55,7 +55,7 @@ The JSON-structured definition of a PSF Request form, specifying fields, input t
 _Avoid_: Form layout, form template
 
 **Form Version**:
-A sequential integer indicating the revision of a Form Schema. Requests are locked to a specific Form Version snapshot upon submission to ensure historical rendering accuracy.
+A sequential integer within one Form Schema family: `psf-request` or `psf-created-information`. Requester draft schema upgrades remain explicit. A request's PSF schema snapshot is captured at creation and is not upgraded by publishing either family or by upgrading its requester schema. Historical rendering and export resolve each request's stored descriptor, with fixed-schema compatibility for legacy PSF records.
 _Avoid_: Version number, revision
 
 **Attachment**:

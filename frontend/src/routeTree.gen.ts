@@ -26,6 +26,7 @@ import { Route as RequestsRequestIdIndexRouteImport } from './routes/requests/$r
 import { Route as AdminFormConfigIndexRouteImport } from './routes/admin/form-config.index'
 import { Route as RequestsRequestIdHistoryRouteImport } from './routes/requests/$requestId/history'
 import { Route as AdminFormConfigVersionRouteImport } from './routes/admin/form-config.$version'
+import { Route as AdminFormConfigFormKeyVersionRouteImport } from './routes/admin/form-config.$formKey.$version'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -113,6 +114,12 @@ const AdminFormConfigVersionRoute = AdminFormConfigVersionRouteImport.update({
   path: '/$version',
   getParentRoute: () => AdminFormConfigRoute,
 } as any)
+const AdminFormConfigFormKeyVersionRoute =
+  AdminFormConfigFormKeyVersionRouteImport.update({
+    id: '/$formKey/$version',
+    path: '/$formKey/$version',
+    getParentRoute: () => AdminFormConfigRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/requests/$requestId/history': typeof RequestsRequestIdHistoryRoute
   '/admin/form-config/': typeof AdminFormConfigIndexRoute
   '/requests/$requestId/': typeof RequestsRequestIdIndexRoute
+  '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +158,7 @@ export interface FileRoutesByTo {
   '/requests/$requestId/history': typeof RequestsRequestIdHistoryRoute
   '/admin/form-config': typeof AdminFormConfigIndexRoute
   '/requests/$requestId': typeof RequestsRequestIdIndexRoute
+  '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,6 +179,7 @@ export interface FileRoutesById {
   '/requests/$requestId/history': typeof RequestsRequestIdHistoryRoute
   '/admin/form-config/': typeof AdminFormConfigIndexRoute
   '/requests/$requestId/': typeof RequestsRequestIdIndexRoute
+  '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/history'
     | '/admin/form-config/'
     | '/requests/$requestId/'
+    | '/admin/form-config/$formKey/$version'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/history'
     | '/admin/form-config'
     | '/requests/$requestId'
+    | '/admin/form-config/$formKey/$version'
   id:
     | '__root__'
     | '/'
@@ -228,6 +240,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/history'
     | '/admin/form-config/'
     | '/requests/$requestId/'
+    | '/admin/form-config/$formKey/$version'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -369,17 +382,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminFormConfigVersionRouteImport
       parentRoute: typeof AdminFormConfigRoute
     }
+    '/admin/form-config/$formKey/$version': {
+      id: '/admin/form-config/$formKey/$version'
+      path: '/$formKey/$version'
+      fullPath: '/admin/form-config/$formKey/$version'
+      preLoaderRoute: typeof AdminFormConfigFormKeyVersionRouteImport
+      parentRoute: typeof AdminFormConfigRoute
+    }
   }
 }
 
 interface AdminFormConfigRouteChildren {
   AdminFormConfigVersionRoute: typeof AdminFormConfigVersionRoute
   AdminFormConfigIndexRoute: typeof AdminFormConfigIndexRoute
+  AdminFormConfigFormKeyVersionRoute: typeof AdminFormConfigFormKeyVersionRoute
 }
 
 const AdminFormConfigRouteChildren: AdminFormConfigRouteChildren = {
   AdminFormConfigVersionRoute: AdminFormConfigVersionRoute,
   AdminFormConfigIndexRoute: AdminFormConfigIndexRoute,
+  AdminFormConfigFormKeyVersionRoute: AdminFormConfigFormKeyVersionRoute,
 }
 
 const AdminFormConfigRouteWithChildren = AdminFormConfigRoute._addFileChildren(

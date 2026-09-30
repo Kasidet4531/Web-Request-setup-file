@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { AuthService } from './../src/auth/auth.service';
+import { FormSchemaService } from './../src/admin/form_schema.service';
 import type { AuthenticatedRequest } from './../src/auth/session.types';
 import {
   DATABASE_POOL,
@@ -460,6 +461,25 @@ describe('AppController (e2e)', () => {
               title: 'Requester Information',
               fields: [
                 {
+                  fieldKey: 'product_type',
+                  canonicalKey: 'product_type',
+                  label: 'Product Type',
+                  type: 'radio',
+                  required: true,
+                  options: [
+                    'New Product',
+                    'Transfer Product',
+                    'Existing Product',
+                  ],
+                },
+                {
+                  fieldKey: 'requester_name',
+                  canonicalKey: 'requester',
+                  label: 'Requester Name',
+                  type: 'text',
+                  required: true,
+                },
+                {
                   fieldKey: 'title',
                   canonicalKey: 'title',
                   label: 'Title',
@@ -518,6 +538,33 @@ describe('AppController (e2e)', () => {
 
     await request(server).get('/api/admin/form-config').expect(403);
     expect(pool.query).toHaveBeenCalledTimes(queryCallsBeforeRejection);
+  });
+
+  it('rejects a bracketed publish query before dispatching to the default requester schema service', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    const publishDraft = jest.spyOn(app.get(FormSchemaService), 'publishDraft');
+    const expressApp = app.getHttpAdapter().getInstance() as {
+      get: (setting: string) => unknown;
+    };
+    expect(expressApp.get('query parser')).toBe('simple');
+    transactionClient.query.mockClear();
+    pool.query.mockClear();
+
+    await request(server)
+      .post('/api/admin/form-config/publish?formKey[]=psf-created-information')
+      .send({ version: 1 })
+      .expect(400);
+
+    expect(publishDraft).not.toHaveBeenCalled();
+    expect(transactionClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('FROM form_definitions'),
+      expect.anything(),
+    );
+    expect(transactionClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET status ='),
+      expect.anything(),
+    );
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it('registers admin user-management routes with server-side validation and authorization', async () => {

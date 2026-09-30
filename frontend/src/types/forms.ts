@@ -1,5 +1,12 @@
 export type FormControlType = 'text' | 'textarea' | 'date' | 'select' | 'radio'
 
+export const FORM_KEYS = ['psf-request', 'psf-created-information'] as const
+export type FormKey = typeof FORM_KEYS[number]
+
+export function isFormKey(value: unknown): value is FormKey {
+  return typeof value === 'string' && (FORM_KEYS as readonly string[]).includes(value)
+}
+
 export interface FormSchemaField {
   fieldKey: string
   canonicalKey: string
@@ -19,14 +26,14 @@ export interface FormSchemaSection {
 }
 
 export interface FormSchema {
-  formKey: string
+  formKey: FormKey
   version: number
   title: string
   sections: FormSchemaSection[]
 }
 
 export interface ActiveFormSchemaResponse {
-  formKey: string
+  formKey: FormKey
   version: number
   title: string
   description: string | null
@@ -40,7 +47,7 @@ export type FormSchemaStatus = 'active' | 'draft' | 'published'
 export type FormSchemaDraft = Omit<FormSchema, 'version'>
 
 export interface FormSchemaVersionResponse {
-  formKey: string
+  formKey: FormKey
   version: number
   title: string
   description: string | null
@@ -52,7 +59,7 @@ export interface FormSchemaVersionResponse {
 }
 
 export interface FormSchemaVersionListResponse {
-  formKey: string
+  formKey: FormKey
   versions: FormSchemaVersionResponse[]
 }
 

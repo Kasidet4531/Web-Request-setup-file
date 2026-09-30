@@ -6,6 +6,7 @@ import type { FormSchemaDraft, FormSchemaVersionResponse } from '../types/forms'
 import * as FormConfigRoute from '../routes/admin/form-config'
 import * as FormConfigIndexRoute from '../routes/admin/form-config.index'
 import * as FormConfigVersionRoute from '../routes/admin/form-config.$version'
+import * as FormConfigFormKeyVersionRoute from '../routes/admin/form-config.$formKey.$version'
 import {
   AdminFormConfigFeedback,
   AdminFormConfigPreview,
@@ -17,16 +18,19 @@ import {
   canPublishFormConfig,
   formatFormSchemaDraft,
   getAdminFormConfigErrorMessage,
+  isAdminFormConfigVersionForKey,
+  isAdminFormConfigVersionListForKey,
   parseFormSchemaDraft,
   readFormSchemaEditorDraft,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
+import { isFormKey } from '../types/forms'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-router')>(),
-  Link: ({ to, params, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; params: { version: string } }) =>
-    <a {...props} href={to.replace('$version', params.version)} />,
+  Link: ({ to, params, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; params?: Record<string, string> }) =>
+    <a {...props} href={Object.entries(params ?? {}).reduce((path, [key, value]) => path.replace(`$${key}`, value), to)} />,
 }))
 
 const editableSchema: FormSchemaDraft = {
@@ -91,6 +95,32 @@ describe('AdminFormConfigPage helpers', () => {
     expect(JSON.parse(text)).toEqual(editableSchema)
     expect(parsed.error).toBeNull()
     expect(parsed.schema).toEqual(editableSchema)
+  })
+
+  it('accepts either supported form family without requester-specific fields and rejects family mismatches', () => {
+    const psfCreatedSchema: FormSchemaDraft = {
+      formKey: 'psf-created-information',
+      title: 'Created details',
+      sections: [{
+        sectionKey: 'created_details',
+        title: 'Created details',
+        fields: [{ fieldKey: 'custom_batch_ref', canonicalKey: 'custom_batch_ref', label: 'Batch reference', type: 'text', required: true }],
+      }],
+    }
+    const text = formatFormSchemaDraft(psfCreatedSchema)
+
+    expect(parseFormSchemaDraft(text, 'psf-created-information')).toMatchObject({ error: null, schema: psfCreatedSchema })
+    expect(readFormSchemaEditorDraft(text, 'psf-created-information')).toEqual(psfCreatedSchema)
+    expect(parseFormSchemaDraft(text, 'psf-request').schema).toBeNull()
+    expect(parseFormSchemaDraft(JSON.stringify({ ...psfCreatedSchema, formKey: 'other-form' })).schema).toBeNull()
+    expect(isFormKey('psf-request')).toBe(true)
+    expect(isFormKey('psf-created-information')).toBe(true)
+    expect(isFormKey('other-form')).toBe(false)
+    const matchingVersion = buildVersion({ formKey: 'psf-created-information', schema: { ...psfCreatedSchema, version: 2 } })
+    expect(isAdminFormConfigVersionForKey(matchingVersion, 'psf-created-information')).toBe(true)
+    expect(isAdminFormConfigVersionListForKey({ formKey: 'psf-created-information', versions: [matchingVersion] }, 'psf-created-information')).toBe(true)
+    expect(isAdminFormConfigVersionListForKey({ formKey: 'psf-request', versions: [matchingVersion] }, 'psf-created-information')).toBe(false)
+    expect(buildPreviewSchema(psfCreatedSchema, buildVersion())).toBeNull()
   })
 
   it('keeps incomplete labels editable but hides malformed JSON from the visual editor', () => {
@@ -252,6 +282,17 @@ describe('AdminFormConfigPage helpers', () => {
     expect(html).not.toMatch(/>(View|Edit)<\/button>/)
   })
 
+  it('uses explicit shareable PSF form-key version links without changing requester links', () => {
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const requesterHtml = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[buildVersion({ status: 'active' })]} />)
+    const psfHtml = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} formKey="psf-created-information" versions={[
+      buildVersion({ formKey: 'psf-created-information', schema: { ...editableSchema, formKey: 'psf-created-information', version: 2 }, status: 'active' }),
+    ]} />)
+
+    expect(requesterHtml).toContain('href="/admin/form-config/2"')
+    expect(psfHtml).toContain('href="/admin/form-config/psf-created-information/2"')
+  })
+
   it('renders native version selection and accessible request feedback', () => {
     const draft = buildVersion()
     const selectorHtml = renderToStaticMarkup(
@@ -302,8 +343,10 @@ describe('AdminFormConfigPage helpers', () => {
     const routeOptions = Reflect.get(FormConfigRoute.Route, 'options') as { component: unknown }
     const indexOptions = Reflect.get(FormConfigIndexRoute.Route, 'options') as { component: unknown }
     const versionOptions = Reflect.get(FormConfigVersionRoute.Route, 'options') as { component: unknown }
+    const formKeyVersionOptions = Reflect.get(FormConfigFormKeyVersionRoute.Route, 'options') as { component: unknown }
     expect(routeOptions.component).toBeDefined()
     expect(indexOptions.component).toBeDefined()
     expect(versionOptions.component).toBeDefined()
+    expect(formKeyVersionOptions.component).toBeDefined()
   })
 })

@@ -243,6 +243,31 @@ describe('createApiClient', () => {
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/form-config/draft/3', expect.objectContaining({ credentials: 'include', method: 'DELETE' }))
   })
 
+  it('scopes every admin form-config lifecycle endpoint to PSF Created Information', async () => {
+    const formKey = 'psf-created-information' as const
+    const schema = { formKey, title: 'Created details', sections: [] }
+    const version = { formKey, version: 3, schema: { ...schema, version: 3 }, status: 'draft' }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ formKey, versions: [version] }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(version), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(version), { status: 201, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...version, status: 'active' }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await client.fetchAdminFormConfig(formKey)
+    await client.saveAdminFormConfigDraft({ draftVersion: 3, schema }, formKey)
+    await client.duplicateAdminFormConfigVersion({ version: 2 }, formKey)
+    await client.discardAdminFormConfigDraft(3, formKey)
+    await client.publishAdminFormConfigDraft({ version: 3 }, formKey)
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/admin/form-config?formKey=psf-created-information', expect.objectContaining({ method: 'GET' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/form-config?formKey=psf-created-information', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ draftVersion: 3, schema }) }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/api/admin/form-config/duplicate?formKey=psf-created-information', expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 2 }) }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/api/admin/form-config/draft/3?formKey=psf-created-information', expect.objectContaining({ method: 'DELETE' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(5, '/api/admin/form-config/publish?formKey=psf-created-information', expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 3 }) }))
+  })
+
   it('propagates the backend admin authorization error without client-side authority claims', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ message: 'Only admins can manage form schema configurations.' }), {
@@ -269,7 +294,7 @@ describe('createApiClient', () => {
 
   it('propagates backend save and publish errors from their admin form-config paths', async () => {
     const schema = {
-      formKey: 'psf-request',
+      formKey: 'psf-request' as const,
       title: 'PSF Request Form',
       sections: [],
     }

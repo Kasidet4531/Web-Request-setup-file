@@ -6,11 +6,12 @@ import {
   type FormSchemaField,
   type FormSchemaJson,
 } from '../admin/form_schema.service';
-import type { AuthenticatedUserProfile } from '../auth/session.types';
 import {
-  PSF_CREATED_INFORMATION_SCHEMA,
-  canActorViewPsfCreatedData,
-} from '../requests/requests.service';
+  PSF_CREATED_INFORMATION_FORM_KEY,
+  resolvePsfCreatedInformationSchema,
+} from '../admin/form_schema.constants';
+import type { AuthenticatedUserProfile } from '../auth/session.types';
+import { canActorViewPsfCreatedData } from '../requests/requests.service';
 import {
   SearchIndexService,
   type RequestExportItem,
@@ -172,7 +173,13 @@ export class ExcelExportService {
     const activeSchema =
       await this.formSchemaService.getActiveSchema('psf-request');
     const requesterFields = this.getExportableFields(activeSchema.schema);
-    const psfCreatedFields = this.getAllPsfCreatedFields();
+    const activePsfCreatedSchema = await this.formSchemaService.getActiveSchema(
+      PSF_CREATED_INFORMATION_FORM_KEY,
+    );
+    const psfCreatedFields = this.getPsfCreatedFields(
+      activePsfCreatedSchema.schema,
+      items,
+    );
 
     const columns: ExportWorksheetColumn[] = [
       ...REQUEST_METADATA_COLUMNS.map(({ header, key }) => ({ header, key })),
@@ -198,6 +205,7 @@ export class ExcelExportService {
         item.status,
         actor,
       );
+      const psfCreatedCanonicalValues = this.getPsfCreatedCanonicalValues(item);
 
       rows.push([
         ...REQUEST_METADATA_COLUMNS.map((column) =>
@@ -211,7 +219,7 @@ export class ExcelExportService {
         ...psfCreatedFields.map((field) =>
           psfCreatedDataVisible
             ? this.searchIndexService.serializeCanonicalValue(
-                item.psfCreatedData[field.fieldKey],
+                psfCreatedCanonicalValues.get(field.canonicalKey),
               )
             : '',
         ),
@@ -312,9 +320,48 @@ export class ExcelExportService {
     return fields;
   }
 
-  private getAllPsfCreatedFields(): FormSchemaField[] {
-    return PSF_CREATED_INFORMATION_SCHEMA.sections.flatMap(
-      (section) => section.fields,
+  private getPsfCreatedFields(
+    activeSchema: FormSchemaJson,
+    items: RequestExportItem[],
+  ): FormSchemaField[] {
+    const fieldsByCanonicalKey = new Map<string, FormSchemaField>();
+
+    [
+      activeSchema,
+      ...items.map((item) =>
+        resolvePsfCreatedInformationSchema(item.psfCreatedInformationSchema),
+      ),
+    ].forEach((schema) => {
+      schema.sections.forEach((section) => {
+        section.fields.forEach((field) => {
+          const canonicalKey = field.canonicalKey?.trim();
+          if (canonicalKey && !fieldsByCanonicalKey.has(canonicalKey)) {
+            fieldsByCanonicalKey.set(canonicalKey, { ...field, canonicalKey });
+          }
+        });
+      });
+    });
+
+    return [...fieldsByCanonicalKey.values()];
+  }
+
+  private getPsfCreatedCanonicalValues(
+    item: RequestExportItem,
+  ): Map<string, unknown> {
+    const schema = resolvePsfCreatedInformationSchema(
+      item.psfCreatedInformationSchema,
     );
+    const values = new Map<string, unknown>();
+
+    schema.sections.forEach((section) => {
+      section.fields.forEach((field) => {
+        const canonicalKey = field.canonicalKey?.trim();
+        if (canonicalKey) {
+          values.set(canonicalKey, item.psfCreatedData[field.fieldKey]);
+        }
+      });
+    });
+
+    return values;
   }
 }

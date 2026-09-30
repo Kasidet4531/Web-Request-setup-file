@@ -52,6 +52,34 @@ const activeSchema = {
   },
 };
 
+const storedPsfDateSchema: FormSchemaJson = {
+  formKey: 'psf-created-information',
+  version: 3,
+  title: 'PSF Created Information v3',
+  sections: [
+    {
+      sectionKey: 'setup',
+      title: 'Setup',
+      fields: [
+        {
+          fieldKey: 'field_3',
+          canonicalKey: 'setup_date',
+          label: 'Setup Date',
+          type: 'date',
+          required: false,
+        },
+        {
+          fieldKey: 'field_4',
+          canonicalKey: 'completion_date',
+          label: 'Completion Date',
+          type: 'date',
+          required: false,
+        },
+      ],
+    },
+  ],
+};
+
 const requesterActor = {
   id: '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
   username: 'requester.demo',
@@ -333,6 +361,8 @@ describe('RequestsService draft flow', () => {
         requester_name: requesterActor.displayName,
       },
       psf_created_data_json: {},
+      psf_created_schema_snapshot_json:
+        requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
       schema_snapshot_json: activeSchema.schema,
       created_at: new Date('2026-06-18T01:02:03.000Z'),
       updated_at: new Date('2026-06-18T01:02:03.000Z'),
@@ -347,6 +377,15 @@ describe('RequestsService draft flow', () => {
       })
       .mockResolvedValueOnce({ rows: [insertedRow] })
       .mockResolvedValueOnce({});
+    formSchemaService.getActiveSchemaForUpdate.mockResolvedValueOnce({
+      formKey: 'psf-created-information',
+      version: 1,
+      title: 'PSF Created Information',
+      description: null,
+      status: 'active',
+      publishedAt: null,
+      schema: requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
+    });
 
     const draft = await service.createDraft(
       {
@@ -362,8 +401,12 @@ describe('RequestsService draft flow', () => {
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
     );
+    expect(formSchemaService.getActiveSchemaForUpdate).toHaveBeenCalledWith(
+      'psf-created-information',
+      dbClient,
+    );
     expect(dbClient.query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO psf_requests'),
+      expect.stringContaining('psf_created_schema_snapshot_json'),
       [
         expect.any(String),
         'DRAFT-20260618-0001',
@@ -378,6 +421,7 @@ describe('RequestsService draft flow', () => {
           requester_name: requesterActor.displayName,
         },
         activeSchema.schema,
+        requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
       ],
     );
     expect(draft).toMatchObject({
@@ -922,6 +966,8 @@ describe('RequestsService draft flow', () => {
       status: 'Draft',
       requesterData: { product_type: 'Transfer Product' },
       schemaSnapshot: activeSchema.schema,
+      psfCreatedInformationSchema:
+        requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
     });
   });
 
@@ -1020,6 +1066,742 @@ describe('RequestsService draft flow', () => {
     ).toBe(true);
   });
 
+  it('returns each request’s PSF schema snapshot instead of the latest active descriptor', async () => {
+    const historicalSchema = {
+      formKey: 'psf-created-information',
+      version: 7,
+      title: 'Historical PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'historical',
+          title: 'Historical setup',
+          fields: [
+            {
+              fieldKey: 'historical_tag',
+              canonicalKey: 'historical_tag',
+              label: 'Historical Tag',
+              type: 'text' as const,
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          request_no: 'PSF-0001',
+          form_key: 'psf-request',
+          form_version: 3,
+          status: 'Draft',
+          requester: requesterActor.displayName,
+          requester_user_id: requesterActor.id,
+          setup_owner: null,
+          setup_owner_role: null,
+          product_type: 'Existing Product',
+          requester_data_json: {},
+          psf_created_data_json: {},
+          psf_created_schema_snapshot_json: historicalSchema,
+          schema_snapshot_json: activeSchema.schema,
+          created_at: new Date('2026-06-18T01:02:03.000Z'),
+          updated_at: new Date('2026-06-18T01:06:03.000Z'),
+          submitted_at: null,
+          psf_created_at: null,
+          completed_at: null,
+        },
+      ],
+    });
+
+    await expect(
+      service.getRequest('request-1', requesterActor),
+    ).resolves.toMatchObject({
+      psfCreatedInformationSchema: historicalSchema,
+      psfCreatedData: {},
+      psfCreatedDataVisible: false,
+    });
+  });
+
+  it.each([
+    { layout: 42 },
+    { mirror_die_available: 'Maybe' },
+    { unexpected_field: 'malicious' },
+  ])(
+    'rejects invalid PSF Created values instead of silently dropping them: %p',
+    async (payload) => {
+      const actor = {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      };
+      const currentUpdatedAt = new Date('2026-06-18T01:05:03.000Z');
+      pool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            updated_at: currentUpdatedAt,
+            psf_created_schema_snapshot_json:
+              requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
+          },
+        ],
+      });
+      pool.query.mockResolvedValueOnce({ rows: [{ id: 'request-1' }] });
+      const updatePsfCreatedData = Reflect.get(
+        service,
+        'updatePsfCreatedData',
+      ) as (
+        requestId: string,
+        dto: {
+          actor: typeof actor;
+          expectedUpdatedAt: string;
+          psfCreatedData: Record<string, unknown>;
+        },
+      ) => Promise<unknown>;
+
+      await expect(
+        updatePsfCreatedData.call(service, 'request-1', {
+          actor,
+          expectedUpdatedAt: currentUpdatedAt.toISOString(),
+          psfCreatedData: payload,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(pool.query).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['not-a-date', '2026-06-18T00:00:00.000Z', '2025-02-29'])(
+    'rejects invalid date values when saving PSF Created Information: %s',
+    async (value) => {
+      const actor = {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      };
+      const updatedAt = new Date('2026-06-18T01:05:03.000Z');
+      pool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            updated_at: updatedAt,
+            psf_created_schema_snapshot_json: storedPsfDateSchema,
+          },
+        ],
+      });
+      pool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            request_no: 'PSF-0001',
+            form_key: 'psf-request',
+            form_version: 3,
+            status: 'Setup In Progress',
+            requester: 'Fook',
+            setup_owner: actor.displayName,
+            setup_owner_role: 'GNTC',
+            product_type: 'Existing Product',
+            requester_data_json: {},
+            psf_created_data_json: { field_3: value },
+            psf_created_schema_snapshot_json: storedPsfDateSchema,
+            schema_snapshot_json: activeSchema.schema,
+            created_at: new Date('2026-06-18T01:02:03.000Z'),
+            updated_at: updatedAt,
+            submitted_at: null,
+            psf_created_at: null,
+            completed_at: null,
+          },
+        ],
+      });
+
+      await expect(
+        service.updatePsfCreatedData('request-1', {
+          actor,
+          expectedUpdatedAt: updatedAt.toISOString(),
+          psfCreatedData: { field_3: value },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(pool.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE psf_requests'),
+        expect.anything(),
+      );
+      expect(auditLogService.record).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts ordinary and leap calendar dates from the request snapshot when saving PSF Created Information', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const updatedAt = new Date('2026-06-18T01:05:03.000Z');
+    const savedData = { field_3: '2026-06-18', field_4: '2024-02-29' };
+    pool.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            updated_at: updatedAt,
+            psf_created_schema_snapshot_json: storedPsfDateSchema,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            request_no: 'PSF-0001',
+            form_key: 'psf-request',
+            form_version: 3,
+            status: 'Setup In Progress',
+            requester: 'Fook',
+            setup_owner: actor.displayName,
+            setup_owner_role: 'GNTC',
+            product_type: 'Existing Product',
+            requester_data_json: {},
+            psf_created_data_json: savedData,
+            psf_created_schema_snapshot_json: storedPsfDateSchema,
+            schema_snapshot_json: activeSchema.schema,
+            created_at: new Date('2026-06-18T01:02:03.000Z'),
+            updated_at: updatedAt,
+            submitted_at: null,
+            psf_created_at: null,
+            completed_at: null,
+          },
+        ],
+      });
+
+    await expect(
+      service.updatePsfCreatedData('request-1', {
+        actor,
+        expectedUpdatedAt: updatedAt.toISOString(),
+        psfCreatedData: {
+          field_3: ' 2026-06-18 ',
+          field_4: ' 2024-02-29 ',
+        },
+      }),
+    ).resolves.toMatchObject({ psfCreatedData: savedData });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      ['request-1', savedData, actor.displayName, 'GNTC', updatedAt],
+    );
+  });
+
+  it('requires required PSF values from the request snapshot before moving to PSF Created', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const requiredSchema = {
+      formKey: 'psf-created-information',
+      version: 4,
+      title: 'PSF Created Information v4',
+      sections: [
+        {
+          sectionKey: 'setup',
+          title: 'Setup',
+          fields: [
+            {
+              fieldKey: 'psf_setup_file_name',
+              canonicalKey: 'psf_setup_file_name',
+              label: 'PSF Setup File Name',
+              type: 'text' as const,
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+      'PSF Created',
+    ]);
+    dbClient.query.mockResolvedValueOnce({}).mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'request-1',
+          status: 'Setup In Progress',
+          requester_user_id: null,
+          psf_created_data_json: {},
+          psf_created_schema_snapshot_json: requiredSchema,
+        },
+      ],
+    });
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'PSF Created',
+        actor,
+      }),
+    ).rejects.toThrow(
+      'PSF Created Information is missing required fields: PSF Setup File Name.',
+    );
+    expect(dbClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.anything(),
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
+  it.each(['2025-02-29', '2026-06-18T00:00:00.000Z'])(
+    'rejects invalid stored required PSF dates before moving to PSF Created: %s',
+    async (value) => {
+      const actor = {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      };
+      const requiredSchema: FormSchemaJson = {
+        ...storedPsfDateSchema,
+        sections: [
+          {
+            ...storedPsfDateSchema.sections[0],
+            fields: [
+              { ...storedPsfDateSchema.sections[0].fields[0], required: true },
+            ],
+          },
+        ],
+      };
+      workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+        'PSF Created',
+      ]);
+      dbClient.query
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 'request-1',
+              status: 'Setup In Progress',
+              requester_user_id: null,
+              psf_created_data_json: { field_3: value },
+              psf_created_schema_snapshot_json: requiredSchema,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 'request-1',
+              request_no: 'PSF-0001',
+              form_key: 'psf-request',
+              form_version: 3,
+              status: 'PSF Created',
+              requester: 'Fook',
+              requester_user_id: null,
+              setup_owner: actor.displayName,
+              setup_owner_role: 'GNTC',
+              product_type: 'Existing Product',
+              requester_data_json: {},
+              psf_created_data_json: { field_3: value },
+              psf_created_schema_snapshot_json: requiredSchema,
+              schema_snapshot_json: activeSchema.schema,
+              created_at: new Date('2026-06-18T01:02:03.000Z'),
+              updated_at: new Date('2026-06-18T01:06:03.000Z'),
+              submitted_at: null,
+              psf_created_at: new Date('2026-06-18T01:06:03.000Z'),
+              completed_at: null,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({});
+
+      await expect(
+        service.updateRequestStatus('request-1', {
+          status: 'PSF Created',
+          actor,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(dbClient.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE psf_requests'),
+        expect.anything(),
+      );
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    },
+  );
+
+  it('accepts valid own ordinary and leap dates when moving to PSF Created', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const requiredSchema: FormSchemaJson = {
+      ...storedPsfDateSchema,
+      sections: [
+        {
+          ...storedPsfDateSchema.sections[0],
+          fields: storedPsfDateSchema.sections[0].fields.map((field) => ({
+            ...field,
+            required: true,
+          })),
+        },
+      ],
+    };
+    const savedData = { field_3: '2026-06-18', field_4: '2024-02-29' };
+    const updatedRow = {
+      id: 'request-1',
+      request_no: 'PSF-0001',
+      form_key: 'psf-request',
+      form_version: 3,
+      status: 'PSF Created',
+      requester: 'Fook',
+      requester_user_id: null,
+      setup_owner: actor.displayName,
+      setup_owner_role: 'GNTC',
+      product_type: 'Existing Product',
+      requester_data_json: {},
+      psf_created_data_json: savedData,
+      psf_created_schema_snapshot_json: requiredSchema,
+      schema_snapshot_json: activeSchema.schema,
+      created_at: new Date('2026-06-18T01:02:03.000Z'),
+      updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      submitted_at: null,
+      psf_created_at: new Date('2026-06-18T01:06:03.000Z'),
+      completed_at: null,
+    };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+      'PSF Created',
+    ]);
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            requester_user_id: null,
+            psf_created_data_json: savedData,
+            psf_created_schema_snapshot_json: requiredSchema,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [updatedRow] })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'PSF Created',
+        actor,
+      }),
+    ).resolves.toMatchObject({
+      status: 'PSF Created',
+      psfCreatedData: savedData,
+    });
+    expect(auditLogService.record).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+    'does not let inherited %s satisfy a required PSF Created field',
+    async (fieldKey) => {
+      const actor = {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      };
+      const requiredSchema = {
+        formKey: 'psf-created-information',
+        version: 4,
+        title: 'PSF Created Information v4',
+        sections: [
+          {
+            sectionKey: 'setup',
+            title: 'Setup',
+            fields: [
+              {
+                fieldKey,
+                canonicalKey: 'required_value',
+                label: 'Required Value',
+                type: 'text' as const,
+                required: true,
+              },
+            ],
+          },
+        ],
+      };
+      workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+        'PSF Created',
+      ]);
+      dbClient.query.mockResolvedValueOnce({}).mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            requester_user_id: null,
+            psf_created_data_json: {},
+            psf_created_schema_snapshot_json: requiredSchema,
+          },
+        ],
+      });
+
+      await expect(
+        service.updateRequestStatus('request-1', {
+          status: 'PSF Created',
+          actor,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(dbClient.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE psf_requests'),
+        expect.anything(),
+      );
+      expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    },
+  );
+
+  it.each([
+    { description: 'a number', value: 12, type: 'text' },
+    { description: 'a boolean', value: true, type: 'text' },
+    { description: 'a blank string', value: '  ', type: 'text' },
+    { description: 'an unconfigured choice', value: 'Maybe', type: 'select' },
+  ])(
+    'rejects required PSF Created fields containing $description',
+    async ({ value, type }) => {
+      const actor = {
+        id: 'setup-owner-1',
+        username: 'setup.gntc.demo',
+        displayName: 'Setup Owner GNTC Demo',
+        role: 'setup_owner' as const,
+        setupOwnerDepartment: 'GNTC' as const,
+      };
+      const requiredSchema = {
+        formKey: 'psf-created-information',
+        version: 4,
+        title: 'PSF Created Information v4',
+        sections: [
+          {
+            sectionKey: 'setup',
+            title: 'Setup',
+            fields: [
+              {
+                fieldKey: 'required_value',
+                canonicalKey: 'required_value',
+                label: 'Required Value',
+                type,
+                required: true,
+                ...(type === 'select' ? { options: ['Yes', 'No'] } : {}),
+              },
+            ],
+          },
+        ],
+      };
+      workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+        'PSF Created',
+      ]);
+      dbClient.query.mockResolvedValueOnce({}).mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            requester_user_id: null,
+            psf_created_data_json: { required_value: value },
+            psf_created_schema_snapshot_json: requiredSchema,
+          },
+        ],
+      });
+
+      await expect(
+        service.updateRequestStatus('request-1', {
+          status: 'PSF Created',
+          actor,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(dbClient.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE psf_requests'),
+        expect.anything(),
+      );
+    },
+  );
+
+  it('accepts an owned configured PSF Created choice when moving to PSF Created', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const requiredSchema = {
+      formKey: 'psf-created-information',
+      version: 4,
+      title: 'PSF Created Information v4',
+      sections: [
+        {
+          sectionKey: 'setup',
+          title: 'Setup',
+          fields: [
+            {
+              fieldKey: 'mirror_die_available',
+              canonicalKey: 'mirror_die_available',
+              label: 'Mirror Die Available',
+              type: 'select' as const,
+              required: true,
+              options: ['Yes', 'No'],
+            },
+          ],
+        },
+      ],
+    };
+    const updatedRow = {
+      id: 'request-1',
+      request_no: 'PSF-0001',
+      form_key: 'psf-request',
+      form_version: 3,
+      status: 'PSF Created',
+      requester: 'Fook',
+      requester_user_id: null,
+      setup_owner: actor.displayName,
+      setup_owner_role: 'GNTC',
+      product_type: 'Existing Product',
+      requester_data_json: {},
+      psf_created_data_json: { mirror_die_available: 'Yes' },
+      psf_created_schema_snapshot_json: requiredSchema,
+      schema_snapshot_json: activeSchema.schema,
+      created_at: new Date('2026-06-18T01:02:03.000Z'),
+      updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      submitted_at: null,
+      psf_created_at: new Date('2026-06-18T01:06:03.000Z'),
+      completed_at: null,
+    };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+      'PSF Created',
+    ]);
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            requester_user_id: null,
+            psf_created_data_json: { mirror_die_available: 'Yes' },
+            psf_created_schema_snapshot_json: requiredSchema,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [updatedRow] })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'PSF Created',
+        actor,
+      }),
+    ).resolves.toMatchObject({
+      status: 'PSF Created',
+      psfCreatedData: { mirror_die_available: 'Yes' },
+    });
+  });
+
+  it('allows PSF Created only after the stored schema required values are present', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const storedSchema = {
+      formKey: 'psf-created-information',
+      version: 4,
+      title: 'PSF Created Information v4',
+      sections: [
+        {
+          sectionKey: 'setup',
+          title: 'Setup',
+          fields: [
+            {
+              fieldKey: 'file_name_v4',
+              canonicalKey: 'file_name',
+              label: 'PSF Setup File Name',
+              type: 'text' as const,
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    const updatedRow = {
+      id: 'request-1',
+      request_no: 'PSF-0001',
+      form_key: 'psf-request',
+      form_version: 3,
+      status: 'PSF Created',
+      requester: 'Fook',
+      requester_user_id: requesterActor.id,
+      setup_owner: actor.displayName,
+      setup_owner_role: 'GNTC',
+      product_type: 'Existing Product',
+      requester_data_json: { product_type: 'Existing Product' },
+      psf_created_data_json: { file_name_v4: 'ready.psf' },
+      psf_created_schema_snapshot_json: storedSchema,
+      schema_snapshot_json: activeSchema.schema,
+      created_at: new Date('2026-06-18T01:02:03.000Z'),
+      updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+      psf_created_at: new Date('2026-06-18T01:06:03.000Z'),
+      completed_at: null,
+    };
+    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
+      'PSF Created',
+    ]);
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            requester_user_id: requesterActor.id,
+            psf_created_data_json: { file_name_v4: 'ready.psf' },
+            psf_created_schema_snapshot_json: storedSchema,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [updatedRow] })
+      .mockResolvedValueOnce({});
+
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'PSF Created',
+        actor,
+      }),
+    ).resolves.toMatchObject({
+      status: 'PSF Created',
+      psfCreatedInformationSchema: storedSchema,
+    });
+    expect(dbClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('FOR UPDATE'),
+      ['request-1'],
+    );
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'REQUEST_STATUS_CHANGED',
+        metadata: {
+          fromStatus: 'Setup In Progress',
+          toStatus: 'PSF Created',
+        },
+      }),
+      dbClient,
+    );
+  });
+
   it.each(['PSF Created', 'Completed'])(
     'returns PSF Created Information read-only to a requester at %s',
     async (status) => {
@@ -1076,6 +1858,109 @@ describe('RequestsService draft flow', () => {
       });
     },
   );
+
+  it('allows incomplete PSF Created saves even when the request snapshot marks a field required', async () => {
+    const actor = {
+      id: 'setup-owner-1',
+      username: 'setup.gntc.demo',
+      displayName: 'Setup Owner GNTC Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    const updatedAt = new Date('2026-06-18T01:05:03.000Z');
+    const storedSchema = {
+      formKey: 'psf-created-information',
+      version: 4,
+      title: 'PSF Created Information v4',
+      sections: [
+        {
+          sectionKey: 'setup',
+          title: 'Setup',
+          fields: [
+            {
+              fieldKey: 'required_file_name',
+              canonicalKey: 'file_name',
+              label: 'Required File Name',
+              type: 'text' as const,
+              required: true,
+            },
+            {
+              fieldKey: 'required_setup_date',
+              canonicalKey: 'required_setup_date',
+              label: 'Required Setup Date',
+              type: 'date' as const,
+              required: true,
+            },
+            {
+              fieldKey: 'optional_setup_date',
+              canonicalKey: 'optional_setup_date',
+              label: 'Optional Setup Date',
+              type: 'date' as const,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    pool.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            status: 'Setup In Progress',
+            updated_at: updatedAt,
+            psf_created_schema_snapshot_json: storedSchema,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'request-1',
+            request_no: 'PSF-0001',
+            form_key: 'psf-request',
+            form_version: 3,
+            status: 'Setup In Progress',
+            requester: 'Fook',
+            setup_owner: actor.displayName,
+            setup_owner_role: 'GNTC',
+            product_type: 'Existing Product',
+            requester_data_json: {},
+            psf_created_data_json: {},
+            psf_created_schema_snapshot_json: storedSchema,
+            schema_snapshot_json: activeSchema.schema,
+            created_at: new Date('2026-06-18T01:02:03.000Z'),
+            updated_at: updatedAt,
+            submitted_at: null,
+            psf_created_at: null,
+            completed_at: null,
+          },
+        ],
+      });
+    const updatePsfCreatedData = Reflect.get(
+      service,
+      'updatePsfCreatedData',
+    ) as (
+      requestId: string,
+      dto: {
+        actor: typeof actor;
+        expectedUpdatedAt: string;
+        psfCreatedData: Record<string, unknown>;
+      },
+    ) => Promise<unknown>;
+
+    await expect(
+      updatePsfCreatedData.call(service, 'request-1', {
+        actor,
+        expectedUpdatedAt: updatedAt.toISOString(),
+        psfCreatedData: { optional_setup_date: '   ' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'Setup In Progress',
+      psfCreatedData: {},
+      psfCreatedInformationSchema: storedSchema,
+    });
+  });
 
   it('allows a setup owner to save normalized PSF Created Information without changing status and records the acting owner', async () => {
     const actor = {
@@ -1138,8 +2023,6 @@ describe('RequestsService draft flow', () => {
         psfCreatedData: {
           psf_setup_file_name: ' final-setup.psf ',
           attachment_reference: ' https://files.example/final-layout.pdf ',
-          layout: 42,
-          unexpected_field: 'must be dropped',
         },
       });
     };

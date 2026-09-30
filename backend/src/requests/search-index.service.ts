@@ -1,5 +1,6 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
+import { resolvePsfCreatedInformationSchema } from '../admin/form_schema.constants';
 import type { FormSchemaJson } from '../admin/form_schema.service';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
 import { DATABASE_POOL } from '../database/database.service';
@@ -75,6 +76,7 @@ export interface RequestExportItem {
   updatedAt: string;
   requesterData: RequesterData;
   psfCreatedData: RequesterData;
+  psfCreatedInformationSchema?: FormSchemaJson;
   schemaSnapshot: FormSchemaJson;
   canonicalValues: CanonicalValues | null;
 }
@@ -117,6 +119,7 @@ interface RequestExportRow {
   updated_at: Date | string;
   requester_data_json: RequesterData;
   psf_created_data_json: RequesterData;
+  psf_created_schema_snapshot_json?: FormSchemaJson | null;
   schema_snapshot_json: FormSchemaJson;
   canonical_values_json: CanonicalValues | null;
   total_count: number;
@@ -360,6 +363,7 @@ export class SearchIndexService implements OnModuleInit {
           request.updated_at,
           request.requester_data_json,
           request.psf_created_data_json,
+          request.psf_created_schema_snapshot_json,
           request.schema_snapshot_json,
           canonical_values.canonical_values_json,
           COUNT(*) OVER()::int AS total_count
@@ -724,6 +728,9 @@ export class SearchIndexService implements OnModuleInit {
       updatedAt: this.serializeTimestamp(row.updated_at),
       requesterData: row.requester_data_json ?? {},
       psfCreatedData: row.psf_created_data_json ?? {},
+      psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
+        row.psf_created_schema_snapshot_json,
+      ),
       schemaSnapshot: row.schema_snapshot_json,
       canonicalValues: row.canonical_values_json,
     };

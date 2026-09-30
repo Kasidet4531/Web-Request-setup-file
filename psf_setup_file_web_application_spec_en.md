@@ -228,6 +228,17 @@ This section is filled in by the setup file owner or engineer after completing t
 - Attachment
 ```
 
+### Form Management and Historical Data
+
+- Admins configure this section through the existing Form Management editor, selecting **PSF Created Information**. Its form key is `psf-created-information`; versions and drafts are independent from Requester Information (`psf-request`).
+- Reuse **Duplicate → Draft → Edit → Preview → Save → Publish**. Published definitions are immutable. Discard deletes only a never-published draft.
+- Store definitions in the existing `form_definitions` table. Storage initialization adds the nullable `psf_created_schema_snapshot_json JSONB` column to `psf_requests`; no request values or requester snapshots are backfilled or overwritten.
+- Capture the active PSF descriptor when a new request is created. Publishing affects subsequently created requests only. A requester schema upgrade does not upgrade the PSF descriptor.
+- Requests without a stored PSF descriptor retain the immutable original field definition as compatibility metadata; this is not a fabricated historical snapshot. Their existing values remain unchanged.
+- Save may retain incomplete required fields. A transition to **PSF Created** requires every required PSF field from that request's descriptor. Validate supplied field keys, scalar values and configured choices against the same descriptor; preserve optimistic concurrency.
+- Preserve actor/status visibility and edit permissions below. Section-role configuration is not reintroduced. Attachment remains a text reference, not an upload feature.
+- Excel interprets each record through its descriptor and keeps missing historical/legacy PSF fields after the active fields, so deleting a field from a newer definition does not remove its old exported values. Requester-before-PSF-Created masking remains enforced.
+
 ### Visibility Rules
 
 | User Role | Before PSF Created | After PSF Created |

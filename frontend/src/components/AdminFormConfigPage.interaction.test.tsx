@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import type {
+  FormKey,
   FormSchemaDraft,
   FormSchemaVersionListResponse,
   FormSchemaVersionResponse,
@@ -22,20 +23,31 @@ const formConfigApi = vi.hoisted(() => ({
 }))
 const navigate = vi.hoisted(() => vi.fn())
 const setBreadcrumb = vi.hoisted(() => vi.fn())
+const blockerHarness = vi.hoisted(() => ({ options: null as unknown }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-router')>(),
   useNavigate: () => navigate,
+  useBlocker: (options: unknown) => {
+    blockerHarness.options = options
+  },
 }))
 
 const formConfigHookHarness = vi.hoisted(() => {
   let effectDependencies: Array<readonly unknown[] | undefined> = []
+  let effects: Array<{ index: number; effect: () => void | (() => void) }> = []
+  let effectCleanups: Array<(() => void) | undefined> = []
   let effectIndex = 0
-  let effects: Array<() => void | (() => void)> = []
   let refIndex = 0
   let refs: Array<{ current: unknown }> = []
   let state: unknown[] = []
   let stateIndex = 0
+
+  function cleanupEffects() {
+    effectCleanups.forEach((cleanup) => cleanup?.())
+    effectCleanups = []
+    effects = []
+  }
 
   function dependenciesChanged(
     previous: readonly unknown[] | undefined,
@@ -55,28 +67,39 @@ const formConfigHookHarness = vi.hoisted(() => {
       stateIndex = 0
     },
     reset() {
+      cleanupEffects()
       effectDependencies = []
       effectIndex = 0
-      effects = []
       refIndex = 0
       refs = []
       state = []
       stateIndex = 0
     },
+    unmount() {
+      cleanupEffects()
+    },
     runEffects() {
       const pendingEffects = effects
       effects = []
-      pendingEffects.forEach((effect) => effect())
+      pendingEffects.forEach(({ index, effect }) => {
+        effectCleanups[index]?.()
+        const cleanup = effect()
+        effectCleanups[index] = typeof cleanup === 'function' ? cleanup : undefined
+      })
     },
     useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {
-      if (dependenciesChanged(effectDependencies[effectIndex], dependencies)) {
-        effects.push(effect)
-        effectDependencies[effectIndex] = dependencies ? [...dependencies] : undefined
+      const index = effectIndex
+      if (dependenciesChanged(effectDependencies[index], dependencies)) {
+        effects.push({ index, effect })
+        effectDependencies[index] = dependencies ? [...dependencies] : undefined
       }
       effectIndex += 1
     },
     useMemo<T>(factory: () => T) {
       return factory()
+    },
+    useCallback<T extends (...args: never[]) => unknown>(callback: T) {
+      return callback
     },
     useRef<T>(initialValue: T) {
       const index = refIndex
@@ -100,10 +123,11 @@ const formConfigHookHarness = vi.hoisted(() => {
         )
       }
 
-      return [state[index], (nextState: unknown) => {
-        state[index] =
+      const stateForRender = state
+      return [stateForRender[index], (nextState: unknown) => {
+        stateForRender[index] =
           typeof nextState === 'function'
-            ? (nextState as (currentState: unknown) => unknown)(state[index])
+            ? (nextState as (currentState: unknown) => unknown)(stateForRender[index])
             : nextState
       }]
     },
@@ -125,6 +149,7 @@ vi.mock('react', async (importOriginal) => {
   return {
     ...actual,
     useContext: () => setBreadcrumb,
+    useCallback: formConfigHookHarness.useCallback,
     useEffect: formConfigHookHarness.useEffect,
     useMemo: formConfigHookHarness.useMemo,
     useRef: formConfigHookHarness.useRef,
@@ -180,8 +205,30 @@ function buildVersion(overrides: Partial<FormSchemaVersionResponse> = {}): FormS
   }
 }
 
-function buildList(versions: FormSchemaVersionResponse[]): FormSchemaVersionListResponse {
-  return { formKey: 'psf-request', versions }
+function buildPsfCreatedVersion(overrides: Partial<FormSchemaVersionResponse> = {}): FormSchemaVersionResponse {
+  const formKey = 'psf-created-information'
+  const schema: FormSchemaDraft = {
+    formKey,
+    title: 'Created details',
+    sections: [{
+      sectionKey: 'created_details',
+      title: 'Created details',
+      fields: [{ fieldKey: 'custom_lot_ref', canonicalKey: 'custom_lot_ref', label: 'Custom lot reference', type: 'text', required: true }],
+    }],
+  }
+  const version = overrides.version ?? 7
+  return buildVersion({
+    ...overrides,
+    formKey,
+    schema: { ...schema, ...overrides.schema, formKey, version },
+    status: overrides.status ?? 'draft',
+    title: overrides.title ?? schema.title,
+    version,
+  })
+}
+
+function buildList(versions: FormSchemaVersionResponse[], formKey: FormKey = 'psf-request'): FormSchemaVersionListResponse {
+  return { formKey, versions }
 }
 
 function findRenderedElement(
@@ -234,20 +281,20 @@ function requireRenderedElement(
   return element
 }
 
-function renderAdminFormConfigPage(version: string | null = '2') {
+function renderAdminFormConfigPage(version: string | null = '2', formKey: FormKey = 'psf-request') {
   formConfigHookHarness.beginRender()
-  return AdminFormConfigPage({ version: version ?? undefined })
+  return AdminFormConfigPage({ formKey, version: version ?? undefined })
 }
 
 async function flushAsyncWork(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
-async function loadAdminFormConfigPage(version: string | null = '2') {
-  renderAdminFormConfigPage(version)
+async function loadAdminFormConfigPage(version: string | null = '2', formKey: FormKey = 'psf-request') {
+  renderAdminFormConfigPage(version, formKey)
   formConfigHookHarness.runEffects()
   await flushAsyncWork()
-  return renderAdminFormConfigPage(version)
+  return renderAdminFormConfigPage(version, formKey)
 }
 
 function getButton(page: unknown, label: string): RenderedElement {
@@ -277,6 +324,42 @@ function getVersionSelector(page: unknown): RenderedElement {
   return requireRenderedElement(page, (element) => element.type === AdminFormConfigVersionSelector)
 }
 
+function getFormKeySelector(page: unknown): RenderedElement {
+  return requireRenderedElement(page, (element) => element.type === 'select' && element.props['aria-label'] === 'Form to manage')
+}
+
+type BlockerArgs = {
+  action: 'PUSH' | 'REPLACE' | 'BACK' | 'FORWARD' | 'GO'
+  current: { pathname: string }
+  next: { pathname: string }
+}
+
+type BlockerOptions = {
+  enableBeforeUnload?: boolean | (() => boolean)
+  shouldBlockFn: (args: BlockerArgs) => boolean | Promise<boolean>
+}
+
+function getBlockerOptions(): BlockerOptions {
+  if (!blockerHarness.options || typeof blockerHarness.options !== 'object') {
+    throw new Error('Expected the editor router blocker to be registered')
+  }
+
+  return blockerHarness.options as BlockerOptions
+}
+
+async function attemptEditorNavigation(
+  nextPathname: string,
+  action: BlockerArgs['action'] = 'PUSH',
+  currentPathname = '/admin/form-config/2',
+): Promise<string> {
+  const blocked = await getBlockerOptions().shouldBlockFn({
+    action,
+    current: { pathname: currentPathname },
+    next: { pathname: nextPathname },
+  })
+  return blocked ? currentPathname : nextPathname
+}
+
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
 
 afterEach(() => {
@@ -295,30 +378,55 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.publishAdminFormConfigDraft.mockReset()
     formConfigApi.saveAdminFormConfigDraft.mockReset()
     navigate.mockReset()
+    blockerHarness.options = null
     formConfigHookHarness.reset()
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
   })
 
-  it('provides an editor Back button that guards unsaved draft changes', async () => {
+  it('routes editor exits through the central blocker instead of an overlapping Back-link guard', async () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
-    let page = await loadAdminFormConfigPage()
+    const page = await loadAdminFormConfigPage()
     const findBack = (tree: unknown) => requireRenderedElement(tree, (element) => element.props.to === '/admin/form-config' && element.props.className === 'secondary-button')
     const confirm = window.confirm as ReturnType<typeof vi.fn>
-    const preventDefault = vi.fn()
+    expect(findBack(page).props.onClick).toBeUndefined()
 
-    ;(findBack(page).props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
-    expect(confirm).not.toHaveBeenCalled()
-
-    ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: JSON.stringify({ ...editableSchema, title: 'Unsaved' }) } })
-    page = renderAdminFormConfigPage()
+    const editedText = JSON.stringify({ ...editableSchema, title: 'Unsaved' })
+    ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: editedText } })
+    renderAdminFormConfigPage()
     confirm.mockReturnValue(false)
-    ;(findBack(page).props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
-    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and return to Form management?')
-    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(await attemptEditorNavigation('/admin/form-config')).toBe('/admin/form-config/2')
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and leave this page?')
+    expect(confirm).toHaveBeenCalledOnce()
 
     confirm.mockReturnValue(true)
-    ;(findBack(page).props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
-    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(await attemptEditorNavigation('/admin/form-config')).toBe('/admin/form-config')
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(getEditor(renderAdminFormConfigPage()).props.value).toBe(editedText)
+  })
+
+  it('guards sidebar, New Request, and browser Back exits once while preserving cancelled edits', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    const page = await loadAdminFormConfigPage()
+    expect(getBlockerOptions().enableBeforeUnload).toBe(false)
+    const editedText = JSON.stringify({ ...editableSchema, title: 'Keep these edits' })
+    ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: editedText } })
+    renderAdminFormConfigPage()
+    expect(getBlockerOptions().enableBeforeUnload).toBe(true)
+
+    const confirm = window.confirm as ReturnType<typeof vi.fn>
+    confirm.mockReturnValue(false)
+    expect(await attemptEditorNavigation('/dashboard')).toBe('/admin/form-config/2')
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(getEditor(renderAdminFormConfigPage()).props.value).toBe(editedText)
+
+    confirm.mockReturnValue(true)
+    expect(await attemptEditorNavigation('/requests/new')).toBe('/requests/new')
+    expect(confirm).toHaveBeenCalledTimes(2)
+
+    confirm.mockReturnValue(false)
+    expect(await attemptEditorNavigation('/admin/form-config', 'BACK')).toBe('/admin/form-config/2')
+    expect(confirm).toHaveBeenCalledTimes(3)
+    expect(getBlockerOptions().enableBeforeUnload).toBe(true)
   })
 
   it('shows the selected active version read-only and duplicates it into a fresh draft', async () => {
@@ -378,6 +486,7 @@ describe('AdminFormConfigPage interactions', () => {
     await flushAsyncWork()
     page = renderAdminFormConfigPage(null)
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('New requests will use v2'))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted.'))
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Already submitted requests keep their saved form snapshot'))
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 2 })
     expect(getVersionSelector(page).props.versions).toEqual([published, { ...active, status: 'published' }])
@@ -401,7 +510,7 @@ describe('AdminFormConfigPage interactions', () => {
     const page = await loadAdminFormConfigPage()
     expect(findRenderedElement(page, (element) => element.type === 'nav' && element.props['aria-label'] === 'Form version breadcrumbs')).toBeNull()
     formConfigHookHarness.runEffects()
-    expect(setBreadcrumb).toHaveBeenCalledWith({ version: 2, status: 'draft', dirty: false })
+    expect(setBreadcrumb).toHaveBeenCalledWith({ formKey: 'psf-request', version: 2, status: 'draft', dirty: false })
   })
 
   it('uses the visual editor as the primary draft editor and keeps advanced JSON optional', async () => {
@@ -631,7 +740,7 @@ describe('AdminFormConfigPage interactions', () => {
 
     expect(getButton(page, 'Publish').props.disabled).toBe(true)
     formConfigHookHarness.runEffects()
-    expect(setBreadcrumb).toHaveBeenCalledWith({ version: 2, status: 'draft', dirty: true })
+    expect(setBreadcrumb).toHaveBeenCalledWith({ formKey: 'psf-request', version: 2, status: 'draft', dirty: true })
     expect(getEditor(page).props.value).toBe(editedText)
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(1)
 
@@ -671,5 +780,162 @@ describe('AdminFormConfigPage interactions', () => {
       kind: 'error',
       message: 'You do not have permission to manage form configuration. The server enforces administrator authorization. Only admins can manage form schema configurations.',
     })
+  })
+
+  it('loads and previews only the selected PSF Created Information family', async () => {
+    const formKey = 'psf-created-information'
+    const draft = buildPsfCreatedVersion()
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([draft], formKey))
+
+    const page = await loadAdminFormConfigPage('7', formKey)
+
+    expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledWith(formKey)
+    expect(getVisualEditor(page).props.schema).toMatchObject({ formKey, title: 'Created details' })
+    expect(getPreview(page).props.schema).toMatchObject({ formKey, version: 7 })
+  })
+
+  it('fails closed when an older backend returns requester configuration for the PSF selection', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+
+    const page = await loadAdminFormConfigPage('2', 'psf-created-information')
+
+    expect(findRenderedElement(page, (element) => element.type === AdminFormConfigEditor)).toBeNull()
+    expect(getFeedback(page).props.feedback).toMatchObject({ kind: 'error' })
+    expect(findRenderedElement(page, (element) => element.type === 'h1' && element.props.children === 'v2 · PSF Request Form')).toBeNull()
+  })
+
+  it('routes a dirty form-family switch through the central blocker exactly once', async () => {
+    const formKey = 'psf-created-information'
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildPsfCreatedVersion()], formKey))
+    let page = await loadAdminFormConfigPage('7', formKey)
+    const editor = getEditor(page)
+    ;(editor.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: JSON.stringify({ ...buildPsfCreatedVersion().schema, title: 'Unsaved PSF schema' }) } })
+    page = renderAdminFormConfigPage('7', formKey)
+    const confirm = window.confirm as ReturnType<typeof vi.fn>
+    confirm.mockReturnValue(false)
+    ;(getFormKeySelector(page).props.onChange as (event: { target: { value: FormKey } }) => void)({ target: { value: 'psf-request' } })
+    expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config', search: { formKey: 'psf-request' } })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(await attemptEditorNavigation('/admin/form-config', 'PUSH', '/admin/form-config/psf-created-information/7'))
+      .toBe('/admin/form-config/psf-created-information/7')
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and leave this page?')
+    expect(confirm).toHaveBeenCalledOnce()
+
+    confirm.mockReturnValue(true)
+    ;(getFormKeySelector(page).props.onChange as (event: { target: { value: FormKey } }) => void)({ target: { value: 'psf-request' } })
+    expect(navigate).toHaveBeenCalledTimes(2)
+    expect(await attemptEditorNavigation('/admin/form-config', 'PUSH', '/admin/form-config/psf-created-information/7'))
+      .toBe('/admin/form-config')
+    expect(confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('duplicates a PSF version and opens its explicit form-key editor URL', async () => {
+    const formKey = 'psf-created-information'
+    const active = buildPsfCreatedVersion({ status: 'active' })
+    const draft = buildPsfCreatedVersion({ version: 8 })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([active], formKey))
+    formConfigApi.duplicateAdminFormConfigVersion.mockResolvedValue(draft)
+    const page = await loadAdminFormConfigPage(null, formKey)
+
+    ;(getVersionSelector(page).props.onDuplicate as (version: number) => void)(7)
+    await flushAsyncWork()
+
+    expect(formConfigApi.duplicateAdminFormConfigVersion).toHaveBeenCalledWith({ version: 7 }, formKey)
+    expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config/$formKey/$version', params: { formKey, version: '8' } })
+  })
+
+  it('does not let a deferred duplicate from an unmounted same-version editor navigate or set new-page feedback', async () => {
+    const formKey = 'psf-created-information'
+    const active = buildPsfCreatedVersion({ status: 'active' })
+    const draft = buildPsfCreatedVersion({ version: 8 })
+    let resolveDuplicate!: (value: FormSchemaVersionResponse) => void
+    const duplicateResponse = new Promise<FormSchemaVersionResponse>((resolve) => {
+      resolveDuplicate = resolve
+    })
+    formConfigApi.fetchAdminFormConfig
+      .mockResolvedValueOnce(buildList([active], formKey))
+      .mockResolvedValueOnce(buildList([active], formKey))
+    formConfigApi.duplicateAdminFormConfigVersion.mockReturnValueOnce(duplicateResponse)
+
+    const oldPage = await loadAdminFormConfigPage('7', formKey)
+    ;(getButton(oldPage, 'Duplicate as draft').props.onClick as () => void)()
+    expect(getFeedback(renderAdminFormConfigPage('7', formKey)).props.loading).toBe(true)
+
+    formConfigHookHarness.unmount()
+    formConfigHookHarness.reset()
+    const currentPage = await loadAdminFormConfigPage('7', formKey)
+    expect(getFeedback(currentPage).props.feedback).toBeNull()
+
+    resolveDuplicate(draft)
+    await flushAsyncWork()
+
+    expect(navigate).not.toHaveBeenCalled()
+    expect(getFeedback(renderAdminFormConfigPage('7', formKey)).props.feedback).toBeNull()
+  })
+
+  it('keeps active PSF versions read-only while previewing the selected family', async () => {
+    const formKey = 'psf-created-information'
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildPsfCreatedVersion({ status: 'active' })], formKey))
+
+    const page = await loadAdminFormConfigPage('7', formKey)
+
+    expect(getVisualEditor(page).props.readOnly).toBe(true)
+    expect(findRenderedElement(page, (element) => element.type === 'textarea' && element.props.id === 'form-config-json')).toBeNull()
+    expect(getPreview(page).props.schema).toMatchObject({ formKey, version: 7 })
+    expect(findRenderedElement(page, (element) => element.type === 'h1' && Array.isArray(element.props.children) && element.props.children.includes('PSF Created Information'))).not.toBeNull()
+  })
+
+  it('saves and publishes a PSF draft with family-scoped lifecycle calls and matching preview metadata', async () => {
+    const formKey = 'psf-created-information'
+    const draft = buildPsfCreatedVersion()
+    const savedSchema: FormSchemaDraft = {
+      formKey: draft.schema.formKey,
+      title: 'Updated created details',
+      sections: draft.schema.sections,
+    }
+    const saved = buildPsfCreatedVersion({ title: savedSchema.title, schema: { ...savedSchema, version: 7 } })
+    const active = buildPsfCreatedVersion({ ...saved, status: 'active' })
+    formConfigApi.fetchAdminFormConfig
+      .mockResolvedValueOnce(buildList([draft], formKey))
+      .mockResolvedValueOnce(buildList([saved], formKey))
+      .mockResolvedValueOnce(buildList([active], formKey))
+    formConfigApi.saveAdminFormConfigDraft.mockResolvedValue(saved)
+    formConfigApi.publishAdminFormConfigDraft.mockResolvedValue(active)
+    let page = await loadAdminFormConfigPage('7', formKey)
+    expect(getPreview(page).props.schema).toMatchObject({ formKey, version: 7 })
+    ;(getVisualEditor(page).props.onChange as (schema: FormSchemaDraft) => void)({ ...draft.schema, title: 'Updated created details' })
+    page = renderAdminFormConfigPage('7', formKey)
+    ;(getButton(page, 'Save draft').props.onClick as () => void)()
+    await flushAsyncWork()
+    page = renderAdminFormConfigPage('7', formKey)
+
+    expect(formConfigApi.saveAdminFormConfigDraft).toHaveBeenCalledWith({ draftVersion: 7, description: 'Keep this description', schema: savedSchema }, formKey)
+    expect(getPreview(page).props.schema).toMatchObject({ formKey, title: 'Updated created details' })
+    ;(getButton(page, 'Publish').props.onClick as () => void)()
+    await flushAsyncWork()
+    page = renderAdminFormConfigPage('7', formKey)
+
+    expect(window.confirm).toHaveBeenCalledWith('Publish PSF Created Information v7? New requests will use this PSF version. Existing requests keep their current PSF form and data and are not upgraded.')
+    expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 7 }, formKey)
+    expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(3)
+    expect(getVisualEditor(page).props.readOnly).toBe(true)
+  })
+
+  it('discards only the selected PSF draft and refreshes the selected family', async () => {
+    const formKey = 'psf-created-information'
+    const draft = buildPsfCreatedVersion()
+    const active = buildPsfCreatedVersion({ version: 6, status: 'active' })
+    formConfigApi.fetchAdminFormConfig
+      .mockResolvedValueOnce(buildList([draft, active], formKey))
+      .mockResolvedValueOnce(buildList([active], formKey))
+    formConfigApi.discardAdminFormConfigDraft.mockResolvedValue(null)
+    const page = await loadAdminFormConfigPage(null, formKey)
+
+    ;(getVersionSelector(page).props.onDiscard as (version: number) => void)(7)
+    await flushAsyncWork()
+
+    expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(7, formKey)
+    expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(2)
+    expect(getVersionSelector(renderAdminFormConfigPage(null, formKey)).props.versions).toEqual([active])
   })
 })

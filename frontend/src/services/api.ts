@@ -2,6 +2,7 @@ import type {
   ActiveFormSchemaResponse,
   DynamicFormValues,
   FormSchema,
+  FormKey,
   FormSchemaVersionListResponse,
   FormSchemaVersionResponse,
   PublishFormSchemaDraftPayload,
@@ -78,6 +79,10 @@ function buildQueryPath(path: string, query: object): string {
 
   const queryString = params.toString()
   return queryString ? `${path}?${queryString}` : path
+}
+
+function adminFormConfigPath(path: string, formKey?: FormKey): string {
+  return formKey === 'psf-created-information' ? buildQueryPath(path, { formKey }) : path
 }
 
 export interface PsfRequestPayload {
@@ -207,7 +212,7 @@ export interface UpgradeDraftSchemaPayload {
 export interface PsfRequestResponse {
   id: string
   requestNo: string
-  formKey: string
+  formKey: FormKey
   formVersion: number
   status: string
   requester: string | null
@@ -329,26 +334,26 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<ActiveFormSchemaResponse>(`/forms/${encodeURIComponent(formKey)}/schema`, {
         method: 'GET',
       }),
-    fetchAdminFormConfig: () =>
-      request<FormSchemaVersionListResponse>('/admin/form-config', {
+    fetchAdminFormConfig: (formKey?: FormKey) =>
+      request<FormSchemaVersionListResponse>(adminFormConfigPath('/admin/form-config', formKey), {
         method: 'GET',
       }),
-    saveAdminFormConfigDraft: (payload: SaveFormSchemaDraftPayload) =>
-      request<FormSchemaVersionResponse>('/admin/form-config', {
+    saveAdminFormConfigDraft: (payload: SaveFormSchemaDraftPayload, formKey?: FormKey) =>
+      request<FormSchemaVersionResponse>(adminFormConfigPath('/admin/form-config', formKey), {
         body: payload,
         method: 'PUT',
       }),
-    duplicateAdminFormConfigVersion: (payload: { version: number }) =>
-      request<FormSchemaVersionResponse>('/admin/form-config/duplicate', {
+    duplicateAdminFormConfigVersion: (payload: { version: number }, formKey?: FormKey) =>
+      request<FormSchemaVersionResponse>(adminFormConfigPath('/admin/form-config/duplicate', formKey), {
         body: payload,
         method: 'POST',
       }),
-    discardAdminFormConfigDraft: (version: number) =>
-      request<null>(`/admin/form-config/draft/${encodeURIComponent(version)}`, {
+    discardAdminFormConfigDraft: (version: number, formKey?: FormKey) =>
+      request<null>(adminFormConfigPath(`/admin/form-config/draft/${encodeURIComponent(version)}`, formKey), {
         method: 'DELETE',
       }),
-    publishAdminFormConfigDraft: (payload: PublishFormSchemaDraftPayload) =>
-      request<FormSchemaVersionResponse>('/admin/form-config/publish', {
+    publishAdminFormConfigDraft: (payload: PublishFormSchemaDraftPayload, formKey?: FormKey) =>
+      request<FormSchemaVersionResponse>(adminFormConfigPath('/admin/form-config/publish', formKey), {
         body: payload,
         method: 'POST',
       }),

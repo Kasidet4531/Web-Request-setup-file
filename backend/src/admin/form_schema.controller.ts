@@ -10,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -26,7 +27,10 @@ import {
   type SaveFormSchemaDraftDto,
 } from './form_schema.service';
 
-const PSF_REQUEST_FORM_KEY = 'psf-request';
+import {
+  PSF_REQUEST_FORM_KEY,
+  SUPPORTED_FORM_KEYS,
+} from './form_schema.constants';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -41,21 +45,29 @@ export class FormSchemaController {
   @Get()
   async getFormConfig(
     @Req() request: AuthenticatedRequest,
+    @Query() query: unknown,
   ): Promise<FormSchemaVersionListResponse> {
     await this.getAuthenticatedAdmin(request);
+    const formKey = this.parseFormKey(query);
 
-    return this.formSchemaService.listVersions();
+    return formKey === undefined
+      ? this.formSchemaService.listVersions()
+      : this.formSchemaService.listVersions(formKey);
   }
 
   @Put()
   async saveDraft(
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
+    @Query() query: unknown,
   ): Promise<FormSchemaVersionResponse> {
     const actor = await this.getAuthenticatedAdmin(request);
-    const dto = this.parseSaveDraft(body);
+    const formKey = this.parseFormKey(query);
+    const dto = this.parseSaveDraft(body, formKey ?? PSF_REQUEST_FORM_KEY);
 
-    return this.formSchemaService.saveDraft(dto, actor);
+    return formKey === undefined
+      ? this.formSchemaService.saveDraft(dto, actor)
+      : this.formSchemaService.saveDraft(dto, actor, formKey);
   }
 
   @Post('publish')
@@ -63,22 +75,30 @@ export class FormSchemaController {
   async publishDraft(
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
+    @Query() query: unknown,
   ): Promise<FormSchemaVersionResponse> {
     await this.getAuthenticatedAdmin(request);
+    const formKey = this.parseFormKey(query);
+    const version = this.parsePublishVersion(body);
 
-    return this.formSchemaService.publishDraft(this.parsePublishVersion(body));
+    return formKey === undefined
+      ? this.formSchemaService.publishDraft(version)
+      : this.formSchemaService.publishDraft(version, formKey);
   }
 
   @Post('duplicate')
   async duplicateVersion(
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
+    @Query() query: unknown,
   ): Promise<FormSchemaVersionResponse> {
     const actor = await this.getAuthenticatedAdmin(request);
-    return this.formSchemaService.duplicateVersion(
-      this.parsePublishVersion(body),
-      actor,
-    );
+    const version = this.parsePublishVersion(body);
+    const formKey = this.parseFormKey(query);
+
+    return formKey === undefined
+      ? this.formSchemaService.duplicateVersion(version, actor)
+      : this.formSchemaService.duplicateVersion(version, actor, formKey);
   }
 
   @Delete('draft/:version')
@@ -86,8 +106,10 @@ export class FormSchemaController {
   async discardDraft(
     @Param('version') version: string,
     @Req() request: AuthenticatedRequest,
+    @Query() query: unknown,
   ): Promise<void> {
     await this.getAuthenticatedAdmin(request);
+    const formKey = this.parseFormKey(query);
     const numericVersion = Number(version);
     if (
       !/^\d+$/.test(version) ||
@@ -96,7 +118,39 @@ export class FormSchemaController {
     ) {
       throw new BadRequestException('version must be a positive safe integer.');
     }
-    await this.formSchemaService.discardDraft(numericVersion);
+    if (formKey === undefined) {
+      await this.formSchemaService.discardDraft(numericVersion);
+    } else {
+      await this.formSchemaService.discardDraft(numericVersion, formKey);
+    }
+  }
+
+  private parseFormKey(
+    query: unknown,
+  ): (typeof SUPPORTED_FORM_KEYS)[number] | undefined {
+    if (query === undefined) return undefined;
+    if (
+      !isRecord(query) ||
+      Reflect.ownKeys(query).some((key) => key !== 'formKey')
+    ) {
+      throw new BadRequestException(
+        'Only the formKey query parameter is allowed.',
+      );
+    }
+    if (!Object.hasOwn(query, 'formKey')) return undefined;
+
+    const value = query.formKey;
+    if (
+      typeof value === 'string' &&
+      SUPPORTED_FORM_KEYS.includes(
+        value as (typeof SUPPORTED_FORM_KEYS)[number],
+      )
+    ) {
+      return value as (typeof SUPPORTED_FORM_KEYS)[number];
+    }
+    throw new BadRequestException(
+      `formKey must be one of: ${SUPPORTED_FORM_KEYS.join(', ')}.`,
+    );
   }
 
   private async getAuthenticatedAdmin(
@@ -123,7 +177,10 @@ export class FormSchemaController {
     return actor;
   }
 
-  private parseSaveDraft(body: unknown): SaveFormSchemaDraftDto {
+  private parseSaveDraft(
+    body: unknown,
+    formKey: string,
+  ): SaveFormSchemaDraftDto {
     if (!isRecord(body) || !isRecord(body.schema)) {
       throw new BadRequestException('A form schema object is required.');
     }
@@ -138,10 +195,8 @@ export class FormSchemaController {
     }
 
     const schema = body.schema;
-    if (schema.formKey !== PSF_REQUEST_FORM_KEY) {
-      throw new BadRequestException(
-        `schema.formKey must be ${PSF_REQUEST_FORM_KEY}.`,
-      );
+    if (schema.formKey !== formKey) {
+      throw new BadRequestException(`schema.formKey must be ${formKey}.`);
     }
 
     if (typeof schema.title !== 'string' || schema.title.trim().length === 0) {
@@ -159,7 +214,7 @@ export class FormSchemaController {
       description: description ?? undefined,
       draftVersion,
       schema: {
-        formKey: PSF_REQUEST_FORM_KEY,
+        formKey,
         title: schema.title.trim(),
         sections: schema.sections as FormSchemaSection[],
       },

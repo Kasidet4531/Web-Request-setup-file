@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
 import { NavSidebar } from './NavSidebar'
-import { FormVersionBreadcrumbContext, guardUnsavedFormExit, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
+import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
 import { isStandaloneAuthenticationPath, type UserRole } from './navigationState'
 import { subscribeAuthSessionChanged } from '../services/auth-session'
 import {
@@ -18,7 +18,7 @@ type AuthState =
   | { status: 'anonymous' }
   | { status: 'error'; error: string }
 
-type Crumb = { label: string; to?: string }
+type Crumb = { label: string; to?: string; search?: { formKey: FormVersionBreadcrumb['formKey'] } }
 
 /**
  * Request crumbs use route paths only; form versions use the version already
@@ -36,27 +36,17 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
   }
 
   if (segments[0] === 'requests') {
-    if (!segments[1]) {
-      return []
-    }
-
+    if (!segments[1]) return []
     const crumbs: Crumb[] = [{ label: 'PSF Requests', to: '/requests' }]
-
-    if (segments[1] === 'new') {
-      crumbs.push({ label: 'Create New Request' })
-    } else if (segments[1]) {
+    if (segments[1] === 'new') crumbs.push({ label: 'Create New Request' })
+    else {
       crumbs.push({ label: 'Request detail' })
-      if (segments[2] === 'history') {
-        crumbs.push({ label: 'Audit History' })
-      }
+      if (segments[2] === 'history') crumbs.push({ label: 'Audit History' })
     }
-
     return crumbs
   }
 
-  if (segments[0] === 'history') {
-    return [{ label: 'Global Audit History' }]
-  }
+  if (segments[0] === 'history') return [{ label: 'Global Audit History' }]
 
   if (segments[0] === 'admin') {
     const crumbs: Crumb[] = [{ label: 'Admin Console' }]
@@ -70,11 +60,18 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
     }
 
     if (segments[1] === 'form-config' && segments[2]) {
-      crumbs.push({ label: labels['form-config'], to: '/admin/form-config' })
-      const status = formVersion && String(formVersion.version) === segments[2]
+      const explicitFormKey = segments.length > 3 ? segments[2] : null
+      const formKey = explicitFormKey === 'psf-created-information' ? explicitFormKey : formVersion?.formKey ?? 'psf-request'
+      const version = explicitFormKey ? segments[3] : segments[2]
+      crumbs.push({
+        label: labels['form-config'],
+        to: '/admin/form-config',
+        ...(formKey === 'psf-request' ? {} : { search: { formKey } }),
+      })
+      const status = formVersion && formVersion.formKey === formKey && String(formVersion.version) === version
         ? formVersion.status === 'published' ? 'Inactive' : formVersion.status === 'active' ? 'Active' : 'Draft'
         : null
-      crumbs.push({ label: `v${segments[2]}${status ? ` (${status})` : ''}` })
+      crumbs.push({ label: `v${version}${status ? ` (${status})` : ''}` })
     } else if (segments[1] && labels[segments[1]]) {
       crumbs.push({ label: labels[segments[1]] })
     }
@@ -255,9 +252,7 @@ export function AppShell() {
                 <span className="breadcrumbs" key={`${crumb.label}-${index}`}>
                   {index > 0 ? <ChevronRight className="breadcrumbs__sep" size={13} /> : null}
                   {crumb.to ? (
-                    <Link className="breadcrumbs__link" onClick={crumb.to === '/admin/form-config' && isFormVersion
-                      ? (event) => guardUnsavedFormExit(!!formVersionBreadcrumb?.dirty, event)
-                      : undefined} to={crumb.to}>
+                    <Link className="breadcrumbs__link" search={crumb.search} to={crumb.to}>
                       {crumb.label}
                     </Link>
                   ) : (

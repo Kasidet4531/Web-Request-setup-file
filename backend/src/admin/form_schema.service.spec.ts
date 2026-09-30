@@ -30,6 +30,21 @@ const makeValidSchema = (
       title: 'Requester Information',
       fields: [
         {
+          fieldKey: 'product_type',
+          canonicalKey: 'product_type',
+          label: 'Product Type',
+          type: 'radio',
+          required: true,
+          options: ['New Product', 'Transfer Product', 'Existing Product'],
+        },
+        {
+          fieldKey: 'requester_name',
+          canonicalKey: 'requester',
+          label: 'Requester Name',
+          type: 'text',
+          required: true,
+        },
+        {
           fieldKey: 'title',
           canonicalKey: 'title',
           label: 'Title',
@@ -159,6 +174,27 @@ describe('FormSchemaService', () => {
     );
   });
 
+  it('seeds the fixed PSF Created Information schema as an independent active form', async () => {
+    pool.query.mockResolvedValue({ rows: [] });
+
+    await service.onModuleInit();
+
+    const seedCalls = pool.query.mock.calls.filter(([, values]) =>
+      (values as unknown[] | undefined)?.includes('psf-created-information'),
+    );
+    expect(seedCalls).toHaveLength(1);
+    const seedCall = seedCalls[0] as [string, unknown[]?] | undefined;
+    expect(seedCall?.[1]).toEqual(
+      expect.arrayContaining([
+        'psf-created-information',
+        1,
+        'PSF Created Information',
+        'active',
+        'system-seed',
+      ]),
+    );
+  });
+
   it('returns the active schema using the public API response shape', async () => {
     const schemaJson = makeValidSchema(1, 'PSF Request Form');
     const storedSchema = structuredClone(schemaJson);
@@ -211,12 +247,11 @@ describe('FormSchemaService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('raises NotFoundException when no active schema exists for a form key', async () => {
-    pool.query.mockResolvedValue({ rows: [] });
-
+  it('rejects an unsupported form key before querying active schema storage', async () => {
     await expect(
       service.getActiveSchema('missing-form'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it('refuses a legacy active schema with restricted roles instead of exposing its fields', async () => {
@@ -345,6 +380,67 @@ describe('FormSchemaService', () => {
       'setup_owner',
       'admin',
     ]);
+  });
+
+  it('allocates PSF Created Information versions independently of requester form versions', async () => {
+    const psfCreatedSchema = {
+      formKey: 'psf-created-information',
+      version: 1,
+      title: 'PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'setup',
+          title: 'Setup',
+          fields: [
+            {
+              fieldKey: 'mirror_die_available',
+              canonicalKey: 'mirror_die_available',
+              label: 'Mirror Die Available',
+              type: 'select' as const,
+              required: false,
+              options: ['Yes', 'No'],
+            },
+          ],
+        },
+      ],
+    };
+    const active = makeRow(1, 'active', {
+      form_key: 'psf-created-information',
+      title: psfCreatedSchema.title,
+      schema_json: psfCreatedSchema,
+    });
+    const draft = makeRow(2, 'draft', {
+      form_key: 'psf-created-information',
+      title: psfCreatedSchema.title,
+      schema_json: { ...psfCreatedSchema, version: 2 },
+    });
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: 'psf-created-information' }] };
+      if (query.includes('ORDER BY version DESC')) return { rows: [active] };
+      if (query.includes('INSERT INTO form_definitions'))
+        return { rows: [draft] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+
+    await expect(
+      service.duplicateVersion(1, adminActor, 'psf-created-information'),
+    ).resolves.toMatchObject({
+      formKey: 'psf-created-information',
+      version: 2,
+      status: 'draft',
+    });
+    expect(transactionClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO form_definitions'),
+      expect.arrayContaining([
+        'psf-created-information',
+        2,
+        expect.objectContaining({
+          formKey: 'psf-created-information',
+          version: 2,
+        }),
+      ]),
+    );
   });
 
   it('rejects duplication while another draft exists without overwriting it', async () => {
@@ -634,7 +730,7 @@ describe('FormSchemaService', () => {
     );
   });
 
-  it('demotes the locked active schema before atomically promoting a valid draft while preserving the prior publication timestamp', async () => {
+  it('publishes a safe draft with a new canonical identity while preserving the prior publication timestamp', async () => {
     const active = makeRow(1, 'active', {
       published_at: new Date('2026-06-01T00:00:00.000Z'),
     });
@@ -648,6 +744,7 @@ describe('FormSchemaService', () => {
         },
       ],
     };
+    schemaWithoutVisibility.sections[0].fields[2].canonicalKey = 'title_v2';
     const draft = makeRow(2, 'draft', {
       published_at: null,
       schema_json: schemaWithoutVisibility,
@@ -805,6 +902,134 @@ describe('FormSchemaService', () => {
         ],
       },
     },
+    ...[
+      { description: 'empty select options', options: [] },
+      { description: 'blank select options', options: ['   '] },
+      { description: 'duplicate select options', options: ['Yes', 'Yes'] },
+      { description: 'untrimmed select options', options: [' Yes', 'No'] },
+      {
+        description: 'trim-colliding select options',
+        options: ['Yes', ' Yes '],
+      },
+    ].map(({ description, options }) => ({
+      description,
+      exception: BadRequestException,
+      schema: {
+        ...makeValidSchema(2, 'PSF Request Form v2'),
+        sections: [
+          {
+            ...makeValidSchema(2, 'PSF Request Form v2').sections[0],
+            fields: [
+              {
+                fieldKey: 'product_type',
+                canonicalKey: 'product_type',
+                label: 'Product Type',
+                type: 'select',
+                required: true,
+                options,
+              },
+              ...makeValidSchema(
+                2,
+                'PSF Request Form v2',
+              ).sections[0].fields.slice(1),
+            ],
+          },
+        ],
+      },
+    })),
+    {
+      description: 'a prototype-reserved field key',
+      exception: BadRequestException,
+      schema: {
+        ...makeValidSchema(2, 'PSF Request Form v2'),
+        sections: [
+          {
+            ...makeValidSchema(2, 'PSF Request Form v2').sections[0],
+            fields: [
+              ...makeValidSchema(2, 'PSF Request Form v2').sections[0].fields,
+              {
+                fieldKey: 'constructor',
+                canonicalKey: 'custom_field',
+                label: 'Custom Field',
+                type: 'text',
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      description: 'a prototype-reserved canonical key',
+      exception: BadRequestException,
+      schema: {
+        ...makeValidSchema(2, 'PSF Request Form v2'),
+        sections: [
+          {
+            ...makeValidSchema(2, 'PSF Request Form v2').sections[0],
+            fields: [
+              {
+                ...makeValidSchema(2, 'PSF Request Form v2').sections[0]
+                  .fields[0],
+                canonicalKey: 'toString',
+              },
+              ...makeValidSchema(
+                2,
+                'PSF Request Form v2',
+              ).sections[0].fields.slice(1),
+            ],
+          },
+        ],
+      },
+    },
+    {
+      description: 'a prototype-reserved section key',
+      exception: BadRequestException,
+      schema: {
+        ...makeValidSchema(2, 'PSF Request Form v2'),
+        sections: [
+          {
+            ...makeValidSchema(2, 'PSF Request Form v2').sections[0],
+            sectionKey: '__proto__',
+          },
+        ],
+      },
+    },
+    {
+      description: 'canonical keys that collide after trimming across sections',
+      exception: BadRequestException,
+      schema: {
+        ...makeValidSchema(2, 'PSF Request Form v2'),
+        sections: [
+          {
+            ...makeValidSchema(2, 'PSF Request Form v2').sections[0],
+            fields: [
+              ...makeValidSchema(2, 'PSF Request Form v2').sections[0].fields,
+              {
+                fieldKey: 'first_custom_field',
+                canonicalKey: 'shared_identity',
+                label: 'First',
+                type: 'text',
+                required: false,
+              },
+            ],
+          },
+          {
+            sectionKey: 'other_section',
+            title: 'Other Section',
+            fields: [
+              {
+                fieldKey: 'second_custom_field',
+                canonicalKey: ' shared_identity ',
+                label: 'Second',
+                type: 'text',
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   ])(
     'rejects a draft with $description before changing active status',
     async ({ schema, exception }) => {
@@ -830,6 +1055,31 @@ describe('FormSchemaService', () => {
       expect(transactionClient.release).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('rejects invalid schema choices before updating a draft', async () => {
+    const active = makeRow(1, 'active');
+    const draft = makeRow(2, 'draft');
+    const invalidSchema = makeValidSchema(2);
+    invalidSchema.sections[0].fields[0].options = [];
+    configureTransaction((query) => {
+      if (query.includes('FOR UPDATE')) return { rows: [draft, active] };
+      if (query.includes('SET title = $1')) {
+        return {
+          rows: [makeRow(2, 'draft', { schema_json: invalidSchema })],
+        };
+      }
+      throw new Error(`Unexpected query: ${query}`);
+    });
+
+    await expect(
+      service.saveDraft({ draftVersion: 2, schema: invalidSchema }, adminActor),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transactionClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET title = $1'),
+      expect.anything(),
+    );
+    expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
 
   it('preserves the original database error when rollback itself fails', async () => {
     const updateFailure = new Error('draft update failed');

@@ -1,30 +1,37 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
-import { FormVersionBreadcrumbContext, guardUnsavedFormExit } from './formVersionBreadcrumb'
+import { FormVersionBreadcrumbContext } from './formVersionBreadcrumb'
 import {
   buildAdminFormConfigSavePayload,
   buildPreviewSchema,
   canPublishFormConfig,
   formatFormSchemaDraft,
   getAdminFormConfigErrorMessage,
+  isAdminFormConfigVersionForKey,
+  isAdminFormConfigVersionListForKey,
   parseFormSchemaDraft,
   readFormSchemaEditorDraft,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
 import { api } from '../services/api'
-import type { FormSchema, FormSchemaField, FormSchemaVersionResponse } from '../types/forms'
+import { isFormKey, type FormKey, type FormSchema, type FormSchemaField, type FormSchemaVersionResponse } from '../types/forms'
 
 type AdminFormConfigFeedbackValue = {
   kind: 'success' | 'error'
   message: string
 }
 
+function formKeyArgs(formKey: FormKey): [] | [FormKey] {
+  return formKey === 'psf-request' ? [] : [formKey]
+}
+
 export interface AdminFormConfigVersionSelectorProps {
   disabled: boolean
+  formKey?: FormKey
   onDuplicate: (version: number) => void
   onDiscard: (version: number) => void
   onPublish: (version: number) => void
@@ -33,6 +40,7 @@ export interface AdminFormConfigVersionSelectorProps {
 
 export function AdminFormConfigVersionSelector({
   disabled,
+  formKey = 'psf-request',
   onDuplicate,
   onDiscard,
   onPublish,
@@ -47,7 +55,9 @@ export function AdminFormConfigVersionSelector({
           <thead><tr><th scope="col">Version</th><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col">Published</th><th scope="col">Actions</th></tr></thead>
           <tbody>{versions.map((version) => (
             <tr className={version.status === 'active' ? 'admin-form-config__version-row admin-form-config__version-row--active' : 'admin-form-config__version-row'} key={version.version}>
-              <th scope="row">{disabled ? `v${version.version}` : <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ version: String(version.version) }} to="/admin/form-config/$version">v{version.version}</Link>}</th>
+              <th scope="row">{disabled ? `v${version.version}` : formKey === 'psf-request'
+                ? <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ version: String(version.version) }} to="/admin/form-config/$version">v{version.version}</Link>
+                : <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ formKey, version: String(version.version) }} to="/admin/form-config/$formKey/$version">v{version.version}</Link>}</th>
               <td>{version.title}</td>
               <td><span className={`admin-form-config__status admin-form-config__status--${version.status}`}>{version.status === 'published' ? 'Inactive' : version.status === 'active' ? 'Active' : 'Draft'}</span></td>
               <td><time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleDateString()}</time></td>
@@ -97,12 +107,23 @@ export function AdminFormConfigFeedback({
   )
 }
 
-export function AdminFormConfigVersionPage() {
-  const { version } = useParams({ from: '/admin/form-config/$version' })
-  return <AdminFormConfigPage key={version} version={version} />
+export function AdminFormConfigListPage() {
+  const { formKey } = useSearch({ from: '/admin/form-config/' })
+  return <AdminFormConfigPage key={`list:${formKey}`} formKey={formKey} />
 }
 
-export function AdminFormConfigPage({ version }: { version?: string }) {
+export function AdminFormConfigVersionPage() {
+  const { version } = useParams({ from: '/admin/form-config/$version' })
+  return <AdminFormConfigPage key={`psf-request:${version}`} formKey="psf-request" version={version} />
+}
+
+export function AdminFormConfigFormKeyVersionPage() {
+  const { formKey, version } = useParams({ from: '/admin/form-config/$formKey/$version' })
+  if (!isFormKey(formKey)) return <p className="status-pill status-pill--error" role="alert">Unsupported form key.</p>
+  return <AdminFormConfigPage key={`${formKey}:${version}`} formKey={formKey} version={version} />
+}
+
+export function AdminFormConfigPage({ formKey = 'psf-request', version }: { formKey?: FormKey; version?: string }) {
   const navigate = useNavigate()
   const setFormVersionBreadcrumb = useContext(FormVersionBreadcrumbContext)
   const isEditor = version !== undefined
@@ -122,16 +143,31 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
   const fieldFallbackRef = useRef<HTMLButtonElement>(null)
   const previewTriggerRef = useRef<HTMLButtonElement>(null)
 
-  const parsed = useMemo(() => parseFormSchemaDraft(editorText), [editorText])
-  const visualSchema = useMemo(() => readFormSchemaEditorDraft(editorText), [editorText])
+  const parsed = useMemo(() => parseFormSchemaDraft(editorText, formKey), [editorText, formKey])
+  const visualSchema = useMemo(() => readFormSchemaEditorDraft(editorText, formKey), [editorText, formKey])
   const dirty = editorText !== savedEditorText
   const busy = loading || saving || publishing
   const editable = selectedVersion?.status === 'draft'
+  const pageMounted = useRef(false)
+  const shouldBlockEditorExit = useCallback(({ current, next }: { current: { pathname: string }; next: { pathname: string } }) => {
+    return isEditor && dirty && current.pathname !== next.pathname &&
+      !window.confirm('Discard unsaved form changes and leave this page?')
+  }, [dirty, isEditor])
+  useBlocker({
+    shouldBlockFn: shouldBlockEditorExit,
+    enableBeforeUnload: isEditor && dirty,
+  })
+
+  useEffect(() => {
+    pageMounted.current = true
+    return () => { pageMounted.current = false }
+  }, [])
+
   useEffect(() => {
     if (!isEditor || !selectedVersion) return
-    setFormVersionBreadcrumb({ version: selectedVersion.version, status: selectedVersion.status, dirty })
+    setFormVersionBreadcrumb({ formKey, version: selectedVersion.version, status: selectedVersion.status, dirty })
     return () => setFormVersionBreadcrumb(null)
-  }, [dirty, isEditor, selectedVersion, setFormVersionBreadcrumb])
+  }, [dirty, formKey, isEditor, selectedVersion, setFormVersionBreadcrumb])
   const previewSchema = useMemo(
     () => (parsed.schema && selectedVersion ? buildPreviewSchema(parsed.schema, selectedVersion) : null),
     [parsed.schema, selectedVersion],
@@ -156,8 +192,10 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
 
     async function loadInitialVersions() {
       try {
-        const response = await api.fetchAdminFormConfig()
-        if (!mounted) {
+        const response = await api.fetchAdminFormConfig(...formKeyArgs(formKey))
+        if (!mounted) return
+        if (!isAdminFormConfigVersionListForKey(response, formKey)) {
+          setFeedback({ kind: 'error', message: 'The server returned a different form family. This selection was not loaded.' })
           return
         }
 
@@ -180,9 +218,7 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
         }
       } finally {
         requestInFlight.current = false
-        if (mounted) {
-          setLoading(false)
-        }
+        if (mounted) setLoading(false)
       }
     }
 
@@ -191,7 +227,7 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
     return () => {
       mounted = false
     }
-  }, [isEditor, version])
+  }, [formKey, isEditor, version])
 
   useEffect(() => {
     if (fieldEdit && !fieldDialogRef.current?.open) {
@@ -257,8 +293,11 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
     try {
       const savedDraft = await api.saveAdminFormConfigDraft(
         buildAdminFormConfigSavePayload(selectedVersion, parsed.schema),
+        ...formKeyArgs(formKey),
       )
-      const refreshed = await api.fetchAdminFormConfig()
+      if (!isAdminFormConfigVersionForKey(savedDraft, formKey)) throw new Error('The server returned a different form family. The draft was not loaded.')
+      const refreshed = await api.fetchAdminFormConfig(...formKeyArgs(formKey))
+      if (!isAdminFormConfigVersionListForKey(refreshed, formKey)) throw new Error('The server returned a different form family. The draft was not loaded.')
       const nextVersion = selectRefreshedFormConfigVersion(refreshed.versions, savedDraft)
 
       setVersions(refreshed.versions)
@@ -278,15 +317,20 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
   async function publishDraft(versionNumber: number) {
     const target = versions.find((item) => item.version === versionNumber && item.status === 'draft')
     if (!target || busy || requestInFlight.current || (isEditor && !publishAllowed)) return
-    if (!window.confirm(`Publish v${versionNumber}? New requests will use v${versionNumber}. Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted. Already submitted requests keep their saved form snapshot and do not change.`)) return
+    const confirmation = formKey === 'psf-created-information'
+      ? `Publish PSF Created Information v${versionNumber}? New requests will use this PSF version. Existing requests keep their current PSF form and data and are not upgraded.`
+      : `Publish v${versionNumber}? New requests will use v${versionNumber}. Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted. Already submitted requests keep their saved form snapshot and do not change.`
+    if (!window.confirm(confirmation)) return
 
     requestInFlight.current = true
     setPublishing(true)
     setFeedback(null)
 
     try {
-      const publishedVersion = await api.publishAdminFormConfigDraft({ version: versionNumber })
-      const refreshed = await api.fetchAdminFormConfig()
+      const publishedVersion = await api.publishAdminFormConfigDraft({ version: versionNumber }, ...formKeyArgs(formKey))
+      if (!isAdminFormConfigVersionForKey(publishedVersion, formKey)) throw new Error('The server returned a different form family. The published version was not loaded.')
+      const refreshed = await api.fetchAdminFormConfig(...formKeyArgs(formKey))
+      if (!isAdminFormConfigVersionListForKey(refreshed, formKey)) throw new Error('The server returned a different form family. The published version was not loaded.')
       const nextVersion = selectRefreshedFormConfigVersion(refreshed.versions, publishedVersion)
 
       setVersions(refreshed.versions)
@@ -309,13 +353,23 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
     setLoading(true)
     setFeedback(null)
     try {
-      const created = await api.duplicateAdminFormConfigVersion({ version })
-      await navigate({ to: '/admin/form-config/$version', params: { version: String(created.version) } })
+      const created = await api.duplicateAdminFormConfigVersion({ version }, ...formKeyArgs(formKey))
+      if (!pageMounted.current) return
+      if (!isAdminFormConfigVersionForKey(created, formKey)) throw new Error('The server returned a different form family. The new draft was not opened.')
+      if (formKey === 'psf-request') {
+        await navigate({ to: '/admin/form-config/$version', params: { version: String(created.version) } })
+      } else {
+        await navigate({ to: '/admin/form-config/$formKey/$version', params: { formKey, version: String(created.version) } })
+      }
     } catch (error) {
-      setFeedback({ kind: 'error', message: getAdminFormConfigErrorMessage(error, 'Unable to duplicate form version.') })
+      if (pageMounted.current) {
+        setFeedback({ kind: 'error', message: getAdminFormConfigErrorMessage(error, 'Unable to duplicate form version.') })
+      }
     } finally {
-      requestInFlight.current = false
-      setLoading(false)
+      if (pageMounted.current) {
+        requestInFlight.current = false
+        setLoading(false)
+      }
     }
   }
 
@@ -326,8 +380,9 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
     setLoading(true)
     setFeedback(null)
     try {
-      await api.discardAdminFormConfigDraft(version)
-      const refreshed = await api.fetchAdminFormConfig()
+      await api.discardAdminFormConfigDraft(version, ...formKeyArgs(formKey))
+      const refreshed = await api.fetchAdminFormConfig(...formKeyArgs(formKey))
+      if (!isAdminFormConfigVersionListForKey(refreshed, formKey)) throw new Error('The server returned a different form family. The refreshed list was not loaded.')
       setVersions(refreshed.versions)
       const next = selectInitialFormConfigVersion(refreshed.versions)
       if (next && !isEditor) applySelectedVersion(next)
@@ -340,16 +395,29 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
     }
   }
 
+  function switchFormFamily(nextFormKey: string) {
+    if (!isFormKey(nextFormKey) || nextFormKey === formKey || busy) return
+    void navigate({ to: '/admin/form-config', search: { formKey: nextFormKey } })
+  }
+
   return (
     <article className="page-card admin-form-config">
       {!isEditor ? <div className="page-card__header"><h1>Form management</h1></div> : null}
 
       <div className="page-card__body admin-form-config__body">
-        {isEditor ? <div><Link className="secondary-button" onClick={(event) => guardUnsavedFormExit(dirty, event)} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link></div> : null}
+        <label className="admin-form-config__field" htmlFor="admin-form-config-family">
+          <span>Form to manage</span>
+          <select aria-label="Form to manage" disabled={busy} id="admin-form-config-family" onChange={(event) => switchFormFamily(event.target.value)} value={formKey}>
+            <option value="psf-request">Requester Information</option>
+            <option value="psf-created-information">PSF Created Information</option>
+          </select>
+        </label>
+        {isEditor ? <div><Link className="secondary-button" search={{ formKey }} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link></div> : null}
         <AdminFormConfigFeedback feedback={feedback} loading={loading} />
 
         {!loading && !isEditor && selectedVersion ? <AdminFormConfigVersionSelector
           disabled={busy}
+          formKey={formKey}
           onDuplicate={(number) => void duplicateVersion(number)}
           onDiscard={(number) => void discardDraft(number)}
           onPublish={(number) => void publishDraft(number)}
@@ -358,7 +426,7 @@ export function AdminFormConfigPage({ version }: { version?: string }) {
         {!loading && isEditor && selectedVersion ? (
           <>
             <div className="admin-form-config__section-header">
-              <h1 id="form-config-editor-heading">v{selectedVersion.version} · {selectedVersion.title}</h1>
+              <h1 id="form-config-editor-heading">{formKey === 'psf-request' ? 'Requester Information' : 'PSF Created Information'} · v{selectedVersion.version} · {selectedVersion.title}</h1>
               <button className="secondary-button" disabled={busy} onClick={(event) => {
                 previewTriggerRef.current = event.currentTarget
                 previewDialogRef.current?.showModal()
