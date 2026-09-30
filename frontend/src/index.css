@@ -1810,7 +1810,14 @@ input.input-with-clear {
 .admin-form-config__modal-actions { flex-wrap: wrap; align-items: center; padding-top: 16px; border-top: 1px solid var(--border); }
 .admin-form-config__modal-actions .admin-form-config__actions { margin-left: auto; }
 .admin-form-config__danger { color: var(--destructive); }
-.admin-form-config__field-dialog .admin-form-config__choice-list { gap: 12px; }
+.admin-form-config__field-dialog .admin-form-config__choice-list {
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+.admin-form-config__field-dialog .admin-form-config__choice .admin-form-config__field > span { font-weight: 500; }
 .admin-form-config__field-dialog .admin-form-config__options legend { margin-bottom: 12px; }
 
 @media (max-width: 640px) {
