@@ -131,7 +131,6 @@ describe('ExcelExportService', () => {
         {
           sectionKey: 'shared',
           title: 'Shared fields',
-          visibleTo: ['requester', 'admin'],
           fields: [
             {
               fieldKey: 'title_v9',
@@ -202,7 +201,6 @@ describe('ExcelExportService', () => {
         {
           sectionKey: 'admin_only',
           title: 'Admin fields',
-          visibleTo: ['admin'],
           fields: [
             {
               fieldKey: 'admin_v9',
@@ -224,7 +222,6 @@ describe('ExcelExportService', () => {
         {
           sectionKey: 'legacy',
           title: 'Legacy fields',
-          visibleTo: ['requester', 'admin'],
           fields: [
             {
               fieldKey: 'legacy_title',
@@ -307,7 +304,9 @@ describe('ExcelExportService', () => {
 
     const result = await service.exportRequests({}, adminActor);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.content);
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
     const worksheet = workbook.getWorksheet('PSF Requests');
 
     if (!worksheet) {
@@ -382,7 +381,7 @@ describe('ExcelExportService', () => {
     );
   });
 
-  it('filters active-schema sections by role and masks requester PSF Created cells before PSF Created', async () => {
+  it('exports all configured form sections while masking requester PSF Created cells before PSF Created', async () => {
     formSchemaService.getActiveSchema.mockResolvedValueOnce({
       formKey: 'psf-request',
       version: 10,
@@ -398,7 +397,7 @@ describe('ExcelExportService', () => {
           {
             sectionKey: 'requester',
             title: 'Requester fields',
-            visibleTo: ['requester', 'admin'],
+
             fields: [
               {
                 fieldKey: 'title_v10',
@@ -413,7 +412,7 @@ describe('ExcelExportService', () => {
           {
             sectionKey: 'requester_only',
             title: 'Requester only fields',
-            visibleTo: ['requester'],
+
             fields: [
               {
                 fieldKey: 'requester_only',
@@ -428,7 +427,7 @@ describe('ExcelExportService', () => {
           {
             sectionKey: 'admin_only',
             title: 'Admin fields',
-            visibleTo: ['admin'],
+
             fields: [
               {
                 fieldKey: 'admin_only',
@@ -477,7 +476,9 @@ describe('ExcelExportService', () => {
 
     const result = await service.exportRequests({}, requesterActor);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.content);
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
     const worksheet = workbook.getWorksheet('PSF Requests');
 
     if (!worksheet) {
@@ -492,7 +493,11 @@ describe('ExcelExportService', () => {
 
     expect(headers).toContain('Requester Title');
     expect(headers).toContain('Requester Only');
-    expect(headers).not.toContain('Admin Only');
+    expect(headers).toContain('Admin Only');
+    const additionalColumn = headers.indexOf('Admin Only') + 1;
+    expect(worksheet.getRow(2).getCell(additionalColumn).value).toBe(
+      'Draft admin value',
+    );
     expect(worksheet.getRow(2).getCell(psfSetupFileColumn).value).toBe('');
     expect(worksheet.getRow(3).getCell(psfSetupFileColumn).value).toBe('');
     expect(worksheet.getRow(4).getCell(psfSetupFileColumn).value).toBe(
@@ -556,7 +561,9 @@ describe('ExcelExportService', () => {
       requesterActor,
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.content);
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
     const worksheet = workbook.getWorksheet('PSF Requests');
 
     expect(worksheet?.getRow(2).getCell(1).value).toBe('PSF-0001');

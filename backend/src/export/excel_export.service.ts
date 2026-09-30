@@ -171,10 +171,7 @@ export class ExcelExportService {
   ): Promise<RequestExportWorkbook> {
     const activeSchema =
       await this.formSchemaService.getActiveSchema('psf-request');
-    const requesterFields = this.getExportableFields(
-      activeSchema.schema,
-      actor,
-    );
+    const requesterFields = this.getExportableFields(activeSchema.schema);
     const psfCreatedFields = this.getAllPsfCreatedFields();
 
     const columns: ExportWorksheetColumn[] = [
@@ -291,18 +288,11 @@ export class ExcelExportService {
     });
   }
 
-  private getExportableFields(
-    schema: FormSchemaJson,
-    actor: Pick<AuthenticatedUserProfile, 'role'>,
-  ): FormSchemaField[] {
+  private getExportableFields(schema: FormSchemaJson): FormSchemaField[] {
     const canonicalKeys = new Set<string>();
     const fields: FormSchemaField[] = [];
 
     schema.sections.forEach((section) => {
-      if (!section.visibleTo.includes(actor.role)) {
-        return;
-      }
-
       section.fields.forEach((field) => {
         const canonicalKey = field.canonicalKey?.trim();
 

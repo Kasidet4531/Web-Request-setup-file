@@ -137,7 +137,6 @@ const runtimeAutofillSchema: FormSchema = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'reference_psf_input',

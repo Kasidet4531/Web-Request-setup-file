@@ -9,7 +9,6 @@ const schema: FormSchemaJson = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'title_v2',

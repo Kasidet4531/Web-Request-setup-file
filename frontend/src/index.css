@@ -1679,21 +1679,18 @@ input.input-with-clear {
   font-size: 15px;
 }
 
-.admin-form-config__roles,
 .admin-form-config__options {
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.admin-form-config__roles legend,
 .admin-form-config__options legend {
   margin-bottom: 8px;
   font-size: 12px;
   font-weight: 600;
 }
 
-.admin-form-config__roles label,
 .admin-form-config__toggle {
   display: inline-flex;
   align-items: center;
@@ -1703,7 +1700,6 @@ input.input-with-clear {
   cursor: pointer;
 }
 
-.admin-form-config__roles input,
 .admin-form-config__toggle input {
   accent-color: var(--accent);
 }
@@ -1744,7 +1740,6 @@ input.input-with-clear {
 .admin-form-config__view-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 16px; border-left: 3px solid var(--accent); background: var(--muted); }
 .admin-form-config__view-banner p { margin: 0; color: var(--foreground); }
 .admin-form-config__builder--readonly > p { margin: 0; }
-.admin-form-config__builder--readonly .admin-form-config__section > p { margin: 0; font-size: 13px; }
 .admin-form-config__read-fields { margin: 0; padding-left: 24px; }
 .admin-form-config__read-fields li { padding: 9px 0; border-bottom: 1px solid var(--border); }
 .admin-form-config__read-fields li span { display: block; font-size: 13px; color: var(--foreground); }

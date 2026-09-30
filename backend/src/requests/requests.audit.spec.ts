@@ -24,7 +24,6 @@ const activeSchema = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'product_type',

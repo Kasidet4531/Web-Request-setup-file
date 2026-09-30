@@ -28,7 +28,6 @@ const makeValidSchema = (
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
       fields: [
         {
           fieldKey: 'title',
@@ -161,11 +160,11 @@ describe('FormSchemaService', () => {
   });
 
   it('returns the active schema using the public API response shape', async () => {
-    const schemaJson = {
-      formKey: 'psf-request',
-      version: 1,
-      sections: [],
-    };
+    const schemaJson = makeValidSchema(1, 'PSF Request Form');
+    const storedSchema = structuredClone(schemaJson);
+    Object.assign(storedSchema.sections[0], {
+      visibleTo: ['requester', 'setup_owner', 'admin'],
+    });
     pool.query.mockResolvedValue({
       rows: [
         {
@@ -174,7 +173,7 @@ describe('FormSchemaService', () => {
           title: 'PSF Request Form',
           description: 'Requester-facing MVP schema',
           status: 'active',
-          schema_json: schemaJson,
+          schema_json: storedSchema,
           published_at: new Date('2026-01-01T00:00:00.000Z'),
         },
       ],
@@ -218,6 +217,16 @@ describe('FormSchemaService', () => {
     await expect(
       service.getActiveSchema('missing-form'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('refuses a legacy active schema with restricted roles instead of exposing its fields', async () => {
+    const active = makeRow(1, 'active');
+    Object.assign(active.schema_json.sections[0], { visibleTo: ['admin'] });
+    pool.query.mockResolvedValue({ rows: [active] });
+
+    await expect(
+      service.getActiveSchema(PSF_REQUEST_FORM_KEY),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('lists stored PSF request schema versions newest first and maps server-owned schema fields', async () => {
@@ -265,6 +274,25 @@ describe('FormSchemaService', () => {
     expect(calls[0][0]).not.toContain('discarded');
   });
 
+  it('normalizes shared legacy sections for admin responses without erasing restricted historical metadata', async () => {
+    const active = makeRow(2, 'active');
+    const historical = makeRow(1, 'published');
+    Object.assign(active.schema_json.sections[0], {
+      visibleTo: ['requester', 'setup_owner', 'admin'],
+    });
+    Object.assign(historical.schema_json.sections[0], { visibleTo: ['admin'] });
+    pool.query.mockResolvedValue({ rows: [active, historical] });
+
+    const result = await service.listVersions();
+    expect(result.versions[0].schema.sections[0]).not.toHaveProperty(
+      'visibleTo',
+    );
+    expect(result.versions[1].schema.sections[0]).toHaveProperty('visibleTo', [
+      'admin',
+    ]);
+    expect(active.schema_json.sections[0]).toHaveProperty('visibleTo');
+  });
+
   it('raises NotFoundException when the fixed form has no stored versions', async () => {
     pool.query.mockResolvedValue({ rows: [] });
 
@@ -275,6 +303,9 @@ describe('FormSchemaService', () => {
 
   it('duplicates a historical version into a new draft without modifying the source', async () => {
     const old = makeRow(1, 'published');
+    Object.assign(old.schema_json.sections[0], {
+      visibleTo: ['requester', 'setup_owner', 'admin'],
+    });
     const active = makeRow(2, 'active');
     const copy = makeRow(3, 'draft', {
       schema_json: makeValidSchema(3, old.title),
@@ -298,9 +329,22 @@ describe('FormSchemaService', () => {
       expect.arrayContaining([
         3,
         old.title,
-        { ...old.schema_json, version: 3 },
+        {
+          ...old.schema_json,
+          version: 3,
+          sections: old.schema_json.sections.map((section) => ({
+            sectionKey: section.sectionKey,
+            title: section.title,
+            fields: section.fields,
+          })),
+        },
       ]),
     );
+    expect(old.schema_json.sections[0]).toHaveProperty('visibleTo', [
+      'requester',
+      'setup_owner',
+      'admin',
+    ]);
   });
 
   it('rejects duplication while another draft exists without overwriting it', async () => {
@@ -354,6 +398,29 @@ describe('FormSchemaService', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
+  it('refuses to erase restricted legacy metadata from an existing draft', async () => {
+    const draft = makeRow(2, 'draft');
+    Object.assign(draft.schema_json.sections[0], { visibleTo: ['admin'] });
+    configureTransaction((query) => {
+      if (query.includes('ORDER BY version ASC'))
+        return { rows: [{ form_key: PSF_REQUEST_FORM_KEY }] };
+      if (query.includes('FOR UPDATE'))
+        return { rows: [draft, makeRow(1, 'active')] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await expect(
+      service.saveDraft(
+        { draftVersion: 2, schema: makeValidSchema(2) },
+        adminActor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(
+      transactionClient.query.mock.calls.some(([sql]) =>
+        (sql as string).includes('SET title = $1'),
+      ),
+    ).toBe(false);
   });
 
   it('rereads managed rows after a stable anchor lock before updating a concurrent draft', async () => {
@@ -571,14 +638,24 @@ describe('FormSchemaService', () => {
     const active = makeRow(1, 'active', {
       published_at: new Date('2026-06-01T00:00:00.000Z'),
     });
+    const schemaWithoutVisibility = {
+      ...makeValidSchema(2, 'Published Draft'),
+      sections: [
+        {
+          sectionKey: 'requester_information',
+          title: 'Requester Information',
+          fields: makeValidSchema(2).sections[0].fields,
+        },
+      ],
+    };
     const draft = makeRow(2, 'draft', {
       published_at: null,
-      schema_json: makeValidSchema(2, 'Published Draft'),
+      schema_json: schemaWithoutVisibility,
       title: 'Published Draft',
     });
     const promoted = makeRow(2, 'active', {
       published_at: new Date('2026-06-03T00:00:00.000Z'),
-      schema_json: makeValidSchema(2, 'Published Draft'),
+      schema_json: schemaWithoutVisibility,
       title: 'Published Draft',
     });
     configureTransaction((query) => {
@@ -666,13 +743,13 @@ describe('FormSchemaService', () => {
   it.each([
     {
       description: 'duplicate field keys',
+      exception: BadRequestException,
       schema: {
         ...makeValidSchema(2, 'PSF Request Form v2'),
         sections: [
           {
             sectionKey: 'requester_information',
             title: 'Requester Information',
-            visibleTo: ['requester'],
             fields: [
               {
                 fieldKey: 'title',
@@ -694,7 +771,8 @@ describe('FormSchemaService', () => {
       },
     },
     {
-      description: 'an unsupported visible role',
+      description: 'a restricted legacy section',
+      exception: ConflictException,
       schema: {
         ...makeValidSchema(2, 'PSF Request Form v2'),
         sections: [
@@ -707,6 +785,7 @@ describe('FormSchemaService', () => {
     },
     {
       description: 'non-string select options',
+      exception: BadRequestException,
       schema: {
         ...makeValidSchema(2, 'PSF Request Form v2'),
         sections: [
@@ -728,7 +807,7 @@ describe('FormSchemaService', () => {
     },
   ])(
     'rejects a draft with $description before changing active status',
-    async ({ schema }) => {
+    async ({ schema, exception }) => {
       const active = makeRow(1, 'active');
       const invalidDraft = makeRow(2, 'draft', {
         schema_json: schema,
@@ -742,9 +821,7 @@ describe('FormSchemaService', () => {
         throw new Error(`Unexpected query: ${query}`);
       });
 
-      await expect(service.publishDraft(2)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(service.publishDraft(2)).rejects.toBeInstanceOf(exception);
       expect(transactionClient.query).not.toHaveBeenCalledWith(
         expect.stringContaining("SET status = 'published'"),
         expect.anything(),

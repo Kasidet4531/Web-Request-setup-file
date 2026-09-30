@@ -51,7 +51,7 @@ The application-local user record that stores role and setup-owner department af
 _Avoid_: Local Authentication, local password login
 
 **Form Schema**:
-The JSON-structured definition of a PSF Request form, specifying fields, input types, sections, layout configurations, and field-level visibility constraints.
+The JSON-structured definition of a PSF Request form, specifying fields, input types, sections, and layout configurations. Section access is not configured in this schema; PSF Created Information visibility follows actor and request status.
 _Avoid_: Form layout, form template
 
 **Form Version**:

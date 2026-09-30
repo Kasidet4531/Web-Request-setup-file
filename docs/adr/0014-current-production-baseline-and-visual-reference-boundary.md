@@ -26,6 +26,14 @@ This record is the implementation-state amendment for ADRs 0002, 0004, 0005, 000
 
 The dashboard, request list, request creation, request detail, global history, user management, form configuration, workflow configuration, autofill configuration, and request export routes are connected to production API components. The `/admin/`, `/admin/master-data`, and `/requests/:requestId/history` routes remain placeholders. Existing mounted-session invalidation is incomplete: the API client throws 401 responses without broadcasting session invalidation; T03 remains required.
 
+## Branch amendment: form section metadata removal
+
+The `rapid-frontend-rewrite` branch removes configurable section-role visibility from the form model, editor, autofill checks, and export columns. This is a source-code amendment, not evidence of a production deployment.
+
+- Request access remains server-authorized. All configured Requester Information sections are available within that access scope; `exportable` and canonical-key validation remain unchanged.
+- PSF Created Information retains its actor/status visibility and edit rules, including requester export-cell masking before `PSF Created` or `Completed`.
+- Existing published schemas and request snapshots are not rewritten. Shared legacy section metadata is omitted from API/editor output and new drafts. Restricted legacy metadata is retained for administrator inspection and rejected for active use, duplication, saving, or publishing until reviewed; it is never silently converted to shared access.
+
 ## Deployment and release limits
 
 `backend/src/main.ts` currently uses the default in-memory `express-session` store and a development fallback session secret. The repository has a Docker Compose file and a backend environment example, but no tracked Nginx configuration. Actual TLS, proxy topology, persistent session store, secrets, LDAP endpoint/certificate behavior, and production database state are unverified and must not be inferred from local source.

@@ -20,7 +20,6 @@ const schemaSnapshot: PsfRequestResponse['schemaSnapshot'] = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'product_type',
@@ -50,7 +49,6 @@ const activeRequestSchema: ActiveFormSchemaResponse = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'product_type',

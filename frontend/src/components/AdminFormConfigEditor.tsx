@@ -36,7 +36,7 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
       const used = new Set(draft.sections.map((section) => section.sectionKey))
       let index = 1
       while (used.has(`section_${index}`)) index += 1
-      draft.sections.push({ sectionKey: `section_${index}`, title: 'New section', visibleTo: ['requester', 'setup_owner', 'admin'], fields: [] })
+      draft.sections.push({ sectionKey: `section_${index}`, title: 'New section', fields: [] })
     })
   }
 
@@ -46,7 +46,6 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
       {schema.sections.map((section) => (
         <section className="admin-form-config__section" key={section.sectionKey}>
           <h2>{section.title}</h2>
-          <p><strong>Visible to:</strong> {section.visibleTo.map((role) => role === 'setup_owner' ? 'Setup owner' : role === 'requester' ? 'Requester' : 'Admin').join(', ')}</p>
           <ol className="admin-form-config__read-fields">
             {section.fields.map((field) => <li key={field.fieldKey}>
               <strong>{field.label}</strong>
@@ -84,19 +83,6 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
             <input aria-describedby={!section.title.trim() ? `form-config-section-${index}-error` : undefined} aria-invalid={!section.title.trim()} disabled={disabled} id={`form-config-section-${index}`} onChange={(event) => edit((draft) => { draft.sections[index].title = event.target.value })} value={section.title} />
             {!section.title.trim() ? <small className="dynamic-form__error" id={`form-config-section-${index}-error`}>Enter a section title.</small> : null}
           </label>
-          <fieldset className="admin-form-config__roles" disabled={disabled}>
-            <legend>Visible to</legend>
-            {(['requester', 'setup_owner', 'admin'] as const).map((role) => (
-              <label htmlFor={`form-config-role-${index}-${role}`} key={role}>
-                <input checked={section.visibleTo.includes(role)} disabled={section.visibleTo.length === 1 && section.visibleTo.includes(role)} id={`form-config-role-${index}-${role}`} onChange={(event) => edit((draft) => {
-                  draft.sections[index].visibleTo = event.target.checked
-                    ? [...section.visibleTo, role]
-                    : section.visibleTo.filter((value) => value !== role)
-                })} type="checkbox" />
-                {role === 'setup_owner' ? 'Setup owner' : role === 'requester' ? 'Requester' : 'Admin'}
-              </label>
-            ))}
-          </fieldset>
           <div className="admin-form-config__fields">
             {section.fields.map((field, fieldIndex) => (
               <div className="admin-form-config__item" key={field.fieldKey}>

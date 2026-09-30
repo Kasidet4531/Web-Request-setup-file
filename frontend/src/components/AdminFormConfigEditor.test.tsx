@@ -18,7 +18,7 @@ function find(node: unknown, match: (element: ElementNode) => boolean): ElementN
 const schema: FormSchemaDraft = {
   formKey: 'psf-request', title: 'PSF Request Form',
   sections: [{
-    sectionKey: 'requester_information', title: 'Requester Information', visibleTo: ['requester', 'setup_owner', 'admin'],
+    sectionKey: 'requester_information', title: 'Requester Information',
     fields: [
       { fieldKey: 'field_1', canonicalKey: 'field_1', label: 'Name', type: 'text', required: true, searchable: true },
       { fieldKey: 'choice', canonicalKey: 'choice', label: 'Priority', type: 'select', required: false, options: ['Low', 'High'] },
@@ -36,7 +36,7 @@ describe('visual form configuration editor', () => {
     const html = renderToStaticMarkup(<AdminFormConfigEditor schema={schema} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
     expect(html).toContain('Form title:')
     expect(html).toContain('Requester Information')
-    expect(html).toContain('Visible to:')
+    expect(html).not.toContain('Visible to')
     expect(html).toContain('Choices: Low, High')
     expect(html).not.toMatch(/<input|<textarea|<button|<fieldset/)
   })
@@ -56,16 +56,14 @@ describe('visual form configuration editor', () => {
     expect(dialogHtml).toContain('disabled="" type="submit"')
   })
 
-  it('edits form title and section visibility without changing field identities', () => {
+  it('edits form title without changing field identities or exposing role controls', () => {
     const onChange = vi.fn()
     const tree = editor(schema, onChange)
     const title = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-title')
     ;(title.props.onChange as (event: unknown) => void)({ target: { value: 'New title' } })
     expect(onChange.mock.calls[0][0]).toEqual({ ...schema, title: 'New title' })
-    const role = find(tree, (element) => element.type === 'input' && element.props.id === 'form-config-role-0-setup_owner')
-    ;(role.props.onChange as (event: unknown) => void)({ target: { checked: false } })
-    expect((onChange.mock.calls[1][0] as FormSchemaDraft).sections[0].visibleTo).toEqual(['requester', 'admin'])
-    expect((onChange.mock.calls[1][0] as FormSchemaDraft).sections[0].fields).toEqual(schema.sections[0].fields)
+    expect((onChange.mock.calls[0][0] as FormSchemaDraft).sections[0].fields).toEqual(schema.sections[0].fields)
+    expect(renderToStaticMarkup(tree)).not.toContain('Visible to')
   })
 
   it('edits a field label, type, required flag and options without dropping metadata or choice values', () => {
@@ -126,7 +124,7 @@ describe('visual form configuration editor', () => {
     let tree = editor(schema, onChange)
     ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add section').props.onClick as () => void)()
     const added = onChange.mock.calls[0][0] as FormSchemaDraft
-    expect(added.sections[1]).toEqual({ sectionKey: 'section_1', title: 'New section', visibleTo: ['requester', 'setup_owner', 'admin'], fields: [] })
+    expect(added.sections[1]).toEqual({ sectionKey: 'section_1', title: 'New section', fields: [] })
     tree = editor(added, onChange)
     ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Move New section up').props.onClick as () => void)()
     const moved = onChange.mock.calls[1][0] as FormSchemaDraft

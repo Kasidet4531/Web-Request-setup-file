@@ -9,7 +9,6 @@ import type {
 
 const PSF_REQUEST_FORM_KEY = 'psf-request'
 const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'date', 'select', 'radio'])
-const SUPPORTED_VISIBLE_TO = new Set(['requester', 'setup_owner', 'admin'])
 
 export interface FormSchemaDraftParseResult {
   error: string | null
@@ -86,6 +85,13 @@ function validateField(field: unknown, sectionIndex: number, fieldIndex: number)
   return null
 }
 
+function hasRestrictedLegacySection(section: unknown): boolean {
+  if (!isRecord(section) || !Object.hasOwn(section, 'visibleTo')) return false
+  const roles = section.visibleTo
+  return !Array.isArray(roles) || roles.length !== 3 ||
+    !['requester', 'setup_owner', 'admin'].every((role) => roles.includes(role))
+}
+
 function validateSection(section: unknown, sectionIndex: number): string | null {
   if (!isRecord(section)) {
     return `Section ${sectionIndex + 1} must be an object.`
@@ -99,12 +105,8 @@ function validateSection(section: unknown, sectionIndex: number): string | null 
     return `Section ${sectionIndex + 1} must have a nonblank title.`
   }
 
-  if (!isStringArray(section.visibleTo)) {
-    return `Section ${sectionIndex + 1} visibleTo must be an array of strings.`
-  }
-
-  if (section.visibleTo.length === 0 || section.visibleTo.some((role) => !SUPPORTED_VISIBLE_TO.has(role))) {
-    return `Section ${sectionIndex + 1} visibleTo must use supported roles.`
+  if (hasRestrictedLegacySection(section)) {
+    return `Legacy role-restricted section ${sectionIndex + 1} requires review before editing.`
   }
 
   if (!Array.isArray(section.fields)) {
@@ -125,7 +127,12 @@ function toFormSchemaDraft(schema: FormSchema | FormSchemaDraft): FormSchemaDraf
   return {
     formKey: schema.formKey,
     title: schema.title,
-    sections: schema.sections,
+    sections: schema.sections.map((section) => {
+      if (hasRestrictedLegacySection(section)) return section
+      const copy = { ...section } as FormSchemaDraft['sections'][number] & { visibleTo?: unknown }
+      delete copy.visibleTo
+      return copy
+    }),
   }
 }
 
@@ -150,9 +157,10 @@ export function readFormSchemaEditorDraft(text: string): FormSchemaDraft | null 
   for (const section of value.sections) {
     if (
       !isRecord(section) || typeof section.sectionKey !== 'string' ||
-      typeof section.title !== 'string' || !isStringArray(section.visibleTo) ||
+      typeof section.title !== 'string' ||
       !Array.isArray(section.fields)
     ) return null
+    if (hasRestrictedLegacySection(section)) return null
     if (!section.sectionKey.trim() || sectionKeys.has(section.sectionKey)) return null
     sectionKeys.add(section.sectionKey)
 
@@ -228,11 +236,11 @@ export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
 
   return {
     error: null,
-    schema: {
+    schema: toFormSchemaDraft({
       formKey: PSF_REQUEST_FORM_KEY,
       title: parsed.title,
       sections: parsed.sections as FormSchemaDraft['sections'],
-    },
+    }),
   }
 }
 

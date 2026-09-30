@@ -26,7 +26,6 @@ export interface FormSchemaField {
 export interface FormSchemaSection {
   sectionKey: string;
   title: string;
-  visibleTo: string[];
   fields: FormSchemaField[];
 }
 
@@ -97,12 +96,21 @@ const SUPPORTED_FIELD_TYPES = new Set<FormSchemaField['type']>([
   'select',
   'radio',
 ]);
-const SUPPORTED_VISIBLE_TO = new Set(['requester', 'setup_owner', 'admin']);
 
 type QueryRunner = Pick<PoolClient, 'query'>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function hasRestrictedLegacySection(section: unknown): boolean {
+  if (!isRecord(section) || !Object.hasOwn(section, 'visibleTo')) return false;
+  const roles = section.visibleTo;
+  return (
+    !Array.isArray(roles) ||
+    roles.length !== 3 ||
+    !['requester', 'setup_owner', 'admin'].every((role) => roles.includes(role))
+  );
+}
 
 const DEFAULT_PSF_REQUEST_SCHEMA: FormSchemaJson = {
   formKey: PSF_REQUEST_FORM_KEY,
@@ -112,7 +120,6 @@ const DEFAULT_PSF_REQUEST_SCHEMA: FormSchemaJson = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
       fields: [
         {
           fieldKey: 'product_type',
@@ -237,6 +244,7 @@ export class FormSchemaService implements OnModuleInit {
     if (!activeSchema) {
       throw new NotFoundException(`No active form schema found for ${formKey}`);
     }
+    this.assertNoRestrictedLegacySections(activeSchema.schema_json.sections);
 
     return {
       formKey: activeSchema.form_key,
@@ -244,7 +252,7 @@ export class FormSchemaService implements OnModuleInit {
       title: activeSchema.title,
       description: activeSchema.description,
       status: activeSchema.status,
-      schema: activeSchema.schema_json,
+      schema: this.normalizeSchemaForResponse(activeSchema),
       publishedAt: this.serializeTimestamp(activeSchema.published_at),
     };
   }
@@ -263,6 +271,7 @@ export class FormSchemaService implements OnModuleInit {
     if (!activeSchema) {
       throw new NotFoundException(`No active form schema found for ${formKey}`);
     }
+    this.assertNoRestrictedLegacySections(activeSchema.schema_json.sections);
 
     return {
       formKey: activeSchema.form_key,
@@ -270,7 +279,7 @@ export class FormSchemaService implements OnModuleInit {
       title: activeSchema.title,
       description: activeSchema.description,
       status: activeSchema.status,
-      schema: activeSchema.schema_json,
+      schema: this.normalizeSchemaForResponse(activeSchema),
       publishedAt: this.serializeTimestamp(activeSchema.published_at),
     };
   }
@@ -332,6 +341,7 @@ export class FormSchemaService implements OnModuleInit {
           'The selected draft no longer exists. Reload versions before saving.',
         );
       }
+      this.assertNoRestrictedLegacySections(existingDraft.schema_json.sections);
       const version = existingDraft.version;
       const schema = this.normalizeDraftSchema(normalizedDto.schema, version);
       const description = normalizedDto.description ?? null;
@@ -716,12 +726,35 @@ export class FormSchemaService implements OnModuleInit {
     schema: Omit<FormSchemaJson, 'version'>,
     version: number,
   ): FormSchemaJson {
+    this.assertNoRestrictedLegacySections(schema.sections);
     return {
       formKey: PSF_REQUEST_FORM_KEY,
       version,
       title: schema.title,
-      sections: schema.sections,
+      sections: this.stripLegacySectionMetadata(schema.sections),
     };
+  }
+
+  private stripLegacySectionMetadata(
+    sections: FormSchemaSection[],
+  ): FormSchemaSection[] {
+    return sections.map((section) => {
+      if (!isRecord(section) || hasRestrictedLegacySection(section))
+        return section;
+      const copy = { ...section } as FormSchemaSection & {
+        visibleTo?: unknown;
+      };
+      delete copy.visibleTo;
+      return copy;
+    });
+  }
+
+  private assertNoRestrictedLegacySections(sections: unknown[]): void {
+    if (sections.some(hasRestrictedLegacySection)) {
+      throw new ConflictException(
+        'Legacy role-restricted form sections require review before use.',
+      );
+    }
   }
 
   private assertPublishVersion(version: unknown): asserts version is number {
@@ -758,6 +791,7 @@ export class FormSchemaService implements OnModuleInit {
         'Draft schema must contain at least one section before publishing.',
       );
     }
+    this.assertNoRestrictedLegacySections(schema.sections);
 
     const sectionKeys = new Set<string>();
     const fieldKeys = new Set<string>();
@@ -783,18 +817,6 @@ export class FormSchemaService implements OnModuleInit {
       if (typeof section.title !== 'string') {
         throw new BadRequestException(
           'Every schema section must have a title.',
-        );
-      }
-
-      if (
-        !Array.isArray(section.visibleTo) ||
-        section.visibleTo.length === 0 ||
-        !section.visibleTo.every(
-          (role) => typeof role === 'string' && SUPPORTED_VISIBLE_TO.has(role),
-        )
-      ) {
-        throw new BadRequestException(
-          'Schema section visibleTo values must be supported roles.',
         );
       }
 
@@ -896,7 +918,9 @@ export class FormSchemaService implements OnModuleInit {
       version: row.version,
       title: row.title,
       sections: Array.isArray(storedSchema.sections)
-        ? (storedSchema.sections as FormSchemaSection[])
+        ? this.stripLegacySectionMetadata(
+            storedSchema.sections as FormSchemaSection[],
+          )
         : [],
     };
   }

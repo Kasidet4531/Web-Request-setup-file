@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import {
   AutofillRuleService,
-  isRequesterVisibleAutofillRule,
+  isValidAutofillRuleForSchema,
   type AutofillRule,
 } from '../admin/autofill_rule.service';
 import { FormSchemaService } from '../admin/form_schema.service';
@@ -65,7 +65,7 @@ export class AutofillService {
     const activeSchema = await this.formSchemaService.getActiveSchema(
       query.formKey,
     );
-    if (!isRequesterVisibleAutofillRule(rule, activeSchema)) {
+    if (!isValidAutofillRuleForSchema(rule, activeSchema)) {
       return { matched: false, suggestedValues: {} };
     }
 

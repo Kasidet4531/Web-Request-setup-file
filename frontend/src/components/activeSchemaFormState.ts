@@ -39,10 +39,8 @@ function fieldKeysForSchema(schema: FormSchema): Set<string> {
   )
 }
 
-function requesterVisibleFields(schema: FormSchema): FormSchemaField[] {
-  return schema.sections.flatMap((section) =>
-    section.visibleTo.includes('requester') ? section.fields : [],
-  )
+function formFields(schema: FormSchema): FormSchemaField[] {
+  return schema.sections.flatMap((section) => section.fields)
 }
 
 export function getRequesterAutofillTriggerField(
@@ -50,7 +48,7 @@ export function getRequesterAutofillTriggerField(
   fieldKey: string,
 ): FormSchemaField | null {
   return (
-    requesterVisibleFields(schema).find(
+    formFields(schema).find(
       (field) => field.fieldKey === fieldKey && field.autofillTrigger === true,
     ) ?? null
   )
@@ -63,14 +61,14 @@ export function applyRuntimeAutofillSuggestions({
   schema,
   suggestedValues,
 }: ApplyRuntimeAutofillSuggestionsInput): ApplyRuntimeAutofillSuggestionsResult {
-  const requesterFieldsByCanonicalKey = new Map(
-    requesterVisibleFields(schema).map((field) => [field.canonicalKey, field]),
+  const fieldsByCanonicalKey = new Map(
+    formFields(schema).map((field) => [field.canonicalKey, field]),
   )
   const nextValues = { ...currentValues }
   const appliedFieldKeys: string[] = []
 
   Object.entries(suggestedValues).forEach(([canonicalKey, suggestedValue]) => {
-    const field = requesterFieldsByCanonicalKey.get(canonicalKey)
+    const field = fieldsByCanonicalKey.get(canonicalKey)
     if (
       !field ||
       typeof suggestedValue !== 'string' ||

@@ -339,7 +339,6 @@ describe('AppController (e2e)', () => {
             {
               sectionKey: 'requester_information',
               title: 'Requester Information',
-              visibleTo: ['requester', 'setup_owner', 'admin'],
               fields: [
                 {
                   fieldKey: 'title',
@@ -364,39 +363,23 @@ describe('AppController (e2e)', () => {
         return Promise.resolve({ rows: formDefinitions });
       }
 
-      if (query.includes('INSERT INTO form_definitions')) {
-        const [
-          ,
-          formKey,
-          version,
-          title,
-          description,
-          schema,
-          status,
-          createdBy,
-        ] = values as [
+      if (
+        query.includes('UPDATE form_definitions') &&
+        query.includes('SET title = $1')
+      ) {
+        const [title, description, schema, , version] = values as [
           string,
+          string,
+          FormDefinitionRow['schema_json'],
           string,
           number,
-          string,
-          string | null,
-          Record<string, unknown>,
-          string,
-          string,
         ];
-        const created: FormDefinitionRow = {
-          form_key: formKey,
-          version,
-          title,
-          description,
-          status,
-          schema_json: schema,
-          created_by: createdBy,
-          created_at: new Date('2026-06-02T00:00:00.000Z'),
-          published_at: null,
-        };
-        formDefinitions.push(created);
-        return Promise.resolve({ rows: [created] });
+        const draft = formDefinitions.find(
+          (row) => row.version === version && row.status === 'draft',
+        );
+        if (!draft) return Promise.resolve({ rows: [] });
+        Object.assign(draft, { title, description, schema_json: schema });
+        return Promise.resolve({ rows: [draft] });
       }
 
       if (query.includes("SET status = 'published'")) {
@@ -455,9 +438,18 @@ describe('AppController (e2e)', () => {
         });
       });
 
+    formDefinitions.push({
+      ...formDefinitions[0],
+      version: 2,
+      status: 'draft',
+      schema_json: { ...formDefinitions[0].schema_json, version: 2 },
+      created_by: 'admin.demo',
+      published_at: null,
+    });
     await request(server)
       .put('/api/admin/form-config')
       .send({
+        draftVersion: 2,
         description: 'Draft schema for the next requester form revision.',
         schema: {
           formKey: 'psf-request',
@@ -466,7 +458,6 @@ describe('AppController (e2e)', () => {
             {
               sectionKey: 'requester_information',
               title: 'Requester Information',
-              visibleTo: ['requester', 'setup_owner', 'admin'],
               fields: [
                 {
                   fieldKey: 'title',
@@ -762,7 +753,6 @@ describe('AppController (e2e)', () => {
           {
             sectionKey: 'requester_information',
             title: 'Requester Information',
-            visibleTo: ['requester', 'setup_owner', 'admin'],
             fields: [
               {
                 fieldKey: 'reference_psf_name',
@@ -1026,7 +1016,6 @@ describe('AppController (e2e)', () => {
           {
             sectionKey: 'requester_information',
             title: 'Requester Information',
-            visibleTo: ['requester'],
             fields: [
               {
                 fieldKey: 'reference_psf_name',
@@ -1154,7 +1143,7 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('fails closed when a requester directly invokes an admin-only stored autofill rule', async () => {
+  it('fails closed when a requester invokes an autofill rule on a restricted legacy schema', async () => {
     const privateRule = {
       id: '75806824-f1b1-4c2a-bb47-41928cb78609',
       form_key: 'psf-request',
@@ -1262,9 +1251,11 @@ describe('AppController (e2e)', () => {
       .get(
         '/api/autofill?formKey=psf-request&field=private_trigger&value=private-reference',
       )
-      .expect(200);
+      .expect(409);
 
-    expect(response.body).toEqual({ matched: false, suggestedValues: {} });
+    expect((response.body as { message: string }).message).toContain(
+      'Legacy role-restricted',
+    );
     expect(canonicalLookupCalls).toBe(0);
   });
 
@@ -1278,7 +1269,6 @@ describe('AppController (e2e)', () => {
         {
           sectionKey: 'requester_information',
           title: 'Requester Information',
-          visibleTo: ['requester'],
           fields: [
             {
               fieldKey: 'product_type',
@@ -1306,7 +1296,6 @@ describe('AppController (e2e)', () => {
         {
           sectionKey: 'requester_information',
           title: 'Requester Information',
-          visibleTo: ['requester'],
           fields: [
             {
               fieldKey: 'product_type',

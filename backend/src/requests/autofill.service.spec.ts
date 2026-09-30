@@ -30,7 +30,6 @@ const requesterVisibleSchema = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'reference_psf_name',
@@ -51,38 +50,6 @@ const requesterVisibleSchema = {
             fieldKey: 'wafer_fab',
             canonicalKey: 'wafer_fab',
             label: 'Wafer FAB',
-            type: 'text',
-            required: false,
-          },
-        ],
-      },
-    ],
-  },
-};
-
-const schemaWithAdminOnlyAutofillFields = {
-  ...requesterVisibleSchema,
-  schema: {
-    ...requesterVisibleSchema.schema,
-    sections: [
-      ...requesterVisibleSchema.schema.sections,
-      {
-        sectionKey: 'admin_only_information',
-        title: 'Admin-only Information',
-        visibleTo: ['admin'],
-        fields: [
-          {
-            fieldKey: 'private_trigger',
-            canonicalKey: 'private_trigger',
-            label: 'Private Trigger',
-            type: 'text',
-            required: false,
-            autofillTrigger: true,
-          },
-          {
-            fieldKey: 'private_target',
-            canonicalKey: 'private_target',
-            label: 'Private Target',
             type: 'text',
             required: false,
           },
@@ -142,22 +109,19 @@ describe('AutofillService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('fails closed without querying historical canonical values when a stored rule targets an admin-only field', async () => {
+  it('fails closed without querying historical canonical values when a stored rule targets an unknown field', async () => {
     autofillRuleService.listActiveRules.mockResolvedValue([
       {
         ...activeRule,
-        targetCanonicalKeys: ['private_target'],
+        targetCanonicalKeys: ['unknown_target'],
       },
     ]);
-    formSchemaService.getActiveSchema.mockResolvedValue(
-      schemaWithAdminOnlyAutofillFields,
-    );
     pool.query.mockResolvedValue({
       rows: [
         {
-          canonical_key: 'private_target',
+          canonical_key: 'unknown_target',
           matched: true,
-          value_json: 'historical-admin-only-value',
+          value_json: 'historical-value',
         },
       ],
     });
@@ -176,22 +140,19 @@ describe('AutofillService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('fails closed without querying historical canonical values when a stored rule has an admin-only trigger', async () => {
+  it('fails closed without querying historical canonical values when a stored rule has an unknown trigger', async () => {
     autofillRuleService.listActiveRules.mockResolvedValue([
       {
         ...activeRule,
-        triggerCanonicalKey: 'private_trigger',
+        triggerCanonicalKey: 'unknown_trigger',
         targetCanonicalKeys: ['product'],
       },
     ]);
-    formSchemaService.getActiveSchema.mockResolvedValue(
-      schemaWithAdminOnlyAutofillFields,
-    );
 
     await expect(
       service.lookupSuggestions({
         formKey: 'psf-request',
-        field: 'private_trigger',
+        field: 'unknown_trigger',
         value: 'REF-PSF-1',
       }),
     ).resolves.toEqual({ matched: false, suggestedValues: {} });

@@ -15,7 +15,6 @@ export interface FormSchemaField {
 export interface FormSchemaSection {
   sectionKey: string
   title: string
-  visibleTo: string[]
   fields: FormSchemaField[]
 }
 

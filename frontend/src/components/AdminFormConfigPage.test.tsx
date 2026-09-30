@@ -36,7 +36,6 @@ const editableSchema: FormSchemaDraft = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
       fields: [
         {
           fieldKey: 'product_type',
@@ -119,15 +118,30 @@ describe('AdminFormConfigPage helpers', () => {
     expect(invalidShape).toEqual({ error: 'Section 1 must have a nonblank sectionKey.', schema: null })
   })
 
-  it('catches duplicate keys, unsupported visibility, and empty choices before saving or publishing', () => {
+  it('catches duplicate keys, restricted legacy sections, and empty choices before saving or publishing', () => {
     const first = editableSchema.sections[0]
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [] })).error).toContain('at least one section')
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [] }] })).error).toContain('at least one field')
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [first, first] })).error).toContain('duplicate sectionKey')
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [first.fields[0], first.fields[0]] }] })).error).toContain('duplicate fieldKey')
-    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, visibleTo: ['unknown'] }] })).error).toContain('supported roles')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, visibleTo: ['admin'] }] })).error).toContain('Legacy role-restricted')
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [''] }, first.fields[1]] }] })).error).toContain('nonblank options')
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [] }, first.fields[1]] }] })).error).toContain('at least one option')
+  })
+
+  it('keeps restricted legacy metadata visible to validation and out of the visual editor', () => {
+    const legacy = { ...editableSchema, sections: [{ ...editableSchema.sections[0], visibleTo: ['admin'] }] }
+    const text = formatFormSchemaDraft(legacy)
+    expect(parseFormSchemaDraft(text).error).toContain('Legacy role-restricted')
+    expect(readFormSchemaEditorDraft(text)).toBeNull()
+  })
+
+  it('drops unrestricted legacy metadata from the editor and saved draft', () => {
+    const text = JSON.stringify({ ...editableSchema, sections: editableSchema.sections.map((section) => ({
+      ...section, visibleTo: ['requester', 'setup_owner', 'admin'],
+    })) })
+    expect(parseFormSchemaDraft(text).schema?.sections[0]).not.toHaveProperty('visibleTo')
+    expect(formatFormSchemaDraft(JSON.parse(text) as FormSchemaDraft)).not.toContain('visibleTo')
   })
 
   it('rejects prototype-reserved field keys before they can reach the shared live preview', () => {

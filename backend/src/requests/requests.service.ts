@@ -68,7 +68,6 @@ export const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
     {
       sectionKey: 'psf_created_information',
       title: 'PSF Created Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
       fields: [
         {
           fieldKey: 'first_die_ref_xy',
