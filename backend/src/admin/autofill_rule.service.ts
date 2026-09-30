@@ -53,27 +53,15 @@ const UUID_PATTERN =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-interface SchemaFieldWithVisibility {
-  field: FormSchemaField;
-  requesterVisible: boolean;
-}
-
-function getSchemaFieldsWithVisibility(
+function getSchemaFields(
   activeSchema: ActiveFormSchemaResponse,
-): SchemaFieldWithVisibility[] {
+): FormSchemaField[] {
   return activeSchema.schema.sections.flatMap((section) =>
-    Array.isArray(section.fields)
-      ? section.fields.map((field) => ({
-          field,
-          requesterVisible:
-            Array.isArray(section.visibleTo) &&
-            section.visibleTo.includes('requester'),
-        }))
-      : [],
+    Array.isArray(section.fields) ? section.fields : [],
   );
 }
 
-export function isRequesterVisibleAutofillRule(
+export function isValidAutofillRuleForSchema(
   rule: Pick<AutofillRuleInput, 'triggerCanonicalKey' | 'targetCanonicalKeys'>,
   activeSchema: ActiveFormSchemaResponse,
 ): boolean {
@@ -93,28 +81,23 @@ export function isRequesterVisibleAutofillRule(
     return false;
   }
 
-  const fields = getSchemaFieldsWithVisibility(activeSchema);
-  const getExactlyOneRequesterVisibleField = (
-    canonicalKey: string,
-  ): FormSchemaField | null => {
+  const fields = getSchemaFields(activeSchema);
+  const getExactlyOneField = (canonicalKey: string): FormSchemaField | null => {
     const matches = fields.filter(
-      ({ field }) => field.canonicalKey === canonicalKey,
+      (field) => field.canonicalKey === canonicalKey,
     );
-    if (matches.length !== 1 || !matches[0].requesterVisible) {
+    if (matches.length !== 1) {
       return null;
     }
 
-    return matches[0].field;
+    return matches[0];
   };
-  const triggerField = getExactlyOneRequesterVisibleField(
-    rule.triggerCanonicalKey,
-  );
+  const triggerField = getExactlyOneField(rule.triggerCanonicalKey);
 
   return (
     triggerField?.autofillTrigger === true &&
     rule.targetCanonicalKeys.every(
-      (targetCanonicalKey) =>
-        getExactlyOneRequesterVisibleField(targetCanonicalKey) !== null,
+      (targetCanonicalKey) => getExactlyOneField(targetCanonicalKey) !== null,
     )
   );
 }
@@ -410,9 +393,9 @@ export class AutofillRuleService implements OnModuleInit {
       );
     }
 
-    if (!isRequesterVisibleAutofillRule(rule, activeSchema)) {
+    if (!isValidAutofillRuleForSchema(rule, activeSchema)) {
       throw new BadRequestException(
-        'Autofill rule trigger and target canonical keys must reference requester-visible fields in the active schema.',
+        'Autofill rule trigger and target canonical keys must reference unique fields in the active schema.',
       );
     }
   }
