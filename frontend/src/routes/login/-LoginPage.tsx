@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, User } from 'lucide-react'
 import { ApiError, loginWithPassword } from '../../services/api'
 import nxpLogo from '../../assets/NXP.png'
+import { DevelopmentLogin } from './-DevelopmentLogin'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -102,6 +103,7 @@ export function LoginPage() {
           </button>
           </form>
         </section>
+        {import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_ENABLED === 'true' ? <DevelopmentLogin /> : null}
       </div>
     </div>
   )

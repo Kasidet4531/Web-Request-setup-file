@@ -1,0 +1,12 @@
+.development-login {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px dashed #94a3b8;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.development-login h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+.development-login p { font-size: 0.875rem; margin: 0 0 0.75rem; }
+.development-login__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.development-login [role="alert"] { color: #b91c1c; margin-top: 0.75rem; }

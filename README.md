@@ -1,5 +1,8 @@
 # PSF Setup File Web Application
 
+For this branch's unified LDAP/local testing workflow and mock removal steps,
+see [Local development authentication](docs/local-development-auth.md).
+
 This repository contains the architecture, specification, and codebase for the **PSF Setup File Request Management Web Application**. The system streamlines the workflow of submitting PSF requests, managing dynamic form schemas, tracking setup status, performing search indexing, auto-filling fields, auditing changes, and exporting reports.
 
 > **Current implementation baseline (T01):** [`ADR 0014`](docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md) is the source for the current runtime, API, authentication, visual-reference boundary, and known release limits. The material below is historical target architecture unless ADR 0014 repeats it. In particular, current authentication is LDAP-backed with locally stored authorization profiles, the backend uses Express, and Nginx/proxy deployment is not verified by this repository.
