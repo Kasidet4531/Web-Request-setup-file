@@ -37,6 +37,7 @@ const activeSchema = {
             canonicalKey: 'product_type',
             label: 'Product Type',
             type: 'radio' as const,
+            options: ['New Product', 'Transfer Product', 'Existing Product'],
             required: true,
           },
           {
@@ -80,12 +81,73 @@ const storedPsfDateSchema: FormSchemaJson = {
   ],
 };
 
+const revision = '2026-06-18T01:05:03.000Z';
+const configuration = {
+  entries: [
+    {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Draft',
+      kind: 'draft',
+      requestCount: null,
+    },
+    ...[
+      'Submitted',
+      'Setup In Progress',
+      'Need More Information',
+      'PSF Created',
+      'Completed',
+      'Rejected',
+      'Cancelled',
+    ].map((name, index) => ({
+      id: `00000000-0000-4000-8000-${String(index + 2).padStart(12, '0')}`,
+      name,
+      kind:
+        name === 'Completed'
+          ? 'completed'
+          : name === 'Cancelled'
+            ? 'cancelled'
+            : 'open',
+      requestCount: 0,
+    })),
+  ],
+  psfVisibilityTriggerId: '00000000-0000-4000-8000-000000000005',
+  updatedAt: revision,
+};
+
 const requesterActor = {
   id: '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
   username: 'requester.demo',
   displayName: 'Fook',
   role: 'requester' as const,
   setupOwnerDepartment: null,
+};
+
+const requestRow = {
+  id: 'request-1',
+  request_no: 'DRAFT-1',
+  form_key: 'psf-request',
+  form_version: 3,
+  status: 'Submitted',
+  requester: requesterActor.displayName,
+  requester_user_id: requesterActor.id,
+  setup_owner: 'Original owner',
+  setup_owner_role: 'MFG',
+  product_type: 'Existing Product',
+  requester_data_json: {
+    product_type: 'Existing Product',
+    requester_name: requesterActor.displayName,
+  },
+  psf_created_data_json: {},
+  schema_snapshot_json: activeSchema.schema,
+  psf_created_schema_snapshot_json:
+    requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
+  created_at: revision,
+  updated_at: revision,
+  updated_at_version: revision,
+  submitted_at: revision,
+  psf_created_at: null,
+  psf_released_at: null,
+  completed_at: null,
 };
 
 describe('RequestsService draft flow', () => {
@@ -98,6 +160,8 @@ describe('RequestsService draft flow', () => {
   };
   let workflowTransitionService: {
     getAllowedNextStatuses: jest.Mock;
+    getConfiguration: jest.Mock;
+    lockConfiguration: jest.Mock;
   };
   let searchIndexService: {
     ensureRequestSearchIndexStorage: jest.Mock;
@@ -125,6 +189,8 @@ describe('RequestsService draft flow', () => {
     };
     workflowTransitionService = {
       getAllowedNextStatuses: jest.fn().mockResolvedValue([]),
+      getConfiguration: jest.fn().mockResolvedValue(configuration),
+      lockConfiguration: jest.fn().mockResolvedValue(configuration),
     };
     searchIndexService = {
       ensureRequestSearchIndexStorage: jest.fn().mockResolvedValue(undefined),
@@ -346,6 +412,8 @@ describe('RequestsService draft flow', () => {
 
   it('derives draft requester identity from the authenticated actor rather than client fields', async () => {
     const insertedRow = {
+      updated_at_version: new Date('2026-06-18T01:02:03.000Z').toISOString(),
+      psf_released_at: null,
       id: 'request-1',
       request_no: 'DRAFT-20260618-0001',
       form_key: 'psf-request',
@@ -440,6 +508,10 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:02:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-2',
           request_no: 'DRAFT-2',
           form_key: 'psf-request',
@@ -471,6 +543,10 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:02:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-2',
           request_no: 'DRAFT-2',
           form_key: 'psf-request',
@@ -505,6 +581,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-2',
             status: 'Draft',
             requester: 'Other Requester',
@@ -518,8 +596,8 @@ describe('RequestsService draft flow', () => {
       service.updateDraftRequesterData(
         'request-2',
         {
+          expectedUpdatedAt: revision,
           formVersion: 3,
-          requester: 'Other Requester',
           requesterData: { product_type: 'New Product' },
         },
         requesterActor,
@@ -544,6 +622,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-1',
             status: 'Draft',
             requester: requesterActor.displayName,
@@ -556,7 +636,11 @@ describe('RequestsService draft flow', () => {
     await expect(
       service.updateDraftRequesterData(
         'request-1',
-        { formVersion: 3, requesterData: { product_type: 'New Product' } },
+        {
+          expectedUpdatedAt: revision,
+          formVersion: 3,
+          requesterData: { product_type: 'New Product' },
+        },
         setupOwnerActor,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -566,7 +650,7 @@ describe('RequestsService draft flow', () => {
     );
   });
 
-  it('constrains requester list queries only by immutable identity when display names differ', async () => {
+  it('keeps ordinary requester filters separate from server-resolved shared authorization', async () => {
     const queryRequestsForActor = service.queryRequests.bind(
       service,
     ) as unknown as (
@@ -589,12 +673,30 @@ describe('RequestsService draft flow', () => {
       requesterActor,
     );
 
-    expect(searchIndexService.queryRequests).toHaveBeenCalledWith({
-      requesterUserId: requesterActor.id,
-      status: 'Submitted',
-      limit: 25,
-      offset: 0,
-    });
+    expect(searchIndexService.queryRequests).toHaveBeenCalledWith(
+      {
+        requester: 'Former Requester Display Name',
+        status: 'Submitted',
+        limit: 25,
+        offset: 0,
+      },
+      {
+        scope: 'all',
+        relation: 'all',
+        workState: 'all',
+        actorId: requesterActor.id,
+        actorRole: 'requester',
+        department: null,
+        openStatuses: [
+          'Submitted',
+          'Setup In Progress',
+          'Need More Information',
+          'PSF Created',
+          'Rejected',
+        ],
+        completedStatuses: ['Completed'],
+      },
+    );
   });
 
   it('queries submitted requests through the search index with normalized pagination values', async () => {
@@ -628,12 +730,30 @@ describe('RequestsService draft flow', () => {
       offset: 50,
     });
 
-    expect(searchIndexService.queryRequests).toHaveBeenCalledWith({
-      keyword: 'probe',
-      status: 'Submitted',
-      limit: 25,
-      offset: 50,
-    });
+    expect(searchIndexService.queryRequests).toHaveBeenCalledWith(
+      {
+        keyword: 'probe',
+        status: 'Submitted',
+        limit: 25,
+        offset: 50,
+      },
+      {
+        scope: 'all',
+        relation: 'all',
+        workState: 'all',
+        actorId: 'admin-1',
+        actorRole: 'admin',
+        department: null,
+        openStatuses: [
+          'Submitted',
+          'Setup In Progress',
+          'Need More Information',
+          'PSF Created',
+          'Rejected',
+        ],
+        completedStatuses: ['Completed'],
+      },
+    );
   });
 
   it.each([
@@ -647,7 +767,8 @@ describe('RequestsService draft flow', () => {
       },
       allowedNextStatuses: ['Cancelled'],
       currentStatus: 'Submitted',
-      description: 'returns the requester cancellation option from Submitted',
+      description:
+        'returns all other catalog work options to a requester from Submitted',
     },
     {
       actor: {
@@ -660,7 +781,7 @@ describe('RequestsService draft flow', () => {
       allowedNextStatuses: ['Submitted', 'Cancelled'],
       currentStatus: 'Need More Information',
       description:
-        'returns the requester resubmit and cancellation options from Need More Information',
+        'returns all other catalog work options to a requester from Need More Information',
     },
     {
       actor: {
@@ -702,208 +823,171 @@ describe('RequestsService draft flow', () => {
       currentStatus: 'PSF Created',
       description: 'returns setup-owner options from PSF Created',
     },
-  ])('$description', async ({ actor, allowedNextStatuses, currentStatus }) => {
+  ])('$description', async ({ actor, currentStatus }) => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           status: currentStatus,
           requester_user_id: actor.role === 'requester' ? actor.id : null,
         },
       ],
     });
-    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce(
-      allowedNextStatuses,
+    const catalog = new WorkflowTransitionService(
+      pool as never,
+      auditLogService as never,
     );
+    pool.query.mockResolvedValue({
+      rows: [{ config_json: configuration, updated_at_version: revision }],
+    });
+    const actualService = new RequestsService(
+      pool as never,
+      formSchemaService as never,
+      catalog,
+      searchIndexService as never,
+      auditLogService as never,
+    );
+    const expected = configuration.entries
+      .filter((entry) => entry.kind !== 'draft' && entry.name !== currentStatus)
+      .map((entry) => entry.name);
 
     await expect(
-      service.getAllowedStatusTransitions('request-1', actor),
-    ).resolves.toEqual({ allowedNextStatuses });
-    expect(
-      workflowTransitionService.getAllowedNextStatuses,
-    ).toHaveBeenCalledWith(actor, currentStatus);
+      actualService.getAllowedStatusTransitions('request-1', actor),
+    ).resolves.toEqual({ allowedNextStatuses: expected });
+    expect(expected).not.toContain('Draft');
+    expect(expected).not.toContain(currentStatus);
   });
 
-  it('allows a setup owner to manually move a submitted request into setup and records the acting owner', async () => {
+  it('records the acting setup owner in status audit without assigning the request to the editor', async () => {
     const actor = {
-      id: 'user-1',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
+      ...requesterActor,
+      id: 'setup-owner-gntc',
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
-    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
-      'Setup In Progress',
-    ]);
-    const updatedRow = {
-      id: 'request-1',
-      request_no: 'DRAFT-1',
-      form_key: 'psf-request',
-      form_version: 3,
-      status: 'Setup In Progress',
-      requester: 'Fook',
-      setup_owner: 'Setup Owner GNTC Demo',
-      setup_owner_role: 'GNTC',
-      product_type: 'Existing Product',
-      requester_data_json: {
-        product_type: 'Existing Product',
-        requester_name: 'Fook',
-      },
-      psf_created_data_json: {},
-      schema_snapshot_json: activeSchema.schema,
-      created_at: new Date('2026-06-18T01:02:03.000Z'),
-      updated_at: new Date('2026-06-18T01:06:03.000Z'),
-      submitted_at: new Date('2026-06-18T01:05:03.000Z'),
-      psf_created_at: null,
-      completed_at: null,
+    const current = {
+      ...requestRow,
+      setup_owner: null,
+      setup_owner_role: null,
     };
-    dbClient.query
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        rows: [{ id: 'request-1', status: 'Submitted' }],
-      })
-      .mockResolvedValueOnce({ rows: [updatedRow] })
-      .mockResolvedValueOnce({});
-
-    const result = await service.updateRequestStatus('request-1', {
-      status: 'Setup In Progress',
-      actor,
+    const updated = { ...current, status: 'Setup In Progress' };
+    pool.query
+      .mockResolvedValueOnce({ rows: [current] })
+      .mockResolvedValueOnce({ rows: [updated] });
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: updated.status,
+        actor,
+        expectedUpdatedAt: revision,
+      }),
+    ).resolves.toMatchObject({
+      status: updated.status,
+      setupOwner: null,
+      setupOwnerRole: null,
     });
-
-    expect(dbClient.query).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE psf_requests'),
-      expect.arrayContaining([
-        'request-1',
-        'Setup In Progress',
-        'Setup Owner GNTC Demo',
-        'GNTC',
-      ]),
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.not.stringMatching(/SET[\s\S]*setup_owner\s*=/),
+      ['request-1', updated.status, false, false, current.status, revision],
     );
     expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
       expect.objectContaining({
-        requestId: 'request-1',
-        status: 'Setup In Progress',
-        setupOwner: 'Setup Owner GNTC Demo',
-        setupOwnerRole: 'GNTC',
+        requesterUserId: requesterActor.id,
+        setupOwner: null,
+        setupOwnerRole: null,
       }),
       { product_type: 'Existing Product', requester: 'Fook' },
       dbClient,
     );
-    expect(result).toMatchObject({
-      id: 'request-1',
-      status: 'Setup In Progress',
-      setupOwner: 'Setup Owner GNTC Demo',
-      setupOwnerRole: 'GNTC',
-    });
-    expect(
-      workflowTransitionService.getAllowedNextStatuses,
-    ).toHaveBeenCalledWith(actor, 'Submitted', dbClient);
-  });
-
-  it('denies a Setup File Owner status update when the saved configuration does not match their department', async () => {
-    const actor = {
-      id: 'setup-owner-mfg',
-      username: 'setup.mfg.demo',
-      displayName: 'Setup Owner MFG Demo',
-      role: 'setup_owner' as const,
-      setupOwnerDepartment: 'MFG' as const,
-    };
-    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([]);
-    dbClient.query
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        rows: [
-          { id: 'request-1', status: 'Submitted', requester_user_id: null },
-        ],
-      })
-      .mockResolvedValueOnce({});
-
-    await expect(
-      service.updateRequestStatus('request-1', {
-        status: 'Setup In Progress',
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
         actor,
+        metadata: { fromStatus: current.status, toStatus: updated.status },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-
-    expect(
-      workflowTransitionService.getAllowedNextStatuses,
-    ).toHaveBeenCalledWith(actor, 'Submitted', dbClient);
-    expect(dbClient.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE psf_requests'),
-      expect.any(Array),
+      dbClient,
     );
   });
 
-  it('rejects a stale status transition when the persisted status changes after validation', async () => {
+  it('allows cross-department shared work transitions without reassigning the existing owner', async () => {
     const actor = {
-      id: 'user-1',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
+      ...requesterActor,
+      id: 'setup-owner-gntc',
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
-    workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
-      'Setup In Progress',
-    ]);
-    dbClient.query
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        rows: [{ id: 'request-1', status: 'Submitted' }],
-      })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({});
-
-    let error: unknown = undefined;
-    try {
-      await service.updateRequestStatus('request-1', {
-        status: 'Setup In Progress',
+    const updated = { ...requestRow, status: 'Setup In Progress' };
+    pool.query
+      .mockResolvedValueOnce({ rows: [requestRow] })
+      .mockResolvedValueOnce({ rows: [updated] });
+    await expect(
+      service.updateRequestStatus('request-1', {
         actor,
-      });
-    } catch (caughtError) {
-      error = caughtError;
-    }
-
-    expect(error).toBeInstanceOf(ConflictException);
-    expect(error).toHaveProperty(
-      'message',
-      'The request status changed before this update. Reload the request and try again.',
+        status: updated.status,
+        expectedUpdatedAt: revision,
+      }),
+    ).resolves.toMatchObject({
+      setupOwner: 'Original owner',
+      setupOwnerRole: 'MFG',
+      requesterUserId: requesterActor.id,
+    });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.not.stringMatching(/SET[\s\S]*setup_owner\s*=/),
+      ['request-1', updated.status, false, false, requestRow.status, revision],
     );
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({ actor, actionType: 'REQUEST_STATUS_CHANGED' }),
+      dbClient,
+    );
+  });
 
-    expect(dbClient.query).toHaveBeenCalledWith(
+  it('rejects a lost status CAS without audit, projections or release', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [requestRow] })
+      .mockResolvedValueOnce({ rows: [] });
+    await expect(
+      service.updateRequestStatus('request-1', {
+        status: 'Setup In Progress',
+        actor: requesterActor,
+        expectedUpdatedAt: revision,
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringMatching(/WHERE id = \$1\s+AND status = \$5/),
       [
         'request-1',
         'Setup In Progress',
-        'Setup Owner GNTC Demo',
-        'GNTC',
-        'Submitted',
+        false,
+        false,
+        requestRow.status,
+        revision,
       ],
     );
+    expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
+    expect(auditLogService.record).not.toHaveBeenCalled();
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
   });
 
-  it('rejects a requester attempting a setup-owner-only transition', async () => {
-    dbClient.query
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        rows: [{ id: 'request-1', status: 'Submitted' }],
-      })
-      .mockResolvedValueOnce({});
-
+  it('allows a requester to skip forward on foreign shared work without changing identity or assignment', async () => {
+    const current = { ...requestRow, requester_user_id: 'foreign-creator' };
+    pool.query
+      .mockResolvedValueOnce({ rows: [current] })
+      .mockResolvedValueOnce({ rows: [{ ...current, status: 'Completed' }] });
     await expect(
       service.updateRequestStatus('request-1', {
-        status: 'Setup In Progress',
-        actor: {
-          id: 'user-2',
-          username: 'requester.demo',
-          displayName: 'Requester Demo',
-          role: 'requester',
-          setupOwnerDepartment: null,
-        },
+        actor: requesterActor,
+        status: 'Completed',
+        expectedUpdatedAt: revision,
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(dbClient.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE psf_requests'),
-      expect.any(Array),
+    ).resolves.toMatchObject({
+      requesterUserId: 'foreign-creator',
+      setupOwner: 'Original owner',
+      psfCreatedDataVisible: false,
+    });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('completed_at = CASE'),
+      ['request-1', 'Completed', true, false, current.status, revision],
     );
   });
 
@@ -911,12 +995,20 @@ describe('RequestsService draft flow', () => {
     dbClient.query
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
-        rows: [{ id: 'request-1', status: 'Draft' }],
+        rows: [
+          {
+            updated_at_version: revision,
+            psf_released_at: null,
+            id: 'request-1',
+            status: 'Draft',
+          },
+        ],
       })
       .mockResolvedValueOnce({});
 
     await expect(
       service.updateRequestStatus('request-1', {
+        expectedUpdatedAt: revision,
         status: 'Submitted',
         actor: {
           id: 'admin-1',
@@ -937,6 +1029,10 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:03:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           request_no: 'DRAFT-1',
           form_key: 'psf-request',
@@ -971,33 +1067,25 @@ describe('RequestsService draft flow', () => {
     });
   });
 
-  it('uses the existing request-detail authorization path before fetching request history', async () => {
-    const expectedHistory = [
-      {
-        actionType: 'DRAFT_CREATED',
-        actorDisplayName: 'Requester Demo',
-        actorRole: 'requester',
-        createdAt: '2026-06-18T01:02:03.000Z',
-        metadata: {},
-      },
-    ];
-    const accessCheck = jest
-      .spyOn(service, 'getRequest')
-      .mockResolvedValue({} as never);
-    auditLogService.findByRequestId.mockResolvedValue(expectedHistory);
-
+  it('resolves actual shared detail permissions before fetching masked PSF history', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [requestRow] });
     await expect(
       service.getRequestHistory('request-1', requesterActor),
-    ).resolves.toEqual(expectedHistory);
-
-    expect(accessCheck).toHaveBeenCalledWith('request-1', requesterActor);
-    expect(auditLogService.findByRequestId).toHaveBeenCalledWith('request-1');
+    ).resolves.toEqual([]);
+    expect(auditLogService.findByRequestId).toHaveBeenCalledWith(
+      'request-1',
+      false,
+    );
   });
 
   it('masks raw PSF Created Information for a requester before PSF Created', async () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:06:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           request_no: 'PSF-0001',
           form_key: 'psf-request',
@@ -1090,6 +1178,10 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:06:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           request_no: 'PSF-0001',
           form_key: 'psf-request',
@@ -1140,6 +1232,8 @@ describe('RequestsService draft flow', () => {
       pool.query.mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: currentUpdatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             updated_at: currentUpdatedAt,
@@ -1186,6 +1280,8 @@ describe('RequestsService draft flow', () => {
       pool.query.mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: updatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             updated_at: updatedAt,
@@ -1196,6 +1292,8 @@ describe('RequestsService draft flow', () => {
       pool.query.mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: updatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             request_no: 'PSF-0001',
             form_key: 'psf-request',
@@ -1248,6 +1346,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: updatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             updated_at: updatedAt,
@@ -1258,6 +1358,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: updatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             request_no: 'PSF-0001',
             form_key: 'psf-request',
@@ -1292,7 +1394,14 @@ describe('RequestsService draft flow', () => {
     ).resolves.toMatchObject({ psfCreatedData: savedData });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
-      ['request-1', savedData, actor.displayName, 'GNTC', updatedAt],
+      [
+        'request-1',
+        savedData,
+        actor.displayName,
+        'GNTC',
+        true,
+        updatedAt.toISOString(),
+      ],
     );
   });
 
@@ -1330,6 +1439,8 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({}).mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           status: 'Setup In Progress',
           requester_user_id: null,
@@ -1341,6 +1452,7 @@ describe('RequestsService draft flow', () => {
 
     await expect(
       service.updateRequestStatus('request-1', {
+        expectedUpdatedAt: revision,
         status: 'PSF Created',
         actor,
       }),
@@ -1383,6 +1495,8 @@ describe('RequestsService draft flow', () => {
         .mockResolvedValueOnce({
           rows: [
             {
+              updated_at_version: revision,
+              psf_released_at: null,
               id: 'request-1',
               status: 'Setup In Progress',
               requester_user_id: null,
@@ -1394,6 +1508,10 @@ describe('RequestsService draft flow', () => {
         .mockResolvedValueOnce({
           rows: [
             {
+              updated_at_version: new Date(
+                '2026-06-18T01:06:03.000Z',
+              ).toISOString(),
+              psf_released_at: null,
               id: 'request-1',
               request_no: 'PSF-0001',
               form_key: 'psf-request',
@@ -1420,6 +1538,7 @@ describe('RequestsService draft flow', () => {
 
       await expect(
         service.updateRequestStatus('request-1', {
+          expectedUpdatedAt: revision,
           status: 'PSF Created',
           actor,
         }),
@@ -1455,6 +1574,8 @@ describe('RequestsService draft flow', () => {
     };
     const savedData = { field_3: '2026-06-18', field_4: '2024-02-29' };
     const updatedRow = {
+      updated_at_version: new Date('2026-06-18T01:06:03.000Z').toISOString(),
+      psf_released_at: null,
       id: 'request-1',
       request_no: 'PSF-0001',
       form_key: 'psf-request',
@@ -1483,6 +1604,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             requester_user_id: null,
@@ -1496,6 +1619,7 @@ describe('RequestsService draft flow', () => {
 
     await expect(
       service.updateRequestStatus('request-1', {
+        expectedUpdatedAt: revision,
         status: 'PSF Created',
         actor,
       }),
@@ -1539,9 +1663,12 @@ describe('RequestsService draft flow', () => {
       workflowTransitionService.getAllowedNextStatuses.mockResolvedValueOnce([
         'PSF Created',
       ]);
+      pool.query.mockResolvedValue({ rows: [requestRow] });
       dbClient.query.mockResolvedValueOnce({}).mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             requester_user_id: null,
@@ -1553,6 +1680,7 @@ describe('RequestsService draft flow', () => {
 
       await expect(
         service.updateRequestStatus('request-1', {
+          expectedUpdatedAt: revision,
           status: 'PSF Created',
           actor,
         }),
@@ -1607,6 +1735,8 @@ describe('RequestsService draft flow', () => {
       dbClient.query.mockResolvedValueOnce({}).mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             requester_user_id: null,
@@ -1618,6 +1748,7 @@ describe('RequestsService draft flow', () => {
 
       await expect(
         service.updateRequestStatus('request-1', {
+          expectedUpdatedAt: revision,
           status: 'PSF Created',
           actor,
         }),
@@ -1659,6 +1790,8 @@ describe('RequestsService draft flow', () => {
       ],
     };
     const updatedRow = {
+      updated_at_version: new Date('2026-06-18T01:06:03.000Z').toISOString(),
+      psf_released_at: null,
       id: 'request-1',
       request_no: 'PSF-0001',
       form_key: 'psf-request',
@@ -1687,6 +1820,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             requester_user_id: null,
@@ -1700,6 +1835,7 @@ describe('RequestsService draft flow', () => {
 
     await expect(
       service.updateRequestStatus('request-1', {
+        expectedUpdatedAt: revision,
         status: 'PSF Created',
         actor,
       }),
@@ -1738,6 +1874,8 @@ describe('RequestsService draft flow', () => {
       ],
     };
     const updatedRow = {
+      updated_at_version: new Date('2026-06-18T01:06:03.000Z').toISOString(),
+      psf_released_at: null,
       id: 'request-1',
       request_no: 'PSF-0001',
       form_key: 'psf-request',
@@ -1766,6 +1904,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: revision,
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             requester_user_id: requesterActor.id,
@@ -1779,6 +1919,7 @@ describe('RequestsService draft flow', () => {
 
     await expect(
       service.updateRequestStatus('request-1', {
+        expectedUpdatedAt: revision,
         status: 'PSF Created',
         actor,
       }),
@@ -1812,6 +1953,7 @@ describe('RequestsService draft flow', () => {
             request_no: 'PSF-0001',
             form_key: 'psf-request',
             form_version: 3,
+            psf_released_at: revision,
             status,
             requester: 'Fook',
             requester_user_id: 'requester-1',
@@ -1859,7 +2001,7 @@ describe('RequestsService draft flow', () => {
     },
   );
 
-  it('allows incomplete PSF Created saves even when the request snapshot marks a field required', async () => {
+  it('rejects incomplete shared PSF saves using the captured required snapshot', async () => {
     const actor = {
       id: 'setup-owner-1',
       username: 'setup.gntc.demo',
@@ -1906,6 +2048,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: updatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             status: 'Setup In Progress',
             updated_at: updatedAt,
@@ -1916,6 +2060,8 @@ describe('RequestsService draft flow', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            updated_at_version: updatedAt.toISOString(),
+            psf_released_at: null,
             id: 'request-1',
             request_no: 'PSF-0001',
             form_key: 'psf-request',
@@ -1955,11 +2101,14 @@ describe('RequestsService draft flow', () => {
         expectedUpdatedAt: updatedAt.toISOString(),
         psfCreatedData: { optional_setup_date: '   ' },
       }),
-    ).resolves.toMatchObject({
-      status: 'Setup In Progress',
-      psfCreatedData: {},
-      psfCreatedInformationSchema: storedSchema,
-    });
+    ).rejects.toThrow('Required File Name, Required Setup Date');
+    expect(pool.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE psf_requests'),
+      expect.anything(),
+    );
+    expect(auditLogService.record).not.toHaveBeenCalled();
+    expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('allows a setup owner to save normalized PSF Created Information without changing status and records the acting owner', async () => {
@@ -1972,6 +2121,8 @@ describe('RequestsService draft flow', () => {
     };
     const currentUpdatedAt = new Date('2026-06-18T01:05:03.000Z');
     const updatedRow = {
+      updated_at_version: new Date('2026-06-18T01:06:03.000Z').toISOString(),
+      psf_released_at: null,
       id: 'request-1',
       request_no: 'PSF-0001',
       form_key: 'psf-request',
@@ -1996,6 +2147,8 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: currentUpdatedAt.toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           status: 'Setup In Progress',
           updated_at: currentUpdatedAt,
@@ -2048,7 +2201,8 @@ describe('RequestsService draft flow', () => {
         },
         'Setup Owner GNTC Demo',
         'GNTC',
-        currentUpdatedAt,
+        true,
+        currentUpdatedAt.toISOString(),
       ],
     );
     const queryCalls = pool.query.mock.calls as unknown as Array<
@@ -2068,7 +2222,14 @@ describe('RequestsService draft flow', () => {
         setupOwnerDepartment: 'GNTC' as const,
       };
       pool.query.mockResolvedValueOnce({
-        rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+        rows: [
+          {
+            updated_at_version: revision,
+            psf_released_at: null,
+            id: 'request-1',
+            status: 'Setup In Progress',
+          },
+        ],
       });
       const updatePsfCreatedData = Reflect.get(
         service,
@@ -2089,7 +2250,8 @@ describe('RequestsService draft flow', () => {
           psfCreatedData,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
-      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(pool.query).not.toHaveBeenCalled();
+      expect(pool.connect).not.toHaveBeenCalled();
     },
   );
 
@@ -2102,7 +2264,14 @@ describe('RequestsService draft flow', () => {
       setupOwnerDepartment: 'GNTC' as const,
     };
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+      rows: [
+        {
+          updated_at_version: revision,
+          psf_released_at: null,
+          id: 'request-1',
+          status: 'Setup In Progress',
+        },
+      ],
     });
     const updatePsfCreatedData = Reflect.get(
       service,
@@ -2123,7 +2292,8 @@ describe('RequestsService draft flow', () => {
         psfCreatedData: { psf_setup_file_name: 'final-setup.psf' },
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(pool.connect).not.toHaveBeenCalled();
   });
 
   it('returns a conflict when another owner saves between the PSF Created Information read and write', async () => {
@@ -2138,6 +2308,8 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: currentUpdatedAt.toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           status: 'Setup In Progress',
           updated_at: currentUpdatedAt,
@@ -2166,14 +2338,15 @@ describe('RequestsService draft flow', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining(
-        "updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))",
+        "updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))",
       ),
       [
         'request-1',
         { psf_setup_file_name: 'stale-setup.psf' },
         'Setup Owner GNTC Demo',
         'GNTC',
-        currentUpdatedAt,
+        true,
+        currentUpdatedAt.toISOString(),
       ],
     );
   });
@@ -2189,6 +2362,10 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:06:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           status: 'Setup In Progress',
           updated_at: new Date('2026-06-18T01:06:03.000Z'),
@@ -2219,7 +2396,14 @@ describe('RequestsService draft flow', () => {
 
   it('rejects a requester attempting to save PSF Created Information', async () => {
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Setup In Progress' }],
+      rows: [
+        {
+          updated_at_version: revision,
+          psf_released_at: null,
+          id: 'request-1',
+          status: 'Setup In Progress',
+        },
+      ],
     });
     const actor = {
       id: 'requester-1',
@@ -2247,39 +2431,60 @@ describe('RequestsService draft flow', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('rejects a setup owner attempting to save PSF Created Information after Completed', async () => {
-    pool.query.mockResolvedValueOnce({
-      rows: [{ id: 'request-1', status: 'Completed' }],
-    });
+  it('allows a setup owner to edit Completed shared PSF data while preserving the existing owner', async () => {
     const actor = {
-      id: 'setup-owner-1',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
+      ...requesterActor,
+      id: 'setup-owner-gntc',
       role: 'setup_owner' as const,
       setupOwnerDepartment: 'GNTC' as const,
     };
-    const invokeUpdate = async () => {
-      const updatePsfCreatedData = Reflect.get(
-        service,
-        'updatePsfCreatedData',
-      ) as (
-        requestId: string,
-        dto: { actor: typeof actor; psfCreatedData: Record<string, unknown> },
-      ) => Promise<unknown>;
-
-      return updatePsfCreatedData.call(service, 'request-1', {
-        actor,
-        psfCreatedData: { psf_setup_file_name: 'late-change.psf' },
+    const current = { ...requestRow, status: 'Completed' };
+    const data = { psf_setup_file_name: 'late-change.psf' };
+    pool.query
+      .mockResolvedValueOnce({ rows: [current] })
+      .mockResolvedValueOnce({
+        rows: [{ ...current, psf_created_data_json: data }],
       });
-    };
-
-    await expect(invokeUpdate()).rejects.toBeInstanceOf(ForbiddenException);
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    await expect(
+      service.updatePsfCreatedData('request-1', {
+        actor,
+        psfCreatedData: data,
+        expectedUpdatedAt: revision,
+      }),
+    ).resolves.toMatchObject({
+      status: 'Completed',
+      canEditPsfCreatedData: true,
+      setupOwner: 'Original owner',
+      setupOwnerRole: 'MFG',
+    });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining(
+        'WHEN setup_owner IS NULL AND setup_owner_role IS NULL',
+      ),
+      ['request-1', data, actor.displayName, 'GNTC', true, revision],
+    );
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor,
+        metadata: {
+          fieldChanges: [
+            expect.objectContaining({
+              fieldKey: 'psf_setup_file_name',
+              before: null,
+              after: 'late-change.psf',
+            }),
+          ],
+        },
+      }),
+      dbClient,
+    );
   });
 
   it('allows an admin to save PSF Created Information after Completed without replacing the saved owner', async () => {
     const currentUpdatedAt = new Date('2026-06-18T01:07:03.000Z');
     const updatedRow = {
+      updated_at_version: new Date('2026-06-18T01:08:03.000Z').toISOString(),
+      psf_released_at: null,
       id: 'request-1',
       request_no: 'PSF-0001',
       form_key: 'psf-request',
@@ -2301,6 +2506,8 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: currentUpdatedAt.toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           status: 'Completed',
           updated_at: currentUpdatedAt,
@@ -2350,7 +2557,8 @@ describe('RequestsService draft flow', () => {
         { psf_setup_file_name: 'admin-corrected.psf' },
         null,
         null,
-        currentUpdatedAt,
+        true,
+        currentUpdatedAt.toISOString(),
       ],
     );
   });
@@ -2359,6 +2567,9 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
+          schema_snapshot_json: activeSchema.schema,
           id: 'request-1',
           form_version: 3,
           status: 'Draft',
@@ -2370,6 +2581,10 @@ describe('RequestsService draft flow', () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:04:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           request_no: 'DRAFT-1',
           form_key: 'psf-request',
@@ -2398,8 +2613,8 @@ describe('RequestsService draft flow', () => {
     const updated = await service.updateDraftRequesterData(
       'request-1',
       {
+        expectedUpdatedAt: revision,
         formVersion: 3,
-        requester: 'Fook',
         requesterData: {
           product_type: 'Existing Product',
           requester_name: 'Fook',
@@ -2412,11 +2627,10 @@ describe('RequestsService draft flow', () => {
       expect.stringContaining('UPDATE psf_requests'),
       [
         'request-1',
-        'Fook',
-        requesterActor.id,
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
         3,
+        revision,
       ],
     );
     expect(updated).toMatchObject({
@@ -2430,29 +2644,22 @@ describe('RequestsService draft flow', () => {
     });
   });
 
-  it('rejects requester-owned updates after Draft status', async () => {
-    pool.query.mockResolvedValueOnce({
-      rows: [
-        {
-          id: 'request-1',
-          status: 'Submitted',
-          requester: 'Fook',
-          requester_user_id: requesterActor.id,
-        },
-      ],
-    });
-
+  it('rejects missing required requester snapshot values on shared work before projections or audit', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [requestRow] });
     await expect(
       service.updateDraftRequesterData(
         'request-1',
-        {
-          formVersion: 3,
-          requester: 'Fook',
-          requesterData: { product_type: 'New Product' },
-        },
+        { formVersion: 3, expectedUpdatedAt: revision, requesterData: {} },
         requesterActor,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toThrow('Product Type, Requester Name');
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).not.toHaveBeenCalled();
+    expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
+    expect(auditLogService.record).not.toHaveBeenCalled();
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('submits a current draft using its locked active schema snapshot', async () => {
@@ -2472,6 +2679,8 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           form_key: 'psf-request',
           status: 'Draft',
@@ -2489,6 +2698,10 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:05:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           request_no: 'DRAFT-1',
           form_key: 'psf-request',
@@ -2516,7 +2729,11 @@ describe('RequestsService draft flow', () => {
 
     const submitted = await service.submitRequest(
       'request-1',
-      { formVersion: 4 },
+      {
+        expectedUpdatedAt: revision,
+        status: 'Submitted',
+        formVersion: 4,
+      },
       requesterActor,
     );
 
@@ -2526,15 +2743,15 @@ describe('RequestsService draft flow', () => {
     );
     expect(dbClient.query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining("status = 'Submitted'"),
+      expect.stringContaining('SET status = $2'),
       [
         'request-1',
-        'Fook',
-        requesterActor.id,
+        'Submitted',
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
-        4,
-        submittedSchema.schema,
+        false,
+        false,
+        revision,
       ],
     );
     expect(
@@ -2575,73 +2792,29 @@ describe('RequestsService draft flow', () => {
     });
   });
 
-  it('drops requester fields that are no longer present in the active schema before locking the submission snapshot', async () => {
-    dbClient.query.mockResolvedValueOnce({});
-    dbClient.query.mockResolvedValueOnce({
-      rows: [
-        {
-          id: 'request-1',
-          form_key: 'psf-request',
-          status: 'Draft',
-          form_version: 3,
-          requester: 'Fook',
-          requester_user_id: requesterActor.id,
-          requester_data_json: {
-            legacy_field: 'remove me',
-            product_type: 'Existing Product',
-            requester_name: 'Fook',
-          },
-          schema_snapshot_json: activeSchema.schema,
-        },
-      ],
-    });
-    dbClient.query.mockResolvedValueOnce({
-      rows: [
-        {
-          id: 'request-1',
-          request_no: 'DRAFT-1',
-          form_key: 'psf-request',
-          form_version: 3,
-          status: 'Submitted',
-          requester: 'Fook',
-          requester_user_id: requesterActor.id,
-          setup_owner: null,
-          setup_owner_role: null,
-          product_type: 'Existing Product',
-          requester_data_json: {
-            product_type: 'Existing Product',
-            requester_name: 'Fook',
-          },
-          psf_created_data_json: {},
-          schema_snapshot_json: activeSchema.schema,
-          created_at: new Date('2026-06-18T01:02:03.000Z'),
-          updated_at: new Date('2026-06-18T01:05:03.000Z'),
-          submitted_at: new Date('2026-06-18T01:05:03.000Z'),
-          psf_created_at: null,
-          completed_at: null,
-        },
-      ],
-    });
-
-    await service.submitRequest(
-      'request-1',
-      { formVersion: 3 },
-      requesterActor,
-    );
-
-    expect(dbClient.query).toHaveBeenNthCalledWith(
-      3,
-      expect.stringContaining("status = 'Submitted'"),
-      [
+  it('rejects unconfigured stored requester fields on submit instead of silently upgrading or dropping data', async () => {
+    const current = {
+      ...requestRow,
+      status: 'Draft',
+      requester_data_json: {
+        ...requestRow.requester_data_json,
+        legacy_field: 'must not silently disappear',
+      },
+    };
+    pool.query.mockResolvedValueOnce({ rows: [current] });
+    await expect(
+      service.submitRequest(
         'request-1',
-        'Fook',
-        requesterActor.id,
-        'Existing Product',
-        { product_type: 'Existing Product', requester_name: 'Fook' },
-        3,
-        activeSchema.schema,
-      ],
-    );
+        { formVersion: 3, status: 'Submitted', expectedUpdatedAt: revision },
+        requesterActor,
+      ),
+    ).rejects.toThrow('Unknown form field: legacy_field');
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).not.toHaveBeenCalled();
+    expect(auditLogService.record).not.toHaveBeenCalled();
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 
   it('rolls back the submitted status update when canonical value persistence fails', async () => {
@@ -2649,6 +2822,8 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           form_key: 'psf-request',
           status: 'Draft',
@@ -2666,6 +2841,10 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: new Date(
+            '2026-06-18T01:05:03.000Z',
+          ).toISOString(),
+          psf_released_at: null,
           id: 'request-1',
           request_no: 'DRAFT-1',
           form_key: 'psf-request',
@@ -2696,20 +2875,28 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
+      service.submitRequest(
+        'request-1',
+        {
+          expectedUpdatedAt: revision,
+          status: 'Submitted',
+          formVersion: 3,
+        },
+        requesterActor,
+      ),
     ).rejects.toThrow('canonical persistence failed');
 
     expect(dbClient.query).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining("status = 'Submitted'"),
+      expect.stringContaining('SET status = $2'),
       [
         'request-1',
-        'Fook',
-        requesterActor.id,
+        'Submitted',
         'Existing Product',
         { product_type: 'Existing Product', requester_name: 'Fook' },
-        3,
-        activeSchema.schema,
+        false,
+        false,
+        revision,
       ],
     );
     expect(
@@ -2730,7 +2917,7 @@ describe('RequestsService draft flow', () => {
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects submission when the latest active schema has required fields the draft has not satisfied', async () => {
+  it('rejects submission when the captured requester schema has required fields the draft has not satisfied', async () => {
     const schemaWithRequiredTitle = {
       ...activeSchema,
       schema: {
@@ -2757,6 +2944,8 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           form_key: 'psf-request',
           status: 'Draft',
@@ -2766,14 +2955,22 @@ describe('RequestsService draft flow', () => {
           requester_data_json: {
             product_type: 'Existing Product',
           },
-          schema_snapshot_json: activeSchema.schema,
+          schema_snapshot_json: schemaWithRequiredTitle.schema,
         },
       ],
     });
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
+      service.submitRequest(
+        'request-1',
+        {
+          expectedUpdatedAt: revision,
+          status: 'Submitted',
+          formVersion: 3,
+        },
+        requesterActor,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
@@ -2794,6 +2991,8 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           form_key: 'psf-request',
           status: 'Draft',
@@ -2811,7 +3010,15 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
+      service.submitRequest(
+        'request-1',
+        {
+          expectedUpdatedAt: revision,
+          status: 'Submitted',
+          formVersion: 3,
+        },
+        requesterActor,
+      ),
     ).rejects.toThrow(
       'The active request schema changed before submit. Reload the draft and submit again.',
     );
@@ -2823,6 +3030,8 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({
       rows: [
         {
+          updated_at_version: revision,
+          psf_released_at: null,
           id: 'request-1',
           status: 'Submitted',
           requester: 'Fook',
@@ -2833,9 +3042,829 @@ describe('RequestsService draft flow', () => {
     dbClient.query.mockResolvedValueOnce({});
 
     await expect(
-      service.submitRequest('request-1', { formVersion: 3 }, requesterActor),
+      service.submitRequest(
+        'request-1',
+        {
+          expectedUpdatedAt: revision,
+          status: 'Submitted',
+          formVersion: 3,
+        },
+        requesterActor,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+
+  it('rejects a lost submission CAS before any canonical, search or audit write', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ ...requestRow, status: 'Draft' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    await expect(
+      service.submitRequest(
+        'request-1',
+        { formVersion: 3, status: 'Submitted', expectedUpdatedAt: revision },
+        requesterActor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).not.toHaveBeenCalled();
+    expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
+    expect(auditLogService.record).not.toHaveBeenCalled();
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+  });
+
+  it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+    'rejects inherited requester required value %s before writing shared data',
+    async (fieldKey) => {
+      const captured = {
+        ...activeSchema.schema,
+        sections: [
+          {
+            ...activeSchema.schema.sections[0],
+            fields: [
+              ...activeSchema.schema.sections[0].fields,
+              {
+                fieldKey,
+                canonicalKey: 'required_value',
+                label: 'Required Value',
+                type: 'text' as const,
+                required: true,
+              },
+            ],
+          },
+        ],
+      };
+      pool.query.mockResolvedValue({ rows: [requestRow] });
+      pool.query.mockResolvedValueOnce({
+        rows: [{ ...requestRow, schema_snapshot_json: captured }],
+      });
+      await expect(
+        service.updateDraftRequesterData(
+          'request-1',
+          {
+            formVersion: 3,
+            expectedUpdatedAt: revision,
+            requesterData: requestRow.requester_data_json,
+          },
+          requesterActor,
+        ),
+      ).rejects.toThrow('Required Value');
+      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertSubmittedCanonicalValues,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['requester', 'admin', 'setup_owner'] as const)(
+    'denies foreign Drafts to %s across every request read/write entry point',
+    async (role) => {
+      const actor = {
+        ...requesterActor,
+        role,
+        setupOwnerDepartment: role === 'setup_owner' ? ('GNTC' as const) : null,
+      };
+      const foreign = {
+        ...requestRow,
+        status: 'Draft',
+        requester_user_id: 'foreign-creator',
+      };
+      pool.query.mockResolvedValue({ rows: [foreign] });
+      const operations = [
+        () => service.getRequest('request-1', actor),
+        () => service.getRequestHistory('request-1', actor),
+        () => service.getAllowedStatusTransitions('request-1', actor),
+        () =>
+          service.updateRequestStatus('request-1', {
+            actor,
+            status: 'Submitted',
+            expectedUpdatedAt: revision,
+          }),
+        () =>
+          service.updateDraftRequesterData(
+            'request-1',
+            {
+              formVersion: 3,
+              requesterData: requestRow.requester_data_json,
+              expectedUpdatedAt: revision,
+            },
+            actor,
+          ),
+        () =>
+          service.updatePsfCreatedData('request-1', {
+            actor,
+            psfCreatedData: {},
+            expectedUpdatedAt: revision,
+          }),
+        () =>
+          service.submitRequest(
+            'request-1',
+            {
+              formVersion: 3,
+              status: 'Submitted',
+              expectedUpdatedAt: revision,
+            },
+            actor,
+          ),
+        () =>
+          service.upgradeDraftSchema('request-1', { formVersion: 4 }, actor),
+      ];
+      for (const invoke of operations)
+        await expect(invoke()).rejects.toBeInstanceOf(ForbiddenException);
+      expect(pool.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE psf_requests'),
+        expect.anything(),
+      );
+      expect(auditLogService.findByRequestId).not.toHaveBeenCalled();
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertRequestSearchIndex,
+      ).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertSubmittedCanonicalValues,
+      ).not.toHaveBeenCalled();
+      expect(formSchemaService.getActiveSchemaForUpdate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['requester', 'admin', 'setup_owner'] as const)(
+    'saves an incomplete private own Draft for %s without updating any shared projection',
+    async (role) => {
+      const actor = {
+        ...requesterActor,
+        role,
+        setupOwnerDepartment: role === 'setup_owner' ? ('GNTC' as const) : null,
+      };
+      const current = { ...requestRow, status: 'Draft' };
+      pool.query
+        .mockResolvedValueOnce({ rows: [current] })
+        .mockResolvedValueOnce({
+          rows: [
+            { ...current, requester_data_json: { requester_name: 'Fook' } },
+          ],
+        });
+      await expect(
+        service.updateDraftRequesterData(
+          'request-1',
+          { formVersion: 3, requesterData: {}, expectedUpdatedAt: revision },
+          actor,
+        ),
+      ).resolves.toMatchObject({
+        requesterUserId: actor.id,
+        canSubmitDraft: true,
+        canEditRequesterData: true,
+      });
+      expect(pool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('AND form_version = $4'),
+        ['request-1', null, { requester_name: 'Fook' }, 3, revision],
+      );
+      expect(formSchemaService.getActiveSchema).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertRequestSearchIndex,
+      ).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertSubmittedCanonicalValues,
+      ).not.toHaveBeenCalled();
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ actor }),
+        dbClient,
+      );
+    },
+  );
+
+  it.each(['admin', 'setup_owner'] as const)(
+    'allows %s to view and save their own incomplete private PSF Draft even when self-requester',
+    async (role) => {
+      const actor = {
+        ...requesterActor,
+        role,
+        setupOwnerDepartment: role === 'setup_owner' ? ('GNTC' as const) : null,
+      };
+      const required = {
+        ...storedPsfDateSchema,
+        sections: [
+          {
+            ...storedPsfDateSchema.sections[0],
+            fields: storedPsfDateSchema.sections[0].fields.map((field) => ({
+              ...field,
+              required: true,
+            })),
+          },
+        ],
+      };
+      const current = {
+        ...requestRow,
+        status: 'Draft',
+        psf_created_schema_snapshot_json: required,
+      };
+      pool.query
+        .mockResolvedValueOnce({ rows: [current] })
+        .mockResolvedValueOnce({ rows: [current] });
+      await expect(
+        service.updatePsfCreatedData('request-1', {
+          actor,
+          psfCreatedData: {},
+          expectedUpdatedAt: revision,
+        }),
+      ).resolves.toMatchObject({
+        psfCreatedDataVisible: true,
+        canEditPsfCreatedData: true,
+        psfReleasedAt: null,
+        requesterUserId: actor.id,
+      });
+      expect(
+        searchIndexService.upsertRequestSearchIndex,
+      ).not.toHaveBeenCalled();
+      expect(pool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('psf_created_at = CASE'),
+        [
+          'request-1',
+          {},
+          role === 'setup_owner' ? actor.displayName : null,
+          actor.setupOwnerDepartment,
+          false,
+          revision,
+        ],
+      );
+    },
+  );
+
+  it.each(['requester', 'admin', 'setup_owner'] as const)(
+    'permits %s to reopen Completed shared work without revoking its sticky release',
+    async (role) => {
+      const actor = { ...requesterActor, role };
+      const current = {
+        ...requestRow,
+        status: 'Completed',
+        psf_released_at: revision,
+      };
+      pool.query
+        .mockResolvedValueOnce({ rows: [current] })
+        .mockResolvedValueOnce({ rows: [{ ...current, status: 'Submitted' }] });
+      await expect(
+        service.updateRequestStatus('request-1', {
+          actor,
+          status: 'Submitted',
+          expectedUpdatedAt: revision,
+        }),
+      ).resolves.toMatchObject({
+        status: 'Submitted',
+        psfReleasedAt: revision,
+        requesterUserId: requesterActor.id,
+        setupOwner: 'Original owner',
+      });
+      expect(pool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('COALESCE(psf_released_at, NOW())'),
+        ['request-1', 'Submitted', false, false, 'Completed', revision],
+      );
+    },
+  );
+
+  it('never submits an owned Draft through the generic status endpoint', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ ...requestRow, status: 'Draft' }],
+    });
+    await expect(
+      service.updateRequestStatus('request-1', {
+        actor: requesterActor,
+        status: 'Submitted',
+        expectedUpdatedAt: revision,
+      }),
+    ).rejects.toThrow('submit action');
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
+    expect(auditLogService.record).not.toHaveBeenCalled();
+  });
+
+  it('does not treat equal status as another transition or first PSF release', async () => {
+    const current = { ...requestRow, status: 'PSF Created' };
+    pool.query.mockResolvedValueOnce({ rows: [current] });
+    await expect(
+      service.updateRequestStatus('request-1', {
+        actor: requesterActor,
+        status: current.status,
+        expectedUpdatedAt: revision,
+      }),
+    ).resolves.toMatchObject({ psfReleasedAt: null });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
+    expect(auditLogService.record).not.toHaveBeenCalled();
+  });
+
+  it.each(['Draft', 'unknown'])(
+    'rejects work transition target %s before updates or side effects',
+    async (status) => {
+      pool.query.mockResolvedValueOnce({ rows: [requestRow] });
+      await expect(
+        service.updateRequestStatus('request-1', {
+          actor: requesterActor,
+          status,
+          expectedUpdatedAt: revision,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(
+        searchIndexService.upsertRequestSearchIndex,
+      ).not.toHaveBeenCalled();
+      expect(auditLogService.record).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['requester', 'psf', 'status', 'submit'] as const)(
+    'rejects same-millisecond but different microsecond %s revision before writes',
+    async (operation) => {
+      const exact = '2026-06-18T01:05:03.123456Z';
+      const current = {
+        ...requestRow,
+        status: operation === 'submit' ? 'Draft' : 'Submitted',
+        updated_at_version: exact,
+      };
+      pool.query.mockResolvedValueOnce({ rows: [current] });
+      const expectedUpdatedAt = '2026-06-18T01:05:03.123455Z';
+      const actor = { ...requesterActor, role: 'admin' as const };
+      const invoke =
+        operation === 'requester'
+          ? service.updateDraftRequesterData(
+              'request-1',
+              {
+                formVersion: 3,
+                requesterData: requestRow.requester_data_json,
+                expectedUpdatedAt,
+              },
+              actor,
+            )
+          : operation === 'psf'
+            ? service.updatePsfCreatedData('request-1', {
+                actor,
+                psfCreatedData: {},
+                expectedUpdatedAt,
+              })
+            : operation === 'status'
+              ? service.updateRequestStatus('request-1', {
+                  actor,
+                  status: 'Completed',
+                  expectedUpdatedAt,
+                })
+              : service.submitRequest(
+                  'request-1',
+                  { formVersion: 3, status: 'Submitted', expectedUpdatedAt },
+                  actor,
+                );
+      await expect(invoke).rejects.toBeInstanceOf(ConflictException);
+      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertRequestSearchIndex,
+      ).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertSubmittedCanonicalValues,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['status', 'submit'] as const)(
+    'gates %s at a custom renamed trigger using the separate PSF snapshot before any writes',
+    async (operation) => {
+      const renamed = 'Ready for requester';
+      const cfg = {
+        ...configuration,
+        entries: configuration.entries.map((entry) =>
+          entry.id === configuration.psfVisibilityTriggerId
+            ? { ...entry, name: renamed }
+            : entry,
+        ),
+      };
+      workflowTransitionService.lockConfiguration.mockResolvedValueOnce(cfg);
+      const required = {
+        ...storedPsfDateSchema,
+        sections: [
+          {
+            ...storedPsfDateSchema.sections[0],
+            fields: [
+              { ...storedPsfDateSchema.sections[0].fields[0], required: true },
+            ],
+          },
+        ],
+      };
+      const current = {
+        ...requestRow,
+        status: operation === 'submit' ? 'Draft' : 'Submitted',
+        psf_created_schema_snapshot_json: required,
+        psf_released_at: operation === 'status' ? revision : null,
+      };
+      pool.query.mockResolvedValueOnce({ rows: [current] });
+      const invoke =
+        operation === 'submit'
+          ? service.submitRequest(
+              'request-1',
+              { formVersion: 3, status: renamed, expectedUpdatedAt: revision },
+              requesterActor,
+            )
+          : service.updateRequestStatus('request-1', {
+              actor: requesterActor,
+              status: renamed,
+              expectedUpdatedAt: revision,
+            });
+      await expect(invoke).rejects.toThrow(
+        'PSF Created Information is missing required fields: Setup Date',
+      );
+      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(
+        searchIndexService.upsertSubmittedCanonicalValues,
+      ).not.toHaveBeenCalled();
+      expect(
+        searchIndexService.upsertRequestSearchIndex,
+      ).not.toHaveBeenCalled();
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    },
+  );
+
+  it('submits to an unrelated explicit work target without requiring or releasing PSF data', async () => {
+    const required = {
+      ...storedPsfDateSchema,
+      sections: [
+        {
+          ...storedPsfDateSchema.sections[0],
+          fields: [
+            { ...storedPsfDateSchema.sections[0].fields[0], required: true },
+          ],
+        },
+      ],
+    };
+    const current = {
+      ...requestRow,
+      status: 'Draft',
+      psf_created_schema_snapshot_json: required,
+    };
+    pool.query
+      .mockResolvedValueOnce({ rows: [current] })
+      .mockResolvedValueOnce({ rows: [{ ...current, status: 'Submitted' }] });
+    await expect(
+      service.submitRequest(
+        'request-1',
+        { formVersion: 3, status: 'Submitted', expectedUpdatedAt: revision },
+        requesterActor,
+      ),
+    ).resolves.toMatchObject({ psfReleasedAt: null });
+    expect(pool.query).toHaveBeenLastCalledWith(
+      expect.stringContaining("AND status = 'Draft'"),
+      [
+        'request-1',
+        'Submitted',
+        'Existing Product',
+        requestRow.requester_data_json,
+        false,
+        false,
+        revision,
+      ],
+    );
+    expect(
+      workflowTransitionService.lockConfiguration.mock.invocationCallOrder[0],
+    ).toBeLessThan(pool.query.mock.invocationCallOrder[0]);
+  });
+
+  it.each(['requester', 'psf', 'status', 'submit'] as const)(
+    'rolls back %s fields, projection, release and audit together on a downstream audit failure',
+    async (operation) => {
+      const current = {
+        ...requestRow,
+        status: operation === 'submit' ? 'Draft' : 'Submitted',
+      };
+      pool.query
+        .mockResolvedValueOnce({ rows: [current] })
+        .mockResolvedValueOnce({ rows: [{ ...current, status: 'Submitted' }] });
+      auditLogService.record.mockRejectedValueOnce(
+        new Error('audit unavailable'),
+      );
+      const actor = { ...requesterActor, role: 'admin' as const };
+      const invoke =
+        operation === 'requester'
+          ? service.updateDraftRequesterData(
+              'request-1',
+              {
+                formVersion: 3,
+                requesterData: requestRow.requester_data_json,
+                expectedUpdatedAt: revision,
+              },
+              actor,
+            )
+          : operation === 'psf'
+            ? service.updatePsfCreatedData('request-1', {
+                actor,
+                psfCreatedData: { psf_setup_file_name: 'valid.psf' },
+                expectedUpdatedAt: revision,
+              })
+            : operation === 'status'
+              ? service.updateRequestStatus('request-1', {
+                  actor,
+                  status: 'Completed',
+                  expectedUpdatedAt: revision,
+                })
+              : service.submitRequest(
+                  'request-1',
+                  {
+                    formVersion: 3,
+                    status: 'Submitted',
+                    expectedUpdatedAt: revision,
+                  },
+                  actor,
+                );
+      await expect(invoke).rejects.toThrow('audit unavailable');
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ actor }),
+        dbClient,
+      );
+      expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+        expect.objectContaining({ requesterUserId: requesterActor.id }),
+        expect.any(Object),
+        dbClient,
+      );
+      expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+      expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+      expect(dbClient.release).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    { scope: 'my-drafts', relation: 'created' },
+    { scope: 'my-drafts', workState: 'open' },
+    { scope: 'all', relation: 'created' },
+  ] as const)(
+    'rejects incompatible list authority filters %p before a search query',
+    async (query) => {
+      await expect(
+        service.queryRequests(query, requesterActor),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(searchIndexService.queryRequests).not.toHaveBeenCalled();
+      expect(workflowTransitionService.getConfiguration).not.toHaveBeenCalled();
+    },
+  );
+
+  it('denies requester department relation even if they spoof ordinary setup filters', async () => {
+    await expect(
+      service.queryRequests(
+        { scope: 'related', relation: 'department', setupOwnerRole: 'GNTC' },
+        requesterActor,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(searchIndexService.queryRequests).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { role: 'requester', status: 'Completed', release: null, visible: false },
+    {
+      role: 'requester',
+      status: 'Renamed business trigger',
+      release: revision,
+      visible: true,
+    },
+    {
+      role: 'requester',
+      status: 'Submitted',
+      release: revision,
+      visible: true,
+    },
+    { role: 'admin', status: 'Completed', release: null, visible: true },
+    { role: 'setup_owner', status: 'Submitted', release: null, visible: true },
+  ] as const)(
+    'applies real PSF history masking for $role at $status with sticky release $release',
+    async ({ role, status, release, visible }) => {
+      const actualAudit = new AuditLogService(pool as never);
+      const actualRequests = new RequestsService(
+        pool as never,
+        formSchemaService as never,
+        workflowTransitionService as never,
+        searchIndexService as never,
+        actualAudit,
+      );
+      const requesterEvent = {
+        action_type: 'REQUESTER_INFORMATION_UPDATED',
+        actor_display_name: 'Editor',
+        actor_role: 'requester',
+        created_at: revision,
+        metadata_json: {
+          fieldChanges: [
+            { fieldKey: 'title', before: 'old', after: 'public title' },
+          ],
+        },
+      };
+      const psfEvent = {
+        ...requesterEvent,
+        action_type: 'PSF_CREATED_INFORMATION_UPDATED',
+        metadata_json: {
+          fieldChanges: [
+            {
+              fieldKey: 'psf_setup_file_name',
+              before: 'private-old.psf',
+              after: 'private-new.psf',
+            },
+          ],
+        },
+      };
+      pool.query
+        .mockResolvedValueOnce({
+          rows: [{ ...requestRow, status, psf_released_at: release }],
+        })
+        .mockResolvedValueOnce({ rows: [requesterEvent, psfEvent] });
+      const result = await actualRequests.getRequestHistory('request-1', {
+        ...requesterActor,
+        role,
+      });
+      expect(result.map((entry) => entry.actionType)).toEqual(
+        visible
+          ? ['REQUESTER_INFORMATION_UPDATED', 'PSF_CREATED_INFORMATION_UPDATED']
+          : ['REQUESTER_INFORMATION_UPDATED'],
+      );
+      expect(JSON.stringify(result).includes('private-new.psf')).toBe(visible);
+      expect(pool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('WHERE request_id = $1'),
+        ['request-1'],
+      );
+    },
+  );
+
+  it.each(['requester', 'psf', 'status', 'submit'] as const)(
+    'rolls back %s mutation before audit when the search projection fails',
+    async (operation) => {
+      const current = {
+        ...requestRow,
+        status: operation === 'submit' ? 'Draft' : 'Submitted',
+      };
+      const changed = {
+        ...current,
+        status: 'Submitted',
+        psf_released_at: revision,
+      };
+      pool.query
+        .mockResolvedValueOnce({ rows: [current] })
+        .mockResolvedValueOnce({ rows: [changed] });
+      searchIndexService.upsertRequestSearchIndex.mockRejectedValueOnce(
+        new Error('projection unavailable'),
+      );
+      const actor = { ...requesterActor, role: 'admin' as const };
+      const invoke =
+        operation === 'requester'
+          ? service.updateDraftRequesterData(
+              'request-1',
+              {
+                formVersion: 3,
+                requesterData: requestRow.requester_data_json,
+                expectedUpdatedAt: revision,
+              },
+              actor,
+            )
+          : operation === 'psf'
+            ? service.updatePsfCreatedData('request-1', {
+                actor,
+                psfCreatedData: { psf_setup_file_name: 'valid.psf' },
+                expectedUpdatedAt: revision,
+              })
+            : operation === 'status'
+              ? service.updateRequestStatus('request-1', {
+                  actor,
+                  status: 'PSF Created',
+                  expectedUpdatedAt: revision,
+                })
+              : service.submitRequest(
+                  'request-1',
+                  {
+                    formVersion: 3,
+                    status: 'PSF Created',
+                    expectedUpdatedAt: revision,
+                  },
+                  actor,
+                );
+      await expect(invoke).rejects.toThrow('projection unavailable');
+      expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+        expect.objectContaining({ requesterUserId: requesterActor.id }),
+        expect.any(Object),
+        dbClient,
+      );
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+      expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+      expect(dbClient.release).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['requester', 'psf', 'status', 'submit'] as const)(
+    'preserves the exact microsecond %s revision in SQL and its authoritative response',
+    async (operation) => {
+      const exact = '2026-06-18T01:05:03.123456Z';
+      const next = '2026-06-18T01:05:03.123457Z';
+      const current = {
+        ...requestRow,
+        status: operation === 'submit' ? 'Draft' : 'Submitted',
+        updated_at_version: exact,
+      };
+      const data = {
+        ...requestRow.requester_data_json,
+        requester_name: 'Spoofed editor',
+      };
+      pool.query
+        .mockResolvedValueOnce({ rows: [current] })
+        .mockResolvedValueOnce({
+          rows: [{ ...current, status: 'Submitted', updated_at_version: next }],
+        });
+      const actor = {
+        ...requesterActor,
+        displayName: 'Different authenticated editor',
+        role: 'admin' as const,
+      };
+      const invoke =
+        operation === 'requester'
+          ? service.updateDraftRequesterData(
+              'request-1',
+              { formVersion: 3, requesterData: data, expectedUpdatedAt: exact },
+              actor,
+            )
+          : operation === 'psf'
+            ? service.updatePsfCreatedData('request-1', {
+                actor,
+                psfCreatedData: {},
+                expectedUpdatedAt: exact,
+              })
+            : operation === 'status'
+              ? service.updateRequestStatus('request-1', {
+                  actor,
+                  status: 'Completed',
+                  expectedUpdatedAt: exact,
+                })
+              : service.submitRequest(
+                  'request-1',
+                  {
+                    formVersion: 3,
+                    status: 'Submitted',
+                    expectedUpdatedAt: exact,
+                  },
+                  actor,
+                );
+      await expect(invoke).resolves.toMatchObject({
+        updatedAt: next,
+        requester: 'Fook',
+        requesterUserId: requesterActor.id,
+        schemaSnapshot: activeSchema.schema,
+      });
+      const [, params] = pool.query.mock.calls[1] as [string, unknown[]];
+      expect(params[params.length - 1]).toBe(exact);
+      expect(params).not.toContain(actor.displayName);
+      expect(formSchemaService.getActiveSchema).not.toHaveBeenCalled();
+      if (operation === 'requester') {
+        expect(params[2]).toEqual(requestRow.requester_data_json);
+        expect(
+          searchIndexService.upsertSubmittedCanonicalValues,
+        ).toHaveBeenCalledWith(
+          'request-1',
+          activeSchema.schema,
+          requestRow.requester_data_json,
+          dbClient,
+        );
+      }
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ actor }),
+        dbClient,
+      );
+    },
+  );
+
+  it('uses server-resolved immutable related authority and ignores a spoofed requesterUserId filter', async () => {
+    const query = {
+      scope: 'related' as const,
+      relation: 'created' as const,
+      requesterUserId: 'spoofed-id',
+      requester: 'Other display name',
+    };
+    await service.queryRequests(query, requesterActor);
+    expect(searchIndexService.queryRequests).toHaveBeenCalledWith(
+      {
+        scope: 'related',
+        relation: 'created',
+        requester: 'Other display name',
+        limit: undefined,
+        offset: undefined,
+      },
+      {
+        scope: 'related',
+        relation: 'created',
+        workState: 'all',
+        actorId: requesterActor.id,
+        actorRole: 'requester',
+        department: null,
+        openStatuses: [
+          'Submitted',
+          'Setup In Progress',
+          'Need More Information',
+          'PSF Created',
+          'Rejected',
+        ],
+        completedStatuses: ['Completed'],
+      },
+    );
+    expect(query.requesterUserId).toBe('spoofed-id');
   });
 
   it('raises NotFoundException when loading an unknown request', async () => {
@@ -2851,8 +3880,8 @@ describe('PSF Created visibility policy', () => {
   it.each([
     ['requester', 'Draft', false],
     ['requester', 'Submitted', false],
-    ['requester', 'PSF Created', true],
-    ['requester', 'Completed', true],
+    ['requester', 'PSF Created', false],
+    ['requester', 'Completed', false],
     ['admin', 'Draft', true],
     ['setup_owner', 'Submitted', true],
   ] as const)('returns %s for a %s at %s', (role, status, expected) => {

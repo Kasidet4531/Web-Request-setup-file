@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Controller,
-  ForbiddenException,
   Get,
   Query,
   Req,
@@ -55,18 +54,6 @@ export class AutofillController {
     if (!actor) {
       request.session.userId = undefined;
       throw new UnauthorizedException('Not authenticated');
-    }
-
-    if (actor.role === 'setup_owner') {
-      throw new ForbiddenException(
-        'Setup File Owners cannot edit requester-owned fields',
-      );
-    }
-
-    if (actor.role !== 'requester' && actor.role !== 'admin') {
-      throw new ForbiddenException(
-        'Only requesters and admins can look up requester autofill suggestions.',
-      );
     }
 
     return actor;

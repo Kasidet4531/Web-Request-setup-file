@@ -20,6 +20,14 @@ const adminActor = {
   setupOwnerDepartment: null,
 };
 
+const setupOwnerActor = {
+  id: 'setup-owner-1',
+  username: 'setup.gntc.demo',
+  displayName: 'Setup Owner GNTC Demo',
+  role: 'setup_owner' as const,
+  setupOwnerDepartment: 'GNTC' as const,
+};
+
 describe('AutofillController', () => {
   let authService: { getProfile: jest.Mock };
   let autofillService: { lookupSuggestions: jest.Mock };
@@ -38,7 +46,7 @@ describe('AutofillController', () => {
     controller = module.get(AutofillController);
   });
 
-  it.each([requesterActor, adminActor])(
+  it.each([requesterActor, setupOwnerActor, adminActor])(
     'allows an authenticated $role to retrieve a minimal lookup response using normalized scalar query values',
     async (actor) => {
       authService.getProfile.mockResolvedValue(actor);
@@ -61,6 +69,7 @@ describe('AutofillController', () => {
         suggestedValues: { product: 'New Product' },
       });
 
+      expect(authService.getProfile).toHaveBeenCalledWith(actor.id);
       expect(autofillService.lookupSuggestions).toHaveBeenCalledWith({
         formKey: 'psf-request',
         field: 'reference_psf_name',
@@ -96,31 +105,6 @@ describe('AutofillController', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(staleRequest.session.userId).toBeUndefined();
-    expect(autofillService.lookupSuggestions).not.toHaveBeenCalled();
-  });
-
-  it('rejects Setup File Owners using the requester-draft lookup before service access', async () => {
-    authService.getProfile.mockResolvedValue({
-      id: 'setup-owner-1',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
-      role: 'setup_owner',
-      setupOwnerDepartment: 'GNTC',
-    });
-
-    await expect(
-      controller.lookup(
-        {
-          formKey: 'psf-request',
-          field: 'reference_psf_name',
-          value: 'REF-PSF-1',
-        },
-        { session: { userId: 'setup-owner-1' } } as never,
-      ),
-    ).rejects.toMatchObject({
-      message: 'Setup File Owners cannot edit requester-owned fields',
-    });
-
     expect(autofillService.lookupSuggestions).not.toHaveBeenCalled();
   });
 

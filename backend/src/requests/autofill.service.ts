@@ -6,6 +6,7 @@ import {
   type AutofillRule,
 } from '../admin/autofill_rule.service';
 import { FormSchemaService } from '../admin/form_schema.service';
+import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import type { CanonicalValue } from './search-index.service';
 
@@ -45,6 +46,7 @@ export class AutofillService {
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     private readonly autofillRuleService: AutofillRuleService,
     private readonly formSchemaService: FormSchemaService,
+    private readonly workflowTransitionService: WorkflowTransitionService,
   ) {}
 
   async getActiveRules(formKey: string): Promise<AutofillRule[]> {
@@ -69,6 +71,14 @@ export class AutofillService {
       return { matched: false, suggestedValues: {} };
     }
 
+    const configuration = await this.workflowTransitionService.getConfiguration(
+      this.pool,
+      false,
+    );
+    const completedStatuses = configuration.entries
+      .filter((entry) => entry.kind === 'completed')
+      .map((entry) => entry.name);
+
     const result = await this.pool.query<AutofillLookupRow>(
       `
         WITH matched_source AS (
@@ -77,7 +87,7 @@ export class AutofillService {
           INNER JOIN canonical_submission_values AS trigger_value
             ON trigger_value.request_id = source_request.id
           WHERE source_request.form_key = $1
-            AND source_request.status = 'Completed'
+            AND source_request.status = ANY($5::text[])
             AND source_request.completed_at IS NOT NULL
             AND trigger_value.canonical_key = $2
             AND trigger_value.value_json = $3::jsonb
@@ -105,6 +115,7 @@ export class AutofillService {
         query.field,
         JSON.stringify(query.value),
         rule.targetCanonicalKeys,
+        completedStatuses,
       ],
     );
     if (!result.rows.some((row) => row.matched)) {

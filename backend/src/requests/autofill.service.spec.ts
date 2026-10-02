@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AutofillRuleService } from '../admin/autofill_rule.service';
 import { FormSchemaService } from '../admin/form_schema.service';
+import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { AutofillService } from './autofill.service';
 
@@ -13,6 +14,24 @@ const activeRule = {
   status: 'active' as const,
   createdAt: '2026-08-11T10:00:00.000Z',
   updatedAt: '2026-08-11T10:00:00.000Z',
+};
+
+const workflowConfiguration = {
+  entries: [
+    { id: 'draft', name: 'Draft', kind: 'draft', requestCount: null },
+    {
+      id: 'completed',
+      name: 'Fulfilled after rename',
+      kind: 'completed',
+      requestCount: null,
+    },
+    {
+      id: 'open-completed-label',
+      name: '100% -- Completed',
+      kind: 'open',
+      requestCount: null,
+    },
+  ],
 };
 
 const requesterVisibleSchema = {
@@ -62,6 +81,7 @@ const requesterVisibleSchema = {
 describe('AutofillService', () => {
   let autofillRuleService: { listActiveRules: jest.Mock };
   let formSchemaService: { getActiveSchema: jest.Mock };
+  let workflowTransitionService: { getConfiguration: jest.Mock };
   let pool: { query: jest.Mock };
   let service: AutofillService;
 
@@ -72,12 +92,19 @@ describe('AutofillService', () => {
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(requesterVisibleSchema),
     };
+    workflowTransitionService = {
+      getConfiguration: jest.fn().mockResolvedValue(workflowConfiguration),
+    };
     pool = { query: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AutofillService,
         { provide: AutofillRuleService, useValue: autofillRuleService },
         { provide: FormSchemaService, useValue: formSchemaService },
+        {
+          provide: WorkflowTransitionService,
+          useValue: workflowTransitionService,
+        },
         { provide: DATABASE_POOL, useValue: pool },
       ],
     }).compile();
@@ -163,7 +190,7 @@ describe('AutofillService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('uses an exact canonical JSON scalar match and returns only safe configured target values from the deterministic newest Completed source', async () => {
+  it('uses the catalog completed kind after status renames and returns only safe configured target values', async () => {
     autofillRuleService.listActiveRules.mockResolvedValue([activeRule]);
     let executedQuery = '';
     pool.query.mockImplementation((query: string) => {
@@ -215,9 +242,14 @@ describe('AutofillService', () => {
         'reference_psf_name',
         JSON.stringify('REF-PSF-1'),
         ['product', 'wafer_fab'],
+        ['Fulfilled after rename'],
       ],
     );
-    expect(executedQuery).toContain("source_request.status = 'Completed'");
+    expect(workflowTransitionService.getConfiguration).toHaveBeenCalledWith(
+      pool,
+      false,
+    );
+    expect(executedQuery).toContain('source_request.status = ANY($5::text[])');
     expect(executedQuery).toContain('source_request.completed_at IS NOT NULL');
     expect(executedQuery).toContain('trigger_value.value_json = $3::jsonb');
     expect(executedQuery).toContain(
@@ -228,6 +260,7 @@ describe('AutofillService', () => {
     );
     expect(executedQuery).not.toContain('requester_data_json');
     expect(executedQuery).not.toContain('request_no');
+    expect(executedQuery).not.toContain('psf_created_data_json');
   });
 
   it('reports a source match with an empty suggestion map when every configured target is missing or null', async () => {
@@ -268,6 +301,7 @@ describe('AutofillService', () => {
         'reference_psf_name',
         JSON.stringify('NO-MATCH'),
         ['product', 'wafer_fab'],
+        ['Fulfilled after rename'],
       ],
     );
   });

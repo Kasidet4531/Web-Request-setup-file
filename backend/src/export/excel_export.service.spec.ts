@@ -547,7 +547,7 @@ describe('ExcelExportService', () => {
     );
   });
 
-  it('exports all configured form sections while masking requester PSF Created cells before PSF Created', async () => {
+  it('exports all configured form sections while using sticky release rather than status names to reveal PSF cells', async () => {
     formSchemaService.getActiveSchema.mockResolvedValueOnce({
       formKey: 'psf-request',
       version: 10,
@@ -614,6 +614,7 @@ describe('ExcelExportService', () => {
           requestId: `request-${index + 1}`,
           requestNo: `PSF-${index + 1}`,
           status,
+          psfReleasedAt: index >= 2 ? '2026-06-18T01:05:03.000001Z' : null,
           requester: 'Requester Demo',
           setupOwner: null,
           setupOwnerRole: null,
@@ -673,6 +674,210 @@ describe('ExcelExportService', () => {
       'Completed.psf',
     );
   });
+
+  it.each(['synchronous', 'queued'] as const)(
+    'retains historical requester and PSF sections in a %s workbook while masking unreleased PSF cells',
+    async (mode) => {
+      const currentSchema = {
+        formKey: 'psf-request',
+        version: 10,
+        title: 'Current',
+        sections: [
+          {
+            sectionKey: 'current',
+            title: 'Current',
+            fields: [
+              {
+                fieldKey: 'current_title',
+                canonicalKey: 'title',
+                label: 'Current Title',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+        ],
+      };
+      const capturedSchema = {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'Captured',
+        sections: [
+          {
+            sectionKey: 'one',
+            title: 'One',
+            fields: [
+              {
+                fieldKey: 'old_title',
+                canonicalKey: 'title',
+                label: 'Old Title',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+          {
+            sectionKey: 'two',
+            title: 'Two',
+            fields: [
+              {
+                fieldKey: 'old_second',
+                canonicalKey: 'historical_second',
+                label: 'Historical second section',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+          {
+            sectionKey: 'three',
+            title: 'Three',
+            fields: [
+              {
+                fieldKey: 'old_third',
+                canonicalKey: 'historical_third',
+                label: 'Historical third section',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+        ],
+      };
+      const capturedPsf = {
+        formKey: 'psf-created-information',
+        version: 2,
+        title: 'Captured PSF',
+        sections: [
+          {
+            sectionKey: 'psf_one',
+            title: 'PSF one',
+            fields: [
+              {
+                fieldKey: 'old_file',
+                canonicalKey: 'psf_setup_file_name',
+                label: 'Old file',
+                type: 'text' as const,
+                required: false,
+              },
+            ],
+          },
+          {
+            sectionKey: 'psf_two',
+            title: 'PSF two',
+            fields: [
+              {
+                fieldKey: 'old_note',
+                canonicalKey: 'historical_note',
+                label: 'Historical PSF note',
+                type: 'text' as const,
+                required: false,
+              },
+            ],
+          },
+        ],
+      };
+      formSchemaService.getActiveSchema.mockImplementation((key: string) =>
+        Promise.resolve({
+          formKey: key,
+          version: 10,
+          schema:
+            key === 'psf-request'
+              ? currentSchema
+              : LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+        }),
+      );
+      searchIndexService.queryExportRequests.mockResolvedValueOnce({
+        items: [null, '2026-06-18T01:05:03.000001Z'].map((release, index) => ({
+          requestId: `old-${index}`,
+          requestNo: `OLD-${index}`,
+          status: index === 0 ? 'Completed' : 'Renamed trigger moved back',
+          requester: 'Requester Demo',
+          setupOwner: null,
+          setupOwnerRole: null,
+          productType: null,
+          requestDate: '2026-06-18T01:05:03Z',
+          updatedAt: '2026-06-18T01:05:03Z',
+          requesterData: {
+            old_title: 'Captured title',
+            old_second: 'Captured two',
+            old_third: 'Captured three',
+          },
+          canonicalValues: null,
+          schemaSnapshot: capturedSchema,
+          psfCreatedData: {
+            old_file: 'captured.psf',
+            old_note: 'Captured private note',
+          },
+          psfCreatedInformationSchema: capturedPsf,
+          psfReleasedAt: release,
+        })),
+        total: 2,
+        limit: 500,
+        offset: 0,
+      });
+      const result =
+        mode === 'synchronous'
+          ? await service.exportRequests({}, requesterActor)
+          : await service.exportAllRequests({}, requesterActor);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+      );
+      const sheet = workbook.getWorksheet('PSF Requests');
+      if (!sheet) throw new Error('Expected worksheet');
+      const headers = Array.from(
+        { length: sheet.columnCount },
+        (_, index) => sheet.getRow(1).getCell(index + 1).value,
+      );
+      expect(headers).toContain('Historical second section');
+      expect(headers).toContain('Historical third section');
+      expect(headers).toContain('Historical PSF note');
+      expect(
+        headers.filter((header) => header === 'Current Title'),
+      ).toHaveLength(1);
+      for (const rowNumber of [2, 3]) {
+        expect(
+          sheet
+            .getRow(rowNumber)
+            .getCell(headers.indexOf('Historical second section') + 1).value,
+        ).toBe('Captured two');
+        expect(
+          sheet
+            .getRow(rowNumber)
+            .getCell(headers.indexOf('Historical third section') + 1).value,
+        ).toBe('Captured three');
+      }
+      expect(
+        sheet.getRow(2).getCell(headers.indexOf('PSF Setup File Name') + 1)
+          .value,
+      ).toBe('');
+      expect(
+        sheet.getRow(2).getCell(headers.indexOf('Historical PSF note') + 1)
+          .value,
+      ).toBe('');
+      expect(
+        sheet.getRow(3).getCell(headers.indexOf('PSF Setup File Name') + 1)
+          .value,
+      ).toBe('captured.psf');
+      expect(
+        sheet.getRow(3).getCell(headers.indexOf('Historical PSF note') + 1)
+          .value,
+      ).toBe('Captured private note');
+      expect(searchIndexService.extractCanonicalValues).toHaveBeenCalledWith(
+        capturedSchema,
+        {
+          old_title: 'Captured title',
+          old_second: 'Captured two',
+          old_third: 'Captured three',
+        },
+      );
+    },
+  );
 
   it('rejects an export exceeding the synchronous record ceiling instead of returning a partial workbook', async () => {
     searchIndexService.queryExportRequests.mockResolvedValueOnce({

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -15,12 +14,9 @@ import type {
 } from '../auth/session.types';
 import {
   WorkflowTransitionService,
-  type WorkflowTransitionConfiguration,
-  type WorkflowTransitionConfigurationInput,
+  type PublicWorkflowConfiguration,
+  type WorkflowConfiguration,
 } from './workflow_transition.service';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 @Controller('admin/workflow')
 export class WorkflowTransitionController {
@@ -32,7 +28,7 @@ export class WorkflowTransitionController {
   @Get()
   async getWorkflowTransitionConfiguration(
     @Req() request: AuthenticatedRequest,
-  ): Promise<WorkflowTransitionConfiguration> {
+  ): Promise<WorkflowConfiguration> {
     await this.getAuthenticatedAdmin(request);
 
     return this.workflowTransitionService.getConfiguration();
@@ -42,12 +38,9 @@ export class WorkflowTransitionController {
   async replaceWorkflowTransitionConfiguration(
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-  ): Promise<WorkflowTransitionConfiguration> {
-    await this.getAuthenticatedAdmin(request);
-
-    return this.workflowTransitionService.replaceConfiguration(
-      this.parseReplacement(body),
-    );
+  ): Promise<WorkflowConfiguration> {
+    const actor = await this.getAuthenticatedAdmin(request);
+    return this.workflowTransitionService.applyOperation(body, actor);
   }
 
   private async getAuthenticatedAdmin(
@@ -67,29 +60,35 @@ export class WorkflowTransitionController {
 
     if (actor.role !== 'admin') {
       throw new ForbiddenException(
-        'Only admins can manage workflow transition configurations.',
+        'Only admins can manage workflow status catalog settings.',
       );
     }
 
     return actor;
   }
+}
 
-  private parseReplacement(
-    body: unknown,
-  ): WorkflowTransitionConfigurationInput {
-    if (!isRecord(body) || !Array.isArray(body.transitions)) {
-      throw new BadRequestException('workflow transitions must be an array.');
+@Controller('workflow')
+export class WorkflowStatusController {
+  constructor(
+    private readonly workflowTransitionService: WorkflowTransitionService,
+    private readonly authService: AuthService,
+  ) {}
+
+  @Get('statuses')
+  async getStatuses(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PublicWorkflowConfiguration> {
+    const userId = request.session.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+    const actor = await this.authService.getProfile(userId);
+    if (!actor) {
+      request.session.userId = undefined;
+      throw new UnauthorizedException('Not authenticated');
     }
 
-    const unsupportedKey = Object.keys(body).find(
-      (key) => key !== 'transitions',
-    );
-    if (unsupportedKey) {
-      throw new BadRequestException(
-        `workflow configuration contains an unsupported field: ${unsupportedKey}.`,
-      );
-    }
-
-    return { transitions: body.transitions as never };
+    return this.workflowTransitionService.getPublicConfiguration();
   }
 }

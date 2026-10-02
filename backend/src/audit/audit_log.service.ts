@@ -16,20 +16,23 @@ export const REQUEST_AUDIT_ACTION = {
   DRAFT_REQUESTER_DATA_UPDATED: 'DRAFT_REQUESTER_DATA_UPDATED',
   REQUEST_SUBMITTED: 'REQUEST_SUBMITTED',
   REQUEST_STATUS_CHANGED: 'REQUEST_STATUS_CHANGED',
+  REQUESTER_INFORMATION_UPDATED: 'REQUESTER_INFORMATION_UPDATED',
+  PSF_CREATED_INFORMATION_UPDATED: 'PSF_CREATED_INFORMATION_UPDATED',
+  WORKFLOW_CATALOG_UPDATED: 'WORKFLOW_CATALOG_UPDATED',
 } as const;
 
 export type RequestAuditAction =
   (typeof REQUEST_AUDIT_ACTION)[keyof typeof REQUEST_AUDIT_ACTION];
 
 export interface RecordRequestAuditAction {
-  requestId: string;
-  actionType: RequestAuditAction;
+  requestId: string | null;
+  actionType: string;
   actor: AuthenticatedUserProfile;
   metadata: Record<string, unknown>;
 }
 
 export interface RequestAuditHistoryEntry {
-  actionType: RequestAuditAction;
+  actionType: string;
   actorDisplayName: string;
   actorRole: AuthenticatedUserProfile['role'];
   createdAt: string;
@@ -45,9 +48,9 @@ export interface GlobalAuditLogFilters {
 }
 
 export interface GlobalAuditLogEntry {
-  requestId: string;
-  requestNo: string;
-  actionType: RequestAuditAction;
+  requestId: string | null;
+  requestNo: string | null;
+  actionType: string;
   actorDisplayName: string;
   actorRole: AuthenticatedUserProfile['role'];
   createdAt: string;
@@ -55,7 +58,7 @@ export interface GlobalAuditLogEntry {
 }
 
 interface RequestAuditHistoryRow {
-  action_type: RequestAuditAction;
+  action_type: string;
   actor_display_name: string;
   actor_role: AuthenticatedUserProfile['role'];
   created_at: Date | string;
@@ -63,9 +66,9 @@ interface RequestAuditHistoryRow {
 }
 
 interface GlobalAuditLogRow {
-  request_id: string;
-  request_no: string;
-  action_type: RequestAuditAction;
+  request_id: string | null;
+  request_no: string | null;
+  action_type: string;
   actor_display_name: string;
   actor_role: AuthenticatedUserProfile['role'];
   created_at: Date | string;
@@ -114,6 +117,7 @@ export class AuditLogService implements OnModuleInit {
 
   async findByRequestId(
     requestId: string,
+    includePsfHistory = true,
   ): Promise<RequestAuditHistoryEntry[]> {
     const result = await this.pool.query<RequestAuditHistoryRow>(
       `
@@ -130,18 +134,26 @@ export class AuditLogService implements OnModuleInit {
       [requestId],
     );
 
-    return result.rows.map((row) => ({
-      actionType: row.action_type,
-      actorDisplayName: row.actor_display_name,
-      actorRole: row.actor_role,
-      createdAt: this.serializeTimestamp(row.created_at),
-      metadata: row.metadata_json,
-    }));
+    return result.rows
+      .filter(
+        (row) =>
+          includePsfHistory ||
+          row.action_type !==
+            REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
+      )
+      .map((row) => ({
+        actionType: row.action_type,
+        actorDisplayName: row.actor_display_name,
+        actorRole: row.actor_role,
+        createdAt: this.serializeTimestamp(row.created_at),
+        metadata: row.metadata_json,
+      }));
   }
 
   // ponytail: unpaged global audit list; add cursor pagination when audit volume is measured.
   async findGlobalAuditLogs(
     filters: GlobalAuditLogFilters = {},
+    actor?: Pick<AuthenticatedUserProfile, 'id'>,
   ): Promise<GlobalAuditLogEntry[]> {
     const requestId = this.parseOptionalUuid(filters.requestId);
     const user = this.normalizeOptionalString(filters.user);
@@ -178,6 +190,16 @@ export class AuditLogService implements OnModuleInit {
       where.push(`audit_log.action_type = ${addParameter(actionType)}`);
     }
 
+    if (actor) {
+      values.push(actor.id);
+      where.push(`(
+        audit_log.request_id IS NULL
+        OR psf_request.id IS NULL
+        OR psf_request.status <> 'Draft'
+        OR psf_request.requester_user_id = $${values.length}::uuid
+      )`);
+    }
+
     if (from) {
       where.push(`audit_log.created_at >= ${addParameter(from)}`);
     }
@@ -197,7 +219,7 @@ export class AuditLogService implements OnModuleInit {
           audit_log.created_at,
           audit_log.metadata_json
         FROM psf_request_audit_logs AS audit_log
-        JOIN psf_requests AS psf_request ON psf_request.id = audit_log.request_id
+        LEFT JOIN psf_requests AS psf_request ON psf_request.id = audit_log.request_id
         ${where.length > 0 ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY audit_log.created_at DESC, audit_log.id DESC
       `,
@@ -219,7 +241,7 @@ export class AuditLogService implements OnModuleInit {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS psf_request_audit_logs (
         id UUID PRIMARY KEY,
-        request_id UUID NOT NULL,
+        request_id UUID,
         action_type TEXT NOT NULL,
         actor_id UUID NOT NULL,
         actor_username TEXT NOT NULL,
@@ -228,6 +250,11 @@ export class AuditLogService implements OnModuleInit {
         metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+
+    await this.pool.query(`
+      ALTER TABLE psf_request_audit_logs
+      ALTER COLUMN request_id DROP NOT NULL
     `);
 
     await this.pool.query(`
