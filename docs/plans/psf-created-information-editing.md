@@ -1,5 +1,7 @@
 # Configurable PSF Created Information — approved implementation contract
 
+> **Historical scoped plan (2026-10-02 audit):** This records the original task scope, approvals, execution instructions and checkpoints. It is not current implementation guidance or new authorization to execute commands, change data, configure agents or deploy. Historical verification claims apply only to their recorded environment and scope. Use [Current implementation](../current-implementation.md) for the checked-in baseline.
+
 ## Goal and boundaries
 Allow administrators to configure PSF Created Information through the existing Form Management visual editor and version lifecycle. Work only in `/opt/data/Web-Request-setup-file/.worktrees/rapid-frontend-rewrite`. Do not modify `local-test-auth`, authentication code, global Hermes config, main, or unrelated features. Commit only after independent review and real verification; do not push.
 

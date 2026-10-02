@@ -1,5 +1,7 @@
 # Production UI Integration Implementation Plan
 
+> **Historical scoped plan (2026-10-02 audit):** This records the original task scope, approvals, execution instructions and checkpoints. It is not current implementation guidance or new authorization to execute commands, change data, configure agents or deploy. Historical verification claims apply only to their recorded environment and scope. Use [Current implementation](../current-implementation.md) for the checked-in baseline.
+
 > **For agentic workers:** Use the `executing-plans` skill for approved execution, one task at a time. Subagent execution requires separate authorization and a verified non-Astra/non-shared-quota model; this plan does not authorize delegation. Checkboxes track documented task progress; only the scoped T01 documentation updates are complete in this revision.
 
 **Goal:** Integrate the selected prototype UI/UX into the existing API-backed application without replacing its domain boundaries or versioned-form architecture.

@@ -1,5 +1,7 @@
 # 13. Excel Export Schema Alignment and Layout Strategy
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ. Async export begins when the count is strictly greater than the configured threshold (default 2,000), rather than at 2,000; see [export controller](../../backend/src/export/export.controller.ts). Export-profile administration and database-cursor streaming below are target decisions, not evidence of implemented capabilities.
+
 > **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
 
 We decided that the Excel Export will use a single flat table format (one request per row), where the columns are structured and ordered according to the latest active/published Form Schema version. Data from requests on older form versions will be dynamically mapped to these columns using canonical keys.

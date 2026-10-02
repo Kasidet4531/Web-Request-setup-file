@@ -1,5 +1,7 @@
 # 12. Schema-Embedded Master Data Configuration
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ. Options remain schema data, but the editor and snapshot capture behavior must be read from the current baseline rather than inferred from ADR 0007 or the submission-time wording below.
+
 We decided to embed Master Data dropdown options (such as Products, Wafer FABs, Priority levels, and Machines) directly within the JSON Form Schema definitions rather than maintaining separate relational lookup tables and dedicated CRUD administration interfaces for each master data type in the MVP.
 
 ## Context

@@ -1,5 +1,7 @@
 # 9. Auto-fill Resolution Strategy for Duplicate Historical Matches
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ.
+
 We decided that when an auto-fill lookup maps to multiple historical completed requests, the system will resolve the conflict by retrieving values from the most recently completed request, rather than showing a picker interface or failing the lookup.
 
 ## Context

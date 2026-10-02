@@ -1,5 +1,7 @@
 # GitHub Issues List: PSF Setup File Request Management
 
+> **Historical target/backlog snapshot (2026-10-02 audit):** Issue drafts, references and checkboxes below preserve their original planning state; they are not a live GitHub issue/PR status report or a current implementation checklist. Some target APIs, permissions and features differ from the checked-in source. Use [Current implementation](current-implementation.md) for present behavior; publication/execution instructions below do not grant new authorization.
+
 This document contains the refined GitHub issues for the vertical slices defined for the PSF Setup File Request Management project. These issues are designed as end-to-end tracer bullets.
 
 ---

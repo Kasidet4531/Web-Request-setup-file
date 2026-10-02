@@ -1,5 +1,15 @@
 # 14. Current Production Baseline and Visual-Reference Boundary
 
+> **Historical baseline, superseded for this branch:** the original text below
+> records an earlier source baseline, not the current `unified-local-auth`
+> runtime or a verified deployment. Use [current implementation](../current-implementation.md)
+> for source-backed behavior. Current amendments include two form families,
+> the configurable 17-entry seed catalog, persistent PSF release, field diffs
+> inside audit metadata, and removable development authentication. Older status
+> labels and claims that these features are unimplemented no longer apply.
+> The original body is preserved for provenance; its production/reference
+> repository assertions are historical claims, not independently reverified here.
+
 **Status:** Accepted as a documentation baseline by T01; product decisions and release approval remain unresolved.
 
 ## Scope and source

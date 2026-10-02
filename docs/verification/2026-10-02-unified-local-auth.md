@@ -1,5 +1,10 @@
 # Unified local authentication verification — 2026-10-02
 
+> **Dated verification record:** the original checks below describe the
+> implementation delivered at `01eab7b`. Use [current implementation](../current-implementation.md)
+> for the maintained source description. The addendum records the later
+> connectivity check separately; it does not extend the original test scope.
+
 Base: `rapid-frontend-rewrite` at `8c11bb4`. Delivery branch: `unified-local-auth`.
 The user requested one branch with the current main frontend/backend and
 removable mock authentication, preserving both existing branches.
@@ -54,3 +59,17 @@ run was not performed. HTTP tests use a fake database pool with actual Nest
 controllers and cookie sessions. PostgreSQL upsert conflict behavior and company
 LDAP connectivity are not verified by these results. No mock PSF Requests or
 database schema changes are part of this delivery.
+
+## Subsequent database connectivity addendum — 2026-10-02
+
+After the user supplied a development PostgreSQL connection, the ignored local
+backend configuration was updated. A `pg.Pool` query using
+`SELECT current_database(), current_user, inet_server_addr()` completed with
+database `psf_setup_db`, user `postgres` and server `10.0.20.6`. The query was
+read-only and ran after permission to access the supplied network endpoint.
+
+This confirms connectivity/authentication for that query at that time. It did
+not start the application, run initializers, validate upsert conflict behavior,
+exercise feature writes, determine PostgreSQL version, or test company LDAP.
+Credentials remain outside version control. The earlier missing Docker/psql
+condition did not prevent checking the database through the installed `pg` client.

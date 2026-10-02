@@ -1,5 +1,7 @@
 # Refined GitHub Issues List: PSF Setup File Request Management
 
+> **Historical target/backlog snapshot (2026-10-02 audit):** Issue drafts, references and checkboxes below preserve their original planning state; they are not a live GitHub issue/PR status report or a current implementation checklist. Some target APIs, permissions and features differ from the checked-in source. Use [Current implementation](current-implementation.md) for present behavior; publication/execution instructions below do not grant new authorization.
+
 This document is a refined replacement for `docs/github_issues.md` when preparing real GitHub implementation issues.
 
 The original file is still useful as a **feature inventory / epic overview**.

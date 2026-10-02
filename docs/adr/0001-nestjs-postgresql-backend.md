@@ -1,5 +1,7 @@
 # 1. NestJS and PostgreSQL for Backend Service
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ.
+
 We decided to use NestJS (TypeScript) with PostgreSQL for the backend service, rejecting the alternative of Rust Axum.
 
 ## Context

@@ -1,5 +1,7 @@
 # Status Management and Request Editing — Scope and Design Plan
 
+> **Historical scoped plan (2026-10-02 audit):** This records the original task scope, approvals, execution instructions and checkpoints. It is not current implementation guidance or new authorization to execute commands, change data, configure agents or deploy. Historical verification claims apply only to their recorded environment and scope. Use [Current implementation](../current-implementation.md) for the checked-in baseline.
+
 ## Current Integration Checkpoint — 2026-10-02
 
 This checkpoint supersedes historical planning-only, pending-approval and older routing statements below. The user approved implementation, isolated workers/runtime, and a local final commit with no push or local-auth sync; the latest coder/reviewer choice is independent `gpt-6.1-sol/high`. Backend/frontend SPEC and QUALITY passed, including Q1/Q2 remediation. Hime executed 14 live HTTP/PostgreSQL/Excel scenarios in the approved isolated schema and integrated the frozen sources into the canonical rapid worktree. Fresh canonical checks passed: backend 578 unit / 18 mocked-HTTP e2e; frontend 230 tests; both lint/build, frontend type-check, source parity and diff check.

@@ -2,6 +2,10 @@
 
 This context manages the request lifecycle for creating and updating PSF Setup Files, enforcing role-based visibility and dynamic form configurations.
 
+Scope: `unified-local-auth`, source-audited on 2026-10-02. Use this glossary with
+[current implementation](docs/current-implementation.md); historical specifications
+and ADR bodies do not override the current source.
+
 ## Language
 
 **PSF Setup File**:
@@ -21,7 +25,7 @@ An engineer or user role responsible for shared PSF work and setup details, belo
 _Avoid_: Engineer, Owner, Setup Owner
 
 **Product Type**:
-A required field positioned at the very top of the PSF Request form, where the Requester selects exactly one option: **New Product**, **Transfer Product**, or **Existing Product** (via radio buttons). This field is stored in the search index and displayed at the beginning of the tables in both the dashboard and export Excel.
+The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in the request table's title/product-type column. XLSX places metadata columns before requester-form fields; Product Type is not its first column.
 _Avoid_: Type of product, product category
 
 
@@ -53,8 +57,11 @@ A structured database table storing pre-extracted canonical values for quick que
 _Avoid_: Query table, view
 
 **Local Authorization Profile**:
-The application-local user record that stores role and setup-owner department after LDAP authentication. It does not validate passwords in the current implementation.
+The application-local user record that supplies role and setup-owner department after LDAP or explicitly enabled development authentication. It does not validate passwords. There are three authorization roles and four reserved development identities; GNTC and MFG are departments, not extra authorization roles.
 _Avoid_: Local Authentication, local password login
+
+**Development Identity**:
+A temporary reserved account selected through mock login while the backend is in development/test with `DEV_AUTH_ENABLED=true`. It uses the same stored authorization profile and session as LDAP login. Production denies the endpoint. See [local development authentication](docs/local-development-auth.md) for exact guards and removal steps.
 
 **Form Schema**:
 The JSON-structured definition of a PSF Request form, specifying fields, input types, sections, and layout configurations. Required validation uses each captured requester/PSF form separately. Section access is not configured in the schema; PSF visibility follows backend actor policy and persistent release, not a percentage or hardcoded status label.
@@ -71,7 +78,6 @@ _Avoid_: File upload, document
 **Master Data**:
 The standardized reference values (e.g., list of Products, Wafer FABs, or Machines) embedded directly within the Form Schema to populate selection dropdowns, ensuring data consistency.
 _Avoid_: Lookup tables, static lists
-
 
 
 

@@ -1,5 +1,7 @@
 # 2. Draft Form Version Upgrade Strategy
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ.
+
 > **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
 
 We decided to implement a hybrid strategy for handling Draft version upgrades, prompting the user when a newer form schema is published.

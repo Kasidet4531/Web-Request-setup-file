@@ -1,5 +1,7 @@
 # Status Management verification — 2026-10-02
 
+> **Historical verification record (2026-10-02 audit):** Results, test counts, authorizations, fixtures, environment paths and limitations below are preserved as evidence of that scoped run. They are not fresh verification of this checkout, its running services or the current database contents, and do not authorize replaying data changes. Use [Current implementation](../current-implementation.md) for the present source baseline.
+
 ## Scope and current gate
 
 The approved Status Management / Request Editing feature is integrated into `rapid-frontend-rewrite`, based on `b5ad4056f2be412928438841677968f920f9dab6`. Delivery is a local commit only; no push, deployment, GitHub artifact, or `local-test-auth` synchronization is authorized. Autofill Rules administration is deferred.

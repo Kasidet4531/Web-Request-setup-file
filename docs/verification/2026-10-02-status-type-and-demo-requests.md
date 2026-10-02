@@ -1,5 +1,7 @@
 # Status type wording and 100 demo requests — 2026-10-02
 
+> **Historical verification record (2026-10-02 audit):** Results, test counts, authorizations, fixtures, environment paths and limitations below are preserved as evidence of that scoped run. They are not fresh verification of this checkout, its running services or the current database contents, and do not authorize replaying data changes. Use [Current implementation](../current-implementation.md) for the present source baseline.
+
 ## Authorized scope
 
 The user requested `Meaning` → `Status type`, visible `Cancelled` → `Cancel`, removal of unused old test data, and approximately 100 new request records for UI inspection.
