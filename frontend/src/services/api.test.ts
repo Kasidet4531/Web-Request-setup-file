@@ -40,6 +40,29 @@ describe('createApiClient', () => {
     })
   })
 
+  it.each([401, 403, 503])('announces session expiry only for HTTP 401, not %s', async (status) => {
+    const target = new EventTarget()
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: target, writable: true })
+    Object.defineProperty(globalThis, 'CustomEvent', { configurable: true, value: TestCustomEvent, writable: true })
+    const listener = vi.fn()
+    target.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
+    globalThis.fetch = vi.fn(async () => new Response(null, { status })) as typeof fetch
+    await expect(createApiClient().get('/requests')).rejects.toMatchObject({ status })
+    expect(listener).toHaveBeenCalledTimes(status === 401 ? 1 : 0)
+    if (status === 401) expect(listener).toHaveBeenCalledWith(expect.objectContaining({ detail: { status: 'anonymous' } }))
+  })
+
+  it('leaves initial session-check failures to the caller so stale responses cannot invalidate a newer login', async () => {
+    const target = new EventTarget()
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: target, writable: true })
+    Object.defineProperty(globalThis, 'CustomEvent', { configurable: true, value: TestCustomEvent, writable: true })
+    const listener = vi.fn()
+    target.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 401 })) as typeof fetch
+    await expect(fetchCurrentUser()).rejects.toMatchObject({ status: 401 })
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('returns parsed JSON for successful GET requests', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ status: 'ok' }), {

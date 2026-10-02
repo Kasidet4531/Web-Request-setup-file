@@ -348,6 +348,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
     const responseBody = await parseResponseBody(response)
 
     if (!response.ok) {
+      // AppShell owns /me checks and ignores responses predating a newer session.
+      if (response.status === 401 && normalizePath(path) !== '/me') {
+        notifyAuthSessionChanged({ status: 'anonymous' })
+      }
+
       const message =
         typeof responseBody === 'object' &&
         responseBody !== null &&

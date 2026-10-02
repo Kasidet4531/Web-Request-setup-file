@@ -19,9 +19,9 @@ const hooks = vi.hoisted(() => {
 vi.mock('react', async (load) => ({ ...await load<typeof import('react')>(), useState: hooks.useState }))
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => hooks.navigate }))
 
-function render() {
+function render(redirectTo?: string) {
   hooks.begin()
-  return DevelopmentLogin()
+  return DevelopmentLogin({ redirectTo })
 }
 
 beforeEach(() => {
@@ -48,10 +48,17 @@ describe('local account login interaction', () => {
         method: 'POST', credentials: 'include', body: '{"identity":"admin"}',
       }))
       complete(new Response(JSON.stringify({ user }), { headers: { 'content-type': 'application/json' } }))
-      await vi.waitFor(() => expect(hooks.navigate).toHaveBeenCalledWith({ to: '/dashboard' }))
+      await vi.waitFor(() => expect(hooks.navigate).toHaveBeenCalledWith({ href: '/dashboard', replace: true }))
       expect(events).toEqual([{ status: 'authenticated', user }])
       expect(render().props.children[2].props.children[3].props.disabled).toBe(false)
     } finally { unsubscribe() }
+  })
+
+  it('returns to the requested internal URL after signing in', async () => {
+    const user = { id: 'dev-id', username: 'dev.admin', displayName: 'Admin', role: 'admin', setupOwnerDepartment: null }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ user }), { headers: { 'content-type': 'application/json' } })))
+    render('/requests?scope=related#details').props.children[2].props.children[0].props.onClick()
+    await vi.waitFor(() => expect(hooks.navigate).toHaveBeenCalledWith({ href: '/requests?scope=related#details', replace: true }))
   })
 
   it('shows backend errors and enables retry without navigating', async () => {

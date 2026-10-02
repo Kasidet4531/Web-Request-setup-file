@@ -6,7 +6,7 @@ import { ApiError, loginWithPassword } from '../../services/api'
 import nxpLogo from '../../assets/NXP.png'
 import { DevelopmentLogin } from './-DevelopmentLogin'
 
-export function LoginPage() {
+export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -21,7 +21,7 @@ export function LoginPage() {
 
     try {
       await loginWithPassword(username, password)
-      await navigate({ to: '/dashboard' })
+      await navigate({ href: redirectTo, replace: true })
     } catch (caughtError) {
       const message =
         caughtError instanceof ApiError
@@ -103,7 +103,7 @@ export function LoginPage() {
           </button>
           </form>
         </section>
-        {import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_ENABLED === 'true' ? <DevelopmentLogin /> : null}
+        {import.meta.env.DEV && import.meta.env.VITE_DEV_AUTH_ENABLED === 'true' ? <DevelopmentLogin redirectTo={redirectTo} /> : null}
       </div>
     </div>
   )

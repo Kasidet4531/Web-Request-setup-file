@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
+import { Link, Navigate, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
 import { NavSidebar } from './NavSidebar'
 import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
@@ -152,8 +152,10 @@ function UserMenu({ user, onLoggedOut }: { user: AuthenticatedUserProfile; onLog
 
 export function AppShell() {
   const navigate = useNavigate()
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const location = useRouterState({ select: (state) => state.location })
+  const pathname = location.pathname
   const [authState, setAuthState] = useState<AuthState>({ status: 'loading' })
+  const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0)
   const [formVersionBreadcrumb, setFormVersionBreadcrumb] = useState<FormVersionBreadcrumb | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches,
@@ -164,15 +166,16 @@ export function AppShell() {
 
   useEffect(() => {
     let isMounted = true
+    let sessionChanged = false
 
     const loadCurrentUser = async () => {
       try {
         const data = await fetchCurrentUser()
-        if (isMounted) {
+        if (isMounted && !sessionChanged) {
           setAuthState({ status: 'authenticated', user: data.user })
         }
       } catch (error) {
-        if (!isMounted) {
+        if (!isMounted || sessionChanged) {
           return
         }
 
@@ -189,6 +192,7 @@ export function AppShell() {
     void loadCurrentUser()
 
     const unsubscribe = subscribeAuthSessionChanged((detail) => {
+      sessionChanged = true
       if (detail.status === 'authenticated') {
         setAuthState({ status: 'authenticated', user: detail.user })
         return
@@ -201,7 +205,7 @@ export function AppShell() {
       isMounted = false
       unsubscribe()
     }
-  }, [])
+  }, [sessionCheckAttempt])
 
   const handleLogout = async () => {
     await logout()
@@ -226,6 +230,28 @@ export function AppShell() {
     return (
       <main className="auth-layout">
         <Outlet />
+      </main>
+    )
+  }
+
+  if (authState.status === 'anonymous') {
+    return <Navigate to="/login" search={{ redirect: location.href }} replace />
+  }
+
+  if (authState.status !== 'authenticated') {
+    return (
+      <main className="auth-layout">
+        <section className="page-card">
+          {authState.status === 'loading' ? <p role="status">Checking session…</p> : (
+            <>
+              <p role="alert">{authState.error}</p>
+              <button className="btn-primary" type="button" onClick={() => {
+                setAuthState({ status: 'loading' })
+                setSessionCheckAttempt((attempt) => attempt + 1)
+              }}>Try again</button>
+            </>
+          )}
+        </section>
       </main>
     )
   }
@@ -281,20 +307,6 @@ export function AppShell() {
 
             {authState.status === 'authenticated' ? (
               <UserMenu onLoggedOut={() => void handleLogout()} user={authState.user} />
-            ) : null}
-
-            {authState.status === 'loading' ? (
-              <span className="auth-status">Checking session…</span>
-            ) : null}
-
-            {authState.status === 'anonymous' ? (
-              <Link className="btn-primary" to="/login">
-                Login
-              </Link>
-            ) : null}
-
-            {authState.status === 'error' ? (
-              <span className="auth-status auth-status--error">{authState.error}</span>
             ) : null}
           </div>
         </header>

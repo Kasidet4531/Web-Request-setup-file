@@ -11,7 +11,7 @@ const accounts = [
   { identity: 'admin', label: 'Admin' },
 ] as const
 
-export function DevelopmentLogin() {
+export function DevelopmentLogin({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
   const navigate = useNavigate()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +22,7 @@ export function DevelopmentLogin() {
     try {
       const response = await api.post<AuthResponse>('/dev/login', { identity })
       notifyAuthSessionChanged({ status: 'authenticated', user: response.user })
-      await navigate({ to: '/dashboard' })
+      await navigate({ href: redirectTo, replace: true })
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Unable to sign in with a local test account')
     } finally {

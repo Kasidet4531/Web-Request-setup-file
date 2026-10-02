@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AUTH_SESSION_CHANGED_EVENT,
+  getLoginRedirect,
   notifyAuthSessionChanged,
   subscribeAuthSessionChanged,
   type AuthSessionChangedDetail,
@@ -90,5 +91,14 @@ describe('auth session notifications', () => {
     notifyAuthSessionChanged({ status: 'anonymous' })
 
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('login return URL', () => {
+  it('preserves an internal path including search and hash', () => {
+    expect(getLoginRedirect('/requests?scope=related#details')).toBe('/requests?scope=related#details')
+  })
+  it.each([undefined, 123, 'https://example.com', '//example.com', '/\\example.com', '/login', '/login/?redirect=/requests', '/admin/../login', '/admin/..//example.com'])('defaults unsafe or recursive target %s to the dashboard', (target) => {
+    expect(getLoginRedirect(target)).toBe('/dashboard')
   })
 })

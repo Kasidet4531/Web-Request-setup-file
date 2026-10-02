@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { notifyAuthSessionChanged } from "./auth-session";
 
 export interface RequestExportFilterValues {
   status: string;
@@ -63,6 +64,10 @@ export function buildRequestExportUrl(
 }
 
 async function exportErrorMessage(response: Response): Promise<string> {
+  if (response.status === 401) {
+    notifyAuthSessionChanged({ status: "anonymous" });
+  }
+
   const responseText = await response.text();
 
   if (!responseText) {
