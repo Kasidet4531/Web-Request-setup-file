@@ -172,7 +172,13 @@ export class ExcelExportService {
   ): Promise<RequestExportWorkbook> {
     const activeSchema =
       await this.formSchemaService.getActiveSchema('psf-request');
-    const requesterFields = this.getExportableFields(activeSchema.schema);
+    const requesterFields = this.getExportableFields({
+      ...activeSchema.schema,
+      sections: [
+        ...activeSchema.schema.sections,
+        ...items.flatMap((item) => item.schemaSnapshot.sections),
+      ],
+    });
     const activePsfCreatedSchema = await this.formSchemaService.getActiveSchema(
       PSF_CREATED_INFORMATION_FORM_KEY,
     );
@@ -204,12 +210,17 @@ export class ExcelExportService {
       const psfCreatedDataVisible = canActorViewPsfCreatedData(
         item.status,
         actor,
+        item.psfReleasedAt,
       );
       const psfCreatedCanonicalValues = this.getPsfCreatedCanonicalValues(item);
 
       rows.push([
         ...REQUEST_METADATA_COLUMNS.map((column) =>
-          this.searchIndexService.serializeCanonicalValue(column.read(item)),
+          column.key === 'status'
+            ? item.status
+            : this.searchIndexService.serializeCanonicalValue(
+                column.read(item),
+              ),
         ),
         ...requesterFields.map((field) =>
           this.searchIndexService.serializeCanonicalValue(

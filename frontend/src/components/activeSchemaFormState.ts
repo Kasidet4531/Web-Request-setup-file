@@ -208,5 +208,5 @@ export function requesterFieldsAreReadOnly(
   mode: 'request' | 'preview',
   request: PsfRequestResponse | null,
 ): boolean {
-  return mode === 'preview' || (request !== null && request.status !== DRAFT_STATUS)
+  return mode === 'preview' || (request !== null && !request.canEditRequesterData)
 }

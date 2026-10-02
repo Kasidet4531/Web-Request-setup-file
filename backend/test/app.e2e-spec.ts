@@ -39,46 +39,45 @@ type PoolQuery = (
   values?: unknown[],
 ) => Promise<{ rows: unknown[] }>;
 
-const MANUAL_WORKFLOW_STATUSES = [
-  'Submitted',
-  'Setup In Progress',
-  'Need More Information',
-  'PSF Created',
-  'Completed',
-  'Rejected',
-  'Cancelled',
+const WORKFLOW_REVISION = '2026-10-01T00:00:00.123456Z';
+const NEXT_WORKFLOW_REVISION = '2026-10-01T00:00:00.123457Z';
+const DEFAULT_STATUS_NAMES = [
+  'Draft',
+  '5% -- Reject (Information not complete)',
+  '10% -- Test Engineer Data Entry',
+  '20% -- PSF File Creating',
+  '30% -- Compare Old and New layout',
+  '40% -- Feedback Requester(Layout mismatch)',
+  '80% -- Wait for create DCC',
+  '81% -- Edit Template Map (Bin62)',
+  '82% -- Wait for sent Template Map',
+  '83% -- Complete Excel probe pattern',
+  '85 % -- Reject check list',
+  '90% -- Wait for buyoff check list',
+  '93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)',
+  '95% -- Reject (Wrong site location and wafer map)',
+  '99% -- Wait requestor Buyoff site location and wafer map',
+  '100% -- Completed',
+  '0% -- Rejected (Cancel Request)',
 ];
-
-function buildWorkflowConfiguration(
-  ruleOverrides: (
-    fromStatus: string,
-    toStatus: string,
-  ) => Partial<{
-    enabled: boolean;
-    allowedRoles: string[];
-    allowedSetupOwnerDepartments: string[];
-  }> = () => ({}),
-) {
-  return {
-    transitions: MANUAL_WORKFLOW_STATUSES.flatMap((fromStatus) =>
-      MANUAL_WORKFLOW_STATUSES.filter(
-        (toStatus) => toStatus !== fromStatus,
-      ).map((toStatus) => ({
-        fromStatus,
-        toStatus,
-        enabled: true,
-        allowedRoles: ['admin'],
-        allowedSetupOwnerDepartments: [],
-        ...ruleOverrides(fromStatus, toStatus),
-      })),
-    ),
-  };
-}
+const DEFAULT_STATUS_ENTRIES = DEFAULT_STATUS_NAMES.map((name, index) => ({
+  id: `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, '0')}`,
+  name,
+  kind:
+    index === 0
+      ? 'draft'
+      : index === 15
+        ? 'completed'
+        : index === 16
+          ? 'cancelled'
+          : 'open',
+}));
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let activeUserId: string | undefined;
   let workflowConfiguration: unknown;
+  let workflowRevision: string;
   const authService = {
     getProfile: jest.fn(),
     listUsers: jest.fn(),
@@ -108,14 +107,28 @@ describe('AppController (e2e)', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     workflowConfiguration = null;
+    workflowRevision = WORKFLOW_REVISION;
     pool.query.mockImplementation((query: string, values?: unknown[]) => {
       if (query.includes('SELECT config_json')) {
         return Promise.resolve({
           rows:
             workflowConfiguration === null
               ? []
-              : [{ config_json: workflowConfiguration }],
+              : [
+                  {
+                    config_json: workflowConfiguration,
+                    updated_at_version: workflowRevision,
+                  },
+                ],
         });
+      }
+
+      if (query.includes('UPDATE workflow_transition_config')) {
+        expect(values?.[0]).toBe('status-catalog-v1');
+        expect(values?.[2]).toBe(workflowRevision);
+        workflowConfiguration = values?.[1];
+        workflowRevision = NEXT_WORKFLOW_REVISION;
+        return Promise.resolve({ rows: [], rowCount: 1 });
       }
 
       if (query.includes('INSERT INTO workflow_transition_config')) {
@@ -641,119 +654,150 @@ describe('AppController (e2e)', () => {
     expect(authService.listUsers).toHaveBeenCalledTimes(1);
   });
 
-  it('registers admin workflow transition routes that persist one complete replacement and enforce admin authorization', async () => {
+  it('registers revision-checked admin catalog operations, rejects legacy role matrices, and keeps shared status choices role-independent', async () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
-
     await request(server)
       .get('/api/admin/workflow')
       .expect(200)
-      .expect(
-        ({
-          body,
-        }: {
-          body: { statuses: string[]; transitions: unknown[] };
-        }) => {
-          expect(body.statuses).toEqual(MANUAL_WORKFLOW_STATUSES);
-          expect(body.transitions).toHaveLength(42);
-        },
-      );
-
-    const gntcOnly = buildWorkflowConfiguration((fromStatus, toStatus) =>
-      fromStatus === 'Submitted' && toStatus === 'Setup In Progress'
-        ? {
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: ['GNTC'],
-          }
-        : {
-            enabled: false,
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: [],
-          },
-    );
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          statuses: DEFAULT_STATUS_NAMES.slice(1),
+          entries: DEFAULT_STATUS_ENTRIES.map((entry) => ({
+            ...entry,
+            requestCount: entry.kind === 'draft' ? null : 0,
+          })),
+          psfVisibilityTriggerId: null,
+          updatedAt: WORKFLOW_REVISION,
+        });
+      });
+    pool.query.mockClear();
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({ transitions: [] })
+      .expect(400);
+    expect(pool.query).not.toHaveBeenCalled();
 
     await request(server)
       .put('/api/admin/workflow')
-      .send(gntcOnly)
+      .send({
+        action: 'create',
+        name: 'Renamed business stage',
+        kind: 'open',
+        expectedUpdatedAt: WORKFLOW_REVISION,
+      })
       .expect(200)
       .expect(
         ({
           body,
         }: {
-          body: { transitions: Array<Record<string, unknown>> };
+          body: {
+            statuses: string[];
+            entries: Array<Record<string, unknown>>;
+            updatedAt: string;
+          };
         }) => {
-          expect(
-            body.transitions.find(
-              (transition) =>
-                transition.fromStatus === 'Submitted' &&
-                transition.toStatus === 'Setup In Progress',
-            ),
-          ).toMatchObject({
-            enabled: true,
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: ['GNTC'],
+          expect(body.statuses).toEqual([
+            ...DEFAULT_STATUS_NAMES.slice(1),
+            'Renamed business stage',
+          ]);
+          expect(body.entries.at(-1)).toEqual({
+            id: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown,
+            name: 'Renamed business stage',
+            kind: 'open',
+            requestCount: 0,
           });
+          expect(body.updatedAt).toBe(NEXT_WORKFLOW_REVISION);
         },
       );
+    expect(transactionClient.query).toHaveBeenLastCalledWith('COMMIT');
+    const queryCalls = pool.query.mock.calls as unknown[][];
+    const auditCalls = queryCalls.filter(
+      ([sql]) =>
+        typeof sql === 'string' &&
+        sql.includes('INSERT INTO psf_request_audit_logs'),
+    );
+    expect(auditCalls).toHaveLength(1);
+    expect(auditCalls[0][1]).toEqual([
+      expect.any(String),
+      null,
+      'WORKFLOW_CATALOG_UPDATED',
+      'admin-1',
+      'admin.demo',
+      'Admin Demo',
+      'admin',
+      expect.objectContaining({
+        operation: {
+          action: 'create',
+          name: 'Renamed business stage',
+          kind: 'open',
+        },
+      }),
+    ]);
 
-    const defaultPoolQuery = pool.query.getMockImplementation() as
-      | PoolQuery
-      | undefined;
-    if (!defaultPoolQuery) {
-      throw new Error('Expected the workflow storage query mock');
-    }
-    pool.query.mockImplementation((query: string, values?: unknown[]) => {
-      if (query.includes('FROM psf_requests')) {
-        return Promise.resolve({
-          rows: [
-            {
-              id: 'request-1',
-              status: 'Submitted',
-              requester_user_id: null,
-            },
-          ],
-        });
-      }
-
-      return defaultPoolQuery(query, values);
-    });
-
-    activeUserId = 'setup-owner-gntc';
-    authService.getProfile.mockResolvedValueOnce({
-      id: 'setup-owner-gntc',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
-      role: 'setup_owner',
-      setupOwnerDepartment: 'GNTC',
-    });
+    pool.query.mockClear();
     await request(server)
-      .get('/api/requests/request-1/status-options')
-      .expect(200)
-      .expect(({ body }: { body: { allowedNextStatuses: string[] } }) => {
-        expect(body.allowedNextStatuses).toEqual(['Setup In Progress']);
+      .put('/api/admin/workflow')
+      .send({
+        action: 'create',
+        name: 'Stale operation',
+        kind: 'open',
+        expectedUpdatedAt: WORKFLOW_REVISION,
+      })
+      .expect(409);
+    expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(
+      pool.query.mock.calls.some(
+        ([sql]: [string]) =>
+          sql.includes('UPDATE workflow_transition_config') ||
+          sql.includes('INSERT INTO psf_request_audit_logs'),
+      ),
+    ).toBe(false);
+
+    const defaultPoolQuery = pool.query.getMockImplementation() as PoolQuery;
+    pool.query.mockImplementation((query: string, values?: unknown[]) =>
+      query.includes('FROM psf_requests')
+        ? Promise.resolve({
+            rows: [
+              {
+                id: 'request-1',
+                status: DEFAULT_STATUS_NAMES[1],
+                requester_user_id: 'foreign-requester',
+              },
+            ],
+          })
+        : defaultPoolQuery(query, values),
+    );
+    for (const role of ['requester', 'setup_owner', 'admin']) {
+      activeUserId = `${role}-1`;
+      authService.getProfile.mockResolvedValue({
+        id: activeUserId,
+        username: `${role}.demo`,
+        displayName: 'Test User',
+        role,
+        setupOwnerDepartment: role === 'setup_owner' ? 'MFG' : null,
       });
-
-    activeUserId = 'setup-owner-mfg';
-    authService.getProfile.mockResolvedValueOnce({
-      id: 'setup-owner-mfg',
-      username: 'setup.mfg.demo',
-      displayName: 'Setup Owner MFG Demo',
-      role: 'setup_owner',
-      setupOwnerDepartment: 'MFG',
-    });
-    await request(server)
-      .put('/api/requests/request-1/status')
-      .send({ status: 'Setup In Progress' })
-      .expect(403);
-
-    activeUserId = 'requester-1';
-    authService.getProfile.mockResolvedValueOnce({
-      id: 'requester-1',
-      username: 'requester.demo',
-      displayName: 'Requester Demo',
-      role: 'requester',
-      setupOwnerDepartment: null,
-    });
-    await request(server).get('/api/admin/workflow').expect(403);
+      await request(server)
+        .get('/api/requests/request-1/status-options')
+        .expect(200)
+        .expect(({ body }: { body: { allowedNextStatuses: string[] } }) => {
+          expect(body.allowedNextStatuses).toEqual([
+            ...DEFAULT_STATUS_NAMES.slice(2),
+            'Renamed business stage',
+          ]);
+          expect(body.allowedNextStatuses).not.toContain('Draft');
+        });
+      if (role !== 'admin') {
+        await request(server).get('/api/admin/workflow').expect(403);
+        await request(server)
+          .put('/api/admin/workflow')
+          .send({
+            action: 'settings',
+            psfVisibilityTriggerId: null,
+            expectedUpdatedAt: NEXT_WORKFLOW_REVISION,
+          })
+          .expect(403);
+      }
+    }
   });
 
   it('exposes ordered workflow statuses without transition rules to every authenticated role', async () => {
@@ -774,12 +818,23 @@ describe('AppController (e2e)', () => {
         .get('/api/workflow/statuses')
         .expect(200)
         .expect(({ body }: { body: Record<string, unknown> }) => {
-          expect(body).toEqual({ statuses: MANUAL_WORKFLOW_STATUSES });
+          expect(body).toEqual({
+            statuses: DEFAULT_STATUS_NAMES.slice(1),
+            entries: DEFAULT_STATUS_ENTRIES,
+            psfVisibilityTriggerId: null,
+            updatedAt: WORKFLOW_REVISION,
+          });
+          expect(JSON.stringify(body)).not.toContain('requestCount');
+          expect(JSON.stringify(body)).not.toContain('transitions');
         });
       if (role !== 'admin') {
         await request(server)
           .put('/api/admin/workflow')
-          .send(buildWorkflowConfiguration())
+          .send({
+            action: 'settings',
+            psfVisibilityTriggerId: null,
+            expectedUpdatedAt: WORKFLOW_REVISION,
+          })
           .expect(403);
       }
     }
@@ -1120,7 +1175,10 @@ describe('AppController (e2e)', () => {
           'reference_psf_name',
           JSON.stringify('REF-PSF-1'),
           ['product', 'wafer_fab'],
+          ['100% -- Completed'],
         ]);
+        expect(query).toContain('source_request.status = ANY($5::text[])');
+        expect(query).toContain('source_request.completed_at IS NOT NULL');
         return Promise.resolve({
           rows: [
             {
@@ -1182,11 +1240,14 @@ describe('AppController (e2e)', () => {
       .get(
         '/api/autofill?formKey=psf-request&field=reference_psf_name&value=REF-PSF-1',
       )
-      .expect(403)
-      .expect(({ body }: { body: { message: string } }) => {
-        expect(body.message).toBe(
-          'Setup File Owners cannot edit requester-owned fields',
-        );
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          matched: true,
+          suggestedValues: { product: 'New Product', wafer_fab: 'Fab A' },
+        });
+        expect(body).not.toHaveProperty('sourceRequest');
+        expect(JSON.stringify(body)).not.toContain('requester_data_json');
       });
   });
 

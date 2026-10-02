@@ -86,6 +86,10 @@ function buildRequest(overrides: Partial<PsfRequestResponse> = {}): PsfRequestRe
     psfCreatedData: {},
     psfCreatedDataVisible: false,
     canEditPsfCreatedData: false,
+    canEditRequesterData: true,
+    canSubmitDraft: false,
+    requesterUserId: 'user-1',
+    psfReleasedAt: null,
     psfCreatedInformationSchema: {
       formKey: 'psf-created-information',
       version: 1,
@@ -132,6 +136,7 @@ describe('resolveRequestFormSchema', () => {
       formVersion: 2,
       schemaSnapshot: activeRequestSchema.schema,
       status: 'Submitted',
+      canEditRequesterData: false,
       submittedAt: '2026-06-20T00:00:00.000Z',
     })
 
@@ -297,6 +302,7 @@ describe('requesterFieldsAreReadOnly', () => {
         'request',
         buildRequest({
           status: 'Submitted',
+          canEditRequesterData: false,
           submittedAt: '2026-06-20T00:00:00.000Z',
         }),
       ),
@@ -315,11 +321,18 @@ describe('RequestDraftStatus', () => {
   })
 
   it('keeps the detail link visible when requester edits are locked', () => {
-    const html = renderToStaticMarkup(<RequestDraftStatus request={buildRequest({ status: 'Submitted' })} />)
+    const html = renderToStaticMarkup(<RequestDraftStatus request={buildRequest({ status: 'Submitted', canEditRequesterData: false })} />)
 
     expect(html).toContain('Submitted')
-    expect(html).toContain('requester-owned fields are locked after Draft status')
+    expect(html).toContain('Requester information editing is unavailable for this request.')
     expect(html).toContain('href="/requests/request-1/"')
+    expect(html).toContain('Open request details')
+  })
+
+  it('does not claim work requester fields lock after Draft when the server permits editing', () => {
+    const html = renderToStaticMarkup(<RequestDraftStatus request={buildRequest({ status: 'Custom work', canEditRequesterData: true })} />)
+    expect(html).not.toContain('locked after Draft')
+    expect(html).not.toContain('editing is unavailable')
     expect(html).toContain('Open request details')
   })
 })

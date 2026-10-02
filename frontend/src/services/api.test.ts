@@ -386,6 +386,7 @@ describe('createApiClient', () => {
     await expect(client.fetchPsfRequest('request-1')).resolves.toMatchObject({ id: 'request-1' })
     await expect(client.updateDraftRequesterData('request-1', {
       formVersion: 3,
+      expectedUpdatedAt: '2026-10-01T01:02:03.123456Z',
       requesterData: { title: 'Updated' },
     })).resolves.toMatchObject({
       requesterData: { title: 'Updated' },
@@ -393,7 +394,7 @@ describe('createApiClient', () => {
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/requests/request-1', expect.objectContaining({ method: 'GET' }))
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/requester-data', expect.objectContaining({
-      body: JSON.stringify({ formVersion: 3, requesterData: { title: 'Updated' } }),
+      body: JSON.stringify({ formVersion: 3, expectedUpdatedAt: '2026-10-01T01:02:03.123456Z', requesterData: { title: 'Updated' } }),
       method: 'PUT',
     }))
   })
@@ -594,13 +595,13 @@ describe('createApiClient', () => {
 
     const client = createApiClient({ baseUrl: '/api' })
 
-    await expect(client.submitPsfRequest('request-1', { formVersion: 4 })).resolves.toMatchObject({
+    await expect(client.submitPsfRequest('request-1', { formVersion: 4, status: 'Submitted', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' })).resolves.toMatchObject({
       id: 'request-1',
       status: 'Submitted',
     })
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/requests/request-1/submit', expect.objectContaining({
-      body: JSON.stringify({ formVersion: 4 }),
+      body: JSON.stringify({ formVersion: 4, status: 'Submitted', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' }),
       method: 'POST',
     }))
   })
@@ -635,7 +636,7 @@ describe('createApiClient', () => {
       limit: 50,
       offset: 0,
     })
-    await expect(client.updatePsfRequestStatus('request-1', { status: 'Setup In Progress' })).resolves.toMatchObject({
+    await expect(client.updatePsfRequestStatus('request-1', { status: 'Setup In Progress', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' })).resolves.toMatchObject({
       id: 'request-1',
       status: 'Setup In Progress',
     })
@@ -649,7 +650,7 @@ describe('createApiClient', () => {
       expect.objectContaining({ method: 'GET' }),
     )
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/status', expect.objectContaining({
-      body: JSON.stringify({ status: 'Setup In Progress' }),
+      body: JSON.stringify({ status: 'Setup In Progress', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' }),
       method: 'PUT',
     }))
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
@@ -659,85 +660,36 @@ describe('createApiClient', () => {
     )
   })
 
-  it('loads and atomically replaces the administrator workflow-transition configuration', async () => {
+  it('loads and applies one optimistic status-catalog operation', async () => {
     const configuration = {
       statuses: ['Submitted', 'Setup In Progress'],
-      transitions: [
-        {
-          fromStatus: 'Submitted',
-          toStatus: 'Setup In Progress',
-          enabled: true,
-          allowedRoles: ['setup_owner'],
-          allowedSetupOwnerDepartments: ['GNTC'],
-        },
+      entries: [
+        { id: 'draft-id', name: 'Draft', kind: 'draft', requestCount: null },
+        { id: 'submitted-id', name: 'Submitted', kind: 'open', requestCount: 2 },
       ],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-01T01:02:03.123456Z',
     }
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(configuration), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(configuration), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-      ) as typeof fetch
-
+    const operation = { action: 'rename' as const, id: 'submitted-id', name: 'Custom Review', expectedUpdatedAt: configuration.updatedAt }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(configuration), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(configuration), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
     const client = createApiClient({ baseUrl: '/api' })
-    const fetchConfiguration = Reflect.get(
-      client,
-      'fetchAdminWorkflowTransitionConfiguration',
-    ) as undefined | (() => Promise<typeof configuration>)
-    const replaceConfiguration = Reflect.get(
-      client,
-      'replaceAdminWorkflowTransitionConfiguration',
-    ) as undefined | ((payload: Pick<typeof configuration, 'transitions'>) => Promise<typeof configuration>)
-
-    expect(fetchConfiguration).toBeTypeOf('function')
-    expect(replaceConfiguration).toBeTypeOf('function')
-    if (!fetchConfiguration || !replaceConfiguration) {
-      return
-    }
-
-    await expect(fetchConfiguration()).resolves.toEqual(configuration)
-    await expect(replaceConfiguration({ transitions: configuration.transitions })).resolves.toEqual(
-      configuration,
-    )
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/workflow',
-      expect.objectContaining({ credentials: 'include', method: 'GET' }),
-    )
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(
-      2,
-      '/api/admin/workflow',
-      expect.objectContaining({
-        body: JSON.stringify({ transitions: configuration.transitions }),
-        credentials: 'include',
-        method: 'PUT',
-      }),
-    )
+    await expect(client.fetchAdminWorkflowTransitionConfiguration()).resolves.toEqual(configuration)
+    await expect(client.replaceAdminWorkflowTransitionConfiguration(operation)).resolves.toEqual(configuration)
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/admin/workflow', expect.objectContaining({ credentials: 'include', method: 'GET' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/workflow', expect.objectContaining({ body: JSON.stringify(operation), credentials: 'include', method: 'PUT' }))
   })
 
-  it('reads configured workflow status order without using the admin-management route', async () => {
-    const statuses = ['Submitted', 'Need More Information', 'Custom Review']
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ statuses }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    ) as typeof fetch
-
+  it('reads the public catalog without private usage counts', async () => {
+    const response = { statuses: ['Submitted', 'Need More Information'], entries: [{ id: 'entry-1', name: 'Submitted', kind: 'open' }], psfVisibilityTriggerId: null, updatedAt: '2026-10-01T01:02:03.123456Z' }
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
     const client = createApiClient({ baseUrl: '/api' })
-    await expect(client.fetchWorkflowStatuses()).resolves.toEqual({ statuses })
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/workflow/statuses',
-      expect.objectContaining({ credentials: 'include', method: 'GET' }),
-    )
+    const catalog = await client.fetchWorkflowStatuses()
+    expect(catalog).toEqual(response)
+    expect(catalog.updatedAt).toBe(response.updatedAt)
+    expect(catalog.entries[0]).not.toHaveProperty('requestCount')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/workflow/statuses', expect.objectContaining({ credentials: 'include', method: 'GET' }))
   })
 
   it('lists, creates, and edits administrator autofill rules through canonical-key endpoints', async () => {

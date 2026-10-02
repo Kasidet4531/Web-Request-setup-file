@@ -38,11 +38,11 @@ export function buildRequestExportUrl(
   resolveUrl: (path: string) => string = api.resolveUrl,
 ): string {
   const query = new URLSearchParams();
-  const status = filters.status.trim();
+  const status = filters.status;
   const from = filters.from.trim();
   const to = filters.to.trim();
 
-  if (status) {
+  if (status.trim()) {
     query.set("status", status);
   }
 

@@ -219,7 +219,7 @@ export function AppShell() {
 
   const role = authState.status === 'authenticated' ? authState.user.role : null
   const breadcrumbs = breadcrumbsForPath(pathname, formVersionBreadcrumb)
-  const canCreateRequest = role === 'requester' || role === 'admin'
+  const canCreateRequest = authState.status === 'authenticated'
   const isFormVersion = pathname.startsWith('/admin/form-config/')
 
   if (isStandaloneAuthenticationPath(pathname)) {

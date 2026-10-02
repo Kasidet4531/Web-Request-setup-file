@@ -139,6 +139,7 @@ export class RequestsController {
 
     return this.requestsService.updateRequestStatus(requestId, {
       status: body.status,
+      expectedUpdatedAt: body.expectedUpdatedAt,
       actor,
     });
   }
@@ -190,6 +191,9 @@ export class RequestsController {
       'dueDateTo',
       'limit',
       'offset',
+      'scope',
+      'relation',
+      'workState',
     ]);
     const unsupportedKey = Object.keys(rawQuery).find(
       (key) => !allowedKeys.has(key),
@@ -242,7 +246,37 @@ export class RequestsController {
       dueDateTo,
       limit: this.parseOptionalIntegerFilter(rawQuery.limit, 'limit', 1),
       offset: this.parseOptionalIntegerFilter(rawQuery.offset, 'offset', 0),
+      scope: this.parseOptionalEnum(rawQuery.scope, 'scope', [
+        'all',
+        'related',
+        'my-drafts',
+      ] as const),
+      relation: this.parseOptionalEnum(rawQuery.relation, 'relation', [
+        'all',
+        'created',
+        'department',
+      ] as const),
+      workState: this.parseOptionalEnum(rawQuery.workState, 'workState', [
+        'all',
+        'open',
+        'overdue',
+        'completed',
+      ] as const),
     };
+  }
+
+  private parseOptionalEnum<const T extends readonly string[]>(
+    value: unknown,
+    name: string,
+    choices: T,
+  ): T[number] | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (typeof value !== 'string' || !choices.includes(value)) {
+      throw new BadRequestException(`Request query filter ${name} is invalid.`);
+    }
+    return value;
   }
 
   private parseOptionalTextFilter(
@@ -266,7 +300,7 @@ export class RequestsController {
       );
     }
 
-    return normalized;
+    return name === 'status' ? value : normalized;
   }
 
   private parseOptionalIntegerFilter(

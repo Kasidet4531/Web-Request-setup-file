@@ -17,6 +17,9 @@ const AUDIT_ACTIONS: Array<{ label: string; value: PsfRequestHistoryAction }> = 
   { label: 'Draft requester information updated', value: 'DRAFT_REQUESTER_DATA_UPDATED' },
   { label: 'Request submitted', value: 'REQUEST_SUBMITTED' },
   { label: 'Request status changed', value: 'REQUEST_STATUS_CHANGED' },
+  { label: 'Requester information updated', value: 'REQUESTER_INFORMATION_UPDATED' },
+  { label: 'PSF Created Information updated', value: 'PSF_CREATED_INFORMATION_UPDATED' },
+  { label: 'Workflow catalog updated', value: 'WORKFLOW_CATALOG_UPDATED' },
 ]
 
 export interface GlobalAuditLogFiltersProps {
@@ -179,13 +182,11 @@ export function GlobalAuditLogTable({
             <tr key={`${entry.requestId}-${entry.createdAt}-${entry.actionType}-${index}`}>
               <td><time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time></td>
               <td>
-                <Link
-                  className="table-action"
-                  params={{ requestId: entry.requestId }}
-                  to="/requests/$requestId"
-                >
-                  {entry.requestNo}
-                </Link>
+                {entry.requestId && entry.requestNo ? (
+                  <Link className="table-action" params={{ requestId: entry.requestId }} to="/requests/$requestId">
+                    {entry.requestNo}
+                  </Link>
+                ) : entry.requestNo ?? 'Workflow configuration'}
               </td>
               <td>
                 <strong>{entry.actorDisplayName}</strong>

@@ -25,7 +25,7 @@ describe("request export URL", () => {
     });
   });
 
-  it("serializes only supplied status and request-date filters", () => {
+  it("preserves a nonblank catalog status exactly while trimming request dates", () => {
     const buildRequestExportUrl = Reflect.get(
       RequestExportClient,
       "buildRequestExportUrl",
@@ -33,13 +33,20 @@ describe("request export URL", () => {
 
     expect(
       buildRequestExportUrl({
-        status: " Submitted ",
-        from: "2026-06-01",
-        to: "2026-06-30",
+        status: "  New work  ",
+        from: " 2026-06-01 ",
+        to: " 2026-06-30 ",
       }),
     ).toBe(
-      "/api/requests/export.xlsx?status=Submitted&from=2026-06-01&to=2026-06-30",
+      "/api/requests/export.xlsx?status=++New+work++&from=2026-06-01&to=2026-06-30",
     );
+  });
+
+  it("omits empty or all-whitespace status without adding an empty query", () => {
+    for (const status of ["", " \t\n "]) {
+      expect(RequestExportClient.buildRequestExportUrl({ status, from: " ", to: " " }))
+        .toBe("/api/requests/export.xlsx");
+    }
   });
 
   it("uses the configured API base URL for the request export", () => {
@@ -178,15 +185,17 @@ describe("request export URL", () => {
       downloading: boolean;
       filters: { status: string; from: string; to: string };
       onChange: (field: string, value: string) => void;
+      statuses: string[];
     }) => unknown;
     const props = {
       downloading: false,
       filters: {
-        status: "Submitted",
+        status: "  New work  ",
         from: "2026-06-01",
         to: "2026-06-30",
       },
       onChange: vi.fn(),
+      statuses: ["  New work  ", ...Array.from({ length: 16 }, (_, index) => `Configured status ${index + 1}`)],
     };
     const form = RequestExportFiltersForm(props);
     const html = renderToStaticMarkup(form as never);
@@ -200,6 +209,11 @@ describe("request export URL", () => {
     expect(html).toContain("<select");
     expect(html).toContain('type="date"');
     expect(loadingHtml).toContain('disabled=""');
+    expect(html.match(/<option /g)).toHaveLength(18);
+    expect(html).toContain('<option value="  New work  " selected="">  New work  </option>');
+    expect(html).toContain('<option value="Configured status 16">Configured status 16</option>');
+    expect(html).not.toContain('value="Submitted"');
+    expect(html).not.toContain('value="Draft"');
   });
 
   it("renders accessible loading, success, and 403 error feedback", () => {

@@ -1,334 +1,109 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  AdminWorkflowTransitionFeedback,
-  AdminWorkflowTransitionMatrix,
-  AdminWorkflowTransitionPage,
-  type AdminWorkflowTransitionMatrixProps,
-} from './AdminWorkflowTransitionPage'
+import { AdminWorkflowTransitionPage } from './AdminWorkflowTransitionPage'
+import { ApiError } from '../services/api'
 
-const adminWorkflowApi = vi.hoisted(() => ({
+const workflowApi = vi.hoisted(() => ({
   fetchAdminWorkflowTransitionConfiguration: vi.fn(),
   replaceAdminWorkflowTransitionConfiguration: vi.fn(),
 }))
+const hookState = vi.hoisted(() => ({
+  states: [] as unknown[],
+  index: 0,
+  effect: null as (() => void | (() => void)) | null,
+  begin() { this.index = 0 },
+  reset() { this.states = []; this.index = 0; this.effect = null },
+  useState(initial: unknown) {
+    const index = this.index++
+    if (index === this.states.length) this.states.push(initial)
+    return [this.states[index], (next: unknown) => { this.states[index] = next }]
+  },
+  useEffect(effect: () => void | (() => void)) { this.effect = effect },
+}))
+vi.mock('../services/api', async (load) => ({ ...(await load<typeof import('../services/api')>()), api: workflowApi }))
+vi.mock('react', async (load) => ({ ...(await load<typeof import('react')>()), useState: hookState.useState.bind(hookState), useEffect: hookState.useEffect.bind(hookState) }))
 
-const adminWorkflowHookHarness = vi.hoisted(() => {
-  let effectDependencies: Array<readonly unknown[] | undefined> = []
-  let effectIndex = 0
-  let effects: Array<() => void | (() => void)> = []
-  let refIndex = 0
-  let refs: Array<{ current: unknown }> = []
-  let state: unknown[] = []
-  let stateIndex = 0
-
-  function dependenciesChanged(
-    previous: readonly unknown[] | undefined,
-    next: readonly unknown[] | undefined,
-  ): boolean {
-    if (!previous || !next || previous.length !== next.length) {
-      return true
-    }
-
-    return previous.some((value, index) => !Object.is(value, next[index]))
-  }
-
-  return {
-    beginRender() {
-      effectIndex = 0
-      refIndex = 0
-      stateIndex = 0
-    },
-    reset() {
-      effectDependencies = []
-      effectIndex = 0
-      effects = []
-      refIndex = 0
-      refs = []
-      state = []
-      stateIndex = 0
-    },
-    runEffects() {
-      const pendingEffects = effects
-      effects = []
-      pendingEffects.forEach((effect) => effect())
-    },
-    useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {
-      if (dependenciesChanged(effectDependencies[effectIndex], dependencies)) {
-        effects.push(effect)
-        effectDependencies[effectIndex] = dependencies ? [...dependencies] : undefined
-      }
-      effectIndex += 1
-    },
-    useRef<T>(initialValue: T) {
-      const index = refIndex
-      refIndex += 1
-
-      if (index === refs.length) {
-        refs.push({ current: initialValue })
-      }
-
-      return refs[index] as { current: T }
-    },
-    useState(initialState: unknown) {
-      const index = stateIndex
-      stateIndex += 1
-
-      if (index === state.length) {
-        state.push(
-          typeof initialState === 'function'
-            ? (initialState as () => unknown)()
-            : initialState,
-        )
-      }
-
-      return [state[index], (nextState: unknown) => {
-        state[index] =
-          typeof nextState === 'function'
-            ? (nextState as (currentState: unknown) => unknown)(state[index])
-            : nextState
-      }]
-    },
-  }
-})
-
-vi.mock('../services/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api')>()
-
-  return {
-    ...actual,
-    api: adminWorkflowApi,
-  }
-})
-
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>()
-
-  return {
-    ...actual,
-    useEffect: adminWorkflowHookHarness.useEffect,
-    useRef: adminWorkflowHookHarness.useRef,
-    useState: adminWorkflowHookHarness.useState,
-  }
-})
-
-interface RenderedElement {
-  props: Record<string, unknown>
-  type: unknown
+function find(node: unknown, predicate: (node: { type: unknown; props: Record<string, unknown> }) => boolean): { type: unknown; props: Record<string, unknown> } | null {
+  if (Array.isArray(node)) { for (const item of node) { const result = find(item, predicate); if (result) return result } return null }
+  if (!node || typeof node !== 'object' || !('type' in node) || !('props' in node)) return null
+  const element = node as { type: unknown; props: Record<string, unknown> }
+  if (predicate(element)) return element
+  return find(element.props.children, predicate)
+}
+const config = {
+  statuses: ['5% -- Reject (Information not complete)'],
+  entries: [{ id: 'draft-id', name: 'Draft', kind: 'draft', requestCount: null }, { id: 'open-id', name: '5% -- Reject (Information not complete)', kind: 'open', requestCount: 4 }],
+  psfVisibilityTriggerId: null,
+  updatedAt: '2026-10-01T01:02:03.123456Z',
 }
 
-function findRenderedElement(
-  node: unknown,
-  matches: (element: RenderedElement) => boolean,
-): RenderedElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findRenderedElement(child, matches)
-      if (match) {
-        return match
-      }
-    }
-
-    return null
-  }
-
-  if (
-    !node ||
-    typeof node !== 'object' ||
-    !('props' in node) ||
-    !('type' in node) ||
-    typeof node.props !== 'object' ||
-    node.props === null
-  ) {
-    return null
-  }
-
-  const element: RenderedElement = {
-    props: node.props as Record<string, unknown>,
-    type: node.type,
-  }
-  if (matches(element)) {
-    return element
-  }
-
-  return findRenderedElement(element.props.children, matches)
-}
-
-function requireRenderedElement(
-  node: unknown,
-  matches: (element: RenderedElement) => boolean,
-): RenderedElement {
-  const element = findRenderedElement(node, matches)
-
-  if (!element) {
-    throw new Error('Expected rendered element was not found')
-  }
-
-  return element
-}
-
-function renderAdminWorkflowTransitionPage() {
-  adminWorkflowHookHarness.beginRender()
-  return AdminWorkflowTransitionPage()
-}
-
-function renderMatrix(page: unknown) {
-  const matrix = requireRenderedElement(
-    page,
-    (element) => element.type === AdminWorkflowTransitionMatrix,
-  )
-
-  return AdminWorkflowTransitionMatrix(
-    matrix.props as unknown as AdminWorkflowTransitionMatrixProps,
-  )
-}
-
-function getCheckbox(matrix: unknown, id: string): RenderedElement {
-  return requireRenderedElement(
-    matrix,
-    (element) => element.type === 'input' && element.props.id === id,
-  )
-}
-
-function getSaveButton(page: unknown): RenderedElement {
-  return requireRenderedElement(
-    page,
-    (element) =>
-      element.type === 'button' &&
-      (element.props.children === 'Save workflow changes' ||
-        element.props.children === 'Saving workflow changes…'),
-  )
-}
-
-function getFeedback(page: unknown): RenderedElement {
-  return requireRenderedElement(
-    page,
-    (element) => element.type === AdminWorkflowTransitionFeedback,
-  )
-}
-
-function toggleCheckbox(matrix: unknown, id: string, checked: boolean): void {
-  const onChange = getCheckbox(matrix, id).props.onChange
-  if (typeof onChange !== 'function') {
-    throw new Error(`Expected checkbox callback for ${id}`)
-  }
-
-  onChange({ target: { checked } })
-}
-
-function clickSave(page: unknown): void {
-  const onClick = getSaveButton(page).props.onClick
-  if (typeof onClick !== 'function') {
-    throw new Error('Expected save callback')
-  }
-
-  onClick()
-}
-
-async function flushAsyncWork(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0))
-}
-
-async function loadAdminWorkflowTransitionPage() {
-  renderAdminWorkflowTransitionPage()
-  adminWorkflowHookHarness.runEffects()
-  await flushAsyncWork()
-  return renderAdminWorkflowTransitionPage()
-}
-
-const transitionId = 'submitted--setup-in-progress'
-const enabledInputId = `admin-workflow-enabled-${transitionId}`
-const adminRoleInputId = `admin-workflow-role-${transitionId}-admin`
-const gntcDepartmentInputId = `admin-workflow-department-${transitionId}-gntc`
-
-const loadedConfiguration = {
-  statuses: ['Submitted', 'Setup In Progress'],
-  transitions: [
-    {
-      fromStatus: 'Submitted',
-      toStatus: 'Setup In Progress',
-      enabled: true,
-      allowedRoles: ['setup_owner'],
-      allowedSetupOwnerDepartments: [],
-    },
-    {
-      fromStatus: 'Setup In Progress',
-      toStatus: 'Submitted',
-      enabled: false,
-      allowedRoles: [],
-      allowedSetupOwnerDepartments: [],
-    },
-  ],
-}
-
-describe('AdminWorkflowTransitionPage interactions', () => {
+describe('Status Management interactions', () => {
   beforeEach(() => {
-    adminWorkflowHookHarness.reset()
-    adminWorkflowApi.fetchAdminWorkflowTransitionConfiguration.mockReset()
-    adminWorkflowApi.replaceAdminWorkflowTransitionConfiguration.mockReset()
-    adminWorkflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(
-      loadedConfiguration,
-    )
-    adminWorkflowApi.replaceAdminWorkflowTransitionConfiguration.mockImplementation(
-      async (payload) => ({
-        statuses: loadedConfiguration.statuses,
-        transitions: payload.transitions,
-      }),
-    )
+    hookState.reset()
+    workflowApi.fetchAdminWorkflowTransitionConfiguration.mockReset().mockResolvedValue(config)
+    workflowApi.replaceAdminWorkflowTransitionConfiguration.mockReset().mockResolvedValue(config)
+  })
+  it.each([false, true])('deletes the last unused work entry without a request replacement (trigger=%s)', async (trigger) => {
+    const unused = { ...config, entries: config.entries.map((entry) => entry.kind === 'draft' ? entry : { ...entry, requestCount: 0 }), psfVisibilityTriggerId: trigger ? 'open-id' : null }
+    workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(unused)
+    hookState.begin(); AdminWorkflowTransitionPage(); hookState.effect?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    hookState.begin()
+    const page = AdminWorkflowTransitionPage()
+    const remove = find(page, (element) => element.type === 'button' && element.props.children === 'Delete')!
+    ;(remove.props.onClick as () => void)()
+    hookState.begin()
+    const confirmation = find(AdminWorkflowTransitionPage(), (element) => element.type === 'button' && element.props.className === 'primary-button' && element.props.type === 'button')!
+    expect(confirmation.props.disabled).toBe(false)
+    expect(confirmation.props.children).toBe('Delete status')
+    ;(confirmation.props.onClick as () => void)()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'delete', id: 'open-id', expectedUpdatedAt: config.updatedAt, ...(trigger ? { replacementTriggerId: null } : {}) })
   })
 
-  it('loads the transition matrix, edits enabled principals, and saves one complete replacement once', async () => {
-    let page = await loadAdminWorkflowTransitionPage()
-    expect(adminWorkflowApi.fetchAdminWorkflowTransitionConfiguration).toHaveBeenCalledTimes(1)
-    expect(getSaveButton(page).props.disabled).toBe(true)
-
-    let matrix = renderMatrix(page)
-    toggleCheckbox(matrix, enabledInputId, false)
-    page = renderAdminWorkflowTransitionPage()
-    matrix = renderMatrix(page)
-    toggleCheckbox(matrix, adminRoleInputId, true)
-    page = renderAdminWorkflowTransitionPage()
-    matrix = renderMatrix(page)
-    toggleCheckbox(matrix, gntcDepartmentInputId, true)
-    page = renderAdminWorkflowTransitionPage()
-
-    expect(getSaveButton(page).props.disabled).toBe(false)
-    clickSave(page)
-    clickSave(page)
-    await flushAsyncWork()
-
-    expect(
-      adminWorkflowApi.replaceAdminWorkflowTransitionConfiguration,
-    ).toHaveBeenCalledTimes(1)
-    const savedPayload = adminWorkflowApi.replaceAdminWorkflowTransitionConfiguration.mock.calls[0][0]
-    expect(savedPayload.transitions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          fromStatus: 'Submitted',
-          toStatus: 'Setup In Progress',
-          enabled: false,
-          allowedRoles: ['setup_owner', 'admin'],
-          allowedSetupOwnerDepartments: ['GNTC'],
-        }),
-      ]),
-    )
+  it('requires an explicit surviving nonDraft replacement for used deletion and resets selection after 409', async () => {
+    const withReplacement = { ...config, entries: [...config.entries, { id: 'other-id', name: 'Other work', kind: 'open', requestCount: 0 }], psfVisibilityTriggerId: 'open-id' }
+    workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(withReplacement)
+    hookState.begin(); AdminWorkflowTransitionPage(); hookState.effect?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const render = () => { hookState.begin(); return AdminWorkflowTransitionPage() }
+    ;(find(render(), (element) => element.type === 'button' && element.props.children === 'Delete')!.props.onClick as () => void)()
+    const confirm = () => find(render(), (element) => element.type === 'button' && element.props.className === 'primary-button' && element.props.type === 'button')!
+    expect(confirm().props.disabled).toBe(true)
+    const replacement = find(render(), (element) => element.type === 'select' && element.props.value === '')!
+    ;(replacement.props.onChange as (event: unknown) => void)({ target: { value: 'draft-id' } })
+    expect(confirm().props.disabled).toBe(true)
+    ;(replacement.props.onChange as (event: unknown) => void)({ target: { value: 'other-id' } })
+    expect(confirm().props.disabled).toBe(false)
+    const trigger = find(render(), (element) => element.type === 'label' && Array.isArray(element.props.children) && element.props.children[0] === 'Replace visibility trigger')!
+    const triggerSelect = find(trigger, (element) => element.type === 'select')!
+    ;(triggerSelect.props.onChange as (event: unknown) => void)({ target: { value: 'other-id' } })
+    workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Stale catalog', 409, 'Conflict', null))
+    ;(confirm().props.onClick as () => void)()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'delete', id: 'open-id', replacementId: 'other-id', replacementTriggerId: 'other-id', expectedUpdatedAt: config.updatedAt })
+    expect(find(render(), (element) => element.props['aria-labelledby'] === 'delete-status-heading')).toBeNull()
+    expect(workflowApi.fetchAdminWorkflowTransitionConfiguration).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps an unsaved matrix edit visible and reports a server rejection', async () => {
-    adminWorkflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValueOnce(
-      new Error('Every directed transition must be present exactly once.'),
-    )
-
-    let page = await loadAdminWorkflowTransitionPage()
-    toggleCheckbox(renderMatrix(page), enabledInputId, false)
-    page = renderAdminWorkflowTransitionPage()
-    clickSave(page)
-    await flushAsyncWork()
-    page = renderAdminWorkflowTransitionPage()
-
-    expect(getFeedback(page).props.feedback).toEqual({
-      kind: 'error',
-      message: 'Every directed transition must be present exactly once.',
-    })
-    expect(getCheckbox(renderMatrix(page), enabledInputId).props.checked).toBe(false)
-    expect(getSaveButton(page).props.disabled).toBe(false)
+  it('shows protected Draft and exact labels, then creates with the opaque revision', async () => {
+    hookState.begin()
+    AdminWorkflowTransitionPage()
+    hookState.effect?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    hookState.begin()
+    const page = AdminWorkflowTransitionPage()
+    expect(find(page, (element) => element.type === 'span' && element.props.children === 'Protected')).not.toBeNull()
+    expect(find(page, (element) => element.type === 'strong' && element.props.children === config.entries[1].name)).not.toBeNull()
+    const input = find(page, (element) => element.type === 'input')
+    const form = find(page, (element) => element.type === 'form')
+    if (!input || typeof input.props.onChange !== 'function' || !form || typeof form.props.onSubmit !== 'function') throw new Error('Expected new-status form controls')
+    input.props.onChange({ target: { value: 'New lane' } })
+    hookState.begin()
+    const updatedPage = AdminWorkflowTransitionPage()
+    const updatedForm = find(updatedPage, (element) => element.type === 'form')
+    if (!updatedForm || typeof updatedForm.props.onSubmit !== 'function') throw new Error('Expected form submit handler')
+    updatedForm.props.onSubmit({ preventDefault() {} })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'create', name: 'New lane', kind: 'open', expectedUpdatedAt: config.updatedAt })
   })
 })

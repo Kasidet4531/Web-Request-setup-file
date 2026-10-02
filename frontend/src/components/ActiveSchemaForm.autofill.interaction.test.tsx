@@ -186,6 +186,10 @@ function buildDraft(overrides: Partial<PsfRequestResponse> = {}): PsfRequestResp
     psfCreatedData: {},
     psfCreatedDataVisible: false,
     canEditPsfCreatedData: false,
+    canEditRequesterData: true,
+    canSubmitDraft: false,
+    requesterUserId: 'user-1',
+    psfReleasedAt: null,
     psfCreatedInformationSchema: {
       formKey: 'psf-created-information',
       version: 1,
@@ -522,7 +526,7 @@ describe('ActiveSchemaForm runtime autofill interactions', () => {
     expect(getFormRenderer(page).props.onChange).toBeUndefined()
 
     hookHarness.reset()
-    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ status: 'Submitted' }))
+    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ status: 'Submitted', canEditRequesterData: false }))
     page = await loadDraft()
 
     expect(getFormRenderer(page).props.onChange).toBeUndefined()

@@ -19,16 +19,33 @@ const adminActor = {
   setupOwnerDepartment: null,
 };
 
-const replacement = {
-  transitions: [
-    {
-      fromStatus: 'Submitted',
-      toStatus: 'Setup In Progress',
-      enabled: true,
-      allowedRoles: ['setup_owner'],
-      allowedSetupOwnerDepartments: [],
-    },
+const configuration = {
+  statuses: ['Review', 'Finished'],
+  entries: [
+    { id: 'draft-id', name: 'Draft', kind: 'draft', requestCount: null },
+    { id: 'review-id', name: 'Review', kind: 'open', requestCount: 4 },
+    { id: 'finished-id', name: 'Finished', kind: 'completed', requestCount: 2 },
   ],
+  psfVisibilityTriggerId: null,
+  updatedAt: '2026-10-01T01:02:03.123456Z',
+};
+
+const publicConfiguration = {
+  statuses: ['Review', 'Finished'],
+  entries: [
+    { id: 'draft-id', name: 'Draft', kind: 'draft' },
+    { id: 'review-id', name: 'Review', kind: 'open' },
+    { id: 'finished-id', name: 'Finished', kind: 'completed' },
+  ],
+  psfVisibilityTriggerId: null,
+  updatedAt: '2026-10-01T01:02:03.123456Z',
+};
+
+const createOperation = {
+  action: 'create' as const,
+  name: 'Approval',
+  kind: 'open' as const,
+  expectedUpdatedAt: '2026-10-01T01:02:03.123456Z',
 };
 
 describe('WorkflowTransitionController', () => {
@@ -37,14 +54,16 @@ describe('WorkflowTransitionController', () => {
   let statusController: WorkflowStatusController;
   let workflowTransitionService: {
     getConfiguration: jest.Mock;
-    replaceConfiguration: jest.Mock;
+    getPublicConfiguration: jest.Mock;
+    applyOperation: jest.Mock;
   };
 
   beforeEach(async () => {
     authService = { getProfile: jest.fn() };
     workflowTransitionService = {
       getConfiguration: jest.fn(),
-      replaceConfiguration: jest.fn(),
+      getPublicConfiguration: jest.fn(),
+      applyOperation: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -63,10 +82,6 @@ describe('WorkflowTransitionController', () => {
   });
 
   it('returns the saved configuration only after resolving the current administrator profile', async () => {
-    const configuration = {
-      statuses: ['Submitted', 'Setup In Progress'],
-      transitions: replacement.transitions,
-    };
     authService.getProfile.mockResolvedValue(adminActor);
     workflowTransitionService.getConfiguration.mockResolvedValue(configuration);
 
@@ -85,24 +100,22 @@ describe('WorkflowTransitionController', () => {
     { ...adminActor, id: 'requester-1', role: 'requester' as const },
     { ...adminActor, id: 'owner-1', role: 'setup_owner' as const },
   ])(
-    'returns only configured statuses to an authenticated $role',
+    'returns the public catalog without usage counts to an authenticated $role',
     async (actor) => {
       authService.getProfile.mockResolvedValue(actor);
-      workflowTransitionService.getConfiguration.mockResolvedValue({
-        statuses: ['Custom review', 'Need More Information'],
-        transitions: replacement.transitions,
-      });
+      workflowTransitionService.getPublicConfiguration.mockResolvedValue(
+        publicConfiguration,
+      );
 
       await expect(
         statusController.getStatuses({
           session: { userId: actor.id },
         } as never),
-      ).resolves.toEqual({
-        statuses: ['Custom review', 'Need More Information'],
-      });
-      expect(workflowTransitionService.getConfiguration).toHaveBeenCalledTimes(
-        1,
-      );
+      ).resolves.toEqual(publicConfiguration);
+      expect(
+        workflowTransitionService.getPublicConfiguration,
+      ).toHaveBeenCalledTimes(1);
+      expect(workflowTransitionService.getConfiguration).not.toHaveBeenCalled();
     },
   );
 
@@ -117,24 +130,24 @@ describe('WorkflowTransitionController', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(stale.session.userId).toBeUndefined();
     expect(workflowTransitionService.getConfiguration).not.toHaveBeenCalled();
+    expect(
+      workflowTransitionService.getPublicConfiguration,
+    ).not.toHaveBeenCalled();
   });
 
-  it('atomically replaces the complete configuration only for an administrator', async () => {
-    const saved = {
-      statuses: ['Submitted', 'Setup In Progress'],
-      transitions: replacement.transitions,
-    };
+  it('forwards a strict catalog operation with the authenticated administrator', async () => {
     authService.getProfile.mockResolvedValue(adminActor);
-    workflowTransitionService.replaceConfiguration.mockResolvedValue(saved);
+    workflowTransitionService.applyOperation.mockResolvedValue(configuration);
 
     await expect(
-      controller.replaceWorkflowTransitionConfiguration(replacement, {
+      controller.replaceWorkflowTransitionConfiguration(createOperation, {
         session: { userId: adminActor.id },
       } as never),
-    ).resolves.toEqual(saved);
+    ).resolves.toEqual(configuration);
 
-    expect(workflowTransitionService.replaceConfiguration).toHaveBeenCalledWith(
-      replacement,
+    expect(workflowTransitionService.applyOperation).toHaveBeenCalledWith(
+      createOperation,
+      adminActor,
     );
   });
 
@@ -151,14 +164,12 @@ describe('WorkflowTransitionController', () => {
 
     await expect(
       controller.replaceWorkflowTransitionConfiguration(
-        replacement,
+        createOperation,
         staleSession as never,
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(staleSession.session.userId).toBeUndefined();
-    expect(
-      workflowTransitionService.replaceConfiguration,
-    ).not.toHaveBeenCalled();
+    expect(workflowTransitionService.applyOperation).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -186,13 +197,14 @@ describe('WorkflowTransitionController', () => {
         controller.getWorkflowTransitionConfiguration(request),
       ).rejects.toBeInstanceOf(ForbiddenException);
       await expect(
-        controller.replaceWorkflowTransitionConfiguration(replacement, request),
+        controller.replaceWorkflowTransitionConfiguration(
+          createOperation,
+          request,
+        ),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(workflowTransitionService.getConfiguration).not.toHaveBeenCalled();
-      expect(
-        workflowTransitionService.replaceConfiguration,
-      ).not.toHaveBeenCalled();
+      expect(workflowTransitionService.applyOperation).not.toHaveBeenCalled();
     },
   );
 
@@ -202,19 +214,29 @@ describe('WorkflowTransitionController', () => {
     { transitions: {} },
     { transitions: [], unexpected: true },
   ])(
-    'rejects malformed replacement envelopes before writing configuration',
-    async (body) => {
+    'rejects malformed operations through the real catalog validation boundary before storage access',
+    async (operation) => {
       authService.getProfile.mockResolvedValue(adminActor);
+      const pool = { connect: jest.fn() };
+      const catalogService = new WorkflowTransitionService(
+        pool as never,
+        {} as never,
+      );
+      workflowTransitionService.applyOperation.mockImplementation((input) =>
+        catalogService.applyOperation(input, adminActor),
+      );
 
       await expect(
-        controller.replaceWorkflowTransitionConfiguration(body, {
+        controller.replaceWorkflowTransitionConfiguration(operation, {
           session: { userId: adminActor.id },
         } as never),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(
-        workflowTransitionService.replaceConfiguration,
-      ).not.toHaveBeenCalled();
+      expect(workflowTransitionService.applyOperation).toHaveBeenCalledWith(
+        operation,
+        adminActor,
+      );
+      expect(pool.connect).not.toHaveBeenCalled();
     },
   );
 });

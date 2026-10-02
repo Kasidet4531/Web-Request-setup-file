@@ -1,455 +1,118 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  api,
-  ApiError,
-  type AdminWorkflowTransitionConfiguration,
-  type SetupOwnerDepartment,
-  type UserRole,
-  type WorkflowTransitionRule,
-} from '../services/api'
+import { useEffect, useState } from 'react'
+import { api, ApiError, type StatusCatalogEntry, type WorkflowConfiguration, type WorkflowConfigurationOperation, type WorkflowStatusKind } from '../services/api'
 
-type AdminWorkflowTransitionFeedbackValue = {
-  kind: 'success' | 'error'
-  message: string
-}
+type WorkflowOperationInput = WorkflowConfigurationOperation extends infer Operation
+  ? Operation extends WorkflowConfigurationOperation
+    ? Omit<Operation, 'expectedUpdatedAt'>
+    : never
+  : never
 
-const USER_ROLE_LABELS: Record<UserRole, string> = {
-  requester: 'Requester',
-  setup_owner: 'Setup File Owner',
-  admin: 'Administrator',
-}
+type Feedback = { kind: 'success'; message: string } | { kind: 'error'; message: string }
 
-const SETUP_OWNER_DEPARTMENTS: SetupOwnerDepartment[] = ['GNTC', 'MFG']
-
-function transitionSlug(fromStatus: string, toStatus: string): string {
-  const normalize = (status: string) =>
-    status
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
-
-  return `${normalize(fromStatus)}--${normalize(toStatus)}`
-}
-
-function cloneTransition(rule: WorkflowTransitionRule): WorkflowTransitionRule {
-  return {
-    ...rule,
-    allowedRoles: [...rule.allowedRoles],
-    allowedSetupOwnerDepartments: [...rule.allowedSetupOwnerDepartments],
-  }
-}
-
-function cloneTransitions(
-  transitions: WorkflowTransitionRule[],
-): WorkflowTransitionRule[] {
-  return transitions.map(cloneTransition)
-}
-
-function toggleListValue<T extends string>(
-  values: T[],
-  value: T,
-  checked: boolean,
-): T[] {
-  if (checked) {
-    return values.includes(value) ? values : [...values, value]
-  }
-
-  return values.filter((current) => current !== value)
-}
-
-function getAdminWorkflowTransitionErrorMessage(
-  error: unknown,
-  fallback: string,
-): string {
-  if (error instanceof ApiError || error instanceof Error) {
-    return error.message || fallback
-  }
-
-  return fallback
-}
-
-export function AdminWorkflowTransitionFeedback({
-  feedback,
-  loading,
-}: {
-  feedback: AdminWorkflowTransitionFeedbackValue | null
-  loading: boolean
-}) {
-  if (loading) {
-    return (
-      <p className="page-card__description" role="status">
-        Loading workflow transitions…
-      </p>
-    )
-  }
-
-  if (!feedback) {
-    return null
-  }
-
-  return (
-    <p
-      className={`status-pill status-pill--${feedback.kind}`}
-      role={feedback.kind === 'error' ? 'alert' : 'status'}
-    >
-      {feedback.message}
-    </p>
-  )
-}
-
-export interface AdminWorkflowTransitionMatrixProps {
-  disabled: boolean
-  onToggleDepartment: (
-    fromStatus: string,
-    toStatus: string,
-    department: SetupOwnerDepartment,
-    checked: boolean,
-  ) => void
-  onToggleEnabled: (
-    fromStatus: string,
-    toStatus: string,
-    checked: boolean,
-  ) => void
-  onToggleRole: (
-    fromStatus: string,
-    toStatus: string,
-    role: UserRole,
-    checked: boolean,
-  ) => void
-  statuses: string[]
-  transitions: WorkflowTransitionRule[]
-}
-
-export function AdminWorkflowTransitionMatrix({
-  disabled,
-  onToggleDepartment,
-  onToggleEnabled,
-  onToggleRole,
-  statuses,
-  transitions,
-}: AdminWorkflowTransitionMatrixProps) {
-  return (
-    <div className="admin-workflow-transition__matrix">
-      {statuses.map((fromStatus) => {
-        const outgoingTransitions = transitions.filter(
-          (transition) => transition.fromStatus === fromStatus,
-        )
-
-        return (
-          <section
-            className="admin-workflow-transition__source"
-            key={fromStatus}
-            aria-labelledby={`admin-workflow-source-${transitionSlug(fromStatus, fromStatus)}`}
-          >
-            <h2 id={`admin-workflow-source-${transitionSlug(fromStatus, fromStatus)}`}>
-              From {fromStatus}
-            </h2>
-            <div className="data-table admin-workflow-transition__table">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">To status</th>
-                    <th scope="col">Enabled</th>
-                    <th scope="col">Allowed roles</th>
-                    <th scope="col">Setup File Owner departments</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outgoingTransitions.map((transition) => {
-                    const slug = transitionSlug(
-                      transition.fromStatus,
-                      transition.toStatus,
-                    )
-                    const enabledInputId = `admin-workflow-enabled-${slug}`
-
-                    return (
-                      <tr key={`${transition.fromStatus}->${transition.toStatus}`}>
-                        <td>
-                          <strong>{transition.toStatus}</strong>
-                        </td>
-                        <td>
-                          <label
-                            className="admin-workflow-transition__checkbox"
-                            htmlFor={enabledInputId}
-                          >
-                            <input
-                              checked={transition.enabled}
-                              disabled={disabled}
-                              id={enabledInputId}
-                              onChange={(event) =>
-                                onToggleEnabled(
-                                  transition.fromStatus,
-                                  transition.toStatus,
-                                  event.target.checked,
-                                )
-                              }
-                              type="checkbox"
-                            />
-                            <span>Enabled</span>
-                          </label>
-                        </td>
-                        <td>
-                          <fieldset className="admin-workflow-transition__principals">
-                            <legend className="sr-only">
-                              Allowed roles for {transition.toStatus} from {transition.fromStatus}
-                            </legend>
-                            {(Object.keys(USER_ROLE_LABELS) as UserRole[]).map((role) => {
-                              const inputId = `admin-workflow-role-${slug}-${role}`
-
-                              return (
-                                <label
-                                  className="admin-workflow-transition__checkbox"
-                                  htmlFor={inputId}
-                                  key={role}
-                                >
-                                  <input
-                                    checked={transition.allowedRoles.includes(role)}
-                                    disabled={disabled}
-                                    id={inputId}
-                                    onChange={(event) =>
-                                      onToggleRole(
-                                        transition.fromStatus,
-                                        transition.toStatus,
-                                        role,
-                                        event.target.checked,
-                                      )
-                                    }
-                                    type="checkbox"
-                                  />
-                                  <span>{USER_ROLE_LABELS[role]}</span>
-                                </label>
-                              )
-                            })}
-                          </fieldset>
-                        </td>
-                        <td>
-                          <fieldset className="admin-workflow-transition__principals">
-                            <legend className="sr-only">
-                              Allowed Setup File Owner departments for {transition.toStatus} from {transition.fromStatus}
-                            </legend>
-                            {SETUP_OWNER_DEPARTMENTS.map((department) => {
-                              const inputId = `admin-workflow-department-${slug}-${department.toLowerCase()}`
-
-                              return (
-                                <label
-                                  className="admin-workflow-transition__checkbox"
-                                  htmlFor={inputId}
-                                  key={department}
-                                >
-                                  <input
-                                    checked={transition.allowedSetupOwnerDepartments.includes(
-                                      department,
-                                    )}
-                                    disabled={disabled}
-                                    id={inputId}
-                                    onChange={(event) =>
-                                      onToggleDepartment(
-                                        transition.fromStatus,
-                                        transition.toStatus,
-                                        department,
-                                        event.target.checked,
-                                      )
-                                    }
-                                    type="checkbox"
-                                  />
-                                  <span>{department}</span>
-                                </label>
-                              )
-                            })}
-                          </fieldset>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )
-      })}
-    </div>
-  )
+function errorMessage(error: unknown): string {
+  return error instanceof ApiError || error instanceof Error ? error.message : 'Unable to update status catalog.'
 }
 
 export function AdminWorkflowTransitionPage() {
-  const [feedback, setFeedback] =
-    useState<AdminWorkflowTransitionFeedbackValue | null>(null)
+  const [configuration, setConfiguration] = useState<WorkflowConfiguration | null>(null)
   const [loading, setLoading] = useState(true)
-  const [savedTransitions, setSavedTransitions] = useState<WorkflowTransitionRule[]>([])
-  const [saving, setSaving] = useState(false)
-  const [statuses, setStatuses] = useState<string[]>([])
-  const [transitions, setTransitions] = useState<WorkflowTransitionRule[]>([])
-  const requestInFlight = useRef(false)
+  const [busy, setBusy] = useState(false)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [newName, setNewName] = useState('')
+  const [newKind, setNewKind] = useState<Exclude<WorkflowStatusKind, 'draft'>>('open')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [deleting, setDeleting] = useState<StatusCatalogEntry | null>(null)
+  const [replacementId, setReplacementId] = useState('')
+  const [replacementTriggerId, setReplacementTriggerId] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
-    requestInFlight.current = true
-
-    async function loadConfiguration() {
-      try {
-        const configuration = await api.fetchAdminWorkflowTransitionConfiguration()
-        if (!mounted) {
-          return
-        }
-
-        const nextTransitions = cloneTransitions(configuration.transitions)
-        setStatuses([...configuration.statuses])
-        setTransitions(nextTransitions)
-        setSavedTransitions(cloneTransitions(nextTransitions))
-        setFeedback(null)
-      } catch (error) {
-        if (mounted) {
-          setFeedback({
-            kind: 'error',
-            message: getAdminWorkflowTransitionErrorMessage(
-              error,
-              'Unable to load workflow transitions.',
-            ),
-          })
-        }
-      } finally {
-        requestInFlight.current = false
-        if (mounted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void loadConfiguration()
-
-    return () => {
-      mounted = false
-    }
+    void api.fetchAdminWorkflowTransitionConfiguration().then((result) => {
+      if (mounted) setConfiguration(result)
+    }).catch((error: unknown) => {
+      if (mounted) setFeedback({ kind: 'error', message: errorMessage(error) })
+    }).finally(() => { if (mounted) setLoading(false) })
+    return () => { mounted = false }
   }, [])
 
-  function updateTransition(
-    fromStatus: string,
-    toStatus: string,
-    update: (transition: WorkflowTransitionRule) => WorkflowTransitionRule,
-  ) {
-    if (saving || requestInFlight.current) {
-      return
-    }
-
-    setTransitions((current) =>
-      current.map((transition) =>
-        transition.fromStatus === fromStatus && transition.toStatus === toStatus
-          ? update(transition)
-          : transition,
-      ),
-    )
+  async function mutate(operation: WorkflowOperationInput) {
+    if (!configuration || busy) return
+    setBusy(true)
     setFeedback(null)
-  }
-
-  function toggleEnabled(fromStatus: string, toStatus: string, checked: boolean) {
-    updateTransition(fromStatus, toStatus, (transition) => ({
-      ...transition,
-      enabled: checked,
-    }))
-  }
-
-  function toggleRole(
-    fromStatus: string,
-    toStatus: string,
-    role: UserRole,
-    checked: boolean,
-  ) {
-    updateTransition(fromStatus, toStatus, (transition) => ({
-      ...transition,
-      allowedRoles: toggleListValue(transition.allowedRoles, role, checked),
-    }))
-  }
-
-  function toggleDepartment(
-    fromStatus: string,
-    toStatus: string,
-    department: SetupOwnerDepartment,
-    checked: boolean,
-  ) {
-    updateTransition(fromStatus, toStatus, (transition) => ({
-      ...transition,
-      allowedSetupOwnerDepartments: toggleListValue(
-        transition.allowedSetupOwnerDepartments,
-        department,
-        checked,
-      ),
-    }))
-  }
-
-  const dirty = JSON.stringify(transitions) !== JSON.stringify(savedTransitions)
-
-  async function saveConfiguration() {
-    if (loading || saving || requestInFlight.current || !dirty) {
-      return
-    }
-
-    requestInFlight.current = true
-    setSaving(true)
-    setFeedback(null)
-
     try {
-      const savedConfiguration: AdminWorkflowTransitionConfiguration =
-        await api.replaceAdminWorkflowTransitionConfiguration({
-          transitions: cloneTransitions(transitions),
-        })
-      const nextTransitions = cloneTransitions(savedConfiguration.transitions)
-      setStatuses([...savedConfiguration.statuses])
-      setTransitions(nextTransitions)
-      setSavedTransitions(cloneTransitions(nextTransitions))
-      setFeedback({
-        kind: 'success',
-        message: 'Workflow transitions were saved.',
-      })
+      const refreshed = await api.replaceAdminWorkflowTransitionConfiguration({ ...operation, expectedUpdatedAt: configuration.updatedAt } as WorkflowConfigurationOperation)
+      setConfiguration(refreshed)
+      setDeleting(null)
+      setEditingId(null)
+      setFeedback({ kind: 'success', message: 'Status catalog updated.' })
     } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: getAdminWorkflowTransitionErrorMessage(
-          error,
-          'Unable to save workflow transitions.',
-        ),
-      })
-    } finally {
-      requestInFlight.current = false
-      setSaving(false)
-    }
+      setFeedback({ kind: 'error', message: errorMessage(error) })
+      if (error instanceof ApiError && error.status === 409) {
+        try {
+          setConfiguration(await api.fetchAdminWorkflowTransitionConfiguration())
+          setDeleting(null)
+          setEditingId(null)
+          setReplacementId('')
+          setReplacementTriggerId(null)
+        } catch { /* Keep the user's conflict context visible. */ }
+      }
+    } finally { setBusy(false) }
   }
+
+  const businessEntries = configuration?.entries.filter((entry) => entry.kind !== 'draft') ?? []
+  const validReplacement = businessEntries.some((entry) => entry.id === replacementId && entry.id !== deleting?.id)
+  const deletingTrigger = Boolean(deleting && configuration?.psfVisibilityTriggerId === deleting.id)
+  const canDelete = Boolean(deleting && deleting.kind !== 'draft' &&
+    (deleting.requestCount === 0 ? !replacementId || validReplacement : validReplacement) &&
+    (!deletingTrigger || replacementTriggerId === null || businessEntries.some((entry) => entry.id === replacementTriggerId && entry.id !== deleting.id)))
 
   return (
     <article className="page-card admin-workflow-transition">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Admin tools</p>
-          <h1>Workflow transition editor</h1>
-          <p className="page-card__description">
-            Enable or disable each directed manual status transition, then choose
-            the roles and Setup File Owner departments that may perform it.
-          </p>
-        </div>
-        <button
-          className="primary-button"
-          disabled={loading || saving || !dirty}
-          onClick={() => void saveConfiguration()}
-          type="button"
-        >
-          {saving ? 'Saving workflow changes…' : 'Save workflow changes'}
-        </button>
-      </div>
-
+      <div className="page-card__header"><div>
+        <p className="page-card__eyebrow">Admin tools</p>
+        <h1>Status Management</h1>
+        <p className="page-card__description">Manage work-status names and meaning. Draft is protected; status names are displayed exactly as entered.</p>
+      </div></div>
       <div className="page-card__body admin-workflow-transition__body">
-        <AdminWorkflowTransitionFeedback feedback={feedback} loading={loading} />
-        {!loading && transitions.length === 0 && !feedback ? (
-          <p className="page-card__description">No workflow transitions are configured.</p>
-        ) : null}
-        {!loading && transitions.length > 0 ? (
-          <AdminWorkflowTransitionMatrix
-            disabled={saving}
-            onToggleDepartment={toggleDepartment}
-            onToggleEnabled={toggleEnabled}
-            onToggleRole={toggleRole}
-            statuses={statuses}
-            transitions={transitions}
-          />
-        ) : null}
+        {loading ? <p role="status">Loading status catalog…</p> : null}
+        {feedback ? <p className={`status-pill status-pill--${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>{feedback.message}</p> : null}
+        {configuration ? <>
+          <form className="toolbar" onSubmit={(event) => { event.preventDefault(); if (newName.trim()) void mutate({ action: 'create', name: newName, kind: newKind }) }}>
+            <label>New status name<input value={newName} onChange={(event) => setNewName(event.target.value)} /></label>
+            <label>Meaning<select value={newKind} onChange={(event) => setNewKind(event.target.value as Exclude<WorkflowStatusKind, 'draft'>)}><option value="open">Open work</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+            <button className="primary-button" disabled={busy || !newName.trim()} type="submit">Add status</button>
+          </form>
+          <section aria-labelledby="visibility-trigger-heading">
+            <h2 id="visibility-trigger-heading">Requester PSF visibility trigger</h2>
+            <p className="page-card__description">{configuration.psfVisibilityTriggerId ? 'Requesters gain access on first entry and keep it afterward.' : 'Not configured; requester access is not released by status changes.'}</p>
+            <label>Trigger status<select disabled={busy} value={configuration.psfVisibilityTriggerId ?? ''} onChange={(event) => void mutate({ action: 'settings', psfVisibilityTriggerId: event.target.value || null })}>
+              <option value="">Not configured</option>{businessEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+            </select></label>
+          </section>
+          <div className="data-table admin-workflow-transition__table" role="region" aria-label="Status catalog" tabIndex={0}><table>
+            <thead><tr><th>Status</th><th>Kind</th><th>Requests</th><th>Actions</th></tr></thead>
+            <tbody>{configuration.entries.map((entry) => <tr key={entry.id}>
+              <td>{editingId === entry.id ? <input aria-label={`Rename ${entry.name}`} value={editName} onChange={(event) => setEditName(event.target.value)} /> : <strong>{entry.name}</strong>}</td>
+              <td>{entry.kind}</td><td>{entry.requestCount ?? '—'}</td>
+              <td>{entry.kind === 'draft' ? <span>Protected</span> : editingId === entry.id ? <>
+                <button disabled={busy || !editName.trim()} onClick={() => void mutate({ action: 'rename', id: entry.id, name: editName })} type="button">Save name</button>
+                <button disabled={busy} onClick={() => setEditingId(null)} type="button">Cancel</button>
+              </> : <>
+                <button disabled={busy} onClick={() => { setEditingId(entry.id); setEditName(entry.name) }} type="button">Rename</button>
+                <button disabled={busy} onClick={() => { setDeleting(entry); setReplacementId(''); setReplacementTriggerId(null) }} type="button">Delete</button>
+              </>}</td>
+            </tr>)}</tbody>
+          </table></div>
+          {deleting ? <section className="page-card" aria-labelledby="delete-status-heading">
+            <h2 id="delete-status-heading">Delete {deleting.name}</h2>
+            <p>{deleting.requestCount ?? 0} current request(s) use this status. {deleting.requestCount === 0 ? 'A request replacement is optional.' : 'Choose a replacement for these requests.'} Deletion is canceled until confirmed.</p>
+            <label>Replacement status<select value={replacementId} onChange={(event) => setReplacementId(event.target.value)}><option value="">{deleting.requestCount === 0 ? 'No request replacement' : 'Choose replacement'}</option>{businessEntries.filter((entry) => entry.id !== deleting.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label>
+            {configuration.psfVisibilityTriggerId === deleting.id ? <label>Replace visibility trigger<select value={replacementTriggerId ?? ''} onChange={(event) => setReplacementTriggerId(event.target.value || null)}><option value="">No trigger</option>{businessEntries.filter((entry) => entry.id !== deleting.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label> : null}
+            <button className="primary-button" disabled={busy || !canDelete} onClick={() => { if (canDelete) void mutate({ action: 'delete', id: deleting.id, ...(replacementId ? { replacementId } : {}), ...(deletingTrigger ? { replacementTriggerId } : {}) }) }} type="button">{deleting.requestCount === 0 ? 'Delete status' : 'Replace and delete'}</button>
+            <button disabled={busy} onClick={() => setDeleting(null)} type="button">Cancel</button>
+          </section> : null}
+        </> : null}
       </div>
     </article>
   )

@@ -32,13 +32,13 @@ describe('NavSidebar', () => {
     expect(html).toContain('href="/admin/users"')
   })
 
-  it('hides admin-only and requester-only entries from setup owners', () => {
-    const html = renderToStaticMarkup(createElement(NavSidebar, { role: 'setup_owner' }))
-
-    expect(html).toContain('href="/requests"')
-    expect(html).not.toContain('/admin/')
-    expect(html).not.toContain('/requests/new')
-    expect(html).not.toContain('href="/history"')
+  it('offers Create Request and My draft to every authenticated role immediately after All Requests', () => {
+    for (const role of ['requester', 'setup_owner', 'admin'] as const) {
+      const items = navSectionsForRole(role).flatMap((section) => section.items)
+      const allRequestsIndex = items.findIndex((item) => item.to === '/requests')
+      expect(items[allRequestsIndex + 1]).toMatchObject({ to: '/my-drafts', label: 'My draft' })
+      expect(items.some((item) => item.to === '/requests/new' && item.label === 'Create Request')).toBe(true)
+    }
   })
 
   it('keeps requester entries for requesters without admin tools', () => {

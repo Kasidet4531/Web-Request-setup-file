@@ -5,164 +5,190 @@ import {
   Injectable,
   OnModuleInit,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
-import type { AuthenticatedUserProfile, UserRole } from '../auth/session.types';
+import type { AuthenticatedUserProfile } from '../auth/session.types';
+import {
+  AuditLogService,
+  REQUEST_AUDIT_ACTION,
+} from '../audit/audit_log.service';
 import { DATABASE_POOL } from '../database/database.service';
+import { resolvePsfCreatedInformationSchema } from './form_schema.constants';
+import type { FormSchemaJson } from './form_schema.constants';
+import { assertValidRequiredFormData } from '../requests/form-data-validation';
 
-export const MANUAL_WORKFLOW_STATUSES = [
-  'Submitted',
-  'Setup In Progress',
-  'Need More Information',
-  'PSF Created',
-  'Completed',
-  'Rejected',
-  'Cancelled',
-] as const;
+export type StatusKind = 'draft' | 'open' | 'completed' | 'cancelled';
 
-export const SETUP_OWNER_DEPARTMENTS = ['GNTC', 'MFG'] as const;
-
-export type ManualWorkflowStatus = (typeof MANUAL_WORKFLOW_STATUSES)[number];
-export type SetupOwnerDepartment = (typeof SETUP_OWNER_DEPARTMENTS)[number];
-
-export interface WorkflowTransitionRule {
-  fromStatus: ManualWorkflowStatus;
-  toStatus: ManualWorkflowStatus;
-  enabled: boolean;
-  allowedRoles: UserRole[];
-  allowedSetupOwnerDepartments: SetupOwnerDepartment[];
+export interface StatusCatalogEntry {
+  id: string;
+  name: string;
+  kind: StatusKind;
+  requestCount: number | null;
 }
 
-export interface WorkflowTransitionConfigurationInput {
-  transitions: WorkflowTransitionRule[];
+export interface WorkflowConfiguration {
+  statuses: string[];
+  entries: StatusCatalogEntry[];
+  psfVisibilityTriggerId: string | null;
+  updatedAt: string;
 }
 
-export interface WorkflowTransitionConfiguration extends WorkflowTransitionConfigurationInput {
-  statuses: ManualWorkflowStatus[];
-}
+export type WorkflowConfigurationOperation =
+  | {
+      action: 'create';
+      name: string;
+      kind: Exclude<StatusKind, 'draft'>;
+      expectedUpdatedAt: string;
+    }
+  | { action: 'rename'; id: string; name: string; expectedUpdatedAt: string }
+  | {
+      action: 'delete';
+      id: string;
+      replacementId?: string;
+      replacementTriggerId?: string | null;
+      expectedUpdatedAt: string;
+    }
+  | {
+      action: 'settings';
+      psfVisibilityTriggerId: string | null;
+      expectedUpdatedAt: string;
+    };
 
-interface WorkflowTransitionConfigurationRow {
+export type PublicWorkflowConfiguration = Omit<
+  WorkflowConfiguration,
+  'entries'
+> & {
+  entries: Array<Omit<StatusCatalogEntry, 'requestCount'>>;
+};
+
+interface WorkflowConfigurationRow {
   config_json: unknown;
+  updated_at_version: string;
 }
 
-const DRAFT_STATUS = 'Draft';
-const WORKFLOW_TRANSITION_CONFIGURATION_KEY = 'manual-transition-rules';
-const USER_ROLES: UserRole[] = ['requester', 'setup_owner', 'admin'];
-const MANUAL_STATUS_SET = new Set<string>(MANUAL_WORKFLOW_STATUSES);
-const USER_ROLE_SET = new Set<string>(USER_ROLES);
-const SETUP_OWNER_DEPARTMENT_SET = new Set<string>(SETUP_OWNER_DEPARTMENTS);
+interface StoredStatus {
+  id: string;
+  name: string;
+  kind: StatusKind;
+}
+
+interface StoredWorkflowConfiguration {
+  entries: StoredStatus[];
+  psfVisibilityTriggerId: string | null;
+}
+
+interface StatusCountRow {
+  status: string;
+  request_count: number;
+}
+
+interface ReplacementRequestRow {
+  id: string;
+  request_no: string;
+  status: string;
+  psf_created_data_json: Record<string, unknown>;
+  psf_created_schema_snapshot_json: FormSchemaJson | null;
+}
 
 type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
-const DEFAULT_STATUS_TRANSITIONS_BY_ROLE: Record<
-  Exclude<UserRole, 'admin'>,
-  Partial<Record<ManualWorkflowStatus, ManualWorkflowStatus[]>>
-> = {
-  requester: {
-    Submitted: ['Cancelled'],
-    'Need More Information': ['Submitted', 'Cancelled'],
+const CONFIGURATION_KEY = 'status-catalog-v1';
+const DRAFT_NAME = 'Draft';
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UPDATED_AT_SQL = `TO_CHAR(updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+const DEFAULT_ENTRIES: StoredStatus[] = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Draft', kind: 'draft' },
+  {
+    id: '00000000-0000-4000-8000-000000000002',
+    name: '5% -- Reject (Information not complete)',
+    kind: 'open',
   },
-  setup_owner: {
-    Submitted: ['Setup In Progress', 'Need More Information', 'Rejected'],
-    'Setup In Progress': ['PSF Created', 'Need More Information', 'Rejected'],
-    'PSF Created': ['Completed', 'Need More Information'],
+  {
+    id: '00000000-0000-4000-8000-000000000003',
+    name: '10% -- Test Engineer Data Entry',
+    kind: 'open',
   },
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  {
+    id: '00000000-0000-4000-8000-000000000004',
+    name: '20% -- PSF File Creating',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000005',
+    name: '30% -- Compare Old and New layout',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000006',
+    name: '40% -- Feedback Requester(Layout mismatch)',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000007',
+    name: '80% -- Wait for create DCC',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000008',
+    name: '81% -- Edit Template Map (Bin62)',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000009',
+    name: '82% -- Wait for sent Template Map',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-00000000000a',
+    name: '83% -- Complete Excel probe pattern',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-00000000000b',
+    name: '85 % -- Reject check list',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-00000000000c',
+    name: '90% -- Wait for buyoff check list',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-00000000000d',
+    name: '93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-00000000000e',
+    name: '95% -- Reject (Wrong site location and wafer map)',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-00000000000f',
+    name: '99% -- Wait requestor Buyoff site location and wafer map',
+    kind: 'open',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000010',
+    name: '100% -- Completed',
+    kind: 'completed',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000011',
+    name: '0% -- Rejected (Cancel Request)',
+    kind: 'cancelled',
+  },
+];
 
 @Injectable()
 export class WorkflowTransitionService implements OnModuleInit {
-  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(DATABASE_POOL) private readonly pool: Pool,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.ensureWorkflowTransitionStorage();
-    await this.seedDefaultConfiguration();
-  }
-
-  async getConfiguration(
-    queryRunner: QueryRunner = this.pool,
-  ): Promise<WorkflowTransitionConfiguration> {
-    const result = await queryRunner.query<WorkflowTransitionConfigurationRow>(
-      `
-        SELECT config_json
-        FROM workflow_transition_config
-        WHERE config_key = $1
-      `,
-      [WORKFLOW_TRANSITION_CONFIGURATION_KEY],
-    );
-    const storedConfiguration = result.rows[0];
-
-    if (!storedConfiguration) {
-      throw new ConflictException(
-        'The workflow transition configuration has not been initialized.',
-      );
-    }
-
-    return this.normalizeConfiguration(storedConfiguration.config_json);
-  }
-
-  async replaceConfiguration(
-    input: unknown,
-  ): Promise<WorkflowTransitionConfiguration> {
-    const configuration = this.normalizeConfiguration(input);
-    const persistedInput: WorkflowTransitionConfigurationInput = {
-      transitions: configuration.transitions,
-    };
-
-    return this.withTransaction(async (client) => {
-      const result = await client.query<WorkflowTransitionConfigurationRow>(
-        `
-          INSERT INTO workflow_transition_config (
-            config_key,
-            config_json,
-            updated_at
-          )
-          VALUES ($1, $2::jsonb, NOW())
-          ON CONFLICT (config_key) DO UPDATE
-          SET config_json = EXCLUDED.config_json,
-              updated_at = NOW()
-          RETURNING config_json
-        `,
-        [WORKFLOW_TRANSITION_CONFIGURATION_KEY, persistedInput],
-      );
-      const savedConfiguration = result.rows[0];
-
-      if (!savedConfiguration) {
-        throw new ConflictException(
-          'The workflow transition configuration could not be saved.',
-        );
-      }
-
-      return this.normalizeConfiguration(savedConfiguration.config_json);
-    });
-  }
-
-  async getAllowedNextStatuses(
-    actor: AuthenticatedUserProfile,
-    currentStatus: string,
-    queryRunner: QueryRunner = this.pool,
-  ): Promise<ManualWorkflowStatus[]> {
-    if (
-      currentStatus === DRAFT_STATUS ||
-      !MANUAL_STATUS_SET.has(currentStatus)
-    ) {
-      return [];
-    }
-
-    const configuration = await this.getConfiguration(queryRunner);
-
-    return configuration.transitions
-      .filter(
-        (transition) =>
-          transition.enabled &&
-          transition.fromStatus === currentStatus &&
-          this.actorMatchesTransition(actor, transition),
-      )
-      .map((transition) => transition.toStatus);
-  }
-
-  private async ensureWorkflowTransitionStorage(): Promise<void> {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS workflow_transition_config (
         config_key TEXT PRIMARY KEY,
@@ -170,296 +196,705 @@ export class WorkflowTransitionService implements OnModuleInit {
         updated_at TIMESTAMP NOT NULL
       )
     `);
-  }
-
-  private async seedDefaultConfiguration(): Promise<void> {
     await this.pool.query(
       `
-        INSERT INTO workflow_transition_config (
-          config_key,
-          config_json,
-          updated_at
-        )
+        INSERT INTO workflow_transition_config (config_key, config_json, updated_at)
         VALUES ($1, $2::jsonb, NOW())
         ON CONFLICT (config_key) DO NOTHING
       `,
-      [WORKFLOW_TRANSITION_CONFIGURATION_KEY, this.defaultConfigurationInput()],
+      [
+        CONFIGURATION_KEY,
+        { entries: DEFAULT_ENTRIES, psfVisibilityTriggerId: null },
+      ],
     );
   }
 
-  private defaultConfigurationInput(): WorkflowTransitionConfigurationInput {
+  async getConfiguration(
+    queryRunner: QueryRunner = this.pool,
+    includeCounts = true,
+  ): Promise<WorkflowConfiguration> {
+    return this.readConfiguration(queryRunner, includeCounts);
+  }
+
+  async getPublicConfiguration(
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<PublicWorkflowConfiguration> {
+    const configuration = await this.readConfiguration(queryRunner, false);
     return {
-      transitions: this.expectedTransitionPairs().map(
-        ({ fromStatus, toStatus }) => ({
-          fromStatus,
-          toStatus,
-          enabled: true,
-          allowedRoles: USER_ROLES.filter((role) =>
-            this.isSeededRoleAllowed(role, fromStatus, toStatus),
-          ),
-          allowedSetupOwnerDepartments: [],
-        }),
-      ),
+      ...configuration,
+      entries: configuration.entries.map(({ id, name, kind }) => ({
+        id,
+        name,
+        kind,
+      })),
     };
   }
 
-  private isSeededRoleAllowed(
-    role: UserRole,
-    fromStatus: ManualWorkflowStatus,
-    toStatus: ManualWorkflowStatus,
-  ): boolean {
-    if (role === 'admin') {
-      return true;
-    }
-
-    return (
-      DEFAULT_STATUS_TRANSITIONS_BY_ROLE[role][fromStatus]?.includes(
-        toStatus,
-      ) ?? false
+  async lockConfiguration(
+    queryRunner: QueryRunner,
+    mode: 'share' | 'update' = 'share',
+  ): Promise<WorkflowConfiguration> {
+    return this.readConfiguration(
+      queryRunner,
+      false,
+      mode === 'update' ? 'FOR UPDATE' : 'FOR SHARE',
     );
   }
 
-  private normalizeConfiguration(
+  async getAllowedNextStatuses(
+    currentStatus: string,
+    queryRunner: QueryRunner = this.pool,
+  ): Promise<string[]> {
+    const { entries } = await this.readConfiguration(queryRunner, false);
+    return entries
+      .filter((entry) => entry.kind !== 'draft' && entry.name !== currentStatus)
+      .map((entry) => entry.name);
+  }
+
+  async applyOperation(
     input: unknown,
-  ): WorkflowTransitionConfiguration {
-    if (!isRecord(input) || !Array.isArray(input.transitions)) {
-      throw new BadRequestException('workflow transitions must be an array.');
-    }
-
-    this.assertOnlyKeys(input, ['transitions'], 'workflow configuration');
-
-    const expectedPairs = this.expectedTransitionPairs();
-    if (input.transitions.length !== expectedPairs.length) {
-      throw new BadRequestException(
-        'Every directed transition between manual statuses must be provided exactly once.',
+    actor: AuthenticatedUserProfile,
+  ): Promise<WorkflowConfiguration> {
+    const operation = this.parseOperation(input);
+    return this.withTransaction(async (client) => {
+      const before = await this.readConfiguration(client, false, 'FOR UPDATE');
+      this.assertExpectedUpdatedAt(
+        operation.expectedUpdatedAt,
+        before.updatedAt,
       );
-    }
+      const entries = before.entries.map(({ id, name, kind }) => ({
+        id,
+        name,
+        kind,
+      }));
+      let triggerId = before.psfVisibilityTriggerId;
+      let requestChanges: Array<{
+        id: string;
+        fromStatus: string;
+        toStatus: string;
+      }> = [];
 
-    const transitionsByKey = new Map<string, WorkflowTransitionRule>();
-    for (const transitionInput of input.transitions) {
-      const transition = this.normalizeTransition(transitionInput);
-      const key = this.transitionKey(
-        transition.fromStatus,
-        transition.toStatus,
-      );
+      switch (operation.action) {
+        case 'create': {
+          this.assertAvailableName(operation.name, entries);
+          entries.push({
+            id: this.newStatusId(entries),
+            name: operation.name,
+            kind: operation.kind,
+          });
+          break;
+        }
+        case 'rename': {
+          const target = this.requireEntry(entries, operation.id);
+          if (target.kind === 'draft') {
+            throw new BadRequestException('Draft cannot be renamed.');
+          }
+          this.assertAvailableName(operation.name, entries, target.id);
+          const previousName = target.name;
+          target.name = operation.name;
+          await client.query(
+            'UPDATE psf_requests SET status = $2 WHERE status = $1',
+            [previousName, operation.name],
+          );
+          await client.query(
+            'UPDATE psf_request_search_index SET status = $2 WHERE status = $1',
+            [previousName, operation.name],
+          );
+          break;
+        }
+        case 'settings': {
+          if (operation.psfVisibilityTriggerId !== null) {
+            const trigger = this.requireEntry(
+              entries,
+              operation.psfVisibilityTriggerId,
+            );
+            if (trigger.kind === 'draft') {
+              throw new BadRequestException(
+                'The PSF visibility trigger must be a work status.',
+              );
+            }
+          }
+          triggerId = operation.psfVisibilityTriggerId;
+          break;
+        }
+        case 'delete': {
+          const target = this.requireEntry(entries, operation.id);
+          if (target.kind === 'draft') {
+            throw new BadRequestException('Draft cannot be deleted.');
+          }
+          const replacement =
+            operation.replacementId === undefined
+              ? undefined
+              : this.requireEntry(entries, operation.replacementId);
+          if (replacement?.kind === 'draft' || replacement?.id === target.id) {
+            throw new BadRequestException(
+              'A different non-Draft replacement status is required.',
+            );
+          }
+          if (triggerId === target.id) {
+            if (!Object.hasOwn(operation, 'replacementTriggerId')) {
+              throw new BadRequestException(
+                'Deleting the configured trigger requires an explicit replacementTriggerId.',
+              );
+            }
+            if (operation.replacementTriggerId !== null) {
+              const replacementTrigger = this.requireEntry(
+                entries,
+                operation.replacementTriggerId as string,
+              );
+              if (
+                replacementTrigger.kind === 'draft' ||
+                replacementTrigger.id === target.id
+              ) {
+                throw new BadRequestException(
+                  'The replacement trigger must be a surviving work status or null.',
+                );
+              }
+            }
+            triggerId = operation.replacementTriggerId as string | null;
+          } else if (Object.hasOwn(operation, 'replacementTriggerId')) {
+            throw new BadRequestException(
+              'replacementTriggerId is only valid when deleting the configured trigger.',
+            );
+          }
 
-      if (transitionsByKey.has(key)) {
-        throw new BadRequestException(
-          'Each directed workflow transition may be configured only once.',
-        );
+          const usedRequests = await client.query<ReplacementRequestRow>(
+            `
+              SELECT id, request_no, status, psf_created_data_json,
+                     psf_created_schema_snapshot_json
+              FROM psf_requests
+              WHERE status = $1
+              ORDER BY id
+              FOR UPDATE
+            `,
+            [target.name],
+          );
+          if (usedRequests.rows.length > 0 && !replacement) {
+            throw new BadRequestException(
+              'A replacement status is required while requests use this status.',
+            );
+          }
+          if (replacement && usedRequests.rows.length > 0) {
+            const entersTrigger = replacement.id === triggerId;
+            if (entersTrigger) {
+              usedRequests.rows.forEach((request) =>
+                assertValidRequiredFormData(
+                  resolvePsfCreatedInformationSchema(
+                    request.psf_created_schema_snapshot_json,
+                  ),
+                  request.psf_created_data_json ?? {},
+                  'PSF Created Information',
+                ),
+              );
+            }
+            const previous = target.name;
+            const result = await client.query<ReplacementRequestRow>(
+              `
+                UPDATE psf_requests
+                SET status = $2,
+                    completed_at = CASE WHEN $3::boolean AND status <> $2 THEN NOW() ELSE completed_at END,
+                    psf_released_at = CASE WHEN $4::boolean THEN COALESCE(psf_released_at, NOW()) ELSE psf_released_at END,
+                    updated_at = NOW()
+                WHERE status = $1
+                RETURNING id, request_no, status, psf_created_data_json,
+                          psf_created_schema_snapshot_json
+              `,
+              [
+                previous,
+                replacement.name,
+                replacement.kind === 'completed',
+                entersTrigger,
+              ],
+            );
+            requestChanges = result.rows.map((request) => ({
+              id: request.id,
+              fromStatus: previous,
+              toStatus: replacement.name,
+            }));
+            const requestIds = requestChanges.map((change) => change.id);
+            if (requestIds.length > 0) {
+              await client.query(
+                `
+                  UPDATE psf_request_search_index AS search_entry
+                  SET status = request.status, updated_at = request.updated_at
+                  FROM psf_requests AS request
+                  WHERE search_entry.request_id = request.id
+                    AND request.id = ANY($1::uuid[])
+                `,
+                [requestIds],
+              );
+            }
+            for (const change of requestChanges) {
+              await this.auditLogService.record(
+                {
+                  requestId: change.id,
+                  actionType: REQUEST_AUDIT_ACTION.REQUEST_STATUS_CHANGED,
+                  actor,
+                  metadata: {
+                    fromStatus: change.fromStatus,
+                    toStatus: change.toStatus,
+                    bulkReplacement: true,
+                  },
+                },
+                client,
+              );
+            }
+          }
+          entries.splice(
+            entries.findIndex((entry) => entry.id === target.id),
+            1,
+          );
+          break;
+        }
       }
 
-      transitionsByKey.set(key, transition);
-    }
+      const after: StoredWorkflowConfiguration = {
+        entries,
+        psfVisibilityTriggerId: triggerId,
+      };
+      await this.persistConfiguration(
+        client,
+        operation.expectedUpdatedAt,
+        after,
+      );
+      await this.auditLogService.record(
+        {
+          requestId: null,
+          actionType: REQUEST_AUDIT_ACTION.WORKFLOW_CATALOG_UPDATED,
+          actor,
+          metadata: {
+            operation: this.auditOperation(operation),
+            before: this.toAuditConfiguration(before),
+            after: this.toAuditConfiguration(after),
+            affectedRequestCount: requestChanges.length,
+          },
+        },
+        client,
+      );
+      return this.readConfiguration(client, true);
+    });
+  }
 
-    const missingPair = expectedPairs.find(
-      ({ fromStatus, toStatus }) =>
-        !transitionsByKey.has(this.transitionKey(fromStatus, toStatus)),
+  private async readConfiguration(
+    queryRunner: QueryRunner,
+    includeCounts: boolean,
+    lock?: 'FOR SHARE' | 'FOR UPDATE',
+  ): Promise<WorkflowConfiguration> {
+    const result = await queryRunner.query<WorkflowConfigurationRow>(
+      `
+        SELECT config_json, ${UPDATED_AT_SQL} AS updated_at_version
+        FROM workflow_transition_config
+        WHERE config_key = $1
+        ${lock ?? ''}
+      `,
+      [CONFIGURATION_KEY],
     );
-    if (missingPair) {
-      throw new BadRequestException(
-        'Every directed transition between manual statuses must be provided exactly once.',
+    const row = result.rows[0];
+    if (!row) {
+      throw new ConflictException(
+        'The workflow status catalog has not been initialized.',
       );
     }
-
+    const stored = this.normalizeStoredConfiguration(row.config_json);
+    const counts = new Map<string, number>();
+    if (includeCounts) {
+      const countResult = await queryRunner.query<StatusCountRow>(
+        `SELECT status, COUNT(*)::int AS request_count FROM psf_requests GROUP BY status`,
+      );
+      countResult.rows.forEach((count) =>
+        counts.set(count.status, Number(count.request_count)),
+      );
+    }
     return {
-      statuses: [...MANUAL_WORKFLOW_STATUSES],
-      transitions: expectedPairs.map(({ fromStatus, toStatus }) => {
-        const transition = transitionsByKey.get(
-          this.transitionKey(fromStatus, toStatus),
-        );
+      statuses: stored.entries
+        .filter((entry) => entry.kind !== 'draft')
+        .map((entry) => entry.name),
+      entries: stored.entries.map((entry) => ({
+        ...entry,
+        requestCount:
+          entry.kind === 'draft' || !includeCounts
+            ? null
+            : (counts.get(entry.name) ?? 0),
+      })),
+      psfVisibilityTriggerId: stored.psfVisibilityTriggerId,
+      updatedAt: row.updated_at_version,
+    };
+  }
 
-        if (!transition) {
-          throw new ConflictException(
-            'The workflow transition configuration is incomplete.',
+  private normalizeStoredConfiguration(
+    input: unknown,
+  ): StoredWorkflowConfiguration {
+    if (!isRecord(input) || !Array.isArray(input.entries)) {
+      throw new ConflictException(
+        'The stored workflow status catalog is invalid.',
+      );
+    }
+    const entries = input.entries.map((entry) => {
+      if (
+        !isRecord(entry) ||
+        typeof entry.id !== 'string' ||
+        !this.isUuid(entry.id) ||
+        typeof entry.name !== 'string' ||
+        !this.isStatusKind(entry.kind)
+      ) {
+        throw new ConflictException(
+          'The stored workflow status catalog is invalid.',
+        );
+      }
+      return { id: entry.id, name: entry.name, kind: entry.kind };
+    });
+    this.assertCatalogInvariants(entries);
+    const triggerId = input.psfVisibilityTriggerId;
+    if (
+      triggerId !== null &&
+      (typeof triggerId !== 'string' ||
+        !entries.some(
+          (entry) => entry.id === triggerId && entry.kind !== 'draft',
+        ))
+    ) {
+      throw new ConflictException(
+        'The stored PSF visibility trigger is invalid.',
+      );
+    }
+    return { entries, psfVisibilityTriggerId: triggerId };
+  }
+
+  private parseOperation(input: unknown): WorkflowConfigurationOperation {
+    if (!isRecord(input) || typeof input.action !== 'string') {
+      throw new BadRequestException(
+        'A supported workflow operation is required.',
+      );
+    }
+    const action = input.action;
+    const expectedUpdatedAt = input.expectedUpdatedAt;
+    if (
+      typeof expectedUpdatedAt !== 'string' ||
+      expectedUpdatedAt.length === 0
+    ) {
+      throw new BadRequestException(
+        'A valid expectedUpdatedAt value is required.',
+      );
+    }
+    switch (action) {
+      case 'create':
+        this.assertOnlyKeys(input, [
+          'action',
+          'name',
+          'kind',
+          'expectedUpdatedAt',
+        ]);
+        if (
+          typeof input.name !== 'string' ||
+          !this.isBusinessKind(input.kind)
+        ) {
+          throw new BadRequestException(
+            'create requires a name and an open, completed, or cancelled kind.',
           );
         }
-
-        return transition;
-      }),
-    };
+        this.assertValidName(input.name);
+        return {
+          action,
+          name: input.name,
+          kind: input.kind,
+          expectedUpdatedAt,
+        };
+      case 'rename':
+        this.assertOnlyKeys(input, [
+          'action',
+          'id',
+          'name',
+          'expectedUpdatedAt',
+        ]);
+        if (
+          typeof input.id !== 'string' ||
+          !this.isUuid(input.id) ||
+          typeof input.name !== 'string'
+        ) {
+          throw new BadRequestException(
+            'rename requires a status id and name.',
+          );
+        }
+        this.assertValidName(input.name);
+        return { action, id: input.id, name: input.name, expectedUpdatedAt };
+      case 'delete':
+        this.assertOnlyKeys(input, [
+          'action',
+          'id',
+          'replacementId',
+          'replacementTriggerId',
+          'expectedUpdatedAt',
+        ]);
+        if (typeof input.id !== 'string' || !this.isUuid(input.id)) {
+          throw new BadRequestException('delete requires a status id.');
+        }
+        if (
+          input.replacementId !== undefined &&
+          (typeof input.replacementId !== 'string' ||
+            !this.isUuid(input.replacementId))
+        ) {
+          throw new BadRequestException('replacementId must be a status id.');
+        }
+        if (
+          Object.hasOwn(input, 'replacementTriggerId') &&
+          input.replacementTriggerId !== null &&
+          (typeof input.replacementTriggerId !== 'string' ||
+            !this.isUuid(input.replacementTriggerId))
+        ) {
+          throw new BadRequestException(
+            'replacementTriggerId must be a status id or null.',
+          );
+        }
+        return {
+          action,
+          id: input.id,
+          ...(input.replacementId === undefined
+            ? {}
+            : { replacementId: input.replacementId }),
+          ...(Object.hasOwn(input, 'replacementTriggerId')
+            ? {
+                replacementTriggerId: input.replacementTriggerId as
+                  | string
+                  | null,
+              }
+            : {}),
+          expectedUpdatedAt,
+        };
+      case 'settings':
+        this.assertOnlyKeys(input, [
+          'action',
+          'psfVisibilityTriggerId',
+          'expectedUpdatedAt',
+        ]);
+        if (
+          input.psfVisibilityTriggerId !== null &&
+          (typeof input.psfVisibilityTriggerId !== 'string' ||
+            !this.isUuid(input.psfVisibilityTriggerId))
+        ) {
+          throw new BadRequestException(
+            'psfVisibilityTriggerId must be a status id or null.',
+          );
+        }
+        return {
+          action,
+          psfVisibilityTriggerId: input.psfVisibilityTriggerId,
+          expectedUpdatedAt,
+        };
+      default:
+        throw new BadRequestException('Unsupported workflow operation.');
+    }
   }
 
-  private normalizeTransition(input: unknown): WorkflowTransitionRule {
-    if (!isRecord(input)) {
-      throw new BadRequestException(
-        'Every workflow transition must be an object.',
-      );
-    }
-
-    this.assertOnlyKeys(
-      input,
-      [
-        'fromStatus',
-        'toStatus',
-        'enabled',
-        'allowedRoles',
-        'allowedSetupOwnerDepartments',
-      ],
-      'workflow transition',
+  private async persistConfiguration(
+    client: PoolClient,
+    expectedUpdatedAt: string,
+    configuration: StoredWorkflowConfiguration,
+  ): Promise<void> {
+    const result = await client.query(
+      `
+        UPDATE workflow_transition_config
+        SET config_json = $2::jsonb, updated_at = clock_timestamp()
+        WHERE config_key = $1
+          AND updated_at = ($3::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+      `,
+      [CONFIGURATION_KEY, configuration, expectedUpdatedAt],
     );
-
-    const fromStatus = this.parseManualStatus(input.fromStatus, 'fromStatus');
-    const toStatus = this.parseManualStatus(input.toStatus, 'toStatus');
-    if (fromStatus === toStatus) {
-      throw new BadRequestException(
-        'Workflow transitions cannot have the same source and target status.',
+    if (result.rowCount !== 1) {
+      throw new ConflictException(
+        'The workflow status catalog changed. Reload and try again.',
       );
     }
-
-    if (typeof input.enabled !== 'boolean') {
-      throw new BadRequestException(
-        'workflow transition enabled must be boolean.',
-      );
-    }
-
-    const allowedRoles = this.parseEnumArray(
-      input.allowedRoles,
-      USER_ROLES,
-      USER_ROLE_SET,
-      'allowedRoles',
-    );
-    const allowedSetupOwnerDepartments = this.parseEnumArray(
-      input.allowedSetupOwnerDepartments,
-      SETUP_OWNER_DEPARTMENTS,
-      SETUP_OWNER_DEPARTMENT_SET,
-      'allowedSetupOwnerDepartments',
-    );
-
-    if (
-      input.enabled &&
-      allowedRoles.length === 0 &&
-      allowedSetupOwnerDepartments.length === 0
-    ) {
-      throw new BadRequestException(
-        'Enabled workflow transitions must allow at least one role or Setup File Owner department.',
-      );
-    }
-
-    return {
-      fromStatus,
-      toStatus,
-      enabled: input.enabled,
-      allowedRoles,
-      allowedSetupOwnerDepartments,
-    };
-  }
-
-  private parseManualStatus(
-    value: unknown,
-    fieldName: string,
-  ): ManualWorkflowStatus {
-    if (typeof value !== 'string' || !MANUAL_STATUS_SET.has(value)) {
-      throw new BadRequestException(
-        `${fieldName} must be a supported manual workflow status; Draft is submitted through the submit action.`,
-      );
-    }
-
-    return value as ManualWorkflowStatus;
-  }
-
-  private parseEnumArray<T extends string>(
-    value: unknown,
-    orderedValues: readonly T[],
-    supportedValues: Set<string>,
-    fieldName: string,
-  ): T[] {
-    if (
-      !Array.isArray(value) ||
-      !value.every(
-        (entry) => typeof entry === 'string' && supportedValues.has(entry),
-      )
-    ) {
-      throw new BadRequestException(
-        `${fieldName} must contain only supported values.`,
-      );
-    }
-
-    const values = value as T[];
-    if (new Set(values).size !== values.length) {
-      throw new BadRequestException(
-        `${fieldName} must not contain duplicates.`,
-      );
-    }
-
-    const selectedValues = new Set(values);
-    return orderedValues.filter((entry) => selectedValues.has(entry));
-  }
-
-  private assertOnlyKeys(
-    value: Record<string, unknown>,
-    supportedKeys: string[],
-    label: string,
-  ): void {
-    const unsupportedKey = Object.keys(value).find(
-      (key) => !supportedKeys.includes(key),
-    );
-
-    if (unsupportedKey) {
-      throw new BadRequestException(
-        `${label} contains an unsupported field: ${unsupportedKey}.`,
-      );
-    }
-  }
-
-  private expectedTransitionPairs(): Array<{
-    fromStatus: ManualWorkflowStatus;
-    toStatus: ManualWorkflowStatus;
-  }> {
-    return MANUAL_WORKFLOW_STATUSES.flatMap((fromStatus) =>
-      MANUAL_WORKFLOW_STATUSES.filter(
-        (toStatus) => toStatus !== fromStatus,
-      ).map((toStatus) => ({ fromStatus, toStatus })),
-    );
-  }
-
-  private actorMatchesTransition(
-    actor: AuthenticatedUserProfile,
-    transition: WorkflowTransitionRule,
-  ): boolean {
-    if (transition.allowedRoles.includes(actor.role)) {
-      return true;
-    }
-
-    return (
-      actor.role === 'setup_owner' &&
-      actor.setupOwnerDepartment !== null &&
-      transition.allowedSetupOwnerDepartments.includes(
-        actor.setupOwnerDepartment,
-      )
-    );
-  }
-
-  private transitionKey(
-    fromStatus: ManualWorkflowStatus,
-    toStatus: ManualWorkflowStatus,
-  ): string {
-    return `${fromStatus}\u0000${toStatus}`;
   }
 
   private async withTransaction<T>(
     operation: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
     const client = await this.pool.connect();
-
     try {
       await client.query('BEGIN');
-      const result = await operation(client);
+      const value = await operation(client);
       await client.query('COMMIT');
-      return result;
+      return value;
     } catch (error) {
-      await this.rollbackTransaction(client);
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the original catalog failure.
+      }
       throw error;
     } finally {
       client.release();
     }
   }
 
-  private async rollbackTransaction(client: PoolClient): Promise<void> {
-    try {
-      await client.query('ROLLBACK');
-    } catch {
-      // Preserve the original configuration error if rollback also fails.
+  private assertExpectedUpdatedAt(expected: string, actual: string): void {
+    if (expected !== actual) {
+      throw new ConflictException(
+        'The workflow status catalog changed. Reload and try again.',
+      );
     }
   }
+
+  private assertValidName(name: string): void {
+    if (
+      !name.trim() ||
+      name.trim().toLowerCase() === DRAFT_NAME.toLowerCase()
+    ) {
+      throw new BadRequestException(
+        'Status names must be nonblank and Draft is reserved.',
+      );
+    }
+  }
+
+  private assertAvailableName(
+    name: string,
+    entries: StoredStatus[],
+    exceptId?: string,
+  ): void {
+    this.assertValidName(name);
+    if (
+      entries.some(
+        (entry) =>
+          entry.id !== exceptId &&
+          entry.name.trim().toLocaleLowerCase() ===
+            name.trim().toLocaleLowerCase(),
+      )
+    ) {
+      throw new BadRequestException(
+        'A status with an ambiguous duplicate name already exists.',
+      );
+    }
+  }
+
+  private assertCatalogInvariants(entries: StoredStatus[]): void {
+    if (
+      entries.length < 1 ||
+      entries[0]?.kind !== 'draft' ||
+      entries[0]?.name !== DRAFT_NAME
+    ) {
+      throw new ConflictException(
+        'Draft must remain the first protected status.',
+      );
+    }
+    if (entries.filter((entry) => entry.kind === 'draft').length !== 1) {
+      throw new ConflictException(
+        'The workflow catalog must contain exactly one Draft status.',
+      );
+    }
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    for (const entry of entries) {
+      if (
+        ids.has(entry.id) ||
+        names.has(entry.name.trim().toLocaleLowerCase()) ||
+        !entry.name.trim()
+      ) {
+        throw new ConflictException(
+          'The stored workflow status catalog contains duplicate identities or names.',
+        );
+      }
+      ids.add(entry.id);
+      names.add(entry.name.trim().toLocaleLowerCase());
+    }
+  }
+
+  private requireEntry(entries: StoredStatus[], id: string): StoredStatus {
+    if (!this.isUuid(id)) {
+      throw new BadRequestException('Status id must be a UUID.');
+    }
+    const entry = entries.find((candidate) => candidate.id === id);
+    if (!entry) {
+      throw new BadRequestException('The selected status does not exist.');
+    }
+    return entry;
+  }
+
+  private newStatusId(entries: StoredStatus[]): string {
+    const existing = new Set(entries.map((entry) => entry.id));
+    let id: string;
+    do {
+      id = randomUUID();
+    } while (existing.has(id));
+    return id;
+  }
+
+  private isUuid(value: string): boolean {
+    return UUID_PATTERN.test(value);
+  }
+
+  private isStatusKind(value: unknown): value is StatusKind {
+    return (
+      value === 'draft' ||
+      value === 'open' ||
+      value === 'completed' ||
+      value === 'cancelled'
+    );
+  }
+
+  private isBusinessKind(
+    value: unknown,
+  ): value is Exclude<StatusKind, 'draft'> {
+    return value === 'open' || value === 'completed' || value === 'cancelled';
+  }
+
+  private assertOnlyKeys(
+    value: Record<string, unknown>,
+    supported: string[],
+  ): void {
+    const unexpected = Object.keys(value).find(
+      (key) => !supported.includes(key),
+    );
+    if (unexpected) {
+      throw new BadRequestException(
+        `Workflow operation contains an unsupported field: ${unexpected}.`,
+      );
+    }
+  }
+
+  private auditOperation(
+    operation: WorkflowConfigurationOperation,
+  ): Record<string, unknown> {
+    switch (operation.action) {
+      case 'create':
+        return {
+          action: operation.action,
+          name: operation.name,
+          kind: operation.kind,
+        };
+      case 'rename':
+        return {
+          action: operation.action,
+          id: operation.id,
+          name: operation.name,
+        };
+      case 'delete':
+        return {
+          action: operation.action,
+          id: operation.id,
+          ...(operation.replacementId
+            ? { replacementId: operation.replacementId }
+            : {}),
+          ...(Object.hasOwn(operation, 'replacementTriggerId')
+            ? { replacementTriggerId: operation.replacementTriggerId }
+            : {}),
+        };
+      case 'settings':
+        return {
+          action: operation.action,
+          psfVisibilityTriggerId: operation.psfVisibilityTriggerId,
+        };
+    }
+  }
+
+  private toAuditConfiguration(
+    value: WorkflowConfiguration | StoredWorkflowConfiguration,
+  ): StoredWorkflowConfiguration {
+    return {
+      entries: value.entries.map(({ id, name, kind }) => ({ id, name, kind })),
+      psfVisibilityTriggerId: value.psfVisibilityTriggerId,
+    };
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

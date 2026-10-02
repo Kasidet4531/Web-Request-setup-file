@@ -8,6 +8,7 @@ import {
   Sliders,
   Users,
   Wand2,
+  FileText as DraftFileText,
 } from 'lucide-react'
 
 export type UserRole = 'requester' | 'setup_owner' | 'admin'
@@ -28,7 +29,7 @@ export type NavSection = {
  * Hiding a link is presentation only; the backend remains the enforcement point.
  */
 export function navSectionsForRole(role: UserRole | null): NavSection[] {
-  const canCreateRequest = role === 'requester' || role === 'admin'
+  const canCreateRequest = role !== null
   const canExport = role === 'requester' || role === 'admin'
   const isAdmin = role === 'admin'
 
@@ -41,6 +42,7 @@ export function navSectionsForRole(role: UserRole | null): NavSection[] {
       label: 'Requests & Workflow',
       items: [
         { to: '/requests', label: 'All PSF Requests', icon: FileText },
+        ...(role ? [{ to: '/my-drafts', label: 'My draft', icon: DraftFileText }] : []),
         ...(canCreateRequest
           ? [{ to: '/requests/new', label: 'Create Request', icon: PlusCircle }]
           : []),

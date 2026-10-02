@@ -92,9 +92,35 @@ export interface PsfRequestPayload {
 
 export interface UpdateDraftRequesterDataPayload extends PsfRequestPayload {
   formVersion: number
+  expectedUpdatedAt: string
 }
 
+export type WorkflowStatusKind = 'draft' | 'open' | 'completed' | 'cancelled'
+
+export interface StatusCatalogEntry {
+  id: string
+  name: string
+  kind: WorkflowStatusKind
+  requestCount: number | null
+}
+
+export interface WorkflowConfiguration {
+  statuses: string[]
+  entries: StatusCatalogEntry[]
+  psfVisibilityTriggerId: string | null
+  updatedAt: string
+}
+
+export type WorkflowConfigurationOperation =
+  | { action: 'create'; name: string; kind: Exclude<WorkflowStatusKind, 'draft'>; expectedUpdatedAt: string }
+  | { action: 'rename'; id: string; name: string; expectedUpdatedAt: string }
+  | { action: 'delete'; id: string; replacementId?: string; replacementTriggerId?: string | null; expectedUpdatedAt: string }
+  | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
+
 export interface PsfRequestQuery {
+  scope?: 'all' | 'related' | 'my-drafts'
+  relation?: 'all' | 'created' | 'department'
+  workState?: 'all' | 'open' | 'overdue' | 'completed'
   keyword?: string
   status?: string
   priority?: string
@@ -126,6 +152,13 @@ export interface PsfRequestListItem {
   requestDate: string | null
   dueDate: string | null
   updatedAt: string
+  requesterUserId?: string | null
+}
+
+export interface PsfRequestListSummary {
+  open: number
+  overdue: number
+  completed: number
 }
 
 export interface PsfRequestListResponse {
@@ -133,10 +166,12 @@ export interface PsfRequestListResponse {
   total: number
   limit: number
   offset: number
+  summary: PsfRequestListSummary
 }
 
 export interface UpdatePsfRequestStatusPayload {
   status: string
+  expectedUpdatedAt: string
 }
 
 export interface UpdatePsfCreatedDataPayload {
@@ -158,18 +193,16 @@ export interface WorkflowTransitionRule {
   allowedSetupOwnerDepartments: SetupOwnerDepartment[]
 }
 
-export interface AdminWorkflowTransitionConfiguration {
-  statuses: string[]
-  transitions: WorkflowTransitionRule[]
-}
+export type AdminWorkflowTransitionConfiguration = WorkflowConfiguration
 
 export interface WorkflowStatusesResponse {
   statuses: string[]
+  entries: Array<Omit<StatusCatalogEntry, 'requestCount'>>
+  psfVisibilityTriggerId: string | null
+  updatedAt: string
 }
 
-export interface ReplaceAdminWorkflowTransitionConfigurationPayload {
-  transitions: WorkflowTransitionRule[]
-}
+export type ReplaceAdminWorkflowTransitionConfigurationPayload = WorkflowConfigurationOperation
 
 export interface AdminAutofillRule {
   id: string
@@ -203,6 +236,8 @@ export interface RuntimeAutofillSuggestionsResponse {
 
 export interface SubmitPsfRequestPayload {
   formVersion: number
+  status: string
+  expectedUpdatedAt: string
 }
 
 export interface UpgradeDraftSchemaPayload {
@@ -223,6 +258,10 @@ export interface PsfRequestResponse {
   psfCreatedData: Record<string, unknown>
   psfCreatedDataVisible: boolean
   canEditPsfCreatedData: boolean
+  canEditRequesterData: boolean
+  canSubmitDraft: boolean
+  requesterUserId: string | null
+  psfReleasedAt: string | null
   psfCreatedInformationSchema: FormSchema
   schemaSnapshot: FormSchema
   createdAt: string
@@ -237,6 +276,9 @@ export type PsfRequestHistoryAction =
   | 'DRAFT_REQUESTER_DATA_UPDATED'
   | 'REQUEST_SUBMITTED'
   | 'REQUEST_STATUS_CHANGED'
+  | 'REQUESTER_INFORMATION_UPDATED'
+  | 'PSF_CREATED_INFORMATION_UPDATED'
+  | 'WORKFLOW_CATALOG_UPDATED'
 
 export interface PsfRequestHistoryEntry {
   actionType: PsfRequestHistoryAction
@@ -255,8 +297,8 @@ export interface GlobalAuditLogQuery {
 }
 
 export interface GlobalAuditLogEntry {
-  requestId: string
-  requestNo: string
+  requestId: string | null
+  requestNo: string | null
   actionType: PsfRequestHistoryAction
   actorDisplayName: string
   actorRole: UserRole
@@ -369,16 +411,9 @@ export function createApiClient(config: ApiClientConfig = {}) {
     fetchWorkflowStatuses: () =>
       request<WorkflowStatusesResponse>('/workflow/statuses', { method: 'GET' }),
     fetchAdminWorkflowTransitionConfiguration: () =>
-      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
-        method: 'GET',
-      }),
-    replaceAdminWorkflowTransitionConfiguration: (
-      payload: ReplaceAdminWorkflowTransitionConfigurationPayload,
-    ) =>
-      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
-        body: payload,
-        method: 'PUT',
-      }),
+      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', { method: 'GET' }),
+    replaceAdminWorkflowTransitionConfiguration: (payload: WorkflowConfigurationOperation) =>
+      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', { body: payload, method: 'PUT' }),
     fetchAdminAutofillRules: () =>
       request<AdminAutofillRule[]>('/admin/autofill', {
         method: 'GET',

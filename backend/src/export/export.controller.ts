@@ -108,9 +108,7 @@ export class ExportController {
       actor.id,
     );
 
-    if (!job) {
-      throw new NotFoundException(EXPORT_JOB_NOT_FOUND_MESSAGE);
-    }
+    this.assertCanAccessExportJob(job, actor);
 
     if (job.status !== 'completed' || !job.content || !job.filename) {
       throw new ConflictException(EXPORT_JOB_NOT_READY_MESSAGE);
@@ -135,17 +133,28 @@ export class ExportController {
       actor.id,
     );
 
-    if (!job) {
-      throw new NotFoundException(EXPORT_JOB_NOT_FOUND_MESSAGE);
-    }
+    this.assertCanAccessExportJob(job, actor);
 
     return this.toStatusResponse(job);
+  }
+
+  private assertCanAccessExportJob(
+    job: ExportJob | null,
+    actor: ExportActor,
+  ): asserts job is ExportJob {
+    if (
+      !job ||
+      job.ownerUserId !== actor.id ||
+      (job.ownerRole === 'admin' && actor.role !== 'admin')
+    ) {
+      throw new NotFoundException(EXPORT_JOB_NOT_FOUND_MESSAGE);
+    }
   }
 
   private parseExportFilters(
     query: Record<string, unknown>,
   ): RequestExportFilters {
-    const status = this.readOptionalScalar(query.status, 'status')?.trim();
+    const status = this.readOptionalScalar(query.status, 'status');
     const requestDateFrom = this.readOptionalScalar(query.from, 'from')?.trim();
     const requestDateTo = this.readOptionalScalar(query.to, 'to')?.trim();
 
@@ -153,7 +162,7 @@ export class ExportController {
     this.validateOptionalCalendarDate(requestDateTo, 'to');
 
     return {
-      ...(status ? { status } : {}),
+      ...(status?.trim() ? { status } : {}),
       ...(requestDateFrom ? { requestDateFrom } : {}),
       ...(requestDateTo ? { requestDateTo } : {}),
     };

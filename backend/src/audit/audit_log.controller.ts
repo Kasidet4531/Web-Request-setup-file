@@ -35,7 +35,7 @@ export class AuditLogController {
       throw new ForbiddenException('Only admins can view global audit logs.');
     }
 
-    return this.auditLogService.findGlobalAuditLogs(filters);
+    return this.auditLogService.findGlobalAuditLogs(filters, actor);
   }
 
   private async getAuthenticatedActor(

@@ -16,39 +16,33 @@ type PendingRequestExportJob = {
   statusUrl: string;
 };
 
-const WORKFLOW_STATUSES = [
-  "Submitted",
-  "Setup In Progress",
-  "Need More Information",
-  "PSF Created",
-  "Completed",
-  "Rejected",
-  "Cancelled",
-];
-
 export interface RequestExportFiltersFormProps {
   downloading: boolean;
   filters: RequestExportFilterValues;
   onChange: (field: keyof RequestExportFilterValues, value: string) => void;
+  statuses: string[];
+  statusDisabled?: boolean;
 }
 
 export function RequestExportFiltersForm({
   downloading,
   filters,
   onChange,
+  statuses,
+  statusDisabled = false,
 }: RequestExportFiltersFormProps) {
   return (
     <div className="filter-bar">
       <label>
         Status
         <select
-          disabled={downloading}
+          disabled={downloading || statusDisabled}
           name="status"
           onChange={(event) => onChange("status", event.target.value)}
           value={filters.status}
         >
           <option value="">All statuses</option>
-          {WORKFLOW_STATUSES.map((status) => (
+          {statuses.map((status) => (
             <option key={status} value={status}>
               {status}
             </option>
@@ -185,6 +179,9 @@ export function RequestExportPreview({
 }
 
 export function RequestExportPage() {
+  const [catalog, setCatalog] = useState<{ statuses: string[]; loading: boolean; error: string | null }>({
+    statuses: [], loading: true, error: null,
+  });
   const [filters, setFilters] = useState<RequestExportFilterValues>({
     status: "",
     from: "",
@@ -211,6 +208,19 @@ export function RequestExportPage() {
   ) => {
     setFilters((current) => ({ ...current, [field]: value }));
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.fetchWorkflowStatuses().then(
+      (response) => {
+        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), loading: false, error: null });
+      },
+      (error: unknown) => {
+        if (!cancelled) setCatalog({ statuses: [], loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
+      },
+    );
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,10 +366,14 @@ export function RequestExportPage() {
       <div className="page-card__body request-export">
         <section className="page-card__section">
           <h2>Export filters</h2>
+          {catalog.loading ? <p className="page-card__description" role="status">Loading workflow statuses…</p> : null}
+          {catalog.error ? <p className="status-pill status-pill--error" role="alert">Unable to load workflow statuses: {catalog.error}</p> : null}
           <RequestExportFiltersForm
             downloading={downloading}
             filters={filters}
             onChange={updateFilters}
+            statuses={catalog.statuses}
+            statusDisabled={catalog.loading || Boolean(catalog.error)}
           />
         </section>
         <RequestExportPreview {...preview} />

@@ -200,7 +200,7 @@ describe('ExportController', () => {
 
     expect(excelExportService.exportRequests).toHaveBeenCalledWith(
       {
-        status: 'Submitted',
+        status: ' Submitted ',
         requestDateFrom: '2026-06-01',
         requestDateTo: '2026-06-30',
       },

@@ -59,7 +59,10 @@ describe('AuditLogController', () => {
     ).resolves.toEqual(entries);
 
     expect(authService.getProfile).toHaveBeenCalledWith('admin-1');
-    expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(filters);
+    expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(
+      filters,
+      admin,
+    );
   });
 
   it.each([

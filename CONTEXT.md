@@ -13,11 +13,11 @@ A request to create or update a PSF Setup File.
 _Avoid_: File Request, Setup Request
 
 **Requester**:
-A user role that creates a PSF Request and provides the initial request information.
+A user role providing request information. Every authenticated role may create a PSF Request; the stored requester is its creator, not a later editor. All authenticated actors may edit shared requester information, while Draft editing remains creator-only.
 _Avoid_: Requester Role, Applicant
 
 **Setup File Owner**:
-An engineer or user role responsible for reviewing any PSF Request, creating or updating the actual setup file, and entering the setup details. Each Setup File Owner is classified into one of two sub-roles/departments: **GNTC** or **MFG** (where a user can belong to only one department). Any user with this role can process any request (there is no exclusive individual assignment at submission). When a Setup File Owner takes action on a request (e.g. starts setup or updates status), they are automatically associated with the request. The Setup File Owner and their department (GNTC or MFG) are stored with the request, and displayed on the dashboard and export Excel reports.
+An engineer or user role responsible for shared PSF work and setup details, belonging to **GNTC** or **MFG**. This role and Admin may edit PSF information in every work status, including Completed, and their own Drafts; foreign Drafts remain inaccessible. An initial PSF save may associate unassigned work, but ordinary status changes and later editors do not replace an existing association. Related work is actor-created work OR department-associated work, deduplicated by request ID. Stored associations appear on the dashboard and Excel reports.
 _Avoid_: Engineer, Owner, Setup Owner
 
 **Product Type**:
@@ -27,12 +27,18 @@ _Avoid_: Type of product, product category
 
 
 **PSF Created Information**:
-The section of the PSF Request filled in by the Setup File Owner containing the final setup details. Administrators configure its structure through Form Management using the independent `psf-created-information` form family and the existing draft/publish lifecycle. New requests capture its active schema when created; published changes do not alter existing requests. Legacy requests without a PSF snapshot use the immutable original descriptor without rewriting their values. Saving incomplete work is allowed; required PSF fields must be completed before the `PSF Created` transition.
+The section containing setup details, editable by backend-authorized Setup File Owners and Administrators. Form Management configures the independent `psf-created-information` family through the existing draft/publish lifecycle. New requests capture its active schema; publishing does not alter existing captures. Legacy requests without a PSF snapshot use the immutable original descriptor without rewriting values. Missing required fields may be saved only in Draft; non-Draft PSF saves validate captured requirements. Entry into the configured visibility trigger checks PSF requirements before submission, status updates or bulk replacement, including repeated entry after release.
 _Avoid_: Setup Information, Completed Info
 
 **Draft**:
-A PSF Request that has been created but not yet submitted.
+A saved, creator-private PSF Request not yet explicitly submitted. Every authenticated role has `My draft`; even Admin/PSF actors cannot access a foreign Draft. Drafts are excluded from shared lists and operational totals. The detail Action center submits the same record to an explicitly selected work status; ordinary status updates cannot submit a Draft or return shared work to Draft.
 _Avoid_: In-progress request, unsaved request
+
+**Work Status**:
+An Admin-configured catalog entry with immutable identity, verbatim name and explicit open/completed/cancelled classification. The initial catalog contains all 17 approved labels; percentages are display text, not progression. All authenticated actors may change shared work status through the single Action center. Catalog/request writes preserve opaque microsecond revisions, transactional projections and audit.
+
+**PSF Visibility Release**:
+A one-time stored release set on successful entry into the explicitly configured trigger, initially unconfigured. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.
 
 **Auto-fill Rule**:
 A configuration defining a trigger field and its target fields to automatically populate data from historical records.
@@ -51,7 +57,7 @@ The application-local user record that stores role and setup-owner department af
 _Avoid_: Local Authentication, local password login
 
 **Form Schema**:
-The JSON-structured definition of a PSF Request form, specifying fields, input types, sections, and layout configurations. Section access is not configured in this schema; PSF Created Information visibility follows actor and request status.
+The JSON-structured definition of a PSF Request form, specifying fields, input types, sections, and layout configurations. Required validation uses each captured requester/PSF form separately. Section access is not configured in the schema; PSF visibility follows backend actor policy and persistent release, not a percentage or hardcoded status label.
 _Avoid_: Form layout, form template
 
 **Form Version**:

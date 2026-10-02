@@ -4,7 +4,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { AppShell } from './AppShell'
 import { isStandaloneAuthenticationPath } from './navigationState'
 
-const routerStateHarness = vi.hoisted(() => ({ pathname: '/admin/form-config/2' }))
+const routerStateHarness = vi.hoisted(() => ({ pathname: '/admin/form-config/2', role: null as 'requester' | 'setup_owner' | 'admin' | null }))
+
+vi.mock('react', async (load) => {
+  const actual = await load<typeof import('react')>()
+  return { ...actual, useState: (initial: unknown) => actual.useState(
+    routerStateHarness.role && initial && typeof initial === 'object' && 'status' in initial && initial.status === 'loading'
+      ? { status: 'authenticated', user: { role: routerStateHarness.role, displayName: 'Tester', username: 'tester' } }
+      : initial,
+  ) }
+})
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-router')>(),
@@ -25,6 +34,14 @@ describe('isStandaloneAuthenticationPath', () => {
 })
 
 describe('AppShell form version navigation', () => {
+  it.each(['requester', 'setup_owner', 'admin'] as const)('offers header New Request for authenticated %s like the sidebar', (role) => {
+    routerStateHarness.role = role
+    const markup = renderToStaticMarkup(<AppShell />)
+    const actions = markup.match(/<div class="header-actions">(.*?)<\/header>/s)?.[1]
+    expect(actions).toContain('href="/requests/new"')
+    expect(actions).toContain('New Request')
+    routerStateHarness.role = null
+  })
   it('places the version breadcrumb in the header', () => {
     routerStateHarness.pathname = '/admin/form-config/2'
     const markup = renderToStaticMarkup(<AppShell />)
