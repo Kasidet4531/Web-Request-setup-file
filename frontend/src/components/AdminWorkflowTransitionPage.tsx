@@ -72,7 +72,7 @@ export function AdminWorkflowTransitionPage() {
       <div className="page-card__header"><div>
         <p className="page-card__eyebrow">Admin tools</p>
         <h1>Status Management</h1>
-        <p className="page-card__description">Manage work-status names and meaning. Draft is protected; status names are displayed exactly as entered.</p>
+        <p className="page-card__description">Manage work-status names and types. Draft is protected; status names are displayed exactly as entered.</p>
       </div></div>
       <div className="page-card__body admin-workflow-transition__body">
         {loading ? <p role="status">Loading status catalog…</p> : null}
@@ -80,7 +80,7 @@ export function AdminWorkflowTransitionPage() {
         {configuration ? <>
           <form className="toolbar" onSubmit={(event) => { event.preventDefault(); if (newName.trim()) void mutate({ action: 'create', name: newName, kind: newKind }) }}>
             <label>New status name<input value={newName} onChange={(event) => setNewName(event.target.value)} /></label>
-            <label>Meaning<select value={newKind} onChange={(event) => setNewKind(event.target.value as Exclude<WorkflowStatusKind, 'draft'>)}><option value="open">Open work</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+            <label>Status type<select value={newKind} onChange={(event) => setNewKind(event.target.value as Exclude<WorkflowStatusKind, 'draft'>)}><option value="open">Open work</option><option value="completed">Completed</option><option value="cancelled">Cancel</option></select></label>
             <button className="primary-button" disabled={busy || !newName.trim()} type="submit">Add status</button>
           </form>
           <section aria-labelledby="visibility-trigger-heading">
@@ -91,10 +91,10 @@ export function AdminWorkflowTransitionPage() {
             </select></label>
           </section>
           <div className="data-table admin-workflow-transition__table" role="region" aria-label="Status catalog" tabIndex={0}><table>
-            <thead><tr><th>Status</th><th>Kind</th><th>Requests</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Status</th><th>Status type</th><th>Requests</th><th>Actions</th></tr></thead>
             <tbody>{configuration.entries.map((entry) => <tr key={entry.id}>
               <td>{editingId === entry.id ? <input aria-label={`Rename ${entry.name}`} value={editName} onChange={(event) => setEditName(event.target.value)} /> : <strong>{entry.name}</strong>}</td>
-              <td>{entry.kind}</td><td>{entry.requestCount ?? '—'}</td>
+              <td>{entry.kind === 'cancelled' ? 'Cancel' : entry.kind}</td><td>{entry.requestCount ?? '—'}</td>
               <td>{entry.kind === 'draft' ? <span>Protected</span> : editingId === entry.id ? <>
                 <button disabled={busy || !editName.trim()} onClick={() => void mutate({ action: 'rename', id: entry.id, name: editName })} type="button">Save name</button>
                 <button disabled={busy} onClick={() => setEditingId(null)} type="button">Cancel</button>
