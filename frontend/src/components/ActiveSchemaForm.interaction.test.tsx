@@ -351,6 +351,24 @@ function getFormRenderer(page: unknown): RenderedElement {
 }
 
 describe('ActiveSchemaForm draft schema upgrade interactions', () => {
+  it('retains a committed new draft and its runtime triggers without requiring another schema fetch', async () => {
+    const current = structuredClone(currentActiveRequestSchema)
+    current.schema.sections[0].fields[0].autofillTrigger = true
+    requestApi.fetchActiveFormSchema.mockResolvedValueOnce(current).mockRejectedValue(new Error('Schema unavailable'))
+    const saved = buildDraft({ requesterData: { product_type: '', legacy_note: '' } })
+    requestApi.createDraftRequest.mockResolvedValue(saved)
+    requestApi.updateDraftRequesterData.mockResolvedValue(saved)
+    let page = await loadNewDraftForm()
+    ;(getFormRenderer(page).props.onSubmit as (values: Record<string, string>) => void)({ product_type: '', legacy_note: '' })
+    await flushAsyncWork()
+    page = renderNewDraftForm()
+    expect((getFormRenderer(page).props.schema as ActiveFormSchemaResponse['schema']).sections[0].fields[0].autofillTrigger).toBe(true)
+    ;(getFormRenderer(page).props.onSubmit as (values: Record<string, string>) => void)({ product_type: '', legacy_note: '' })
+    await flushAsyncWork()
+    expect(requestApi.createDraftRequest).toHaveBeenCalledTimes(1)
+    expect(requestApi.updateDraftRequesterData).toHaveBeenCalledTimes(1)
+    expect(requestApi.fetchActiveFormSchema).toHaveBeenCalledTimes(1)
+  })
   it('persists an incomplete new draft without surfacing required-field validation', async () => {
     requestApi.fetchActiveFormSchema.mockResolvedValue(currentActiveRequestSchema)
     requestApi.createDraftRequest.mockResolvedValue(

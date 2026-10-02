@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
 import { DATABASE_POOL } from '../database/database.service';
+import { getAutofillRuleSchemaState } from './autofill-rule-schema';
 import {
   DEFAULT_PSF_REQUEST_SCHEMA,
   LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
@@ -117,6 +118,7 @@ export class FormSchemaService implements OnModuleInit {
 
   async getActiveSchema(
     formKey: string = PSF_REQUEST_FORM_KEY,
+    includeRuntimeAutofill = false,
   ): Promise<ActiveFormSchemaResponse> {
     this.assertSupportedFormKey(formKey);
     const result = await this.pool.query<FormDefinitionRow>(
@@ -137,13 +139,37 @@ export class FormSchemaService implements OnModuleInit {
     }
     this.assertNoRestrictedLegacySections(activeSchema.schema_json.sections);
 
+    const schema = this.normalizeSchemaForResponse(activeSchema);
+    if (includeRuntimeAutofill && formKey === PSF_REQUEST_FORM_KEY) {
+      const rules = await this.pool.query<{ trigger_canonical_key: string }>(
+        `
+        SELECT trigger_canonical_key FROM autofill_rules
+        WHERE form_key = $1 AND status = 'active'
+      `,
+        [formKey],
+      );
+      const triggerKeys = new Set(
+        rules.rows.map((rule) => rule.trigger_canonical_key),
+      );
+      schema.sections = schema.sections.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => ({
+          ...field,
+          ...(field.autofillTrigger !== undefined ||
+          triggerKeys.has(field.canonicalKey)
+            ? { autofillTrigger: triggerKeys.has(field.canonicalKey) }
+            : {}),
+        })),
+      }));
+    }
+
     return {
       formKey: activeSchema.form_key,
       version: activeSchema.version,
       title: activeSchema.title,
       description: activeSchema.description,
       status: activeSchema.status,
-      schema: this.normalizeSchemaForResponse(activeSchema),
+      schema,
       publishedAt: this.serializeTimestamp(activeSchema.published_at),
     };
   }
@@ -393,8 +419,50 @@ export class FormSchemaService implements OnModuleInit {
         );
       }
 
+      if (formKey === PSF_REQUEST_FORM_KEY) {
+        await this.reconcileAutofillRules(client, promoted.schema_json);
+      }
+
       return this.toVersionResponse(promoted);
     });
+  }
+
+  private async reconcileAutofillRules(
+    client: QueryRunner,
+    schema: FormSchemaJson,
+  ): Promise<void> {
+    const rules = await client.query<{
+      id: string;
+      trigger_canonical_key: string;
+      fill_targets_json: string[];
+    }>(
+      `
+      SELECT id, trigger_canonical_key, fill_targets_json
+      FROM autofill_rules
+      WHERE form_key = $1 AND status = 'active'
+      FOR UPDATE
+    `,
+      [PSF_REQUEST_FORM_KEY],
+    );
+    for (const rule of rules.rows) {
+      const state = getAutofillRuleSchemaState(
+        {
+          triggerCanonicalKey: rule.trigger_canonical_key,
+          targetCanonicalKeys: rule.fill_targets_json,
+        },
+        schema,
+      );
+      if (state.inactiveReason) {
+        await client.query(
+          `
+          UPDATE autofill_rules
+          SET status = 'inactive', inactive_reason = $2, updated_at = NOW()
+          WHERE id = $1::uuid AND status = 'active'
+        `,
+          [rule.id, state.inactiveReason],
+        );
+      }
+    }
   }
 
   private async ensureFormDefinitionsStorage(): Promise<void> {

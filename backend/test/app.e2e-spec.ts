@@ -373,6 +373,9 @@ describe('AppController (e2e)', () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
 
     pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('FROM autofill_rules'))
+        return Promise.resolve({ rows: [] });
+
       if (query.includes('FOR UPDATE')) {
         return Promise.resolve({ rows: formDefinitions });
       }
@@ -1169,7 +1172,7 @@ describe('AppController (e2e)', () => {
         return Promise.resolve({ rows: [activeDefinition] });
       }
 
-      if (query.includes('WITH matched_source')) {
+      if (query.includes('matched_source AS')) {
         expect(values).toEqual([
           'psf-request',
           'reference_psf_name',
@@ -1322,7 +1325,7 @@ describe('AppController (e2e)', () => {
         return Promise.resolve({ rows: [activeDefinition] });
       }
 
-      if (query.includes('WITH matched_source')) {
+      if (query.includes('matched_source AS')) {
         canonicalLookupCalls += 1;
         expect(values).toEqual([
           'psf-request',

@@ -88,6 +88,106 @@ describe('FormSchemaService', () => {
 
   let service: FormSchemaService;
 
+  it('marks only fields configured by active rules as runtime triggers without changing stored schema', async () => {
+    const row = makeRow(1, 'active');
+    row.schema_json.sections[0].fields[2].autofillTrigger = true;
+    pool.query.mockImplementation((query: string) =>
+      Promise.resolve({
+        rows: query.includes('FROM autofill_rules')
+          ? [{ trigger_canonical_key: 'requester' }]
+          : [row],
+      }),
+    );
+    const response = await service.getActiveSchema('psf-request', true);
+    expect(response.schema.sections[0].fields[1]).toMatchObject({
+      canonicalKey: 'requester',
+      autofillTrigger: true,
+    });
+    expect(response.schema.sections[0].fields[2]).toMatchObject({
+      canonicalKey: 'title',
+      autofillTrigger: false,
+    });
+    expect(
+      row.schema_json.sections[0].fields[1].autofillTrigger,
+    ).toBeUndefined();
+    expect(row.schema_json.sections[0].fields[2].autofillTrigger).toBe(true);
+  });
+
+  it.each([
+    {
+      trigger: 'removed_trigger',
+      targets: ['title'],
+      reason: 'Trigger field was removed from the published form.',
+    },
+    {
+      trigger: 'requester',
+      targets: ['removed_target'],
+      reason: 'All target fields were removed from the published form.',
+    },
+    {
+      trigger: 'requester',
+      targets: ['title', 'removed_target'],
+      reason: null,
+    },
+  ])(
+    'reconciles autofill on publication for $trigger and $targets',
+    async ({ trigger, targets, reason }) => {
+      const draft = makeRow(2, 'draft');
+      const storedRule = {
+        id: 'rule-1',
+        trigger_canonical_key: trigger,
+        fill_targets_json: targets,
+        status: 'active',
+        inactive_reason: null as string | null,
+      };
+      configureTransaction((query, values) => {
+        if (query.includes('FROM autofill_rules'))
+          return { rows: [storedRule] };
+        if (query.includes('UPDATE autofill_rules')) {
+          expect(values).toEqual(['rule-1', reason]);
+          storedRule.status = 'inactive';
+          storedRule.inactive_reason = values?.[1] as string;
+          return { rows: [] };
+        }
+        if (query.includes('FOR UPDATE'))
+          return { rows: [makeRow(1, 'active'), draft] };
+        if (query.includes("SET status = 'published'")) return { rows: [] };
+        if (query.includes("SET status = 'active'"))
+          return { rows: [{ ...draft, status: 'active' }] };
+        throw new Error(`Unexpected query: ${query}`);
+      });
+      await service.publishDraft(2);
+      expect(storedRule.status).toBe(reason ? 'inactive' : 'active');
+      expect(storedRule.inactive_reason).toBe(reason);
+      expect(storedRule.fill_targets_json).toEqual(targets);
+      expect(transactionClient.query).toHaveBeenLastCalledWith('COMMIT');
+    },
+  );
+
+  it('never enables an inactive rule when its canonical field is restored', async () => {
+    const draft = makeRow(2, 'draft');
+    configureTransaction((query) => {
+      if (query.includes('FROM autofill_rules')) {
+        expect(query).toContain("status = 'active'");
+        return { rows: [] };
+      }
+      if (query.includes('UPDATE autofill_rules'))
+        throw new Error('Inactive rules must stay inactive');
+      if (query.includes('FOR UPDATE'))
+        return { rows: [makeRow(1, 'active'), draft] };
+      if (query.includes("SET status = 'published'")) return { rows: [] };
+      if (query.includes("SET status = 'active'"))
+        return { rows: [{ ...draft, status: 'active' }] };
+      throw new Error(`Unexpected query: ${query}`);
+    });
+    await service.publishDraft(2);
+    expect(
+      transactionClient.query.mock.calls.some(([query]) =>
+        (query as string).includes('FROM autofill_rules'),
+      ),
+    ).toBe(true);
+  });
+
   const configureTransaction = (
     handler: (query: string, values?: unknown[]) => unknown,
   ): void => {
@@ -756,6 +856,7 @@ describe('FormSchemaService', () => {
       title: 'Published Draft',
     });
     configureTransaction((query) => {
+      if (query.includes('FROM autofill_rules')) return { rows: [] };
       if (query.includes('FOR UPDATE')) {
         return { rows: [active, draft] };
       }

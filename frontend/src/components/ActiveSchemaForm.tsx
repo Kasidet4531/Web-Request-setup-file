@@ -649,7 +649,7 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
       const nextActiveRequestSchema =
         currentRequest && activeRequestSchema
           ? activeRequestSchema
-          : activeSchemaFromRequest(savedRequest)
+          : activeSchema ?? activeSchemaFromRequest(savedRequest)
       const classification = classifyDraftSchemaVersion(mode, savedRequest, nextActiveRequestSchema)
       const resolvedSchema = resolveRequestFormSchema(mode, savedRequest, nextActiveRequestSchema)
 
@@ -758,7 +758,7 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
       const upgradedRequest = await api.upgradeDraftSchema(currentRequest.id, {
         formVersion: activeRequestSchema.version,
       })
-      const upgradedSchema = activeSchemaFromRequest(upgradedRequest)
+      const upgradedSchema = resolveRequestFormSchema('request', upgradedRequest, activeRequestSchema)
       const classification = classifyDraftSchemaVersion('request', upgradedRequest, upgradedSchema)
 
       setCurrentRequest(upgradedRequest)
@@ -845,7 +845,7 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
           </button>
         </div>
       ) : null}
-      {autofillLoading ? <p role="status">Loading autofill suggestions…</p> : null}
+      {autofillLoading ? <p className="sr-only" role="status">Loading autofill suggestions…</p> : null}
       {autofillError ? (
         <p className="status-pill status-pill--error" role="alert">
           Autofill suggestions could not be loaded: {autofillError}

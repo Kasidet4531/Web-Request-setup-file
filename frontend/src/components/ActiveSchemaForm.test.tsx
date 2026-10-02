@@ -121,6 +121,17 @@ describe('buildRequestValuesForSchema', () => {
 })
 
 describe('resolveRequestFormSchema', () => {
+  it('uses current active rule triggers by canonical key on an older draft without rewriting its snapshot', () => {
+    const current = structuredClone(activeRequestSchema)
+    current.schema.sections[0].fields[0].fieldKey = 'renamed_product_input'
+    current.schema.sections[0].fields[0].autofillTrigger = true
+    const request = buildRequest()
+    const resolved = resolveRequestFormSchema('request', request, current)
+    expect(resolved.schema.version).toBe(1)
+    expect(resolved.schema.sections[0].fields[0]).toMatchObject({ fieldKey: 'product_type', canonicalKey: 'product_type', autofillTrigger: true })
+    expect(request.schemaSnapshot.sections[0].fields[0].autofillTrigger).toBeUndefined()
+    expect(resolveRequestFormSchema('preview', request, current).schema).toEqual(request.schemaSnapshot)
+  })
   it('keeps an older Draft on its snapshot until the requester explicitly upgrades it', () => {
     const resolved = resolveRequestFormSchema('request', buildRequest(), activeRequestSchema)
 

@@ -34,6 +34,7 @@ describe('FormsController', () => {
     ).resolves.toEqual(activeSchema);
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
+      true,
     );
   });
 });

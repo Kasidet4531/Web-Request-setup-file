@@ -201,7 +201,28 @@ export function resolveRequestFormSchema(
     return activeRequestSchema
   }
 
-  return activeSchemaFromRequest(request)
+  const snapshot = activeSchemaFromRequest(request)
+  if (mode !== 'request' || request.status !== DRAFT_STATUS || !activeRequestSchema) {
+    return snapshot
+  }
+  const triggerKeys = new Set(formFields(activeRequestSchema.schema)
+    .filter((field) => field.autofillTrigger === true)
+    .map((field) => field.canonicalKey))
+  return {
+    ...snapshot,
+    schema: {
+      ...snapshot.schema,
+      sections: snapshot.schema.sections.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => ({
+          ...field,
+          ...(field.autofillTrigger !== undefined || triggerKeys.has(field.canonicalKey)
+            ? { autofillTrigger: triggerKeys.has(field.canonicalKey) }
+            : {}),
+        })),
+      })),
+    },
+  }
 }
 
 export function requesterFieldsAreReadOnly(

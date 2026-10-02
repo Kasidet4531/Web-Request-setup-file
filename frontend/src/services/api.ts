@@ -210,7 +210,8 @@ export interface AdminAutofillRule {
   triggerCanonicalKey: string
   targetCanonicalKeys: string[]
   lookupSource: 'previous_completed_submission'
-  status: 'active'
+  status: 'active' | 'inactive'
+  inactiveReason?: string
   createdAt: string
   updatedAt: string
 }

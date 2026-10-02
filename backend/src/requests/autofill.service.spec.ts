@@ -85,6 +85,73 @@ describe('AutofillService', () => {
   let pool: { query: jest.Mock };
   let service: AutofillService;
 
+  it('queries historical snapshot values for newly configured unindexed trigger and target fields', async () => {
+    autofillRuleService.listActiveRules.mockResolvedValue([
+      {
+        ...activeRule,
+        triggerCanonicalKey: 'product',
+        targetCanonicalKeys: ['wafer_fab'],
+      },
+    ]);
+    pool.query.mockResolvedValue({
+      rows: [
+        { canonical_key: 'wafer_fab', matched: true, value_json: 'Fab A' },
+      ],
+    });
+    await expect(
+      service.lookupSuggestions({
+        formKey: 'psf-request',
+        field: 'product',
+        value: 'Product A',
+      }),
+    ).resolves.toEqual({
+      matched: true,
+      suggestedValues: { wafer_fab: 'Fab A' },
+    });
+    const [sql] = pool.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("schema_snapshot_json->'sections'");
+    expect(sql).toContain("requester_data_json->>(field.value->>'fieldKey')");
+    expect(sql).toContain("field.value->>'canonicalKey'");
+    expect(sql).toContain('NOT EXISTS');
+    expect(sql).not.toContain("field.value->'autofillTrigger'");
+    expect(sql).toContain("historical_section.value ? 'visibleTo'");
+    expect(sql).toContain('jsonb_array_length');
+    expect(sql).toContain('["requester", "setup_owner", "admin"]');
+  });
+
+  it('keeps remaining targets usable after another target is removed from the published schema', async () => {
+    autofillRuleService.listActiveRules.mockResolvedValue([
+      { ...activeRule, targetCanonicalKeys: ['product', 'deleted_target'] },
+    ]);
+    pool.query.mockResolvedValue({
+      rows: [
+        { canonical_key: 'product', matched: true, value_json: 'Product A' },
+        {
+          canonical_key: 'deleted_target',
+          matched: true,
+          value_json: 'must not return',
+        },
+      ],
+    });
+    await expect(
+      service.lookupSuggestions({
+        formKey: 'psf-request',
+        field: 'reference_psf_name',
+        value: 'REF-1',
+      }),
+    ).resolves.toEqual({
+      matched: true,
+      suggestedValues: { product: 'Product A' },
+    });
+    expect(pool.query).toHaveBeenCalledWith(expect.any(String), [
+      'psf-request',
+      'reference_psf_name',
+      JSON.stringify('REF-1'),
+      ['product'],
+      ['Fulfilled after rename'],
+    ]);
+  });
+
   beforeEach(async () => {
     autofillRuleService = {
       listActiveRules: jest.fn(),
@@ -258,7 +325,6 @@ describe('AutofillService', () => {
     expect(executedQuery).toContain(
       'ORDER BY source_request.completed_at DESC, source_request.id DESC',
     );
-    expect(executedQuery).not.toContain('requester_data_json');
     expect(executedQuery).not.toContain('request_no');
     expect(executedQuery).not.toContain('psf_created_data_json');
   });

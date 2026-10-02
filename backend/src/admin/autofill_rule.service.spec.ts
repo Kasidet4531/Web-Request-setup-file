@@ -18,6 +18,7 @@ type StoredRule = {
   lookup_source: string;
   fill_targets_json: string[];
   status: string;
+  inactive_reason?: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -118,6 +119,52 @@ describe('AutofillRuleService', () => {
   let storedRules: StoredRule[];
   let lastPersistedTargetJson: string | null;
 
+  it('allows a schema field without the legacy trigger flag to configure autofill', async () => {
+    await expect(
+      service.createRule({
+        ...validInput,
+        triggerCanonicalKey: 'product',
+        targetCanonicalKeys: ['wafer_fab'],
+      }),
+    ).resolves.toMatchObject({
+      triggerCanonicalKey: 'product',
+      status: 'active',
+    });
+  });
+
+  it('keeps inactive rules visible to admins but excludes them from runtime lookup', async () => {
+    const saved = await service.createRule(validInput);
+    storedRules[0].status = 'inactive';
+    storedRules[0].inactive_reason =
+      'Trigger field was removed from the published form.';
+    await expect(service.listRules('psf-request')).resolves.toEqual([
+      {
+        ...saved,
+        status: 'inactive',
+        inactiveReason: 'Trigger field was removed from the published form.',
+      },
+    ]);
+    await expect(service.listActiveRules('psf-request')).resolves.toEqual([]);
+  });
+
+  it('only reactivates an inactive rule after an administrator saves valid fields', async () => {
+    const saved = await service.createRule(validInput);
+    storedRules[0].status = 'inactive';
+    storedRules[0].inactive_reason =
+      'Trigger field was removed from the published form.';
+    await expect(
+      service.updateRule(saved.id, {
+        ...validInput,
+        triggerCanonicalKey: 'product',
+        targetCanonicalKeys: ['wafer_fab'],
+      }),
+    ).resolves.toMatchObject({
+      status: 'active',
+      triggerCanonicalKey: 'product',
+    });
+    expect(storedRules[0].inactive_reason).toBeNull();
+  });
+
   beforeEach(async () => {
     storedRules = [];
     lastPersistedTargetJson = null;
@@ -188,17 +235,21 @@ describe('AutofillRuleService', () => {
         lastPersistedTargetJson = fillTargetsJson;
         existing.fill_targets_json = JSON.parse(fillTargetsJson) as string[];
         existing.updated_at = new Date('2026-08-11T11:00:00.000Z');
+        if (query.includes("status = 'active'")) {
+          existing.status = 'active';
+          existing.inactive_reason = null;
+        }
         return Promise.resolve({ rows: [existing] });
       }
 
       if (query.includes('FROM autofill_rules')) {
-        const [formKey] = values as [string];
+        const [formKey, , status] = values as [string, string, string | null];
         return Promise.resolve({
           rows: storedRules.filter(
             (rule) =>
               rule.form_key === formKey &&
               rule.lookup_source === 'previous_completed_submission' &&
-              rule.status === 'active',
+              (status === null || rule.status === status),
           ),
         });
       }
@@ -303,10 +354,6 @@ describe('AutofillRuleService', () => {
     {
       description: 'an unknown trigger key',
       input: { ...validInput, triggerCanonicalKey: 'unknown_key' },
-    },
-    {
-      description: 'a trigger field that is not marked for autofill',
-      input: { ...validInput, triggerCanonicalKey: 'product' },
     },
     {
       description: 'an unknown target key',

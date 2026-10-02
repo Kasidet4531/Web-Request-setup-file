@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import { DATABASE_POOL } from '../database/database.service';
+import { isAutofillField } from './autofill-rule-schema';
 import {
   FormSchemaService,
   type ActiveFormSchemaResponse,
@@ -31,7 +32,8 @@ export interface AutofillRule {
   triggerCanonicalKey: string;
   targetCanonicalKeys: string[];
   lookupSource: typeof AUTOFILL_RULE_LOOKUP_SOURCE;
-  status: typeof AUTOFILL_RULE_STATUS;
+  status: 'active' | 'inactive';
+  inactiveReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +45,7 @@ interface AutofillRuleRow {
   lookup_source: string;
   fill_targets_json: unknown;
   status: string;
+  inactive_reason?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -95,7 +98,8 @@ export function isValidAutofillRuleForSchema(
   const triggerField = getExactlyOneField(rule.triggerCanonicalKey);
 
   return (
-    triggerField?.autofillTrigger === true &&
+    triggerField !== null &&
+    isAutofillField(triggerField) &&
     rule.targetCanonicalKeys.every(
       (targetCanonicalKey) => getExactlyOneField(targetCanonicalKey) !== null,
     )
@@ -114,6 +118,17 @@ export class AutofillRuleService implements OnModuleInit {
   }
 
   async listActiveRules(formKey: string): Promise<AutofillRule[]> {
+    return this.readRules(formKey, false);
+  }
+
+  async listRules(formKey: string): Promise<AutofillRule[]> {
+    return this.readRules(formKey, true);
+  }
+
+  private async readRules(
+    formKey: string,
+    includeInactive: boolean,
+  ): Promise<AutofillRule[]> {
     this.assertManagedFormKey(formKey);
 
     const result = await this.pool.query<AutofillRuleRow>(
@@ -125,18 +140,19 @@ export class AutofillRuleService implements OnModuleInit {
           lookup_source,
           fill_targets_json,
           status,
+          inactive_reason,
           created_at,
           updated_at
         FROM autofill_rules
         WHERE form_key = $1
           AND lookup_source = $2
-          AND status = $3
+          AND ($3::text IS NULL OR status = $3)
         ORDER BY created_at ASC, id ASC
       `,
       [
         AUTOFILL_RULE_FORM_KEY,
         AUTOFILL_RULE_LOOKUP_SOURCE,
-        AUTOFILL_RULE_STATUS,
+        includeInactive ? null : AUTOFILL_RULE_STATUS,
       ],
     );
 
@@ -220,6 +236,8 @@ export class AutofillRuleService implements OnModuleInit {
             SET
               trigger_canonical_key = $1,
               fill_targets_json = $2::jsonb,
+              status = 'active',
+              inactive_reason = NULL,
               updated_at = NOW()
             WHERE id = $3::uuid AND form_key = $4
             RETURNING
@@ -263,6 +281,10 @@ export class AutofillRuleService implements OnModuleInit {
         created_at TIMESTAMP NOT NULL,
         updated_at TIMESTAMP NOT NULL
       )
+    `);
+
+    await this.pool.query(`
+      ALTER TABLE autofill_rules ADD COLUMN IF NOT EXISTS inactive_reason TEXT
     `);
 
     await this.pool.query(`
@@ -373,9 +395,9 @@ export class AutofillRuleService implements OnModuleInit {
       'triggerCanonicalKey',
     );
 
-    if (triggerField.autofillTrigger !== true) {
+    if (!isAutofillField(triggerField)) {
       throw new BadRequestException(
-        'triggerCanonicalKey must reference a field enabled as an autofill trigger.',
+        'triggerCanonicalKey must reference a supported form field.',
       );
     }
 
@@ -422,7 +444,7 @@ export class AutofillRuleService implements OnModuleInit {
       !UUID_PATTERN.test(row.id) ||
       row.form_key !== AUTOFILL_RULE_FORM_KEY ||
       row.lookup_source !== AUTOFILL_RULE_LOOKUP_SOURCE ||
-      row.status !== AUTOFILL_RULE_STATUS
+      !['active', 'inactive'].includes(row.status)
     ) {
       throw new ConflictException('Stored autofill rule data is invalid.');
     }
@@ -438,7 +460,13 @@ export class AutofillRuleService implements OnModuleInit {
       triggerCanonicalKey: row.trigger_canonical_key,
       targetCanonicalKeys,
       lookupSource: AUTOFILL_RULE_LOOKUP_SOURCE,
-      status: AUTOFILL_RULE_STATUS,
+      status: row.status as 'active' | 'inactive',
+      ...(row.status === 'inactive'
+        ? {
+            inactiveReason:
+              row.inactive_reason ?? 'Rule requires administrator review.',
+          }
+        : {}),
       createdAt: this.serializeTimestamp(row.created_at),
       updatedAt: this.serializeTimestamp(row.updated_at),
     };

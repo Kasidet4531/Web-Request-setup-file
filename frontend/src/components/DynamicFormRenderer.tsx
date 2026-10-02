@@ -1,4 +1,4 @@
-import type { ChangeEvent, FormEvent, ReactNode } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import type {
   DynamicFormErrors,
   DynamicFormValues,
@@ -69,8 +69,20 @@ export function DynamicFormRenderer({
     onSubmit?.(values)
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    const input = event.target as HTMLInputElement
+    if (
+      event.key === 'Enter' &&
+      !event.nativeEvent.isComposing &&
+      input.tagName === 'INPUT' &&
+      !['button', 'submit', 'reset', 'image'].includes(input.type)
+    ) {
+      event.preventDefault()
+    }
+  }
+
   return (
-    <form className="dynamic-form" noValidate onSubmit={handleSubmit}>
+    <form className="dynamic-form" noValidate onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
       {showSchemaHeader ? (
         <div className="dynamic-form__header">
           <p className="page-card__eyebrow">Schema preview</p>

@@ -22,7 +22,7 @@ function getFieldDescription(
 ): string {
   const field = fields.find((candidate) => candidate.canonicalKey === canonicalKey)
 
-  return field ? `${field.label} (${field.canonicalKey})` : canonicalKey
+  return field ? `${field.label} (${field.canonicalKey})` : `Removed field (${canonicalKey})`
 }
 
 function getDraftValidationMessage(draft: AdminAutofillRuleDraft): string | null {
@@ -90,6 +90,7 @@ export function AdminAutofillRulesTable({
           <tr>
             <th scope="col">Trigger field</th>
             <th scope="col">Fill target fields</th>
+            <th scope="col">Status</th>
             <th scope="col">Action</th>
           </tr>
         </thead>
@@ -108,6 +109,10 @@ export function AdminAutofillRulesTable({
                     </li>
                   ))}
                 </ul>
+              </td>
+              <td>
+                <strong>{rule.status === 'active' ? 'Active' : 'Inactive'}</strong>
+                {rule.inactiveReason ? <p>{rule.inactiveReason}</p> : null}
               </td>
               <td>
                 <button
@@ -149,9 +154,15 @@ export function AdminAutofillRuleEditor({
   onChangeTrigger,
   onSave,
 }: AdminAutofillRuleEditorProps) {
-  const triggerFields = fields.filter((field) => field.autofillTrigger === true)
+  const triggerFields = fields.filter((field) => ['text', 'textarea', 'date', 'select', 'radio'].includes(field.type))
   const targetFields = fields.filter(
     (field) => field.canonicalKey !== draft.triggerCanonicalKey,
+  )
+  const removedTargets = draft.targetCanonicalKeys.filter(
+    (key) => !fields.some((field) => field.canonicalKey === key),
+  )
+  const triggerRemoved = draft.triggerCanonicalKey !== '' && !triggerFields.some(
+    (field) => field.canonicalKey === draft.triggerCanonicalKey,
   )
   const validationMessage = getDraftValidationMessage(draft)
   const saveLabel = isEditing ? 'Save autofill rule' : 'Create autofill rule'
@@ -177,6 +188,9 @@ export function AdminAutofillRuleEditor({
           value={draft.triggerCanonicalKey}
         >
           <option value="">Choose a trigger field</option>
+          {triggerRemoved ? <option disabled value={draft.triggerCanonicalKey}>
+            Removed field ({draft.triggerCanonicalKey})
+          </option> : null}
           {triggerFields.map((field) => (
             <option key={field.canonicalKey} value={field.canonicalKey}>
               {field.label} ({field.canonicalKey})
@@ -192,6 +206,13 @@ export function AdminAutofillRuleEditor({
           shown only for administration.
         </p>
         <div className="admin-autofill-rules__target-options">
+          {removedTargets.map((key) => (
+            <label key={key} htmlFor={`admin-autofill-target-${key}`}>
+              <input id={`admin-autofill-target-${key}`} type="checkbox" checked disabled={disabled}
+                onChange={(event) => onChangeTarget(key, event.target.checked)} />
+              <span>Removed field ({key}) — deselect before saving</span>
+            </label>
+          ))}
           {targetFields.map((field) => {
             const inputId = `admin-autofill-target-${field.canonicalKey}`
 
@@ -214,6 +235,8 @@ export function AdminAutofillRuleEditor({
           })}
         </div>
       </fieldset>
+
+      {isEditing ? <p className="page-card__description">Saving a valid rule activates it again.</p> : null}
 
       {validationMessage ? (
         <p className="form-error" role="alert">

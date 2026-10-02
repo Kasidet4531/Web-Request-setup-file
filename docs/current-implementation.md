@@ -112,6 +112,21 @@ combine fields from multiple historical requests. Global audit is Admin-only and
 currently unpaged. Requester/PSF edit audit metadata includes per-field key,
 label, before and after values; these are metadata within action rows, not a
 separate audit row per field.
+
+Admins can choose any supported requester form field as a trigger; each rule
+has one trigger and one or more targets. Runtime trigger metadata comes from
+active rules, including for older drafts using their original field keys.
+Publishing a schema inactivates rules whose trigger is removed or whose targets
+are all removed, retaining the rule and its reason for administrator review.
+Partially removed targets are skipped. Saving a draft schema does not change
+rules, restoring a field does not reactivate a rule, and explicitly saving a
+valid edited rule activates it again. Renaming labels does not change canonical
+identity. Autofill preserves manual values and edits made during a lookup.
+Unindexed historical values are read through their original schema snapshot;
+requests with restricted legacy sections are excluded as autofill sources.
+
+`cd backend && npm run test:postgres` exercises lookup and publication against
+an isolated embedded PostgreSQL database without using configured credentials.
 Sources: [autofill](../backend/src/requests/autofill.service.ts),
 [rules](../backend/src/admin/autofill_rule.service.ts),
 [audit service](../backend/src/audit/audit_log.service.ts),

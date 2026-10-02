@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DynamicFormRenderer, type FormSchema } from './DynamicFormRenderer'
 import { validateRequiredFields } from '../services/formValidation'
 
@@ -48,6 +48,34 @@ const schema: FormSchema = {
 }
 
 describe('DynamicFormRenderer', () => {
+  it('prevents Enter in a text field from implicitly saving the request', () => {
+    const form = DynamicFormRenderer({ schema })
+    const preventDefault = vi.fn()
+    form.props.onKeyDown?.({ key: 'Enter', target: { tagName: 'INPUT', type: 'text' }, nativeEvent: { isComposing: false }, preventDefault })
+    expect(preventDefault).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    { key: 'Enter', tagName: 'TEXTAREA', type: undefined, composing: false },
+    { key: 'Enter', tagName: 'BUTTON', type: 'submit', composing: false },
+    { key: 'Enter', tagName: 'INPUT', type: 'submit', composing: false },
+    { key: 'Enter', tagName: 'SELECT', type: undefined, composing: false },
+    { key: 'Tab', tagName: 'INPUT', type: 'text', composing: false },
+    { key: 'Enter', tagName: 'INPUT', type: 'text', composing: true },
+  ])('preserves normal keyboard behavior for $tagName/$type/$key composing=$composing', ({ key, tagName, type, composing }) => {
+    const form = DynamicFormRenderer({ schema })
+    const preventDefault = vi.fn()
+    form.props.onKeyDown?.({ key, target: { tagName, type }, nativeEvent: { isComposing: composing }, preventDefault })
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('still saves when the submit button submits the form explicitly', () => {
+    const onSubmit = vi.fn()
+    const values = { title: 'A request' }
+    const form = DynamicFormRenderer({ schema, values, onSubmit })
+    form.props.onSubmit({ preventDefault: vi.fn() })
+    expect(onSubmit).toHaveBeenCalledWith(values)
+  })
   it('renders product type prominently before the rest of the schema-driven fields', () => {
     const html = renderToStaticMarkup(
       <DynamicFormRenderer
