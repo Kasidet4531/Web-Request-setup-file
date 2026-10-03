@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { AsyncNotice } from './ui/AsyncNotice'
 import {
   activeSchemaFromRequest,
   applyRuntimeAutofillSuggestions,
@@ -42,6 +43,7 @@ function buildInitialValues(schema: FormSchema): DynamicFormValues {
 
 export interface ActiveSchemaFormProps {
   mode: 'request' | 'preview'
+  headerTitle?: string
   requestId?: string
   disabled?: boolean
   onDirtyChange?: (dirty: boolean) => void
@@ -97,10 +99,10 @@ export function DraftSchemaUpgradeDecision({
   return (
     <section
       aria-busy={isUpgradePending}
-      aria-labelledby="draft-schema-upgrade-heading"
+      aria-label={hasRemained ? 'Schema upgrade required before submit' : 'Schema update required'}
       className="draft-schema-upgrade"
     >
-      <h2 id="draft-schema-upgrade-heading">
+      <h2>
         {hasRemained ? 'Schema upgrade required before submit' : 'Schema update required'}
       </h2>
       <p>
@@ -111,14 +113,10 @@ export function DraftSchemaUpgradeDecision({
           : 'Choose whether to upgrade now or remain on the Draft schema while editing.'}
       </p>
       {isUpgradePending ? <p role="status">Upgrading Draft schema…</p> : null}
-      {error ? (
-        <p className="status-pill status-pill--error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <AsyncNotice kind="error" title={error} /> : null}
       <div className="draft-schema-upgrade__actions">
         <button
-          className="primary-button"
+          className="ui-button ui-button--primary"
           disabled={isUpgradePending || disabled}
           onClick={onUpgrade}
           type="button"
@@ -127,7 +125,7 @@ export function DraftSchemaUpgradeDecision({
         </button>
         {showRemain ? (
           <button
-            className="secondary-button"
+            className="ui-button ui-button--secondary"
             disabled={isUpgradePending || disabled}
             onClick={onRemain}
             type="button"
@@ -137,7 +135,7 @@ export function DraftSchemaUpgradeDecision({
         ) : null}
         {error ? (
           <button
-            className="secondary-button"
+            className="ui-button ui-button--secondary"
             disabled={isUpgradePending || disabled}
             onClick={onReload}
             type="button"
@@ -152,7 +150,7 @@ export function DraftSchemaUpgradeDecision({
 
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
-export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
+export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
   const savedValuesRef = useRef<DynamicFormValues>({})
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
@@ -176,6 +174,7 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
   const [submissionConflictError, setSubmissionConflictError] = useState<string | null>(null)
   const [upgradePending, setUpgradePending] = useState(false)
   const [values, setValues] = useState<DynamicFormValues>({})
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const draftSchemaUpgradeLock = useRef(createDraftSchemaUpgradeLock())
   const autofillLookupGeneration = useRef(0)
   const fieldEditVersions = useRef<Record<string, number>>({})
@@ -188,6 +187,7 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
   function replaceValues(nextValues: DynamicFormValues) {
     valuesRef.current = nextValues
     setValues(nextValues)
+    setHasUnsavedChanges(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current))
   }
 
   function invalidateRuntimeAutofill() {
@@ -794,16 +794,21 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
     }
   }
 
+  let editState = currentRequest ? 'Saved' : 'Not saved'
+  if (hasUnsavedChanges) editState = 'Unsaved changes'
+  if (upgradePending) editState = 'Upgrading schema…'
+  if (saving) editState = 'Saving…'
+  if (hasInconsistentDraftSchema) editState = 'Editing is unavailable until the Draft schema is reloaded.'
+  if (disabled) editState = 'Editing is temporarily unavailable while another action is pending.'
+  if (readOnly) editState = 'Requester information is read-only.'
+  if (mode === 'preview') editState = 'Read-only preview'
+
   if (loading || loadedSchemaKey !== loadKey) {
-    return <p className="page-card__description">Loading PSF request draft…</p>
+    return <AsyncNotice kind="loading" title="Loading PSF request draft…" />
   }
 
   if (loadError || !activeSchema) {
-    return (
-      <p className="status-pill status-pill--error" role="alert">
-        {loadError ?? 'PSF request draft is unavailable.'}
-      </p>
-    )
+    return <AsyncNotice kind="error" title={loadError ?? 'PSF request draft is unavailable.'} />
   }
 
   if (isSchemaChoicePending && currentRequest && activeRequestSchema) {
@@ -825,31 +830,21 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
   }
 
   return (
-    <>
+    <div className="active-schema-form">
       {currentRequest && !requestId ? <RequestDraftStatus request={currentRequest} /> : null}
-      {saveMessage ? (
-        <p className="status-pill status-pill--success" role="status">
-          {saveMessage}
-        </p>
-      ) : null}
-      {saveError ? (
-        <p className="status-pill status-pill--error" role="alert">
-          {saveError}
-        </p>
-      ) : null}
+      {saving ? <AsyncNotice kind="loading" title="Saving requester information…" /> : null}
+      {saveMessage ? <AsyncNotice kind="success" title={saveMessage} /> : null}
+      {saveError ? <AsyncNotice kind="error" title={saveError} /> : null}
       {submissionConflictError ? (
-        <div className="status-pill status-pill--error" role="alert">
-          <span>{submissionConflictError}</span>
-          <button className="secondary-button" onClick={reloadDraftSchema} type="button">
+        <AsyncNotice kind="error" title={submissionConflictError} action={
+          <button className="ui-button ui-button--secondary" onClick={reloadDraftSchema} type="button">
             Reload draft
           </button>
-        </div>
+        } />
       ) : null}
       {autofillLoading ? <p className="sr-only" role="status">Loading autofill suggestions…</p> : null}
       {autofillError ? (
-        <p className="status-pill status-pill--error" role="alert">
-          Autofill suggestions could not be loaded: {autofillError}
-        </p>
+        <AsyncNotice kind="error" title={`Autofill suggestions could not be loaded: ${autofillError}`} />
       ) : null}
       {schemaDecisionRequired &&
       draftSchemaDecision === 'remain' &&
@@ -868,8 +863,20 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
           showRemain={false}
         />
       ) : null}
+      <div className="active-schema-form__identity">
+        <div>
+          {headerTitle ? <h2>{headerTitle}</h2> : null}
+          <span className="active-schema-form__version">{activeSchema.title} · {activeSchema.formKey} · version {activeSchema.version}</span>
+        </div>
+        <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+      </div>
       <DynamicFormRenderer
         errors={errors}
+        footerActions={!formReadOnly ? <div className="active-schema-form__footer">
+          <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+          <p className="ui-help">{currentRequest ? 'Requester information is saved separately from PSF information.' : 'You can review and submit after saving the draft.'}</p>
+        </div> : undefined}
+        headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}
         onChange={!formReadOnly ? updateField : undefined}
         onSubmit={!formReadOnly ? saveDraft : undefined}
@@ -879,6 +886,6 @@ export function ActiveSchemaForm({ mode, requestId, disabled = false, onDirtyCha
         submitLabel={saving ? 'Saving draft…' : submitLabel}
         values={values}
       />
-    </>
+    </div>
   )
 }

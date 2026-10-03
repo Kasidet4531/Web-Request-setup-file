@@ -32,8 +32,8 @@ describe('Status Management page', () => {
       updatedAt: '2026-10-02T00:00:00.123456Z',
     }
     const html = renderToStaticMarkup(createElement(AdminWorkflowTransitionPage))
-    expect(html).toContain('<label>Status type<select')
-    expect(html).toContain('<th>Status type</th>')
+    expect(html).toContain('Status type</span><select')
+    expect(html).toContain('<th scope="col">Status type</th>')
     expect(html).toContain('<option value="cancelled">Cancel</option>')
     expect(html).toContain('<td>Cancel</td>')
     expect(html).not.toContain('Meaning')

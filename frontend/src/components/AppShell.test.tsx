@@ -45,6 +45,22 @@ describe('AppShell form version navigation', () => {
     expect(actions).toContain('New Request')
     routerStateHarness.role = null
   })
+  it('exposes contextual authorized administration tools only in the administration workspace', () => {
+    routerStateHarness.role = 'admin'
+    routerStateHarness.pathname = '/admin/form-config/2'
+    let markup = renderToStaticMarkup(<AppShell />)
+    expect(markup).toContain('aria-label="Administration tools"')
+    for (const route of ['/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/history']) expect(markup).toContain(`href="${route}"`)
+    routerStateHarness.pathname = '/dashboard'
+    markup = renderToStaticMarkup(<AppShell />)
+    expect(markup).not.toContain('aria-label="Administration tools"')
+    routerStateHarness.role = 'requester'
+    routerStateHarness.pathname = '/admin/export-profile'
+    markup = renderToStaticMarkup(<AppShell />)
+    expect(markup).not.toContain('href="/admin/users"')
+    routerStateHarness.role = null
+  })
+
   it('places the version breadcrumb in the header', () => {
     routerStateHarness.pathname = '/admin/form-config/2'
     const markup = renderToStaticMarkup(<AppShell />)
@@ -59,6 +75,22 @@ describe('AppShell form version navigation', () => {
     const breadcrumbs = markup.match(/<nav aria-label="Breadcrumbs"[^>]*>(.*?)<\/nav>/)?.[1]
     expect(breadcrumbs).toContain('href="/admin/form-config?formKey=psf-created-information"')
     routerStateHarness.pathname = '/admin/form-config/2'
+  })
+
+  it('offers a keyboard skip target and names the navigation controls', () => {
+    routerStateHarness.pathname = '/dashboard'
+    const markup = renderToStaticMarkup(<AppShell />)
+    expect(markup).toContain('href="#main-content"')
+    expect(markup).toContain('id="main-content"')
+    expect(markup).toContain('aria-controls="primary-navigation"')
+    expect(markup).toContain('aria-label="Close navigation"')
+  })
+
+  it('identifies My drafts in the breadcrumb instead of Dashboard', () => {
+    routerStateHarness.pathname = '/my-drafts'
+    const markup = renderToStaticMarkup(<AppShell />)
+    const breadcrumbs = markup.match(/<nav aria-label="Breadcrumbs"[^>]*>(.*?)<\/nav>/)?.[1]
+    expect(breadcrumbs).toContain('My drafts')
   })
 })
 

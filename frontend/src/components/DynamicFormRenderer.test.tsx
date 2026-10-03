@@ -48,6 +48,95 @@ const schema: FormSchema = {
 }
 
 describe('DynamicFormRenderer', () => {
+  it('suppresses only a single section title that duplicates the supplied pane title', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} headerTitle="Requester Information" showSchemaHeader={false} />)
+    expect(html).toContain('aria-label="Requester Information"')
+    expect(html).not.toContain('dynamic-form__section-header')
+    for (const field of schema.sections[0].fields) expect(html).toContain(field.label)
+  })
+
+  it('preserves distinct and multiple chapter headers, numbering and configured field order', () => {
+    const distinctSchema = { ...schema, sections: [{ ...schema.sections[0], title: 'Custom engineering inputs' }] }
+    const distinct = renderToStaticMarkup(<DynamicFormRenderer schema={distinctSchema} headerTitle="Requester Information" showSchemaHeader={false} />)
+    expect(distinct).toContain('<h3 class="dynamic-form__section-title">Custom engineering inputs</h3>')
+    expect(distinct).toContain('dynamic-form__section-number">01</span>')
+    const multiSchema = { ...schema, sections: [schema.sections[0], { sectionKey: 'additional', title: 'Additional engineering details', fields: [{ fieldKey: 'custom_ref', canonicalKey: 'custom_ref', label: 'Custom reference', type: 'text' as const, required: false }] }] }
+    const multi = renderToStaticMarkup(<DynamicFormRenderer schema={multiSchema} headerTitle="Requester Information" showSchemaHeader={false} />)
+    expect(multi).toContain('<h3 class="dynamic-form__section-title">Requester Information</h3>')
+    expect(multi).toContain('<h3 class="dynamic-form__section-title">Additional engineering details</h3>')
+    expect(multi).toContain('dynamic-form__section-number">02</span>')
+    expect(multi.indexOf('Request Note')).toBeLessThan(multi.indexOf('Custom reference'))
+  })
+
+  it('names long custom radio groups and associates their errors and autofill status', () => {
+    const label = 'ManufacturingRouteIncludingEngineeringReviewAndCustomerSpecificPreparationWithoutBreaks'
+    const customSchema: FormSchema = {
+      ...schema,
+      sections: [{ ...schema.sections[0], fields: [{ ...schema.sections[0].fields[0], label }] }],
+    }
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={customSchema}
+      errors={{ product_type: 'Choose a manufacturing route.' }}
+      fieldStatuses={{ product_type: 'auto-filled' }} />)
+    const group = html.match(/<fieldset[^>]*role="radiogroup"[^>]*>([\s\S]*?)<\/fieldset>/)
+    expect(group).not.toBeNull()
+    expect(group?.[1]).toContain(label)
+    const describedBy = group?.[0].match(/aria-describedby="([^"]+)"/)?.[1].split(' ')
+    expect(describedBy).toHaveLength(2)
+    for (const id of describedBy ?? []) expect(html).toContain(`id="${id}"`)
+    expect(group?.[0]).toContain('aria-invalid="true"')
+  })
+
+  it('keeps labels and radio selection independent when two forms share field keys', () => {
+    const html = renderToStaticMarkup(<>
+      <DynamicFormRenderer schema={schema} errors={{ title: 'First form title required.' }} />
+      <DynamicFormRenderer schema={{ ...schema, formKey: 'psf-created-information', title: 'PSF Created Information' }} fieldStatuses={{ title: 'auto-filled' }} />
+    </>)
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1])
+    expect(new Set(ids).size).toBe(ids.length)
+    const names = [...html.matchAll(/<input[^>]*type="radio"[^>]*>/g)].map((match) => match[0].match(/name="([^"]+)"/)?.[1])
+    expect(new Set(names).size).toBe(2)
+    for (const match of html.matchAll(/(?:for|aria-labelledby|aria-describedby)="([^"]+)"/g)) {
+      for (const id of match[1].split(' ')) expect(ids).toContain(id)
+    }
+  })
+
+  it('preserves administrator field order and sections even when product type is not first', () => {
+    const customSchema: FormSchema = { ...schema, sections: [
+      { sectionKey: 'empty', title: 'Engineering notes', fields: [] },
+      { ...schema.sections[0], fields: [schema.sections[0].fields[1], schema.sections[0].fields[0]] },
+    ] }
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={customSchema} showSchemaHeader={false} />)
+    expect(html.indexOf('Title')).toBeLessThan(html.indexOf('Product Type'))
+    expect(html).toContain('Engineering notes')
+    expect(html).toContain('aria-label="Requester Information"')
+  })
+
+  it('exposes read-only values through their custom field labels without disabled controls', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} readOnly
+      values={{ title: 'Customer-specific setup', product_type: 'Transfer Product' }} />)
+    expect(html).toContain('<output')
+    expect(html).toContain('aria-labelledby=')
+    expect(html).toContain('Customer-specific setup')
+    expect(html).toContain('Transfer Product')
+    expect(html).toContain('Not provided')
+    expect(html).not.toContain('disabled=')
+    expect(html).not.toContain('type="submit"')
+  })
+
+  it('changes the displayed heading without changing the configured title, field order, or values', () => {
+    const configuredSchema = structuredClone(schema)
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={configuredSchema}
+      headerTitle="Requester Information" values={{ title: 'Engineering setup', priority: 'Urgent' }} />)
+    expect(html).toContain('<h2>Requester Information</h2>')
+    expect(html).not.toContain('Schema preview')
+    expect(html).toContain('PSF Request Form · psf-request · version 1')
+    expect(configuredSchema).toEqual(schema)
+    expect(html.indexOf('Product Type')).toBeLessThan(html.indexOf('Title'))
+    expect(html.indexOf('Title')).toBeLessThan(html.indexOf('Priority'))
+    expect(html).toContain('value="Engineering setup"')
+    expect(html).toContain('<option value="Urgent" selected="">Urgent</option>')
+  })
+
   it('prevents Enter in a text field from implicitly saving the request', () => {
     const form = DynamicFormRenderer({ schema })
     const preventDefault = vi.fn()
@@ -105,7 +194,7 @@ describe('DynamicFormRenderer', () => {
 
     expect(html).not.toContain('Schema preview')
     expect(html).not.toContain('<h2>PSF Request Form</h2>')
-    expect(html).toContain('<h3>Requester Information</h3>')
+    expect(html).toContain('<h3 class="dynamic-form__section-title">Requester Information</h3>')
   })
 
   it('shows required validation messages next to the related field', () => {
@@ -125,9 +214,9 @@ describe('DynamicFormRenderer', () => {
       />,
     )
 
-    expect(html).toContain('id="product_type-error"')
+    expect(html).toMatch(/id="[^"]+product_type-error"/)
     expect(html).toContain('Product Type is required.')
-    expect(html).toContain('id="title-error"')
+    expect(html).toMatch(/id="[^"]+title-error"/)
     expect(html).toContain('Title is required.')
   })
 
@@ -140,8 +229,8 @@ describe('DynamicFormRenderer', () => {
       />,
     )
 
-    expect(html).toContain('aria-readonly="true"')
-    expect(html).toContain('disabled=""')
+    expect(html).not.toContain('<input')
+    expect(html).toContain('<output')
     expect(html).toContain('Probe card update')
   })
 
@@ -157,8 +246,8 @@ describe('DynamicFormRenderer', () => {
 
     expect(html).toContain('Auto-filled')
     expect(html).toContain('Edited by user')
-    expect(html).toContain('id="title-autofill-status"')
-    expect(html).toContain('id="priority-autofill-status"')
-    expect(html).toContain('aria-describedby="title-autofill-status"')
+    expect(html).toMatch(/id="[^"]+title-autofill-status"/)
+    expect(html).toMatch(/id="[^"]+priority-autofill-status"/)
+    expect(html).toMatch(/aria-describedby="[^"]+title-autofill-status"/)
   })
 })

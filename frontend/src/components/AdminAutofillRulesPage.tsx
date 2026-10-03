@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { PageHeader } from './ui/PageHeader'
+import { AsyncNotice } from './ui/AsyncNotice'
+import { StatusLabel } from './ui/StatusLabel'
 import type { FormSchemaField } from '../types/forms'
 import { api, type AdminAutofillRule } from '../services/api'
 import {
@@ -49,25 +52,14 @@ export function AdminAutofillRulesFeedback({
   loading: boolean
 }) {
   if (loading) {
-    return (
-      <p className="page-card__description" role="status">
-        Loading autofill rules…
-      </p>
-    )
+    return <AsyncNotice kind="loading" title="Loading autofill rules…" />
   }
 
   if (!feedback) {
     return null
   }
 
-  return (
-    <p
-      className={`status-pill status-pill--${feedback.kind}`}
-      role={feedback.kind === 'error' ? 'alert' : 'status'}
-    >
-      {feedback.message}
-    </p>
-  )
+  return <AsyncNotice kind={feedback.kind} title={feedback.message} />
 }
 
 export interface AdminAutofillRulesTableProps {
@@ -84,12 +76,13 @@ export function AdminAutofillRulesTable({
   rules,
 }: AdminAutofillRulesTableProps) {
   return (
-    <div className="data-table admin-autofill-rules__table">
+    <div className="data-table admin-autofill-rules__table" role="region" aria-label="Auto-fill rules" tabIndex={0}>
       <table>
         <thead>
           <tr>
             <th scope="col">Trigger field</th>
             <th scope="col">Fill target fields</th>
+            <th scope="col">Source</th>
             <th scope="col">Status</th>
             <th scope="col">Action</th>
           </tr>
@@ -98,21 +91,23 @@ export function AdminAutofillRulesTable({
           {rules.map((rule) => (
             <tr key={rule.id}>
               <td>
-                <strong>{getFieldDescription(rule.triggerCanonicalKey, fields)}</strong>
-                <span>{rule.triggerCanonicalKey}</span>
+                <strong>{fields.find((field) => field.canonicalKey === rule.triggerCanonicalKey)?.label ?? getFieldDescription(rule.triggerCanonicalKey, fields)}</strong>
+                <code>{rule.triggerCanonicalKey}</code>
               </td>
               <td>
                 <ul className="admin-autofill-rules__targets">
                   {rule.targetCanonicalKeys.map((targetCanonicalKey) => (
                     <li key={targetCanonicalKey}>
-                      {getFieldDescription(targetCanonicalKey, fields)}
+                      <div>{fields.find((field) => field.canonicalKey === targetCanonicalKey)?.label ?? 'Removed field'}</div>
+                      <code>{targetCanonicalKey}</code>
                     </li>
                   ))}
                 </ul>
               </td>
+              <td>Previous completed PSF request</td>
               <td>
-                <strong>{rule.status === 'active' ? 'Active' : 'Inactive'}</strong>
-                {rule.inactiveReason ? <p>{rule.inactiveReason}</p> : null}
+                <StatusLabel status={rule.status === 'active' ? 'Active' : 'Inactive'} kind={rule.status === 'active' ? 'completed' : 'neutral'} />
+                {rule.inactiveReason ? <p className="ui-help">{rule.inactiveReason}</p> : null}
               </td>
               <td>
                 <button
@@ -179,6 +174,8 @@ export function AdminAutofillRuleEditor({
         </div>
       </div>
 
+      <div className="admin-autofill-rules__editor-grid">
+      <div className="admin-autofill-rules__source">
       <label className="admin-autofill-rules__field" htmlFor="admin-autofill-trigger">
         <span>Autofill trigger field</span>
         <select
@@ -198,6 +195,8 @@ export function AdminAutofillRuleEditor({
           ))}
         </select>
       </label>
+      <p className="ui-help">Source: a previous completed PSF request. Auto-fill preserves values entered manually.</p>
+      </div>
 
       <fieldset className="admin-autofill-rules__targets-fieldset">
         <legend>Fill target fields</legend>
@@ -235,6 +234,7 @@ export function AdminAutofillRuleEditor({
           })}
         </div>
       </fieldset>
+      </div>
 
       {isEditing ? <p className="page-card__description">Saving a valid rule activates it again.</p> : null}
 
@@ -450,38 +450,30 @@ export function AdminAutofillRulesPage() {
 
   return (
     <article className="page-card admin-autofill-rules">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Admin tools</p>
-          <h1>Autofill rule management</h1>
-          <p className="page-card__description">
-            Configure a canonical trigger field and the fields it may fill from a
-            previous completed PSF request. The server validates and persists every
-            rule.
-          </p>
-        </div>
-        <button
+      <PageHeader title="Auto-fill Rules" description="Connect a trigger field to the fields it fills from a previous completed PSF request." actions={<button
           className="primary-button"
           disabled={loading || saving}
           onClick={startCreateRule}
           type="button"
         >
           Create rule
-        </button>
-      </div>
+        </button>} />
 
       <div className="page-card__body admin-autofill-rules__body">
         <AdminAutofillRulesFeedback feedback={feedback} loading={loading} />
         {!loading && rules.length === 0 && !showEditor && !feedback ? (
-          <p className="page-card__description">No autofill rules are configured.</p>
+          <AsyncNotice kind="empty" title="No autofill rules are configured." />
         ) : null}
         {!loading && rules.length > 0 ? (
+          <div className="admin-autofill-rules__catalog">
+          <p className="table-scroll__hint">Scroll horizontally to see rule sources, status, and actions.</p>
           <AdminAutofillRulesTable
             disabled={saving}
             fields={fields}
             onEdit={startEditRule}
             rules={rules}
           />
+          </div>
         ) : null}
         {!loading && showEditor ? (
           <AdminAutofillRuleEditor

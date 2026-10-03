@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { api, ApiError, type AuthResponse } from '../../services/api'
 import { notifyAuthSessionChanged } from '../../services/auth-session'
+import { AsyncNotice } from '../../components/ui/AsyncNotice'
 import './-development-login.css'
 
 const accounts = [
@@ -31,9 +32,9 @@ export function DevelopmentLogin({ redirectTo = '/dashboard' }: { redirectTo?: s
   }
 
   return (
-    <section className="development-login" aria-label="Local test accounts">
+    <section className="development-login" aria-label="Local test accounts" aria-busy={pending}>
       <h2>Local test accounts</h2>
-      <p>Choose a role to test without company LDAP.</p>
+      <p className="ui-help">Development environment only. Choose a role to test without company LDAP.</p>
       <div className="development-login__actions">
         {accounts.map(({ identity, label }) => (
           <button className="btn-secondary" type="button" key={identity} disabled={pending} onClick={() => void login(identity)}>
@@ -41,7 +42,8 @@ export function DevelopmentLogin({ redirectTo = '/dashboard' }: { redirectTo?: s
           </button>
         ))}
       </div>
-      {error ? <p role="alert">{error}</p> : null}
+      {pending ? <AsyncNotice kind="loading" title="Signing in with a local test account…" /> : null}
+      {error ? <AsyncNotice kind="error" title={error} /> : null}
     </section>
   )
 }

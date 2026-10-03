@@ -252,9 +252,11 @@ function openEditor(page: unknown, userId: string) {
   const editedPage = renderAdminUserManagementPage()
   const dialog = requireRenderedElement(editedPage, (element) => element.type === 'dialog')
   const dialogRef = dialog.props.ref as { current: unknown }
+  const cancelFocus = vi.fn()
   const fakeDialog = {
     open: false,
     showModal: vi.fn(() => { fakeDialog.open = true }),
+    querySelector: vi.fn(() => ({ focus: cancelFocus })),
     close: vi.fn(() => {
       fakeDialog.open = false
       const onClose = dialog.props.onClose
@@ -264,6 +266,8 @@ function openEditor(page: unknown, userId: string) {
   dialogRef.current = fakeDialog
   adminUserHookHarness.runEffects()
   expect(fakeDialog.showModal).toHaveBeenCalledOnce()
+  expect(fakeDialog.querySelector).toHaveBeenCalledWith('[data-dialog-cancel]')
+  expect(cancelFocus).toHaveBeenCalledOnce()
   return { dialog: fakeDialog, focus, page: editedPage }
 }
 

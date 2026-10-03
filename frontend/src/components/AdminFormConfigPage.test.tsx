@@ -206,7 +206,8 @@ describe('AdminFormConfigPage helpers', () => {
     expect(validHtml).toContain('Schema preview')
     expect(validHtml).toContain('PSF Request Form')
     expect(validHtml).toContain('version 2')
-    expect(validHtml).toContain('disabled=""')
+    expect(validHtml).toContain('<output')
+    expect(validHtml).not.toMatch(/<input|<select|<textarea/)
     expect(invalidHtml).toBe('')
   })
 
@@ -260,9 +261,9 @@ describe('AdminFormConfigPage helpers', () => {
     const history = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[active, old]} />)
     const pending = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[draft, active, old]} />)
     expect(history.match(/Duplicate as draft/g)).toHaveLength(2)
-    expect(history).toContain('<table')
-    expect(history).toContain('<th scope="col">Created</th>')
-    expect(history).toContain('<th scope="col">Published</th>')
+    expect(history).toContain('<ol aria-label="Form versions"')
+    expect(history).toContain('<dt>Created</dt>')
+    expect(history).toContain('<dt>Published</dt>')
     expect(history).toContain('Inactive')
     expect(history).not.toContain('Selected')
     expect(history).not.toContain('Discard draft')
@@ -271,7 +272,7 @@ describe('AdminFormConfigPage helpers', () => {
     expect(pending).toContain('>Discard</button>')
   })
 
-  it('opens versions from the table instead of View or Edit actions', () => {
+  it('opens versions from the catalog instead of View or Edit actions', () => {
     const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
     const html = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[
       buildVersion({ status: 'active', version: 2 }),
@@ -313,9 +314,9 @@ describe('AdminFormConfigPage helpers', () => {
     )
 
     expect(selectorHtml).toContain('Form versions')
-    expect(selectorHtml).toContain('>v2</a></th>')
+    expect(selectorHtml).toContain('>v2</a></div>')
     expect(selectorHtml).toContain('PSF Request Form')
-    expect(selectorHtml).toContain('>—</td>')
+    expect(selectorHtml).toContain('>—</dd>')
     expect(selectorHtml).toContain('>Discard</button>')
     expect(loadingHtml).toContain('Loading form schema versions…')
     expect(loadingHtml).toContain('role="status"')

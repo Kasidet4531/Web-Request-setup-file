@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { api, type PsfRequestListItem } from "../services/api";
+import { api, type PsfRequestListItem, type WorkflowStatusKind } from "../services/api";
+import { PageHeader } from './ui/PageHeader';
+import { AsyncNotice } from './ui/AsyncNotice';
+import { StatusLabel } from './ui/StatusLabel';
 import {
   downloadCompletedRequestExport,
   fetchRequestExportJob,
@@ -32,7 +35,7 @@ export function RequestExportFiltersForm({
   statusDisabled = false,
 }: RequestExportFiltersFormProps) {
   return (
-    <div className="filter-bar">
+    <div className="filter-bar request-export__filters">
       <label>
         Status
         <select
@@ -88,25 +91,14 @@ export function RequestExportFeedback({
   jobStatus: "queued" | "running" | null;
 }) {
   if (downloading) {
-    return (
-      <p className="page-card__description" role="status">
-        {jobStatus ? `Request export ${jobStatus}…` : "Preparing request export…"}
-      </p>
-    );
+    return <AsyncNotice kind="loading" title={jobStatus ? `Request export ${jobStatus}…` : "Preparing request export…"} />;
   }
 
   if (!feedback) {
     return null;
   }
 
-  return (
-    <p
-      className={`status-pill status-pill--${feedback.kind}`}
-      role={feedback.kind === "error" ? "alert" : "status"}
-    >
-      {feedback.message}
-    </p>
-  );
+  return <AsyncNotice kind={feedback.kind} title={feedback.message} />;
 }
 
 type RequestExportPreviewState = {
@@ -114,6 +106,7 @@ type RequestExportPreviewState = {
   items: PsfRequestListItem[];
   loading: boolean;
   total: number;
+  statusKinds?: Record<string, WorkflowStatusKind>;
 };
 
 function formatPreviewDate(value: string | null): string {
@@ -129,43 +122,49 @@ export function RequestExportPreview({
   items,
   loading,
   total,
+  statusKinds = {},
 }: RequestExportPreviewState) {
   return (
     <section className="request-export__preview" aria-live="polite">
       <div className="request-export__preview-header">
         <div>
-          <h2>Export preview</h2>
+          <h2>Request preview</h2>
           <p>{loading ? "Loading filtered requests…" : `First ${items.length} of ${total} matching request${total === 1 ? "" : "s"}.`}</p>
+          <p>Download includes only requests permitted for your account. This preview may show a broader set; its count is not an exported record count.</p>
         </div>
       </div>
-      {error ? <p className="status-pill status-pill--error" role="alert">{error}</p> : null}
+      {error ? <AsyncNotice kind="error" title={error} /> : null}
       {!loading && !error && items.length === 0 ? (
         <div className="table-empty">
           <h3>No requests match these filters</h3>
-          <p>Adjust the filters to preview a different export set.</p>
+          <p>Adjust the filters to preview different requests.</p>
         </div>
       ) : null}
       {!loading && !error && items.length > 0 ? (
-        <div className="data-table" role="region" aria-label="Filtered request export preview" tabIndex={0}>
+        <div className="request-export__preview-table">
+        <p className="table-scroll__hint">Scroll horizontally to see request statuses, requesters, and due dates.</p>
+        <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0}>
           <table>
             <thead>
               <tr>
-                <th>Request No.</th>
-                <th>Title / Product Type</th>
-                <th>Status</th>
-                <th>Requester</th>
-                <th>Due Date</th>
+                <th scope="col">Request No.</th>
+                <th scope="col">Title / Product Type</th>
+                <th scope="col">Status</th>
+                <th scope="col">Requester</th>
+                <th scope="col">Due Date</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.requestId}>
-                  <td>{item.requestNo}</td>
+                  <td><code>{item.requestNo}</code></td>
                   <td>
-                    <span className="cell-strong">{item.title ?? "Untitled request"}</span>
-                    <span className="chip">{item.productType ?? "No product type"}</span>
+                    <div className="request-identity">
+                    <span className="request-identity__title">{item.title ?? "Untitled request"}</span>
+                    <span className="request-identity__type">{item.productType ?? "No product type"}</span>
+                    </div>
                   </td>
-                  <td><span className="status-badge">{item.status}</span></td>
+                  <td><StatusLabel status={item.status} kind={Object.hasOwn(statusKinds, item.status) ? statusKinds[item.status] : undefined} /></td>
                   <td>{item.requester ?? "—"}</td>
                   <td>{formatPreviewDate(item.dueDate)}</td>
                 </tr>
@@ -173,14 +172,15 @@ export function RequestExportPreview({
             </tbody>
           </table>
         </div>
+        </div>
       ) : null}
     </section>
   );
 }
 
 export function RequestExportPage() {
-  const [catalog, setCatalog] = useState<{ statuses: string[]; loading: boolean; error: string | null }>({
-    statuses: [], loading: true, error: null,
+  const [catalog, setCatalog] = useState<{ statuses: string[]; kinds: Record<string, WorkflowStatusKind>; loading: boolean; error: string | null }>({
+    statuses: [], kinds: {}, loading: true, error: null,
   });
   const [filters, setFilters] = useState<RequestExportFilterValues>({
     status: "",
@@ -213,10 +213,10 @@ export function RequestExportPage() {
     let cancelled = false;
     void api.fetchWorkflowStatuses().then(
       (response) => {
-        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), loading: false, error: null });
+        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), kinds: Object.fromEntries(response.entries.map((entry) => [entry.name, entry.kind])), loading: false, error: null });
       },
       (error: unknown) => {
-        if (!cancelled) setCatalog({ statuses: [], loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
+        if (!cancelled) setCatalog({ statuses: [], kinds: {}, loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
       },
     );
     return () => { cancelled = true; };
@@ -360,14 +360,12 @@ export function RequestExportPage() {
 
   return (
     <article className="page-card workflow-page">
-      <div className="page-card__header">
-        <h1>Request export</h1>
-      </div>
+      <PageHeader title="Export to Excel" description="Filter requests and download an XLSX workbook. Larger exports are prepared in the background." />
       <div className="page-card__body request-export">
         <section className="page-card__section">
           <h2>Export filters</h2>
-          {catalog.loading ? <p className="page-card__description" role="status">Loading workflow statuses…</p> : null}
-          {catalog.error ? <p className="status-pill status-pill--error" role="alert">Unable to load workflow statuses: {catalog.error}</p> : null}
+          {catalog.loading ? <AsyncNotice kind="loading" title="Loading workflow statuses…" /> : null}
+          {catalog.error ? <AsyncNotice kind="error" title={`Unable to load workflow statuses: ${catalog.error}`} /> : null}
           <RequestExportFiltersForm
             downloading={downloading}
             filters={filters}
@@ -376,7 +374,6 @@ export function RequestExportPage() {
             statusDisabled={catalog.loading || Boolean(catalog.error)}
           />
         </section>
-        <RequestExportPreview {...preview} />
         <div className="request-export__action">
           <button className="primary-button" disabled={downloading} onClick={exportRequests} type="button">
             {downloading ? "Preparing…" : "Export XLSX"}
@@ -387,6 +384,7 @@ export function RequestExportPage() {
             jobStatus={pendingJob?.status ?? null}
           />
         </div>
+        <RequestExportPreview {...preview} statusKinds={catalog.kinds} />
       </div>
     </article>
   );

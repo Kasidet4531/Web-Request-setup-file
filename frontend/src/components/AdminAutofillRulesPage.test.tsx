@@ -36,7 +36,7 @@ describe('AdminAutofillRulesPage', () => {
     const html = renderToStaticMarkup(createElement(AdminAutofillRulesPage))
 
     expect(routeOptions.component).toBe(AdminAutofillRulesPage)
-    expect(html).toContain('<h1>Autofill rule management</h1>')
+    expect(html).toContain('<h1>Auto-fill Rules</h1>')
     expect(html).toContain('Create rule')
   })
 })

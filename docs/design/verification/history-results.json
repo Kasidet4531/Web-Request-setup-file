@@ -1,0 +1,8 @@
+{
+  "checks": [
+    "history route clears previous identity on client-side route change",
+    "denied history renders its actual error",
+    "previous request events are absent after denied navigation",
+    "final desktop and mobile history recaptured"
+  ]
+}

@@ -351,6 +351,23 @@ function getFormRenderer(page: unknown): RenderedElement {
 }
 
 describe('ActiveSchemaForm draft schema upgrade interactions', () => {
+  it('shows unsaved feedback for edits and clears it when the user restores the saved value', async () => {
+    requestApi.fetchActiveFormSchema.mockResolvedValue(currentActiveRequestSchema)
+    let page = await loadNewDraftForm()
+    expect(findRenderedElement(page, (element) => element.props.children === 'Not saved')).not.toBeNull()
+    expect(findRenderedElement(getFormRenderer(page).props.footerActions, (element) => element.props.children === 'Not saved')).not.toBeNull()
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', 'Local note')
+    page = renderNewDraftForm()
+    expect(findRenderedElement(page, (element) => element.props.children === 'Unsaved changes')).not.toBeNull()
+    expect(findRenderedElement(getFormRenderer(page).props.footerActions, (element) => element.props.children === 'Unsaved changes')).not.toBeNull()
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', '')
+    page = renderNewDraftForm()
+    expect(findRenderedElement(page, (element) => element.props.children === 'Unsaved changes')).toBeNull()
+    expect(findRenderedElement(page, (element) => element.props.children === 'Not saved')).not.toBeNull()
+    expect(findRenderedElement(getFormRenderer(page).props.footerActions, (element) => element.props.children === 'Unsaved changes')).toBeNull()
+    expect(findRenderedElement(getFormRenderer(page).props.footerActions, (element) => element.props.children === 'Not saved')).not.toBeNull()
+  })
+
   it('retains a committed new draft and its runtime triggers without requiring another schema fetch', async () => {
     const current = structuredClone(currentActiveRequestSchema)
     current.schema.sections[0].fields[0].autofillTrigger = true
@@ -531,7 +548,7 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     const formRenderer = getFormRenderer(page)
     expect(formRenderer.props.schema).toEqual(activeRequestSchema.schema)
     expect(formRenderer.props.values).toEqual({ product_type: 'New Product', title: '' })
-    expect(formRenderer.props.footerActions).toBeFalsy()
+    expect(findRenderedElement(formRenderer.props.footerActions, (element) => element.type === 'button')).toBeNull()
     expect(requestApi.submitPsfRequest).not.toHaveBeenCalled()
   })
 
@@ -762,7 +779,7 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     const formRenderer = getFormRenderer(page)
     expect(formRenderer.props.schema).toEqual(snapshotSchema)
     expect(formRenderer.props.onSubmit).toBeTypeOf('function')
-    expect(formRenderer.props.footerActions).toBeFalsy()
+    expect(findRenderedElement(formRenderer.props.footerActions, (element) => element.type === 'button')).toBeNull()
     expect(requestApi.submitPsfRequest).not.toHaveBeenCalled()
     expect(requestApi.upgradeDraftSchema).not.toHaveBeenCalled()
   })

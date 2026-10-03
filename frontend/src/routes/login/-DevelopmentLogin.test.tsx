@@ -67,8 +67,8 @@ describe('local account login interaction', () => {
     })))
     render().props.children[2].props.children[0].props.onClick()
     await vi.waitFor(() => {
-      const error = render().props.children[3]
-      expect(error && error.props.children).toBe('Not Found')
+      const error = render().props.children.find((child: { props: { kind?: string; title?: string } } | null) => child?.props.kind === 'error')
+      expect(error && error.props.title).toBe('Not Found')
     })
     expect(hooks.navigate).not.toHaveBeenCalled()
     expect(render().props.children[2].props.children[0].props.disabled).toBe(false)

@@ -291,7 +291,7 @@ describe("request export URL", () => {
       }) as never,
     );
 
-    expect(html).toContain("Export preview");
+    expect(html).toContain("Request preview");
     expect(html).toContain("Request No.");
     expect(html).toContain("Title / Product Type");
     expect(html).toContain("Requester");
@@ -311,10 +311,10 @@ describe("request export URL", () => {
     );
 
     expect(routeOptions.component).toBe(RequestExportPage);
-    expect(html).toContain("<h1>Request export</h1>");
+    expect(html).toContain("<h1>Export to Excel</h1>");
     expect(html).not.toContain("Admin tools");
     expect(html).not.toContain("Download a filtered XLSX copy of the current request list.");
-    expect(html).toContain("Export preview");
+    expect(html).toContain("Request preview");
     expect(html).toContain("Export XLSX");
   });
 });

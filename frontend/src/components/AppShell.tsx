@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
+import { RequestBreadcrumbContext, requestDocumentTitle, type RequestBreadcrumb } from './requestBreadcrumb'
 import { NavSidebar } from './NavSidebar'
 import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
-import { isStandaloneAuthenticationPath, type UserRole } from './navigationState'
+import { contextualAdminSections, isStandaloneAuthenticationPath, resolveActivePath, type UserRole } from './navigationState'
 import { subscribeAuthSessionChanged } from '../services/auth-session'
+import { AsyncNotice } from './ui/AsyncNotice'
 import {
   ApiError,
   fetchCurrentUser,
@@ -24,7 +26,7 @@ type Crumb = { label: string; to?: string; search?: { formKey: FormVersionBreadc
  * Request crumbs use route paths only; form versions use the version already
  * loaded by the editor so their status is not guessed from the URL.
  */
-function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb | null): Crumb[] {
+function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb | null, request: RequestBreadcrumb | null = null): Crumb[] {
   const segments = pathname.split('/').filter(Boolean)
 
   if (segments.length === 0 || segments[0] === 'dashboard') {
@@ -36,17 +38,18 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
   }
 
   if (segments[0] === 'requests') {
-    if (!segments[1]) return []
+    if (!segments[1]) return [{ label: 'All PSF Requests' }]
     const crumbs: Crumb[] = [{ label: 'PSF Requests', to: '/requests' }]
     if (segments[1] === 'new') crumbs.push({ label: 'Create New Request' })
     else {
-      crumbs.push({ label: 'Request detail' })
+      crumbs.push({ label: request?.requestId === segments[1] ? request.requestNo : 'Request detail' })
       if (segments[2] === 'history') crumbs.push({ label: 'Audit History' })
     }
     return crumbs
   }
 
   if (segments[0] === 'history') return [{ label: 'Global Audit History' }]
+  if (segments[0] === 'my-drafts') return [{ label: 'My drafts' }]
 
   if (segments[0] === 'admin') {
     const crumbs: Crumb[] = [{ label: 'Admin Console' }]
@@ -108,10 +111,27 @@ function RoleIcon({ role }: { role: UserRole }) {
 
 function UserMenu({ user, onLoggedOut }: { user: AuthenticatedUserProfile; onLoggedOut: () => void }) {
   const [isOpen, setIsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setIsOpen(false)
+    }
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setIsOpen(false); triggerRef.current?.focus() }
+    }
+    document.addEventListener('pointerdown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => { document.removeEventListener('pointerdown', handleClick); document.removeEventListener('keydown', handleKey) }
+  }, [isOpen])
 
   return (
-    <div className="user-menu">
+    <div className="user-menu" ref={menuRef}>
       <button
+        ref={triggerRef}
+        aria-label={`Account: ${user.displayName}`}
         aria-expanded={isOpen}
         className="user-menu__trigger"
         onClick={() => setIsOpen((open) => !open)}
@@ -157,12 +177,47 @@ export function AppShell() {
   const [authState, setAuthState] = useState<AuthState>({ status: 'loading' })
   const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0)
   const [formVersionBreadcrumb, setFormVersionBreadcrumb] = useState<FormVersionBreadcrumb | null>(null)
+  const [requestBreadcrumb, setRequestBreadcrumb] = useState<RequestBreadcrumb | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches,
+    () => typeof window === 'undefined' || !window.matchMedia('(max-width: 899px)').matches,
   )
+  const [mobileNavigation, setMobileNavigation] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches)
+  const navigationRef = useRef<HTMLElement>(null)
+  const navigationTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobileDrawerOpen = mobileNavigation && sidebarOpen
   const [darkMode, setDarkMode] = useState(
     () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
   )
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 899px)')
+    const handleChange = () => { setMobileNavigation(media.matches); setSidebarOpen(!media.matches) }
+    media.addEventListener('change', handleChange)
+    return () => media.removeEventListener('change', handleChange)
+  }, [])
+
+  useEffect(() => {
+    document.title = requestDocumentTitle(pathname, requestBreadcrumb, breadcrumbsForPath(pathname, formVersionBreadcrumb, requestBreadcrumb).at(-1)?.label ?? 'PSF Requests')
+  }, [pathname, formVersionBreadcrumb, requestBreadcrumb])
+
+  useEffect(() => {
+    if (!mobileDrawerOpen) return
+    const navigation = navigationRef.current
+    const trigger = navigationTriggerRef.current
+    navigation?.querySelector<HTMLButtonElement>('.sidebar__close')?.focus()
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setSidebarOpen(false) }
+      if (event.key === 'Tab') {
+        const controls = navigation?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')
+        const first = controls?.[0]
+        const last = controls?.[controls.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => { document.removeEventListener('keydown', handleKey); trigger?.focus() }
+  }, [mobileDrawerOpen])
 
   useEffect(() => {
     let isMounted = true
@@ -222,7 +277,7 @@ export function AppShell() {
   }
 
   const role = authState.status === 'authenticated' ? authState.user.role : null
-  const breadcrumbs = breadcrumbsForPath(pathname, formVersionBreadcrumb)
+  const breadcrumbs = breadcrumbsForPath(pathname, formVersionBreadcrumb, requestBreadcrumb)
   const canCreateRequest = authState.status === 'authenticated'
   const isFormVersion = pathname.startsWith('/admin/form-config/')
 
@@ -242,7 +297,7 @@ export function AppShell() {
     return (
       <main className="auth-layout">
         <section className="page-card">
-          {authState.status === 'loading' ? <p role="status">Checking session…</p> : (
+          {authState.status === 'loading' ? <AsyncNotice kind="loading" title="Checking session…" /> : (
             <>
               <p role="alert">{authState.error}</p>
               <button className="btn-primary" type="button" onClick={() => {
@@ -258,12 +313,17 @@ export function AppShell() {
 
   return (
     <div className="app-layout">
-      <NavSidebar collapsed={!sidebarOpen} role={role} />
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <NavSidebar collapsed={!sidebarOpen} role={role} mobile={mobileNavigation} navigationRef={navigationRef}
+        onClose={() => setSidebarOpen(false)} onNavigate={() => { if (mobileNavigation) setSidebarOpen(false) }} />
+      {mobileDrawerOpen ? <button className="navigation-backdrop" tabIndex={-1} aria-label="Close navigation backdrop" type="button" onClick={() => setSidebarOpen(false)} /> : null}
 
-      <div className="app-layout__body">
+      <div className="app-layout__body" inert={mobileDrawerOpen || undefined}>
         <header className={isFormVersion ? 'app-header app-header--form-version' : 'app-header'}>
           <div className="header-left">
             <button
+              ref={navigationTriggerRef}
+              aria-controls="primary-navigation"
               aria-expanded={sidebarOpen}
               aria-label={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
               className="icon-button"
@@ -291,8 +351,8 @@ export function AppShell() {
 
           <div className="header-actions">
             {canCreateRequest && pathname !== '/requests/new' ? (
-              <Link className={pathname.startsWith('/admin') ? 'btn-secondary' : 'btn-primary'} to="/requests/new">
-                <Plus size={14} /> New Request
+              <Link className={pathname.startsWith('/admin') ? 'btn-secondary header-new-request' : 'btn-primary header-new-request'} aria-label="New Request" to="/requests/new">
+                <Plus size={14} /><span>New Request</span>
               </Link>
             ) : null}
 
@@ -311,10 +371,17 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="app-main">
+        <main className="app-main" id="main-content" tabIndex={-1}>
           <div className="app-main__inner">
+            {role === 'admin' && pathname.startsWith('/admin') ? <nav aria-label="Administration tools" className="context-navigation">
+              <Link className={pathname === '/admin' ? 'context-navigation__home is-active' : 'context-navigation__home'} to="/admin" aria-current={pathname === '/admin' ? 'page' : undefined}>Administration</Link>
+              {contextualAdminSections(role).map((section) => <div className="context-navigation__group" key={section.label}>
+                <span>{section.label}</span>
+                <div>{section.items.map((item) => <Link key={item.to} to={item.to} aria-current={resolveActivePath(pathname, contextualAdminSections(role)) === item.to ? 'page' : undefined}>{item.label}</Link>)}</div>
+              </div>)}
+            </nav> : null}
             <FormVersionBreadcrumbContext.Provider value={setFormVersionBreadcrumb}>
-              <Outlet />
+              <RequestBreadcrumbContext.Provider value={setRequestBreadcrumb}><Outlet /></RequestBreadcrumbContext.Provider>
             </FormVersionBreadcrumbContext.Provider>
           </div>
         </main>

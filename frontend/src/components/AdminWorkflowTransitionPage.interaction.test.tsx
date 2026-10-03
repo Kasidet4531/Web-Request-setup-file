@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdminWorkflowTransitionPage } from './AdminWorkflowTransitionPage'
 import { ApiError } from '../services/api'
+import { StatusLabel } from './ui/StatusLabel'
 
 const workflowApi = vi.hoisted(() => ({
   fetchAdminWorkflowTransitionConfiguration: vi.fn(),
@@ -52,7 +53,7 @@ describe('Status Management interactions', () => {
     const remove = find(page, (element) => element.type === 'button' && element.props.children === 'Delete')!
     ;(remove.props.onClick as () => void)()
     hookState.begin()
-    const confirmation = find(AdminWorkflowTransitionPage(), (element) => element.type === 'button' && element.props.className === 'primary-button' && element.props.type === 'button')!
+    const confirmation = find(AdminWorkflowTransitionPage(), (element) => element.type === 'button' && (element.props.children === 'Delete status' || element.props.children === 'Replace and delete'))!
     expect(confirmation.props.disabled).toBe(false)
     expect(confirmation.props.children).toBe('Delete status')
     ;(confirmation.props.onClick as () => void)()
@@ -67,14 +68,14 @@ describe('Status Management interactions', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     const render = () => { hookState.begin(); return AdminWorkflowTransitionPage() }
     ;(find(render(), (element) => element.type === 'button' && element.props.children === 'Delete')!.props.onClick as () => void)()
-    const confirm = () => find(render(), (element) => element.type === 'button' && element.props.className === 'primary-button' && element.props.type === 'button')!
+    const confirm = () => find(render(), (element) => element.type === 'button' && (element.props.children === 'Delete status' || element.props.children === 'Replace and delete'))!
     expect(confirm().props.disabled).toBe(true)
     const replacement = find(render(), (element) => element.type === 'select' && element.props.value === '')!
     ;(replacement.props.onChange as (event: unknown) => void)({ target: { value: 'draft-id' } })
     expect(confirm().props.disabled).toBe(true)
     ;(replacement.props.onChange as (event: unknown) => void)({ target: { value: 'other-id' } })
     expect(confirm().props.disabled).toBe(false)
-    const trigger = find(render(), (element) => element.type === 'label' && Array.isArray(element.props.children) && element.props.children[0] === 'Replace visibility trigger')!
+    const trigger = find(render(), (element) => element.type === 'label' && find(element.props.children, (child) => child.type === 'span' && child.props.children === 'Replace visibility trigger') !== null)!
     const triggerSelect = find(trigger, (element) => element.type === 'select')!
     ;(triggerSelect.props.onChange as (event: unknown) => void)({ target: { value: 'other-id' } })
     workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Stale catalog', 409, 'Conflict', null))
@@ -93,7 +94,7 @@ describe('Status Management interactions', () => {
     hookState.begin()
     const page = AdminWorkflowTransitionPage()
     expect(find(page, (element) => element.type === 'span' && element.props.children === 'Protected')).not.toBeNull()
-    expect(find(page, (element) => element.type === 'strong' && element.props.children === config.entries[1].name)).not.toBeNull()
+    expect(find(page, (element) => element.type === StatusLabel && element.props.status === config.entries[1].name && element.props.kind === 'open')).not.toBeNull()
     const input = find(page, (element) => element.type === 'input')
     const form = find(page, (element) => element.type === 'form')
     if (!input || typeof input.props.onChange !== 'function' || !form || typeof form.props.onSubmit !== 'function') throw new Error('Expected new-status form controls')

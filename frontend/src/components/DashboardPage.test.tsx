@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { RequestsTable } from './RequestsWorkspace'
 import type { PsfRequestListItem } from '../services/api'
 
+function findRequestLink(node: unknown): { props: Record<string, unknown> } | null {
+  if (Array.isArray(node)) return node.map(findRequestLink).find(Boolean) ?? null
+  if (!node || typeof node !== 'object' || !('props' in node)) return null
+  const element = node as { props: Record<string, unknown> }
+  if (element.props.to === '/requests/$requestId') return element
+  return findRequestLink(element.props.children)
+}
+
 function findRow(node: unknown): { props: Record<string, unknown> } | null {
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -49,6 +57,10 @@ describe('Request list rows', () => {
     expect(row.props.className).toContain('data-table__row--interactive')
     expect(JSON.stringify(table)).not.toContain('Open detail')
     expect(JSON.stringify(table)).not.toContain('Action')
+
+    const identityLink = findRequestLink(table)
+    expect(identityLink?.props.params).toEqual({ requestId: 'request-42' })
+    expect(JSON.stringify(identityLink)).toContain('PSF-0042')
 
     ;(row.props.onClick as () => void)()
     ;(row.props.onKeyDown as (event: { key: string; preventDefault: () => void }) => void)({

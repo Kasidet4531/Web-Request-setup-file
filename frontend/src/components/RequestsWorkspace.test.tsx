@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactElement } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RequestDetailShell,
   RequestHeaderSummary,
@@ -11,12 +11,14 @@ import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
 import { ApiError, type PsfRequestResponse } from '../services/api'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { ConfirmDialog } from './ui/ConfirmDialog'
+import { AsyncNotice } from './ui/AsyncNotice'
 
-const navigation = vi.hoisted(() => ({ blocker: null as { shouldBlockFn: (location: { current: { pathname: string }; next: { pathname: string } }) => boolean; enableBeforeUnload: boolean } | null, navigate: vi.fn() }))
+const navigation = vi.hoisted(() => ({ blocker: null as { shouldBlockFn: (location: { current: { pathname: string }; next: { pathname: string } }) => boolean; enableBeforeUnload: boolean; withResolver?: boolean } | null, navigate: vi.fn(), resolver: { status: 'idle' as 'idle' | 'blocked', proceed: vi.fn(), reset: vi.fn() } }))
 vi.mock('@tanstack/react-router', async (load) => ({
   ...await load<typeof import('@tanstack/react-router')>(),
   useNavigate: () => navigation.navigate,
-  useBlocker: (options: typeof navigation.blocker) => { navigation.blocker = options },
+  useBlocker: (options: typeof navigation.blocker) => { navigation.blocker = options; return navigation.resolver },
 }))
 
 const requestDetailApi = vi.hoisted(() => ({
@@ -533,7 +535,8 @@ describe('PsfCreatedInformationPanel', () => {
     expect(html).toContain('psf-created-panel--read-only')
     expect(html).not.toContain('Editable')
     expect(html).not.toContain('available read-only')
-    expect(html).toMatch(/<input[^>]*disabled=""[^>]*>/)
+    expect(html).toContain('<output')
+    expect(html).not.toContain('<input')
     expect(html).not.toContain('Save PSF Created Information')
   })
 
@@ -789,7 +792,7 @@ describe('Request list pagination', () => {
     const label = requireRenderedElement(page, (element) => element.type === 'label' && Array.isArray(element.props.children) && element.props.children[0].toString().trim() === name)
     return requireRenderedElement(label, (element) => element.type === 'input' || element.type === 'select')
   }
-  async function settle() { requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return render() }
+  async function settle() { requestDetailHookHarness.runEffects(); await new Promise((resolve) => setTimeout(resolve, 310)); render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return render() }
   beforeEach(() => {
     requestDetailHookHarness.reset()
     requestDetailApi.fetchCurrentUser.mockReset().mockResolvedValue({ user: { role: 'requester' } })
@@ -806,7 +809,7 @@ describe('Request list pagination', () => {
     ;(field(page, name).props.onChange as (event: unknown) => void)({ target: { value: 'Open work' } })
     render(); page = await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0 }))
-    expect(requireRenderedElement(page, (element) => element.props.role === 'status').props.children).toEqual([1, ' request(s)'])
+    expect(renderToStaticMarkup(<>{requireRenderedElement(page, (element) => element.props.className === 'table-footer').props.children}</>)).toContain('0 requests')
   })
 
   it('keeps My draft owner scope and keyword/product/pagination without exposing business-only status choices', async () => {
@@ -816,6 +819,8 @@ describe('Request list pagination', () => {
     expect(findRenderedElement(page, (element) => element.type === 'select')).toBeNull()
     ;(field(page, 'Keyword').props.onChange as (event: unknown) => void)({ target: { value: 'my probe' } })
     ;(field(page, 'Product Type').props.onChange as (event: unknown) => void)({ target: { value: 'Existing Product' } })
+    renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    await new Promise((resolve) => setTimeout(resolve, 310))
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     page = renderDrafts()
     ;(button(page, 'Next').props.onClick as () => void)()
@@ -840,11 +845,147 @@ describe('Request list pagination', () => {
   })
 })
 
+describe('Queue filtering and retained results', () => {
+  const render = (dashboard = false, scope: 'all' | 'my-drafts' = 'all') => {
+    requestDetailHookHarness.beginRender()
+    return dashboard ? RequestsWorkspace.DashboardPage() : RequestsWorkspace.RequestsListPage({ scope })
+  }
+  const table = (page: unknown) => findRenderedElement(page, (element) => element.type === RequestsWorkspace.RequestsTable)
+  const field = (page: unknown, name: string) => {
+    const label = requireRenderedElement(page, (element) => element.type === 'label' && Array.isArray(element.props.children) && String(element.props.children[0]).trim() === name)
+    return requireRenderedElement(label, (element) => element.type === 'input' || element.type === 'select')
+  }
+  const change = (page: unknown, name: string, value: string) => (field(page, name).props.onChange as (event: unknown) => void)({ target: { value } })
+  async function settle(dashboard = false, scope: 'all' | 'my-drafts' = 'all') {
+    requestDetailHookHarness.runEffects()
+    await vi.advanceTimersByTimeAsync(0)
+    return render(dashboard, scope)
+  }
+  const response = (requestNo = 'PSF-001', total = 101) => ({ items: [{ requestId: requestNo, requestNo, title: 'Probe request', status: 'Open work' }], total, offset: 0, limit: 100, summary: { open: total, overdue: 0, completed: 0 } })
+  beforeEach(() => {
+    vi.useFakeTimers()
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchCurrentUser.mockReset().mockResolvedValue({ user: { id: 'actor-1', role: 'requester' } })
+    requestDetailApi.fetchWorkflowStatuses.mockReset().mockResolvedValue({ statuses: ['Open work', 'Completed'] })
+    requestDetailApi.queryPsfRequests.mockReset().mockResolvedValue(response())
+  })
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
+
+  it.each([true, false])('keeps inputs responsive and debounces text queries for300ms (dashboard=%s)', async (dashboard) => {
+    render(dashboard); let page = await settle(dashboard)
+    change(page, 'Keyword', 'pro'); page = render(dashboard); await settle(dashboard)
+    expect(field(page, 'Keyword').props.value).toBe('pro')
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(200)
+    change(page, 'Keyword', 'probe'); render(dashboard); await settle(dashboard)
+    await vi.advanceTimersByTimeAsync(299)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1); render(dashboard); await settle(dashboard)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(2)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: 'probe', offset: 0 }))
+    page = render(dashboard); change(page, 'Status', 'Completed'); render(dashboard); await settle(dashboard)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(3)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'Completed' }))
+  })
+
+  it('settles keyword and product filters on page two before querying offset zero', async () => {
+    render(); let page = await settle()
+    const next = requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Next')
+    ;(next.props.onClick as () => void)(); render(); page = await settle()
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 100 }))
+    change(page, 'Keyword', 'probe'); change(page, 'Product Type', 'Transfer Product'); render(); await settle()
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(300); render(); await settle()
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(3)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: 'probe', productType: 'Transfer Product', offset: 0 }))
+  })
+
+  it.each([true, false])('retains inert rows while updating, suppresses stale counts, and clears rows on failure (dashboard=%s)', async (dashboard) => {
+    render(dashboard); let page = await settle(dashboard)
+    let reject: ((reason: unknown) => void) | undefined
+    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((_resolve, rejectRequest) => { reject = rejectRequest }))
+    change(page, 'Status', 'Completed'); render(dashboard); page = await settle(dashboard)
+    expect(table(page)?.props.items).toEqual(response().items)
+    expect(findRenderedElement(page, (element) => element.props.inert === true && element.props['aria-busy'] === true)).not.toBeNull()
+    expect(findRenderedElement(page, (element) => element.props.role === 'status' && typeof element.props.children === 'string' && element.props.children.startsWith('Updating'))).not.toBeNull()
+    expect(findRenderedElement(page, (element) => element.props.className === 'table-footer')).toBeNull()
+    reject!(new Error('Queue unavailable')); await vi.advanceTimersByTimeAsync(0); page = render(dashboard)
+    expect(table(page)).toBeNull()
+  })
+
+  it('hides private draft rows immediately when the scope changes', async () => {
+    render(false, 'my-drafts'); let page = await settle(false, 'my-drafts')
+    expect(table(page)).not.toBeNull()
+    page = render(false, 'all')
+    expect(table(page)).toBeNull()
+    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise(() => {}))
+    page = await settle(false, 'all')
+    expect(table(page)).toBeNull()
+  })
+
+  it('ignores an older response after text input changes and preserves the newer result', async () => {
+    render(); let page = await settle()
+    let resolveOld: ((value: unknown) => void) | undefined
+    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    change(page, 'Status', 'Completed'); render(); page = await settle()
+    change(page, 'Keyword', 'new'); render(); await settle()
+    await vi.advanceTimersByTimeAsync(300)
+    requestDetailApi.queryPsfRequests.mockResolvedValueOnce(response('PSF-NEW', 1))
+    render(); await settle()
+    resolveOld!(response('PSF-OLD')); await vi.advanceTimersByTimeAsync(0); page = render()
+    expect(table(page)?.props.items).toEqual(response('PSF-NEW', 1).items)
+  })
+
+  it('finishes the current query when a pending text edit is undone before debounce', async () => {
+    render(); let page = await settle()
+    let resolve: ((value: unknown) => void) | undefined
+    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((resolveRequest) => { resolve = resolveRequest }))
+    change(page, 'Status', 'Completed'); render(); page = await settle()
+    change(page, 'Keyword', 'temporary'); render(); page = await settle()
+    change(page, 'Keyword', ''); render(); await settle()
+    resolve!(response('PSF-FINISHED', 1)); await vi.advanceTimersByTimeAsync(0); page = render()
+    expect(table(page)?.props.items).toEqual(response('PSF-FINISHED', 1).items)
+    expect(findRenderedElement(page, (element) => element.props.inert === true)).toBeNull()
+  })
+
+  it.each([true, false])('clears previous actor rows as soon as refreshed identity changes (dashboard=%s)', async (dashboard) => {
+    render(dashboard); let page = await settle(dashboard)
+    requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'actor-2', role: 'requester' } })
+    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise(() => {}))
+    change(page, 'Status', 'Completed'); render(dashboard); page = await settle(dashboard)
+    expect(table(page)).toBeNull()
+    expect(findRenderedElement(page, (element) => element.props.to === '/admin/export-profile')).toBeNull()
+  })
+
+  it.each([true, false])('shows the result range once beside pagination (dashboard=%s)', async (dashboard) => {
+    render(dashboard); const page = await settle(dashboard)
+    expect(JSON.stringify(page).match(/1–1/g)).toHaveLength(1)
+    const footer = requireRenderedElement(page, (element) => element.props.className === 'table-footer')
+    expect(findRenderedElement(footer, (element) => element.type === 'button' && element.props.children === 'Next')).not.toBeNull()
+  })
+
+  it('provides one scoped empty state and a real clear-filter action', async () => {
+    requestDetailApi.queryPsfRequests.mockResolvedValue({ ...response(), items: [], total: 0 })
+    render(); let page = await settle()
+    change(page, 'Status', 'Completed'); render(); page = await settle()
+    const emptyTable = table(page)!
+    const empty = RequestsWorkspace.RequestsTable(emptyTable.props as unknown as Parameters<typeof RequestsWorkspace.RequestsTable>[0])
+    expect(renderToStaticMarkup(empty)).toContain('No requests match')
+    const clear = requireRenderedElement(empty, (element) => element.type === 'button' && element.props.children === 'Clear filters')
+    ;(clear.props.onClick as () => void)(); render(); page = await settle()
+    expect(field(page, 'Status').props.value).toBe('')
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }))
+  })
+})
+
 describe('Request dirty navigation protection (blocker wiring, not mounted Router proof)', () => {
   beforeEach(() => {
     requestDetailHookHarness.reset()
     navigation.blocker = null
     navigation.navigate.mockReset()
+    navigation.resolver.status = 'idle'
+    navigation.resolver.proceed.mockReset()
+    navigation.resolver.reset.mockReset()
     requestDetailApi.fetchPsfRequest.mockResolvedValue(buildDraftRequest({ psfCreatedDataVisible: true, canEditPsfCreatedData: true }))
     requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
     requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
@@ -857,13 +998,20 @@ describe('Request dirty navigation protection (blocker wiring, not mounted Route
     const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
     expect(form.props.onDirtyChange).toBeTypeOf('function')
     ;(form.props.onDirtyChange as (dirty: boolean) => void)(true)
-    page = render()
+    render()
     expect(navigation.blocker?.enableBeforeUnload).toBe(true)
     const location = { current: { pathname: '/requests/new' }, next: { pathname: '/dashboard' } }
     expect(navigation.blocker?.shouldBlockFn(location)).toBe(true)
-    expect(window.confirm).toHaveBeenCalledTimes(1)
-    vi.mocked(window.confirm).mockReturnValue(true)
-    expect(navigation.blocker?.shouldBlockFn(location)).toBe(false)
+    expect(navigation.blocker?.withResolver).toBe(true)
+    navigation.resolver.status = 'blocked'
+    page = render()
+    const confirmation = requireRenderedElement(page, (element) => element.type === ConfirmDialog)
+    expect(confirmation.props.open).toBe(true)
+    ;(confirmation.props.onCancel as () => void)()
+    expect(navigation.resolver.reset).toHaveBeenCalledOnce()
+    expect(navigation.blocker?.shouldBlockFn(location)).toBe(true)
+    ;(confirmation.props.onConfirm as () => void)()
+    expect(navigation.resolver.proceed).toHaveBeenCalledOnce()
     const savedForm = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
     ;(savedForm.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
     ;(savedForm.props.onDirtyChange as (dirty: boolean) => void)(false)
@@ -872,7 +1020,7 @@ describe('Request dirty navigation protection (blocker wiring, not mounted Route
     expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
     expect(navigation.blocker?.enableBeforeUnload).toBe(false)
     expect(navigation.blocker?.shouldBlockFn(location)).toBe(false)
-    expect(window.confirm).toHaveBeenCalledTimes(2)
+    expect(window.confirm).not.toHaveBeenCalled()
   })
 
   it('guards requester OR PSF edits, leaves values intact on cancel, and stops guarding after separate saves', async () => {
@@ -959,7 +1107,7 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
     shell = renderRequestDetailShell()
     actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
-    const success = requireRenderedElement(shell, (element) => element.props.role === 'status')
+    const success = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')
 
     expect(requestDetailApi.submitPsfRequest).toHaveBeenCalledWith('request-1', {
       formVersion: 4,
@@ -969,7 +1117,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(requestDetailApi.updatePsfRequestStatus).not.toHaveBeenCalled()
     expect(actions.props.currentStatus).toBe('Setup In Progress')
     expect(actions.props.selectedStatus).toBe('Setup In Progress')
-    expect(success.props.children).toBe('Request DRAFT-0001 submitted to Setup In Progress.')
+    expect(success.props.title).toBe('Request DRAFT-0001 submitted to Setup In Progress.')
   })
 
   it('blocks Action center submission while requester edits are unsaved', async () => {
@@ -1148,9 +1296,9 @@ describe('RequestDetailShell workflow actions', () => {
     shell = renderRequestDetailShell()
 
     const conflictForm = requireRenderedElement(shell, (element) => element.type === ActiveSchemaForm)
-    const alert = requireRenderedElement(shell, (element) => element.props.role === 'alert')
+    const alert = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
     expect(conflictForm.props.submissionConflict).toBe(1)
-    expect(alert.props.children).toBe('The Draft changed while submitting.')
+    expect(alert.props.title).toBe('The Draft changed while submitting.')
   })
 
   it('blocks Action center submission when the form detects an older Draft schema', async () => {
@@ -1219,14 +1367,11 @@ describe('RequestDetailShell workflow actions', () => {
     renderRequestDetailShell()
     requestDetailHookHarness.runEffects()
     await flushRequestDetailAsyncWork()
-    const header = requireRenderedElement(renderRequestDetailShell(), (element) => element.props.className === 'page-header')
-    const requestNumber = requireRenderedElement(header, (element) => element.props.className === 'detail-topbar__id font-mono-code')
-    const status = requireRenderedElement(header, (element) => element.props.className === 'detail-topbar__status')
-
-    expect(requestNumber.props.children).toBe('PSF-0001')
-    expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('Current status')
-    expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('Custom review')
-    expect(renderToStaticMarkup(<>{status.props.children}</>)).toContain('status-badge--custom-review')
+    const summary = requireRenderedElement(renderRequestDetailShell(), (element) => element.type === RequestHeaderSummary)
+    const header = renderToStaticMarkup(<RequestHeaderSummary request={summary.props.request as PsfRequestResponse} includeMetadata={false} />)
+    expect(header).toContain('PSF-0001')
+    expect(header).toContain('Custom review')
+    expect(header).toContain('ui-status--neutral')
     expect(requestDetailApi.fetchWorkflowStatuses).not.toHaveBeenCalled()
   })
 
@@ -1407,8 +1552,7 @@ describe('RequestDetailShell workflow actions', () => {
 
     actions = requireRenderedElement(shell, (element) => element.type === WorkflowStatusActions)
     const summary = requireRenderedElement(shell, (element) => element.type === RequestHeaderSummary)
-    const currentStatus = requireRenderedElement(shell, (element) => element.props.className === 'detail-topbar__status')
-    const success = requireRenderedElement(shell, (element) => element.props.role === 'status')
+    const success = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')
 
     expect(requestDetailApi.updatePsfRequestStatus).toHaveBeenCalledWith('request-1', {
       status: 'Setup In Progress',
@@ -1416,10 +1560,10 @@ describe('RequestDetailShell workflow actions', () => {
     })
     expect(requestDetailApi.fetchPsfRequestStatusOptions).toHaveBeenCalledTimes(2)
     expect(summary.props.request).toMatchObject({ status: 'Setup In Progress' })
-    expect(renderToStaticMarkup(<>{currentStatus.props.children}</>)).toContain('Setup In Progress')
+    expect(renderToStaticMarkup(<RequestHeaderSummary request={summary.props.request as PsfRequestResponse} includeMetadata={false} />)).toContain('Setup In Progress')
     expect(actions.props.allowedNextStatuses).toEqual(['PSF Created', 'Need More Information', 'Rejected'])
     expect(actions.props.selectedStatus).toBe('Setup In Progress')
-    expect(success.props.children).toBe('Request PSF-0001 moved to Setup In Progress.')
+    expect(success.props.title).toBe('Request PSF-0001 moved to Setup In Progress.')
   })
 
   it('locks requester edits and Action center while the separate PSF save is pending', async () => {
@@ -1529,7 +1673,7 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
     shell = renderRequestDetailShell()
     panelElement = requireRenderedElement(shell, (element) => element.type === panel)
-    const success = requireRenderedElement(shell, (element) => element.props.role === 'status')
+    const success = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
@@ -1540,7 +1684,7 @@ describe('RequestDetailShell workflow actions', () => {
       updatedAt: '2026-08-01T00:00:01.000Z',
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'saved-setup.psf' })
-    expect(success.props.children).toBe('PSF Created Information for PSF-0001 saved.')
+    expect(success.props.title).toBe('PSF Created Information for PSF-0001 saved.')
   })
 
   it('keeps editable PSF Created Information values and exposes save failures through an alert', async () => {
@@ -1587,14 +1731,14 @@ describe('RequestDetailShell workflow actions', () => {
     shell = renderRequestDetailShell()
 
     panelElement = requireRenderedElement(shell, (element) => element.type === panel)
-    const alert = requireRenderedElement(shell, (element) => element.props.role === 'alert')
+    const alert = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
       psfCreatedData: { psf_setup_file_name: 'retry-setup.psf' },
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'retry-setup.psf' })
-    expect(alert.props.children).toBe('PSF data validation failed')
+    expect(alert.props.title).toBe('PSF data validation failed')
   })
 
   it('keeps real requester and PSF edits when a PSF conflict refresh changes status', async () => {
@@ -1658,7 +1802,7 @@ describe('RequestDetailShell workflow actions', () => {
     rendered = renderRequestDetailWithRequesterChild()
     requesterRenderer = requireRenderedElement(rendered.requesterForm, (element) => element.type === DynamicFormRenderer)
     const form = requireRenderedElement(rendered.shell, (element) => element.type === ActiveSchemaForm)
-    const alert = requireRenderedElement(rendered.shell, (element) => element.props.role === 'alert')
+    const alert = requireRenderedElement(rendered.shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
 
@@ -1685,7 +1829,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect((requesterRenderer.props.values as Record<string, string>).request_title_v4).toBe('LOCAL requester title')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
-    expect(alert.props.children).toBe(
+    expect(alert.props.title).toBe(
       'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
     )
   })
@@ -1719,7 +1863,7 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
     shell = renderRequestDetailShell()
 
-    const alert = requireRenderedElement(shell, (element) => element.props.role === 'alert')
+    const alert = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
     const summary = requireRenderedElement(shell, (element) => element.type === RequestHeaderSummary)
 
     expect(requestDetailApi.updatePsfRequestStatus).toHaveBeenCalledWith('request-1', {
@@ -1728,6 +1872,183 @@ describe('RequestDetailShell workflow actions', () => {
     })
     expect(requestDetailApi.fetchPsfRequestStatusOptions).toHaveBeenCalledTimes(1)
     expect(summary.props.request).toMatchObject({ status: 'Submitted' })
-    expect(alert.props.children).toBe('Transition denied')
+    expect(alert.props.title).toBe('Transition denied')
+  })
+})
+
+
+describe('Request identity and dashboard orientation', () => {
+  beforeEach(() => {
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchPsfRequest.mockReset().mockResolvedValue(buildSubmittedRequest())
+    requestDetailApi.fetchPsfRequestHistory.mockReset().mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockReset().mockResolvedValue({ allowedNextStatuses: ['Complete'] })
+    requestDetailApi.fetchCurrentUser.mockReset().mockResolvedValue({ user: { id: 'user-1', role: 'requester' } })
+    requestDetailApi.fetchWorkflowStatuses.mockReset().mockResolvedValue({ statuses: ['Submitted', 'Complete'] })
+    requestDetailApi.queryPsfRequests.mockReset().mockResolvedValue({ items: [], total: 0, limit: 25, summary: { open: 5, overdue: 2, completed: 3 } })
+  })
+
+  it('hides the previous request and its actions before effects run for a new identity', async () => {
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    expect(findRenderedElement(renderRequestDetailShell(), element => element.type === RequestHeaderSummary)).not.toBeNull()
+
+    const next = renderRequestDetailShell('request-2')
+    expect(findRenderedElement(next, element => element.type === RequestHeaderSummary)).toBeNull()
+    expect(findRenderedElement(next, element => element.type === ActiveSchemaForm)).toBeNull()
+    expect(findRenderedElement(next, element => element.type === WorkflowStatusActions)).toBeNull()
+  })
+
+  it('keeps prior request data hidden after access to the next request is denied', async () => {
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    renderRequestDetailShell()
+    requestDetailApi.fetchPsfRequest.mockRejectedValueOnce(new ApiError('Draft requests are private to their creator.', 403, 'Forbidden', null))
+    renderRequestDetailShell('request-2')
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const denied = renderRequestDetailShell('request-2')
+    expect(findRenderedElement(denied, element => element.type === RequestHeaderSummary)).toBeNull()
+    expect(findRenderedElement(denied, element => element.type === ActiveSchemaForm)).toBeNull()
+    expect(findRenderedElement(denied, element => element.type === AsyncNotice && element.props.kind === 'error')).not.toBeNull()
+  })
+
+  it('keeps count filters in place with unavailable totals while dashboard results refresh', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.DashboardPage() }
+    render()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const loaded = render()
+    const status = requireRenderedElement(loaded, element => element.type === 'select')
+    ;(status.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: 'Complete' } })
+    const pending = render()
+    const counts = requireRenderedElement(pending, element => element.props.className === 'summary-grid dashboard-summary-grid')
+    expect((counts.props.children as RenderedElement[]).map(element => element.props.value)).toEqual([null, null, null])
+  })
+})
+
+describe('Request history route', () => {
+  const render = (requestId = 'request-1') => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestHistoryPage({ requestId }) }
+  beforeEach(() => {
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchPsfRequest.mockReset().mockResolvedValue(buildSubmittedRequest())
+    requestDetailApi.fetchPsfRequestHistory.mockReset()
+  })
+  it('loads request identity and authorized history, preserving returned event data', async () => {
+    const entries = [{ actionType: 'REQUEST_STATUS_CHANGED', actorDisplayName: 'Engineer', actorRole: 'setup_owner', createdAt: '2026-10-03T00:00:00Z', metadata: { fromStatus: 'Submitted', toStatus: 'Review' } }]
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue(entries)
+    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    const page = render()
+    const panel = requireRenderedElement(page, (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledExactlyOnceWith('request-1')
+    expect(panel.props.entries).toEqual(entries)
+    expect(panel.props.loading).toBe(false)
+    const header = requireRenderedElement(page, (element) => typeof element.props.title === 'string' && element.props.title.endsWith(' history'))
+    const link = requireRenderedElement(header.props.actions, (element) => element.props.to === '/requests/$requestId')
+    expect(link.props.params).toEqual({ requestId: 'request-1' })
+  })
+  it('never displays the previous request identity or history while another request loads or denies access', async () => {
+    const entries = [{ actionType: 'DRAFT_CREATED', actorDisplayName: 'Previous owner', actorRole: 'requester', createdAt: '2026-10-03T00:00:00Z', metadata: {} }]
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValueOnce(entries)
+    render(); const cleanups = requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    render()
+    cleanups.forEach((cleanup) => cleanup?.())
+    requestDetailApi.fetchPsfRequest.mockRejectedValueOnce(new Error('Private draft'))
+    requestDetailApi.fetchPsfRequestHistory.mockRejectedValueOnce(new Error('Private draft'))
+    const pending = render('request-2')
+    const header = requireRenderedElement(pending, (element) => element.props.title === 'Request history')
+    expect(header.props.description).toBe('Activity visible to you for this request.')
+    const pendingPanel = requireRenderedElement(pending, (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
+    expect(pendingPanel.props.entries).toEqual([])
+    expect(pendingPanel.props.loading).toBe(true)
+    requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    const denied = render('request-2')
+    expect(requireRenderedElement(denied, (element) => element.props.title === 'Request history').props.description).toBe('Activity visible to you for this request.')
+    const deniedPanel = requireRenderedElement(denied, (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
+    expect(deniedPanel.props.entries).toEqual([])
+    expect(deniedPanel.props.error).toBe('Private draft')
+  })
+  it('retries a failed history read without inventing or exposing events', async () => {
+    requestDetailApi.fetchPsfRequestHistory.mockRejectedValueOnce(new Error('History unavailable')).mockResolvedValueOnce([])
+    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    const panel = requireRenderedElement(render(), (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
+    expect(panel.props.error).toBe('History unavailable')
+    expect(panel.props.entries).toEqual([])
+    ;(panel.props.onRetry as () => void)()
+    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    const retried = requireRenderedElement(render(), (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
+    expect(retried.props.error).toBeNull()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(2)
+  })
+})
+
+
+describe('Request detail history retry lifecycle', () => {
+  it('ignores an old request retry completion after navigating to another request', async () => {
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchPsfRequest.mockReset().mockResolvedValue(buildSubmittedRequest())
+    requestDetailApi.fetchPsfRequestStatusOptions.mockReset().mockResolvedValue({ allowedNextStatuses: [] })
+    requestDetailApi.fetchPsfRequestHistory.mockReset().mockRejectedValueOnce(new Error('Try again'))
+    renderRequestDetailShell(); const initialCleanups = requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    let resolveOld: ((entries: unknown[]) => void) | undefined
+    requestDetailApi.fetchPsfRequestHistory.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    const panel = requireRenderedElement(renderRequestDetailShell(), (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
+    ;(panel.props.onRetry as () => void)()
+    renderRequestDetailShell(); const retryCleanups = requestDetailHookHarness.runEffects()
+    initialCleanups.forEach((cleanup) => cleanup?.()); retryCleanups.forEach((cleanup) => cleanup?.())
+    const newEntries = [{ actionType: 'REQUEST_SUBMITTED', actorDisplayName: 'B owner', actorRole: 'requester', createdAt: '2026-10-03T00:00:00Z', metadata: {} }]
+    requestDetailApi.fetchPsfRequest.mockResolvedValueOnce({ ...buildSubmittedRequest(), id: 'request-2', requestNo: 'PSF-0002' })
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValueOnce(newEntries)
+    requestDetailHookHarness.beginRender(); RequestsWorkspace.RequestDetailShell({ requestId: 'request-2' })
+    requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+    resolveOld!([{ actionType: 'DRAFT_CREATED', actorDisplayName: 'A owner', actorRole: 'requester', createdAt: '2026-10-02T00:00:00Z', metadata: {} }]); await flushRequestDetailAsyncWork()
+    requestDetailHookHarness.beginRender(); const newPage = RequestsWorkspace.RequestDetailShell({ requestId: 'request-2' })
+    expect(requireRenderedElement(newPage, (element) => element.type === RequestsWorkspace.RequestHistoryPanel).props.entries).toEqual(newEntries)
+  })
+})
+
+
+describe('Queue filter disclosure', () => {
+  beforeEach(() => requestDetailHookHarness.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('starts collapsed on mobile, lets native disclosure toggle, and marks active filters', () => {
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) })
+    requestDetailHookHarness.beginRender()
+    const panel = RequestsWorkspace.QueueFilterPanel({ active: true, children: <input aria-label="Product Type" defaultValue="Transfer" /> })
+    expect(panel.props.open).toBeUndefined()
+    const summary = requireRenderedElement(panel, (element) => element.type === 'summary')
+    const preventDefault = vi.fn()
+    ;(summary.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(renderToStaticMarkup(panel)).toContain('Active')
+    expect(renderToStaticMarkup(panel)).toContain('value="Transfer"')
+  })
+
+  it('keeps desktop filters expanded and adapts the native panel when the viewport changes', () => {
+    const query = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }
+    vi.stubGlobal('window', { matchMedia: () => query })
+    requestDetailHookHarness.beginRender()
+    const panel = RequestsWorkspace.QueueFilterPanel({ active: false, children: null })
+    expect(panel.props.open).toBe(true)
+    const summary = requireRenderedElement(panel, (element) => element.type === 'summary')
+    const preventDefault = vi.fn()
+    ;(summary.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledOnce()
+    const ref = panel.props.ref as { current: { open: boolean } | null }
+    ref.current = { open: false }
+    const cleanups = requestDetailHookHarness.runEffects()
+    expect(ref.current.open).toBe(true)
+    query.matches = true
+    const onChange = query.addEventListener.mock.calls[0][1] as () => void
+    onChange()
+    expect(ref.current.open).toBe(false)
+    query.matches = false
+    onChange()
+    expect(ref.current.open).toBe(true)
+    for (const cleanup of cleanups) if (typeof cleanup === 'function') cleanup()
+    expect(query.removeEventListener).toHaveBeenCalledWith('change', onChange)
   })
 })

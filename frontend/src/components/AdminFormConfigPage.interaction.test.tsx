@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 import type {
   FormKey,
   FormSchemaDraft,
@@ -297,6 +298,10 @@ async function loadAdminFormConfigPage(version: string | null = '2', formKey: Fo
   return renderAdminFormConfigPage(version, formKey)
 }
 
+function getConfirmation(page: unknown): RenderedElement {
+  return requireRenderedElement(page, (element) => element.type === ConfirmDialog)
+}
+
 function getButton(page: unknown, label: string): RenderedElement {
   return requireRenderedElement(
     page,
@@ -381,6 +386,39 @@ describe('AdminFormConfigPage interactions', () => {
     blockerHarness.options = null
     formConfigHookHarness.reset()
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
+  })
+
+  it('offers shareable family links on the list with the selected family identified', async () => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
+    const page = await loadAdminFormConfigPage(null)
+    const familyNav = requireRenderedElement(page, (element) => element.type === 'nav' && element.props['aria-label'] === 'Form families')
+    const requester = requireRenderedElement(familyNav, (element) => (element.props.search as { formKey?: string } | undefined)?.formKey === 'psf-request')
+    const psf = requireRenderedElement(familyNav, (element) => (element.props.search as { formKey?: string } | undefined)?.formKey === 'psf-created-information')
+    expect(requester.props.to).toBe('/admin/form-config')
+    expect(requester.props['aria-current']).toBe('page')
+    expect(psf.props.to).toBe('/admin/form-config')
+    expect(psf.props['aria-current']).toBeUndefined()
+  })
+
+  it('keeps saved versions unchanged when the native publish or discard dialog is cancelled', async () => {
+    const draft = buildVersion()
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([draft]))
+    let page = await loadAdminFormConfigPage(null)
+    ;(getVersionSelector(page).props.onPublish as (version: number) => void)(2)
+    page = renderAdminFormConfigPage(null)
+    expect(getConfirmation(page).props.open).toBe(true)
+    expect(getConfirmation(page).props.description).toContain('Already submitted requests keep their saved form snapshot')
+    expect(formConfigApi.publishAdminFormConfigDraft).not.toHaveBeenCalled()
+    ;(getConfirmation(page).props.onCancel as () => void)()
+    page = renderAdminFormConfigPage(null)
+    expect(getConfirmation(page).props.open).toBe(false)
+    ;(getVersionSelector(page).props.onDiscard as (version: number) => void)(2)
+    page = renderAdminFormConfigPage(null)
+    expect(getConfirmation(page).props.tone).toBe('danger')
+    ;(getConfirmation(page).props.onCancel as () => void)()
+    expect(getVersionSelector(renderAdminFormConfigPage(null)).props.versions).toEqual([draft])
+    expect(formConfigApi.discardAdminFormConfigDraft).not.toHaveBeenCalled()
+    expect(window.confirm).not.toHaveBeenCalled()
   })
 
   it('routes editor exits through the central blocker instead of an overlapping Back-link guard', async () => {
@@ -468,10 +506,13 @@ describe('AdminFormConfigPage interactions', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
     let page = await loadAdminFormConfigPage(null)
     ;(getVersionSelector(page).props.onDiscard as (version: number) => void)(3)
+    page = renderAdminFormConfigPage(null)
+    expect(getConfirmation(page).props.description).toBe('Discard draft v3? This unpublished draft will be permanently deleted.')
+    ;(getConfirmation(page).props.onConfirm as () => void)()
     await flushAsyncWork()
     page = renderAdminFormConfigPage(null)
     expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(3)
-    expect(window.confirm).toHaveBeenCalledWith('Discard draft v3? This unpublished draft will be permanently deleted.')
+    expect(window.confirm).not.toHaveBeenCalled()
     expect(getVersionSelector(page).props.versions).toEqual([active])
   })
 
@@ -483,11 +524,14 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.publishAdminFormConfigDraft.mockResolvedValue(published)
     let page = await loadAdminFormConfigPage(null)
     ;(getVersionSelector(page).props.onPublish as (version: number) => void)(2)
+    page = renderAdminFormConfigPage(null)
+    const impact = getConfirmation(page).props.description as string
+    ;(getConfirmation(page).props.onConfirm as () => void)()
     await flushAsyncWork()
     page = renderAdminFormConfigPage(null)
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('New requests will use v2'))
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted.'))
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Already submitted requests keep their saved form snapshot'))
+    expect(impact).toContain('New requests will use v2')
+    expect(impact).toContain('Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted.')
+    expect(impact).toContain('Already submitted requests keep their saved form snapshot')
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 2 })
     expect(getVersionSelector(page).props.versions).toEqual([published, { ...active, status: 'published' }])
   })
@@ -700,7 +744,11 @@ describe('AdminFormConfigPage interactions', () => {
       throw new Error('Expected publish callback')
     }
     publish()
-    publish()
+    page = renderAdminFormConfigPage()
+    const confirmPublish = getConfirmation(page).props.onConfirm as () => void
+    confirmPublish()
+    confirmPublish()
+    expect(getConfirmation(renderAdminFormConfigPage()).props.pending).toBe(true)
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledTimes(1)
     expect(getButton(renderAdminFormConfigPage(), 'Publishing…').props.disabled).toBe(true)
 
@@ -760,13 +808,15 @@ describe('AdminFormConfigPage interactions', () => {
     )
     publish()
     expect(formConfigApi.publishAdminFormConfigDraft).not.toHaveBeenCalled()
-    ;(window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(true)
+    ;(getConfirmation(renderAdminFormConfigPage()).props.onCancel as () => void)()
     publish()
+    const impact = getConfirmation(renderAdminFormConfigPage()).props.description as string
+    ;(getConfirmation(renderAdminFormConfigPage()).props.onConfirm as () => void)()
     await flushAsyncWork()
     page = renderAdminFormConfigPage()
 
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 2 })
-    expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('Existing Draft requests keep their current version and must be explicitly upgraded'))
+    expect(impact).toContain('Existing Draft requests keep their current version and must be explicitly upgraded')
     expect(getFeedback(page).props.feedback).toEqual({ kind: 'error', message: 'Draft is no longer publishable.' })
   })
 
@@ -882,7 +932,9 @@ describe('AdminFormConfigPage interactions', () => {
     expect(getVisualEditor(page).props.readOnly).toBe(true)
     expect(findRenderedElement(page, (element) => element.type === 'textarea' && element.props.id === 'form-config-json')).toBeNull()
     expect(getPreview(page).props.schema).toMatchObject({ formKey, version: 7 })
-    expect(findRenderedElement(page, (element) => element.type === 'h1' && Array.isArray(element.props.children) && element.props.children.includes('PSF Created Information'))).not.toBeNull()
+    expect(findRenderedElement(page, (element) => element.props.className === 'page-card__eyebrow' && element.props.children === 'PSF Created Information')).not.toBeNull()
+    expect(findRenderedElement(page, (element) => element.type === 'h1' && element.props.id === 'form-config-editor-heading')?.props.children).toBe(buildPsfCreatedVersion().title)
+    expect(findRenderedElement(page, (element) => element.props.className === 'admin-form-config__version-stamp')?.props.children).toEqual(['v', 7])
   })
 
   it('saves and publishes a PSF draft with family-scoped lifecycle calls and matching preview metadata', async () => {
@@ -912,10 +964,13 @@ describe('AdminFormConfigPage interactions', () => {
     expect(formConfigApi.saveAdminFormConfigDraft).toHaveBeenCalledWith({ draftVersion: 7, description: 'Keep this description', schema: savedSchema }, formKey)
     expect(getPreview(page).props.schema).toMatchObject({ formKey, title: 'Updated created details' })
     ;(getButton(page, 'Publish').props.onClick as () => void)()
+    page = renderAdminFormConfigPage('7', formKey)
+    expect(getConfirmation(page).props.description).toBe('Publish PSF Created Information v7? New requests will use this PSF version. Existing requests keep their current PSF form and data and are not upgraded.')
+    ;(getConfirmation(page).props.onConfirm as () => void)()
     await flushAsyncWork()
     page = renderAdminFormConfigPage('7', formKey)
 
-    expect(window.confirm).toHaveBeenCalledWith('Publish PSF Created Information v7? New requests will use this PSF version. Existing requests keep their current PSF form and data and are not upgraded.')
+    expect(window.confirm).not.toHaveBeenCalled()
     expect(formConfigApi.publishAdminFormConfigDraft).toHaveBeenCalledWith({ version: 7 }, formKey)
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(3)
     expect(getVisualEditor(page).props.readOnly).toBe(true)
@@ -932,6 +987,7 @@ describe('AdminFormConfigPage interactions', () => {
     const page = await loadAdminFormConfigPage(null, formKey)
 
     ;(getVersionSelector(page).props.onDiscard as (version: number) => void)(7)
+    ;(getConfirmation(renderAdminFormConfigPage(null, formKey)).props.onConfirm as () => void)()
     await flushAsyncWork()
 
     expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(7, formKey)

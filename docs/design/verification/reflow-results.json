@@ -1,0 +1,18 @@
+{
+  "assertions": 12,
+  "checks": [
+    "first keyboard target is Skip to content",
+    "skip link moves focus to main",
+    "drawer initially focuses close",
+    "drawer traps backward Tab",
+    "Escape returns focus to navigation opener",
+    "200% reflow equivalent contains requests",
+    "200% reflow equivalent contains detail",
+    "200% reflow equivalent contains forms",
+    "200% reflow equivalent contains export",
+    "mobile order is identity, actions, forms, history",
+    "dark input boundary uses approved token",
+    "light input boundary is canonical #7A8D99"
+  ],
+  "zoomMethod": "720\u00d7450 CSS viewport represents the layout space of 1440\u00d7900 at 200% zoom; native browser menu zoom and scaled raster rendering are not asserted"
+}

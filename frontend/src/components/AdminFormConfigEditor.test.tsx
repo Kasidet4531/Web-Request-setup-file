@@ -40,6 +40,18 @@ describe('visual form configuration editor', () => {
     expect(html).toContain('Choices: Low, High')
     expect(html).not.toMatch(/<input|<textarea|<button|<fieldset/)
   })
+  it('exposes immutable field and canonical identities in both editor and read-only view', () => {
+    const field = { ...schema.sections[0].fields[0], canonicalKey: 'requester' }
+    const draft = { ...schema, sections: [{ ...schema.sections[0], fields: [field] }] }
+    const view = renderToStaticMarkup(<AdminFormConfigEditor schema={draft} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
+    const modal = renderToStaticMarkup(fieldEditor(field))
+    expect(view).toContain('Field key:')
+    expect(view).toContain('Canonical key:')
+    expect(modal).toContain('Canonical key:')
+    expect(modal).toContain('requester')
+    expect(modal).not.toMatch(/<input[^>]*value="(field_1|requester)"/)
+  })
+
   it('shows compact field rows with edit actions, and shows field errors inside the editor', () => {
     const invalid: FormSchemaDraft = { ...schema, title: '', sections: [{ ...schema.sections[0], fields: [
       { ...schema.sections[0].fields[0], label: '' },
@@ -131,6 +143,28 @@ describe('visual form configuration editor', () => {
     ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Add field to Requester Information').props.onClick as (event: unknown) => void)({ currentTarget: trigger })
     expect(onEditField).toHaveBeenCalledWith(0, null, { fieldKey: 'field_2', canonicalKey: 'field_2', label: 'New field', type: 'text', required: false }, trigger)
     expect(moved.sections[0].fields).toHaveLength(2)
+  })
+
+  it.each([1, 2])('confirms the exact consequence before removing a section with %i fields', (fieldCount) => {
+    const onChange = vi.fn()
+    const confirm = vi.fn(() => false)
+    vi.stubGlobal('window', { confirm })
+    try {
+      const draft = { ...schema, sections: [
+        { ...schema.sections[0], fields: schema.sections[0].fields.slice(0, fieldCount) },
+        { sectionKey: 'retained_section', title: 'Retained section', fields: [] },
+      ] }
+      const tree = editor(draft, onChange)
+      const remove = find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove Requester Information').props.onClick as () => void
+      remove()
+      expect(confirm).toHaveBeenCalledWith(`Remove Requester Information and its ${fieldCount} ${fieldCount === 1 ? 'field' : 'fields'}?`)
+      expect(onChange).not.toHaveBeenCalled()
+      confirm.mockReturnValue(true)
+      remove()
+      expect((onChange.mock.calls[0][0] as FormSchemaDraft).sections).toEqual([draft.sections[1]])
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('adds, reorders and removes sections with stable keys', () => {

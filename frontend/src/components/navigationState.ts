@@ -35,14 +35,11 @@ export function navSectionsForRole(role: UserRole | null): NavSection[] {
 
   const sections: NavSection[] = [
     {
-      label: 'Overview',
-      items: [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
-    },
-    {
-      label: 'Requests & Workflow',
+      label: 'Work',
       items: [
+        { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/requests', label: 'All PSF Requests', icon: FileText },
-        ...(role ? [{ to: '/my-drafts', label: 'My draft', icon: DraftFileText }] : []),
+        ...(role ? [{ to: '/my-drafts', label: 'My drafts', icon: DraftFileText }] : []),
         ...(canCreateRequest
           ? [{ to: '/requests/new', label: 'Create Request', icon: PlusCircle }]
           : []),
@@ -88,4 +85,17 @@ export function resolveActivePath(pathname: string, sections: NavSection[]): str
       .filter((item) => normalised.startsWith(`${item.to}/`))
       .sort((a, b) => b.to.length - a.to.length)[0]?.to ?? null
   )
+}
+
+/** Authorized contextual tools sit beside the working surface, outside the work rail. */
+export function contextualAdminSections(role: UserRole | null): NavSection[] {
+  if (role !== 'admin') return []
+  const sections = navSectionsForRole(role)
+  const adminItems = sections.find((section) => section.label === 'Administration')?.items ?? []
+  const workItems = sections.find((section) => section.label === 'Work')?.items ?? []
+  return [
+    { label: 'Request configuration', items: adminItems.filter((item) => item.to !== '/admin/users') },
+    { label: 'Access', items: adminItems.filter((item) => item.to === '/admin/users') },
+    { label: 'Reporting', items: workItems.filter((item) => item.to === '/history' || item.to === '/admin/export-profile') },
+  ]
 }

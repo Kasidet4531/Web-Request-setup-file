@@ -154,7 +154,7 @@ function findRenderedElement(
     return element
   }
 
-  return findRenderedElement(element.props.children, matches)
+  return findRenderedElement(element.props.children, matches) ?? findRenderedElement(element.props.actions, matches)
 }
 
 function requireRenderedElement(

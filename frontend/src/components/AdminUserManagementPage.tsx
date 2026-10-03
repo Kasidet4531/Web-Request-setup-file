@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { PageHeader } from './ui/PageHeader'
+import { AsyncNotice } from './ui/AsyncNotice'
 import {
   api,
   refreshCurrentUser,
@@ -49,25 +51,14 @@ export function AdminUserManagementFeedback({
   loading: boolean
 }) {
   if (loading) {
-    return (
-      <p className="page-card__description" role="status">
-        Loading users…
-      </p>
-    )
+    return <AsyncNotice kind="loading" title="Loading users…" />
   }
 
   if (!feedback) {
     return null
   }
 
-  return (
-    <p
-      className={`status-pill status-pill--${feedback.kind}`}
-      role={feedback.kind === 'error' ? 'alert' : 'status'}
-    >
-      {feedback.message}
-    </p>
-  )
+  return <AsyncNotice kind={feedback.kind} title={feedback.message} />
 }
 
 export interface AdminUserManagementUsersTableProps {
@@ -83,7 +74,8 @@ export function AdminUserManagementUsersTable({
 }: AdminUserManagementUsersTableProps) {
   return (
     <>
-      <div className="data-table admin-user-management__table">
+      <p className="table-scroll__hint">Scroll horizontally to see all user details and actions.</p>
+      <div className="data-table admin-user-management__table" role="region" aria-label="Users and access" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -201,6 +193,7 @@ export function AdminUserManagementPage() {
   useEffect(() => {
     if (editingUserId && !dialogRef.current?.open) {
       dialogRef.current?.showModal()
+      dialogRef.current?.querySelector<HTMLButtonElement>('[data-dialog-cancel]')?.focus()
     }
   }, [editingUserId])
 
@@ -316,17 +309,12 @@ export function AdminUserManagementPage() {
 
   return (
     <article className="page-card admin-user-management">
-      <div className="page-card__header">
-        <div>
-          <h1>Users &amp; Roles</h1>
-          <p className="page-card__description">Review identities and manage access.</p>
-        </div>
-      </div>
+      <PageHeader title="Users & Roles" description="Review company identities and manage roles and Setup File Owner departments." />
 
       <div className="page-card__body admin-user-management__body">
         <AdminUserManagementFeedback feedback={editingUserId ? null : feedback} loading={loading} />
         {!loading && users.length === 0 && !feedback ? (
-          <p className="page-card__description">No users are available.</p>
+          <AsyncNotice kind="empty" title="No users are available." />
         ) : null}
         {!loading && users.length > 0 ? (
           <AdminUserManagementUsersTable
@@ -340,6 +328,9 @@ export function AdminUserManagementPage() {
       <dialog
         aria-labelledby="admin-user-edit-title"
         className="admin-user-management__dialog"
+        onClick={(event) => {
+          if (event.target === event.currentTarget && !savingUserId) dialogRef.current?.close()
+        }}
         onCancel={(event) => {
           if (savingUserId) event.preventDefault()
         }}
@@ -364,7 +355,7 @@ export function AdminUserManagementPage() {
               <span>Email: {editingUser.email || '—'}</span>
             </div>
             <label className="admin-user-management__field" htmlFor="admin-user-edit-role">
-              Role
+              <span>Role</span>
               <select
                 disabled={savingUserId !== null}
                 id="admin-user-edit-role"
@@ -378,7 +369,7 @@ export function AdminUserManagementPage() {
             </label>
             {editingDraft.role === 'setup_owner' ? (
               <label className="admin-user-management__field" htmlFor="admin-user-edit-department">
-                Setup File Owner department
+                <span>Setup File Owner department</span>
                 <select
                   disabled={savingUserId !== null}
                   id="admin-user-edit-department"
@@ -399,6 +390,7 @@ export function AdminUserManagementPage() {
             <div className="admin-user-management__actions">
               <button
                 className="btn-secondary"
+                data-dialog-cancel
                 disabled={savingUserId !== null}
                 onClick={() => dialogRef.current?.close()}
                 type="button"

@@ -1,0 +1,11 @@
+{
+  "captures": 6,
+  "checks": [
+    "create at exact 1487\u00d71058 concept dimensions",
+    "complete create form and optional help at mobile",
+    "complete mobile detail including both forms and history",
+    "login desktop dimensions verified",
+    "login mobile dimensions verified",
+    "dark login style verified after applying theme class; theme persistence is not claimed"
+  ]
+}

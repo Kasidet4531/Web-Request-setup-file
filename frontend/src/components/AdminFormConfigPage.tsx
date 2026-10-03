@@ -1,6 +1,10 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
+import { PageHeader } from './ui/PageHeader'
+import { AsyncNotice } from './ui/AsyncNotice'
+import { StatusLabel } from './ui/StatusLabel'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import { FormVersionBreadcrumbContext } from './formVersionBreadcrumb'
@@ -49,29 +53,29 @@ export function AdminFormConfigVersionSelector({
   const hasDraft = versions.some((version) => version.status === 'draft')
   return (
     <section className="admin-form-config__versions">
-      <div className="admin-form-config__table-scroll">
-        <table className="admin-form-config__version-table">
-          <caption className="sr-only">Form versions</caption>
-          <thead><tr><th scope="col">Version</th><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col">Published</th><th scope="col">Actions</th></tr></thead>
-          <tbody>{versions.map((version) => (
-            <tr className={version.status === 'active' ? 'admin-form-config__version-row admin-form-config__version-row--active' : 'admin-form-config__version-row'} key={version.version}>
-              <th scope="row">{disabled ? `v${version.version}` : formKey === 'psf-request'
+      <ol aria-label="Form versions" className="admin-form-config__version-catalog">
+        {versions.map((version) => (
+          <li className={`admin-form-config__version-record admin-form-config__version-record--${version.status}`} key={version.version}>
+            <div className="admin-form-config__version-stamp">{disabled ? `v${version.version}` : formKey === 'psf-request'
                 ? <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ version: String(version.version) }} to="/admin/form-config/$version">v{version.version}</Link>
-                : <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ formKey, version: String(version.version) }} to="/admin/form-config/$formKey/$version">v{version.version}</Link>}</th>
-              <td>{version.title}</td>
-              <td><span className={`admin-form-config__status admin-form-config__status--${version.status}`}>{version.status === 'published' ? 'Inactive' : version.status === 'active' ? 'Active' : 'Draft'}</span></td>
-              <td><time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleDateString()}</time></td>
-              <td>{version.publishedAt ? <time dateTime={version.publishedAt}>{new Date(version.publishedAt).toLocaleDateString()}</time> : '—'}</td>
-              <td><div className="admin-form-config__controls">
+                : <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ formKey, version: String(version.version) }} to="/admin/form-config/$formKey/$version">v{version.version}</Link>}</div>
+            <div className="admin-form-config__version-content">
+              <div className="admin-form-config__record-heading"><h3>{version.title}</h3><StatusLabel status={version.status === 'published' ? 'Inactive' : version.status === 'active' ? 'Active' : 'Draft'} kind={version.status === 'active' ? 'completed' : version.status === 'draft' ? 'draft' : 'neutral'} /></div>
+              {version.description ? <p className="page-card__description">{version.description}</p> : null}
+              <dl className="admin-form-config__version-dates">
+                <div><dt>Created</dt><dd><time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleDateString()}</time></dd></div>
+                <div><dt>Published</dt><dd>{version.publishedAt ? <time dateTime={version.publishedAt}>{new Date(version.publishedAt).toLocaleDateString()}</time> : '—'}</dd></div>
+              </dl>
+            </div>
+            <div className="admin-form-config__controls">
                 {version.status === 'draft' ? <>
                   <button aria-label={`Publish version ${version.version}`} className="primary-button" disabled={disabled} onClick={() => onPublish(version.version)} type="button">Publish</button>
                   <button aria-label={`Discard draft version ${version.version}`} className="secondary-button admin-form-config__danger" disabled={disabled} onClick={() => onDiscard(version.version)} type="button">Discard</button>
                 </> : <button aria-label={`Duplicate version ${version.version} as draft`} className="secondary-button" disabled={disabled || hasDraft} title={hasDraft ? 'Open or discard the existing draft before duplicating another version.' : undefined} onClick={() => onDuplicate(version.version)} type="button">Duplicate as draft</button>}
-              </div></td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
+            </div>
+          </li>
+        ))}
+      </ol>
       {hasDraft ? <p className="page-card__description">A draft already exists. Open or discard it before duplicating another version.</p> : <p className="page-card__description">To make an older form active, duplicate it as a draft and publish the new version.</p>}
     </section>
   )
@@ -88,23 +92,8 @@ export function AdminFormConfigFeedback({
   feedback: AdminFormConfigFeedbackValue | null
   loading: boolean
 }) {
-  if (loading) {
-    return (
-      <p className="page-card__description" role="status">
-        Loading form schema versions…
-      </p>
-    )
-  }
-
-  if (!feedback) {
-    return null
-  }
-
-  return (
-    <p className={`status-pill status-pill--${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>
-      {feedback.message}
-    </p>
-  )
+  if (loading) return <AsyncNotice kind="loading" title="Loading form schema versions…" />
+  return feedback ? <AsyncNotice kind={feedback.kind} title={feedback.message} /> : null
 }
 
 export function AdminFormConfigListPage() {
@@ -135,6 +124,7 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
   const [saving, setSaving] = useState(false)
   const [selectedVersion, setSelectedVersion] = useState<FormSchemaVersionResponse | null>(null)
   const [versions, setVersions] = useState<FormSchemaVersionResponse[]>([])
+  const [confirmation, setConfirmation] = useState<{ action: 'publish' | 'discard'; version: number } | null>(null)
   const [fieldEdit, setFieldEdit] = useState<{ sectionIndex: number; fieldIndex: number | null; field: FormSchemaField } | null>(null)
   const requestInFlight = useRef(false)
   const fieldDialogRef = useRef<HTMLDialogElement>(null)
@@ -317,10 +307,6 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
   async function publishDraft(versionNumber: number) {
     const target = versions.find((item) => item.version === versionNumber && item.status === 'draft')
     if (!target || busy || requestInFlight.current || (isEditor && !publishAllowed)) return
-    const confirmation = formKey === 'psf-created-information'
-      ? `Publish PSF Created Information v${versionNumber}? New requests will use this PSF version. Existing requests keep their current PSF form and data and are not upgraded.`
-      : `Publish v${versionNumber}? New requests will use v${versionNumber}. Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted. Already submitted requests keep their saved form snapshot and do not change.`
-    if (!window.confirm(confirmation)) return
 
     requestInFlight.current = true
     setPublishing(true)
@@ -344,6 +330,7 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
     } finally {
       requestInFlight.current = false
       setPublishing(false)
+      setConfirmation(null)
     }
   }
 
@@ -375,7 +362,6 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
 
   async function discardDraft(version: number) {
     if (busy || requestInFlight.current || !versions.some((item) => item.version === version && item.status === 'draft')) return
-    if (!window.confirm(`Discard draft v${version}? This unpublished draft will be permanently deleted.`)) return
     requestInFlight.current = true
     setLoading(true)
     setFeedback(null)
@@ -392,6 +378,7 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
     } finally {
       requestInFlight.current = false
       setLoading(false)
+      setConfirmation(null)
     }
   }
 
@@ -400,47 +387,76 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
     void navigate({ to: '/admin/form-config', search: { formKey: nextFormKey } })
   }
 
+  function requestConfirmation(action: 'publish' | 'discard', number: number) {
+    if (busy || requestInFlight.current || !versions.some((item) => item.version === number && item.status === 'draft')) return
+    if (action === 'publish' && isEditor && !publishAllowed) return
+    setConfirmation({ action, version: number })
+  }
+
+  const familyLabel = formKey === 'psf-request' ? 'Requester Information' : 'PSF Created Information'
+  const confirmationDescription = confirmation?.action === 'discard'
+    ? `Discard draft v${confirmation.version}? This unpublished draft will be permanently deleted.`
+    : formKey === 'psf-created-information'
+      ? `Publish PSF Created Information v${confirmation?.version}? New requests will use this PSF version. Existing requests keep their current PSF form and data and are not upgraded.`
+      : `Publish v${confirmation?.version}? New requests will use v${confirmation?.version}. Existing Draft requests keep their current version and must be explicitly upgraded before they can be submitted. Already submitted requests keep their saved form snapshot and do not change.`
+
   return (
     <article className="page-card admin-form-config">
-      {!isEditor ? <div className="page-card__header"><h1>Form management</h1></div> : null}
+      {!isEditor ? <PageHeader title="Form management" description="Manage requester and PSF forms independently. Duplicate a saved version to prepare a draft." /> : null}
 
       <div className="page-card__body admin-form-config__body">
-        <label className="admin-form-config__field" htmlFor="admin-form-config-family">
+        <div className={`admin-form-config__workspace${isEditor ? ' admin-form-config__workspace--editor' : ''}`}>
+        <aside aria-label="Form family selection" className="admin-form-config__family-panel">
+        <p className="page-card__eyebrow">Form families</p>
+        {!isEditor ? <nav aria-label="Form families" className="admin-form-config__family-nav">
+          <Link aria-current={formKey === 'psf-request' ? 'page' : undefined} className="admin-form-config__family-link" search={{ formKey: 'psf-request' }} to="/admin/form-config"><span>Requester Information</span><small>Fields completed by the requester</small></Link>
+          <Link aria-current={formKey === 'psf-created-information' ? 'page' : undefined} className="admin-form-config__family-link" search={{ formKey: 'psf-created-information' }} to="/admin/form-config"><span>PSF Created Information</span><small>Fields maintained by the setup team</small></Link>
+        </nav> : <label className="admin-form-config__field" htmlFor="admin-form-config-family">
           <span>Form to manage</span>
           <select aria-label="Form to manage" disabled={busy} id="admin-form-config-family" onChange={(event) => switchFormFamily(event.target.value)} value={formKey}>
             <option value="psf-request">Requester Information</option>
             <option value="psf-created-information">PSF Created Information</option>
           </select>
-        </label>
+        </label>}
         {isEditor ? <div><Link className="secondary-button" search={{ formKey }} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link></div> : null}
+        <p className="admin-form-config__family-note">Each family has its own versions and one draft at a time.</p>
+        </aside>
+        <div className={isEditor ? 'admin-form-config__editor-surface' : 'admin-form-config__catalog'}>
+        {!isEditor ? <header className="admin-form-config__family-context"><p className="page-card__eyebrow">Version catalog</p><h2>{familyLabel}</h2><p className="page-card__description">Active versions are used for new requests. Existing requests retain their captured form versions.</p></header> : null}
         <AdminFormConfigFeedback feedback={feedback} loading={loading} />
 
         {!loading && !isEditor && selectedVersion ? <AdminFormConfigVersionSelector
           disabled={busy}
           formKey={formKey}
           onDuplicate={(number) => void duplicateVersion(number)}
-          onDiscard={(number) => void discardDraft(number)}
-          onPublish={(number) => void publishDraft(number)}
+          onDiscard={(number) => requestConfirmation('discard', number)}
+          onPublish={(number) => requestConfirmation('publish', number)}
           versions={versions}
         /> : null}
         {!loading && isEditor && selectedVersion ? (
           <>
             <div className="admin-form-config__section-header">
-              <h1 id="form-config-editor-heading">{formKey === 'psf-request' ? 'Requester Information' : 'PSF Created Information'} · v{selectedVersion.version} · {selectedVersion.title}</h1>
+              <div className="admin-form-config__version-heading"><span className="admin-form-config__version-stamp">v{selectedVersion.version}</span><div><p className="page-card__eyebrow">{familyLabel}</p><h1 id="form-config-editor-heading">{selectedVersion.title}</h1></div></div>
               <button className="secondary-button" disabled={busy} onClick={(event) => {
                 previewTriggerRef.current = event.currentTarget
                 previewDialogRef.current?.showModal()
               }} type="button">Preview form</button>
+            </div>
+            <div className="admin-form-config__identity">
+              <StatusLabel status={selectedVersion.status === 'active' ? 'Active' : selectedVersion.status === 'draft' ? 'Draft' : 'Inactive'} kind={selectedVersion.status === 'active' ? 'completed' : selectedVersion.status === 'draft' ? 'draft' : 'neutral'} />
+              <span className="admin-form-config__key">Family: {formKey}</span>
+              <span>Created by {selectedVersion.createdBy} · <time dateTime={selectedVersion.createdAt}>{new Date(selectedVersion.createdAt).toLocaleDateString()}</time></span>
+              {selectedVersion.description ? <span>{selectedVersion.description}</span> : null}
             </div>
             {!editable ? <div className="admin-form-config__view-banner" role="status">
               <p>You're viewing v{selectedVersion.version} ({selectedVersion.status === 'active' ? 'Active' : 'Inactive'}). This version is read-only.</p>
               <button className="primary-button" disabled={busy || versions.some((item) => item.status === 'draft')} title={versions.some((item) => item.status === 'draft') ? 'Open or discard the existing draft before duplicating another version.' : undefined} onClick={() => void duplicateVersion(selectedVersion.version)} type="button">Duplicate as draft</button>
             </div> : null}
             {editable ? <div className="admin-form-config__toolbar">
-              <span role="status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+              <div><span role="status">{saving ? 'Saving changes…' : dirty ? 'Unsaved changes' : 'All changes saved'}</span><p className="ui-help">{dirty ? 'Save your changes before publishing.' : !parsed.schema ? 'Fix validation errors before publishing.' : 'Publish makes this saved draft active for new requests.'}</p></div>
               <div className="admin-form-config__actions">
                 <button className="secondary-button" disabled={busy || !parsed.schema || !dirty} onClick={() => void saveDraft()} type="button">{saving ? 'Saving draft…' : 'Save draft'}</button>
-                <button className="primary-button" disabled={!publishAllowed} onClick={() => void publishDraft(selectedVersion.version)} type="button">{publishing ? 'Publishing…' : 'Publish'}</button>
+                <button className="primary-button" disabled={!publishAllowed} onClick={() => requestConfirmation('publish', selectedVersion.version)} type="button">{publishing ? 'Publishing…' : 'Publish'}</button>
               </div>
             </div> : null}
             <div className="admin-form-config__editor" aria-labelledby="form-config-editor-heading">
@@ -502,17 +518,35 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
             <dialog aria-labelledby="form-config-preview-title" className="admin-form-config__preview-dialog" onClose={() => previewTriggerRef.current?.focus()} ref={previewDialogRef}>
               <div className="admin-form-config__modal-head">
                 <div><h2 id="form-config-preview-title">Form preview</h2><p>{dirty ? 'Unsaved page draft' : 'Selected version'} · preview only</p></div>
-                <button aria-label="Close preview" className="secondary-button" onClick={() => previewDialogRef.current?.close()} type="button">×</button>
+                <button aria-label="Close preview" className="icon-button" onClick={() => previewDialogRef.current?.close()} type="button"><X aria-hidden="true" size={16} /></button>
               </div>
+              <div aria-label="Preview fields" className="admin-form-config__preview-content" role="region" tabIndex={0}>
               {previewSchema ? (
                 <AdminFormConfigPreview schema={previewSchema} />
               ) : (
                 <p className="page-card__description">Fix the form errors above to see the preview.</p>
               )}
+              </div>
             </dialog>
           </>
         ) : null}
+        </div>
+        </div>
       </div>
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={confirmation?.action === 'discard' ? `Discard draft v${confirmation.version}?` : `Publish version ${confirmation?.version ?? ''}?`}
+        description={confirmationDescription}
+        confirmLabel={confirmation?.action === 'discard' ? 'Discard draft' : 'Publish'}
+        pending={busy}
+        tone={confirmation?.action === 'discard' ? 'danger' : 'default'}
+        onCancel={() => { if (!busy) setConfirmation(null) }}
+        onConfirm={() => {
+          if (!confirmation) return
+          if (confirmation.action === 'publish') void publishDraft(confirmation.version)
+          else void discardDraft(confirmation.version)
+        }}
+      />
     </article>
   )
 }

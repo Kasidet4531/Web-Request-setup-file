@@ -1,5 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { PageHeader } from './ui/PageHeader'
+import { AsyncNotice } from './ui/AsyncNotice'
 import {
   api,
   type GlobalAuditLogEntry,
@@ -146,26 +148,20 @@ export function GlobalAuditLogTable({
   loading: boolean
 }) {
   if (loading) {
-    return <p className="page-card__description" role="status">Loading global audit history…</p>
+    return <AsyncNotice kind="loading" title="Loading global audit history…" />
   }
 
   if (error) {
-    return (
-      <p className="status-pill status-pill--error" role="alert">
-        Unable to load global audit history: {error}
-      </p>
-    )
+    return <AsyncNotice kind="error" title={`Unable to load global audit history: ${error}`} />
   }
 
   if (entries.length === 0) {
-    return (
-      <p className="page-card__description" role="status">
-        No global audit history matches the current filters.
-      </p>
-    )
+    return <AsyncNotice kind="empty" title="No global audit history matches the current filters." />
   }
 
   return (
+    <>
+    <p className="table-scroll__hint">Scroll horizontally to see audit actors, actions, and details.</p>
     <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0}>
       <table>
         <thead>
@@ -183,7 +179,7 @@ export function GlobalAuditLogTable({
               <td><time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time></td>
               <td>
                 {entry.requestId && entry.requestNo ? (
-                  <Link className="table-action" params={{ requestId: entry.requestId }} to="/requests/$requestId">
+                  <Link className="table-action font-mono-code" params={{ requestId: entry.requestId }} to="/requests/$requestId">
                     {entry.requestNo}
                   </Link>
                 ) : entry.requestNo ?? 'Workflow configuration'}
@@ -199,6 +195,7 @@ export function GlobalAuditLogTable({
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -258,9 +255,7 @@ export function GlobalHistoryPage() {
 
   return (
     <article className="page-card workflow-page">
-      <div className="page-card__header">
-        <h1>Global History</h1>
-      </div>
+      <PageHeader title="Audit History" description="Review authorized request and configuration activity. Edit filters, then choose Apply to update the results." />
 
       <section className="workflow-section" aria-labelledby="global-history-filters-heading">
         <div className="section-heading">
@@ -277,6 +272,7 @@ export function GlobalHistoryPage() {
       <section className="workflow-section" aria-labelledby="global-history-results-heading">
         <div className="section-heading">
           <h2 id="global-history-results-heading">Audit entries</h2>
+          <p>Displayed times: local ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Date filters use UTC.</p>
         </div>
         <GlobalAuditLogTable
           entries={history.data}

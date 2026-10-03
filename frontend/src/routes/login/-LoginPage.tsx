@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, User } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Lock, User } from 'lucide-react'
+import { AsyncNotice } from '../../components/ui/AsyncNotice'
 import { ApiError, loginWithPassword } from '../../services/api'
 import nxpLogo from '../../assets/NXP.png'
 import { DevelopmentLogin } from './-DevelopmentLogin'
@@ -36,23 +37,29 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
   return (
     <div className="login-page">
       <div className="login-page__content">
+        <section className="page-card login-card" aria-labelledby="login-title">
         <div className="login-card__brand">
           <img src={nxpLogo} alt="NXP Semiconductors" />
           <div>
-            <h1>PSF Request Portal</h1>
-            <p>Sign in to manage PSF setup files and workflow requests</p>
+            <h1 id="login-title">PSF Request Portal</h1>
+            <p>Manage PSF setup files and workflow requests.</p>
           </div>
         </div>
 
-        <section className="page-card login-card">
-          <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
-          <label className="form-field">
+          <form className="login-form" aria-busy={isSubmitting} onSubmit={(event) => void handleSubmit(event)}>
+          <div>
+            <h2>Company sign-in</h2>
+            <p className="login-form__hint">Use your company LDAP username and password.</p>
+          </div>
+          <label className="form-field" htmlFor="login-username">
             <span>Username</span>
             <span className="login-form__control">
-              <User size={18} />
+              <User size={16} aria-hidden="true" />
               <input
                 autoComplete="username"
                 className="input-base input-with-icon"
+                disabled={isSubmitting}
+                id="login-username"
                 onChange={(event) => setUsername(event.target.value)}
                 placeholder="Enter your username"
                 required
@@ -62,13 +69,15 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
             </span>
           </label>
 
-          <label className="form-field">
-            <span>Password</span>
-            <span className="login-form__control">
-              <Lock size={18} />
+          <div className="form-field">
+            <label className="ui-label" htmlFor="login-password">Password</label>
+            <div className="login-form__control">
+              <Lock size={16} aria-hidden="true" />
               <input
                 autoComplete="current-password"
                 className="input-base input-with-icon input-with-clear"
+                disabled={isSubmitting}
+                id="login-password"
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
                 required
@@ -77,21 +86,19 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
               />
               <button
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-controls="login-password"
+                aria-pressed={showPassword}
                 className="login-form__toggle"
+                disabled={isSubmitting}
                 onClick={() => setShowPassword((current) => !current)}
                 type="button"
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
-            </span>
-          </label>
+            </div>
+          </div>
 
-          {error ? (
-            <p className="login-form__error" role="alert">
-              <AlertCircle size={15} />
-              <span>{error}</span>
-            </p>
-          ) : null}
+          {error ? <AsyncNotice kind="error" title={error} /> : null}
 
           <button
             className="btn-primary login-form__submit"
@@ -99,7 +106,7 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
             type="submit"
           >
             {isSubmitting ? 'Signing in…' : 'Sign in to Portal'}
-            <ArrowRight size={16} />
+            <ArrowRight size={16} aria-hidden="true" />
           </button>
           </form>
         </section>
