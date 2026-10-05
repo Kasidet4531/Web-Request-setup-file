@@ -52,10 +52,6 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
         </div>
 
           <form className="login-form" aria-busy={isSubmitting} onSubmit={(event) => void handleSubmit(event)}>
-          <div>
-            <h2>Company sign-in</h2>
-            <p className="login-form__hint">Use your company LDAP username and password.</p>
-          </div>
           <label className="form-field" htmlFor="login-username">
             <span>Username</span>
             <span className="login-form__control">

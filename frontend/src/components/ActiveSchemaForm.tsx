@@ -927,12 +927,15 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       <DynamicFormRenderer
         collapseOptionalFields={mode === 'request' && (!currentRequest || currentRequest.status === DRAFT_STATUS || usesExplicitEdit)}
         errors={errors}
-        footerActions={!formReadOnly ? <>
+        footerActions={!formReadOnly && (usesExplicitEdit || currentRequest) ? <>
           {usesExplicitEdit ? <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button> : null}
-          <div className="active-schema-form__footer">
-          <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
-          <p className="ui-help">{currentRequest ? 'Requester information is saved separately from PSF information.' : 'You can review and submit after saving the draft.'}</p>
-        </div></> : undefined}
+          {currentRequest ? (
+            <div className="active-schema-form__footer">
+              <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+              <p className="ui-help">Requester information is saved separately from PSF information.</p>
+            </div>
+          ) : null}
+        </> : undefined}
         headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}
         onChange={!formReadOnly ? updateField : undefined}
