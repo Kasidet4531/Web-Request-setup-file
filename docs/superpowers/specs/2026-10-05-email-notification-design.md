@@ -2,53 +2,55 @@
 
 - **Date:** 2026-10-05
 - **Branch:** `feat/email-notification`
-- **Scope:** Backend notification outbox, SOAP web service dispatch, email templates, workflow hooks, worker recovery, and admin monitoring API.
+- **Scope:** Backend notification outbox, SOAP web service dispatch, email templates, workflow hooks, worker lifecycle, admin monitoring API, and security controls.
 - **Reference Tasks:** GI-26 (Notification Outbox & Email Dispatch), Section 7 of `psf_setup_file_web_application_spec_en.md`.
 
 ---
 
-## 1. Executive Summary & Goals
+## 1. Executive Summary & Delivery Semantics
 
-The Email Notification System automatically notifies stakeholders (Requesters and Setup File Owners) when PSF requests are submitted or when their workflow status changes. 
+The Email Notification System automatically dispatches emails to stakeholders (Requesters, Setup File Owners, and Administrators) upon PSF request submission, status changes, and system alerts.
 
-To ensure high reliability and responsiveness:
-1. **Asynchronous Outbox Pattern:** Request mutations (submission, status transitions) write notification jobs into an `email_outbox` table within the same PostgreSQL transaction. Email sending failures or external network latency never block user actions or roll back business transactions.
-2. **Enterprise SOAP Web Service:** Emails are dispatched through NXP's internal `SendMailService.asmx` SOAP web service (`POST http://.../MailService/SendMailService.asmx`) using standard XML envelope structure and SMTP relay configuration.
-3. **Send-Time Redirection & Dev Safety:** In development and test environments, `MAIL_REDIRECT_TO` reroutes all outgoing emails to specified test inboxes, prepending `[TEST]` to the subject and displaying the original intended recipients in the body banner.
-4. **Resilient Worker:** A background worker polls the outbox using `FOR UPDATE SKIP LOCKED` with chained `setTimeout` execution (preventing overlapping runs), exponential backoff retries, and automatic recovery of stuck `sending` tasks.
-5. **Admin Monitoring & Control:** Authenticated admin endpoints allow querying outbox history (paginated), resending failed emails, and sending direct test emails.
+### Key Guarantees & Constraints:
+1. **Asynchronous Outbox Pattern:** All notification events are written into an `email_outbox` table inside the same PostgreSQL transaction as the business operation (`submitRequest`, `updateRequestStatus`). Sending is decoupled from request mutations.
+2. **At-Least-Once Delivery Semantics:** The system provides at-least-once delivery. If a worker process or container terminates abruptly after the SOAP service receives the call but before the database transaction commits the `sent` status, the job may be re-claimed and resent after the `locked_at` timeout expires (5 minutes). Idempotency should be kept in mind by consumers.
+3. **Transaction Isolation:** Failures during recipient resolution or outbox enqueue must never roll back user request writes or status transitions. When `MAIL_ENABLED=true`, `MAIL_DEFAULT_TO` is strictly required at startup. If no recipient can be found at runtime even after checking defaults, the enqueue step is safely skipped and a warning is logged.
+4. **Non-Blocking SOAP Dispatch:** SOAP web service calls are executed strictly outside database transactions.
+5. **Send-Time Redirection & Dev Safety:** In non-production environments, `MAIL_REDIRECT_TO` guarantees that no emails leave for real users. Redirection is applied strictly at dispatch time, preserving original intended recipients in database audit fields.
+6. **Delivery Channel:** Dispatched through NXP internal `SendMailService.asmx` SOAP 1.1 Web Service (`POST http://.../MailService/SendMailService.asmx`) relaying to SMTP (`smtp.th-bnk01.nxp.com:25`).
 
 ---
 
-## 2. High-Level Architecture & Flow
+## 2. High-Level Architecture & Data Flow
 
 ```mermaid
 flowchart TD
     subgraph Core Request Transaction
-        A[Client Request: Submit / Status Update] --> B[RequestsService]
+        A[Client API: Submit / Status Update] --> B[RequestsService]
         B --> C[(PostgreSQL: psf_requests)]
         B --> D[NotificationService.enqueue]
-        D --> E[(PostgreSQL: email_outbox)]
+        D -->|Resolve From & To| E[(PostgreSQL: email_outbox)]
     end
 
     subgraph Outbox Background Worker
-        F[Chained setTimeout Timer] --> G{MAIL_ENABLED?}
-        G -->|No| F
-        G -->|Yes| H[Recover Stuck Jobs: locked_at > 5m]
-        H --> I[Fetch Batch: FOR UPDATE SKIP LOCKED]
-        I --> J[Mark status = 'sending', set locked_at]
-        J --> K[Resolve Send-time Redirection & Subject/Body]
-        K --> L[SoapMailClient.send]
+        F[Chained setTimeout Loop] --> G{MAIL_ENABLED?}
+        G -->|false| F
+        G -->|true| H[Step 1: Recover Stuck Jobs - locked_at > 5m]
+        H --> I[Step 2: Atomic Batch Claim - UPDATE ... LIMIT 10 RETURNING *]
+        I -->|Commit Immediately| J[Rows in memory with status = sending]
+        J --> K[Step 3: Resolve Send-time Redirection & XML Escape]
+        K --> L[SoapMailClient.send - Outside DB Transaction]
         L --> M{SOAP Result}
-        M -->|HTTP 2xx & No Fault| N[Update status = 'sent', sent_to, sent_at]
+        M -->|HTTP 2xx & No Fault| N[UPDATE email_outbox: status='sent', sent_to, sent_at]
         M -->|Fault / Error / Timeout| O{attempts >= 5?}
-        O -->|No| P[Update status = 'pending', next_attempt_at = backoff]
-        O -->|Yes| Q[Update status = 'failed', last_error = faultstring]
+        O -->|No| P[UPDATE email_outbox: status='pending', next_attempt_at=backoff, last_error]
+        O -->|Yes| Q[UPDATE email_outbox: status='failed', last_error]
+        Q --> R[Aggregate Failed Batch -> Enqueue ADMIN_ALERT]
     end
 
     subgraph SOAP Web Service
-        L -->|SOAP XML POST| R[SendMailService.asmx]
-        R --> S[SMTP Server: smtp.th-bnk01.nxp.com:25]
+        L -->|SOAP XML POST| S[SendMailService.asmx]
+        S --> T[SMTP Server: smtp.th-bnk01.nxp.com:25]
     end
 ```
 
@@ -56,13 +58,14 @@ flowchart TD
 
 ## 3. Database Schema (`email_outbox`)
 
-The table is defined with strict constraints, indexes, and audit columns.
+The table captures the full lifecycle, recipient history, fallback flag, and error telemetry.
 
 ```sql
 CREATE TABLE IF NOT EXISTS email_outbox (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_type TEXT NOT NULL CHECK (event_type IN ('REQUEST_SUBMITTED', 'REQUEST_STATUS_CHANGED', 'ADMIN_TEST')),
+    event_type TEXT NOT NULL CHECK (event_type IN ('REQUEST_SUBMITTED', 'REQUEST_STATUS_CHANGED', 'ADMIN_ALERT', 'ADMIN_TEST')),
     request_id UUID REFERENCES psf_requests(id) ON DELETE SET NULL,
+    from_address TEXT NOT NULL,
     to_recipients TEXT NOT NULL,
     cc_recipients TEXT,
     bcc_recipients TEXT,
@@ -70,6 +73,7 @@ CREATE TABLE IF NOT EXISTS email_outbox (
     subject TEXT NOT NULL,
     body_html TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed')),
+    is_fallback BOOLEAN NOT NULL DEFAULT FALSE,
     attempts INT NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     locked_at TIMESTAMPTZ,
@@ -79,12 +83,12 @@ CREATE TABLE IF NOT EXISTS email_outbox (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Worker polling index
+-- Polling index for pending jobs
 CREATE INDEX IF NOT EXISTS idx_email_outbox_polling 
     ON email_outbox (status, next_attempt_at) 
     WHERE status = 'pending';
 
--- Worker stuck recovery index
+-- Stuck recovery index for zombie sending jobs
 CREATE INDEX IF NOT EXISTS idx_email_outbox_stuck_recovery 
     ON email_outbox (status, locked_at) 
     WHERE status = 'sending';
@@ -93,29 +97,43 @@ CREATE INDEX IF NOT EXISTS idx_email_outbox_stuck_recovery
 CREATE INDEX IF NOT EXISTS idx_email_outbox_request_id 
     ON email_outbox (request_id);
 
--- Admin pagination index
-CREATE INDEX IF NOT EXISTS idx_email_outbox_created_at 
-    ON email_outbox (created_at DESC);
+-- Admin pagination & fallback filter index
+CREATE INDEX IF NOT EXISTS idx_email_outbox_admin_list 
+    ON email_outbox (created_at DESC, status, is_fallback);
 ```
 
-### Column Definitions:
-- `to_recipients`, `cc_recipients`, `bcc_recipients`: The original, intended recipient emails (comma-separated). Preserved verbatim regardless of redirection.
-- `sent_to`: The actual recipient address(es) that received the SOAP payload (populated at send time after applying redirection).
-- `locked_at`: Timestamp set when a worker marks the row as `sending`. If a worker process crashes, any row with `status = 'sending'` and `locked_at < NOW() - INTERVAL '5 minutes'` is automatically reset to `status = 'pending'`.
-- `last_error`: Stores only the first line of the SOAP `faultstring` or network exception (capped at 500 characters, no stack traces).
+### Column Specifications:
+- `from_address`: The email address of the actor who performed the action (or `MAIL_FROM` if missing).
+- `to_recipients`, `cc_recipients`, `bcc_recipients`: The original intended recipients (comma-separated). Unmodified by dev redirection.
+- `sent_to`: Complete audit string of actual destination addresses used during SOAP dispatch (e.g. `To: kasidet...; CC: danunan...`).
+- `is_fallback`: `TRUE` if the notification could not resolve target stakeholder emails and had to be routed to `MAIL_DEFAULT_TO`.
+- `locked_at`: Timestamp recorded when atomically claimed for sending. Used for 5-minute zombie recovery.
+- `last_error`: The first line of `faultstring` or network exception, decoded from XML entities, stripped of stack traces, capped at 500 characters.
 
 ---
 
-## 4. SOAP Web Service Contract
+## 4. SOAP Web Service Contract & XML Escaping
 
-### 4.1 Endpoint and HTTP Headers
+### 4.1 Endpoint & Required HTTP Headers
 - **Method:** `POST`
 - **URL:** `${MAIL_SOAP_URL}` (e.g. `http://thgbnklak1ms170.wbi.nxp.com/MailService/SendMailService.asmx`)
 - **Headers:**
   - `Content-Type: text/xml; charset=utf-8`
   - `SOAPAction: "http://tempuri.org/SendMail"`
 
-### 4.2 SOAP XML Envelope
+### 4.2 XML Escaping Rules
+Every field passed outside CDATA blocks (`i_strSystemName`, `i_strServer`, `i_strPort`, `i_strFrom`, `i_strTo`, `i_strCC`, `i_strBCC`, `i_strSubject`) **MUST** be strictly XML-escaped:
+- `&` → `&amp;`
+- `<` → `&lt;`
+- `>` → `&gt;`
+- `"` → `&quot;`
+- `'` → `&apos;`
+
+### 4.3 CDATA Escaping
+The email HTML body is placed inside `<i_strBody><![CDATA[ ... ]]></i_strBody>`.
+If the body string contains the literal sequence `]]>`, it must be escaped as `]]]]><![CDATA[>` to avoid breaking the CDATA enclosure.
+
+### 4.4 SOAP XML Payload Structure
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope
@@ -124,121 +142,138 @@ CREATE INDEX IF NOT EXISTS idx_email_outbox_created_at
   xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
     <SendMail xmlns="http://tempuri.org/">
-      <i_strSystemName>${MAIL_SYSTEM_NAME}</i_strSystemName>
-      <i_strServer>${MAIL_SMTP_SERVER}</i_strServer>
-      <i_strPort>${MAIL_SMTP_PORT}</i_strPort>
-      <i_strFrom>${MAIL_FROM}</i_strFrom>
-      <i_strTo>${actual_to}</i_strTo>
-      <i_strCC>${actual_cc}</i_strCC>
-      <i_strBCC>${actual_bcc}</i_strBCC>
-      <i_strSubject>${subject}</i_strSubject>
-      <i_strBody><![CDATA[${html_body}]]></i_strBody>
+      <i_strSystemName>${xmlEscape(MAIL_SYSTEM_NAME)}</i_strSystemName>
+      <i_strServer>${xmlEscape(MAIL_SMTP_SERVER)}</i_strServer>
+      <i_strPort>${xmlEscape(MAIL_SMTP_PORT)}</i_strPort>
+      <i_strFrom>${xmlEscape(fromAddress)}</i_strFrom>
+      <i_strTo>${xmlEscape(actualTo)}</i_strTo>
+      <i_strCC>${xmlEscape(actualCc)}</i_strCC>
+      <i_strBCC>${xmlEscape(actualBcc)}</i_strBCC>
+      <i_strSubject>${xmlEscape(subject)}</i_strSubject>
+      <i_strBody><![CDATA[${cdataEscape(htmlBody)}]]></i_strBody>
     </SendMail>
   </soap:Body>
 </soap:Envelope>
 ```
 
-### 4.3 CDATA Escaping
-If `${html_body}` contains the literal sequence `]]>`, it must be escaped as `]]]]><![CDATA[>` to prevent premature termination of the XML CDATA block.
-
-### 4.4 Success and Failure Detection Rules
-1. **Success Condition:**
+### 4.5 SOAP Response Handling & Success Detection
+1. **Success Criteria:**
    - HTTP response status is `2xx` (specifically `200 OK`).
-   - Response XML contains `<SendMailResponse xmlns="http://tempuri.org/"` (can be self-closing or empty).
+   - Response XML contains `<SendMailResponse xmlns="http://tempuri.org/"` (can be empty / self-closing).
    - Response does **not** contain `<soap:Fault>`.
-   - *Note:* The web service does not return a `<SendMailResult>` tag on success.
-2. **Failure Condition:**
-   - HTTP response status is non-`2xx` (e.g. `500 Internal Server Error`).
+   - *(Note: SendMailService returns an empty `<SendMailResponse />` tag without `<SendMailResult>` upon success).*
+2. **Failure Criteria:**
+   - HTTP status is non-`2xx` (e.g. `500 Internal Server Error`).
    - Response contains `<soap:Fault>`.
-   - Network failure, DNS error, connection refusal, or request timeout (`MAIL_TIMEOUT_MS`, default: 10,000 ms).
-   - Unparseable response XML.
-3. **Error Logging:**
-   - The worker extracts `<faultstring>` from the SOAP Fault.
-   - Only the first line (e.g. `System.Web.Services.Protocols.SoapException: ...` or `System.Net.Mail.SmtpException: ...`) is extracted, stripped of carriage returns/stack traces, truncated to 500 characters, and saved to `last_error`.
-   - The full XML error and stack trace are logged to the NestJS logger for developer inspection.
+   - Connection timeout (exceeding `MAIL_TIMEOUT_MS`, default: 10,000 ms), network error, or invalid XML.
+3. **Error Parsing & XML Entity Decoding:**
+   - On fault, extract `<faultstring>` from XML.
+   - Decode XML entities (e.g. `&gt;` → `>`, `&lt;` → `<`, `&amp;` → `&`, `&quot;` → `"`).
+   - Extract only the first line (e.g. `System.Net.Mail.SmtpException: Syntax error in parameters or arguments`).
+   - Truncate to at most 500 characters and write to `last_error`.
+   - Log the complete raw fault and stack trace to server logs.
 
 ---
 
-## 5. Recipient Resolution & Send-Time Redirection
+## 5. Sender (From) & Recipient Rules
 
-### 5.1 Enqueue-Time Recipient Resolution
-Recipients are resolved when the event is created and stored in `to_recipients` and `cc_recipients`:
-1. **Submission Event (`REQUEST_SUBMITTED`):**
-   - **To:** Email addresses of all active users with `role = 'setup_owner'` (both GNTC and MFG).
-   - **CC:** Empty (or Requester email if configured).
-   - **Fallback:** If no Setup Owners have an email configured (common in development test seeds), fallback to `MAIL_DEFAULT_TO`.
-2. **Status Change Event (`REQUEST_STATUS_CHANGED`):**
-   - **To:** Requester email.
-   - **CC:** Assigned Setup Owner email (or all Setup Owners if not yet assigned).
-   - **Fallback:** If no emails found, fallback to `MAIL_DEFAULT_TO` and `MAIL_DEFAULT_CC`.
+### 5.1 Sender (`from_address`) Rules
+1. **Action-Driven From Address:** `from_address` is the authenticated email of the actor performing the action:
+   - Request submitter email on `submitRequest`.
+   - Updating user's email on `updateRequestStatus`.
+   - Triggering admin's email on test endpoints.
+2. **Fallback to `MAIL_FROM`:** If the acting user has no email configured (e.g. mock development identities where `email = NULL`), fall back to `MAIL_FROM`.
+3. **Production Standard:** In production, `MAIL_FROM` must be configured as a generic system/no-reply mailbox (e.g. `no-reply.psf@nxp.com`), not a personal employee email.
+4. **Redirection Preservation:** When `MAIL_REDIRECT_TO` is active, `from_address` remains unchanged. Only recipient addresses are redirected. The test banner displays the original `from_address`.
+5. **No Custom Automated Footer:** The backend template must **not** add an "automated message" footer. The SOAP web service already automatically appends:
+   `"This is sent from system, please don't reply directly"`
+   *(Note: This creates a conceptual conflict with using a real person's email as From; see Open Question §12).*
 
-### 5.2 Send-Time Redirection (`MAIL_REDIRECT_TO`)
-To ensure safety in test and staging environments, redirection is applied **strictly at send time** (inside the worker/client, not at enqueue time):
-- If `MAIL_REDIRECT_TO` is non-empty (e.g. `kasidet.watthanaphonphairot@nxp.com, danunan.maliyan@nxp.com`):
-  - `i_strTo` is overridden with `MAIL_REDIRECT_TO`.
-  - `i_strCC` is set to `""`.
-  - `i_strBCC` is set to `""`.
-  - The subject has `[TEST] ` prepended (e.g. `[TEST] [PSF Request] New Request: ...`).
-  - A prominent yellow test banner is prepended to the top of `${html_body}`:
+### 5.2 Recipient Resolution Rules *(Business Assumptions)*
+> [!IMPORTANT]
+> The following recipient mappings are current baseline assumptions based on specification documents. They must be formally confirmed with business process owners prior to production rollout.
+
+1. **Submission Notification (`REQUEST_SUBMITTED`):**
+   - **To:** All users with role `setup_owner` (both GNTC and MFG departments) having non-empty `email`.
+   - **CC:** None.
+2. **Status Change Notification (`REQUEST_STATUS_CHANGED`):**
+   - **To:** The original `requester` user email.
+   - **CC:** The assigned Setup Owner email (if assigned), or all Setup Owners if unassigned.
+3. **Fallback Handling (`is_fallback = true`):**
+   - If recipient resolution yields no valid emails for a notification:
+     - Route the email to `MAIL_DEFAULT_TO` (admin mailbox).
+     - Set `is_fallback = TRUE` in `email_outbox`.
+     - Inject a prominent top warning banner into the HTML body:
+       `"ไม่พบอีเมลผู้รับสำหรับ event นี้ กรุณาตรวจสอบข้อมูลผู้ใช้ (ผู้รับที่ควรได้รับ: {role})"`
+4. **Safety Enqueue Guard:**
+   - If even `MAIL_DEFAULT_TO` is empty or invalid when resolving fallback, **do not throw an error and do not fail the business transaction**. Log a `warn` message and skip outbox insertion.
+
+### 5.3 Send-Time Redirection (`MAIL_REDIRECT_TO`)
+Applied **strictly at send time** inside the worker (never at enqueue time):
+- When `MAIL_REDIRECT_TO` is populated:
+  - Actual `To` sent to SOAP = `MAIL_REDIRECT_TO`.
+  - Actual `CC` sent to SOAP = `""`.
+  - Actual `BCC` sent to SOAP = `""`.
+  - Subject prepends `[TEST] ` (subject in database remains clean without `[TEST]`).
+  - Prepend a prominent test banner to the HTML body:
     ```html
     <div style="background-color: #fff3cd; color: #856404; padding: 12px; border: 1px solid #ffeeba; margin-bottom: 16px; border-radius: 4px;">
       <strong>[TEST ENVIRONMENT REDIRECTION]</strong><br/>
-      Original Intended To: <code>${to_recipients}</code><br/>
-      Original Intended CC: <code>${cc_recipients || '-'}</code>
+      Sender: <code>${from_address}</code><br/>
+      Original To: <code>${to_recipients}</code><br/>
+      Original CC: <code>${cc_recipients || '-'}</code>
     </div>
     ```
-  - `email_outbox.sent_to` is recorded as `MAIL_REDIRECT_TO`.
-- If `MAIL_REDIRECT_TO` is empty:
-  - `i_strTo` is `to_recipients`.
-  - `i_strCC` is `cc_recipients`.
-  - `email_outbox.sent_to` is recorded as `to_recipients`.
+  - Record complete recipient log in `sent_to` (e.g. `To: kasidet...; CC: danunan...`).
+- When `MAIL_REDIRECT_TO` is empty:
+  - Actual `To` = `to_recipients`, Actual `CC` = `cc_recipients`.
+  - `sent_to` recorded as `To: ${to_recipients}; CC: ${cc_recipients || '-'}`.
 
 ---
 
-## 6. Email Templates & Content
+## 6. Email Content & View Request Link
 
-All emails share a clean, responsive HTML layout with inline CSS (compatible with Outlook desktop and web clients).
+### 6.1 Event Subjects (Clean, Unprefixed in Database)
+1. **Submission:** `[PSF Request] New Request: {requestNo} - {title}`
+2. **Status Changed (Open kind):** `[PSF Request] Status Updated to {newStatus}: {requestNo} - {title}`
+3. **Completed (`kind === 'completed'`):** `[PSF Request] Completed: {requestNo} - {title}`
+4. **Cancelled (`kind === 'cancelled'`):** `[PSF Request] Cancelled: {requestNo} - {title}`
+5. **Admin Alert:** `[PSF System Alert] Notification Delivery Failures: {count} failed`
 
-### 6.1 Event Subjects
-1. **New Request:** `[PSF Request] New Request: {requestNo} - {title}`
-2. **Status Updated (In Progress):** `[PSF Request] Status Updated to {newStatus}: {requestNo} - {title}`
-3. **Completed:** `[PSF Request] Completed: {requestNo} - {title}`
-4. **Cancelled:** `[PSF Request] Cancelled: {requestNo} - {title}`
-
-### 6.2 Body Content Structure
+### 6.2 Body Structure & Information Hiding
 - **Header:** System brand header (`PSF Setup File Request Management`).
-- **Notification Summary:** Explaining the current action (e.g., *"Request PSF-2026-0042 has been submitted and is awaiting engineering review."*).
-- **Metadata Table:**
-  - **Request No:** `{requestNo}`
-  - **Title:** `{title}`
-  - **Requester:** `{requesterName}`
-  - **Product Type:** `{productType}`
-  - **Priority:** `{priority}`
-  - **Due Date:** `{dueDate}`
-  - **Status:** `{fromStatus} → {toStatus}`
-  - **Updated By:** `{actorName} ({actorRole})`
-  - **Reason / Remarks:** (Shown only for Cancelled or Reject actions if reason metadata is present; omitted otherwise).
-- **Call-to-Action:** Button linking to `${APP_BASE_URL}/requests/${requestId}`.
-- **Footer:** Automated message disclaimer.
+- **Summary Statement:** Explains the current action in context.
+- **Request Metadata Table:**
+  - Request No, Title, Requester, Product Type, Priority, Due Date
+  - Previous Status → New Status
+  - Updated By: `{actorName} ({actorRole})` *(Retained because SOAP service displays a generic system sender name rather than individual names).*
+  - Reason / Remarks: Included only if status is Cancelled/Rejected and reason metadata is present.
+- **Security Constraint:** **PSF Created Information is NEVER included in emails.** Unreleased engineering data cannot leak.
+- **HTML Escaping:** All dynamic user inputs are strictly HTML-escaped. Null/empty fields display as `"-"`.
 
-### 6.3 Security & Boundary Rule
-- All dynamic strings are strictly HTML-escaped (`&`, `<`, `>`, `"`, `'`).
-- Missing or null fields render as `"-"`.
-- **PSF Created Information is NEVER included in email bodies.** This guarantees that unreleased PSF data cannot leak to unauthorized recipients.
+### 6.3 "View Request" Button & SPA Routing Requirements
+- Button links directly to `${APP_BASE_URL}/requests/${requestId}`.
+- **Authentication & Deep Linking:**
+  - If an unauthenticated user opens the link, the frontend route guard must store the target URL (`returnUrl`) in session/query and redirect to `/login`.
+  - Upon successful LDAP login, the user must be redirected back to `${APP_BASE_URL}/requests/${requestId}`.
+  - If the authenticated user does not have permission to view the request, render a clean, explicit `403 Forbidden` page.
+- **Nginx / Web Server SPA Fallback:**
+  - The production web server (Nginx/IIS) serving the frontend SPA must be configured with fallback routing (`try_files $uri $uri/ /index.html;`) so that direct navigation or browser refresh on `/requests/:id` does not return `404 Not Found`.
 
 ---
 
-## 7. Outbox Background Worker & Retry Lifecycle
+## 7. Outbox Background Worker, Retries & Admin Alerts
 
 ### 7.1 Non-Overlapping Polling Loop
-- The worker does **not** use `setInterval` (which can cause tick pile-up if a SOAP request times out).
-- Instead, it uses chained `setTimeout` with a boolean mutex flag (`isRunning`):
+- Uses chained `setTimeout` with a boolean mutex flag (`isRunning`):
   ```typescript
   async function pollLoop() {
     if (isRunning) return;
     isRunning = true;
     try {
       await processOutboxBatch();
+    } catch (err) {
+      logger.error('Worker error', err);
     } finally {
       isRunning = false;
       timeoutHandle = setTimeout(pollLoop, pollIntervalMs);
@@ -246,15 +281,15 @@ All emails share a clean, responsive HTML layout with inline CSS (compatible wit
   }
   ```
 
-### 7.2 Switch Behavior: `MAIL_ENABLED` toggled `false` → `true`
-- When `MAIL_ENABLED=false`:
-  - `RequestsService` still writes outbox rows in `status = 'pending'` during business transactions.
-  - The worker poll loop exits immediately without querying for rows or executing sends.
-- When `MAIL_ENABLED` is switched to `true`:
-  - On the very next poll tick, the worker picks up all existing `pending` rows whose `next_attempt_at <= NOW()` and processes them in FIFO order. No enqueued emails are lost during the disabled window.
+### 7.2 `MAIL_ENABLED` Toggle Behavior
+- **When `MAIL_ENABLED=false`:**
+  - Mutation endpoints continue to insert outbox records in `status = 'pending'`.
+  - The worker poll loop immediately sleeps without running database queries.
+- **When toggled from `false` to `true`:**
+  - On the very next poll tick, the worker picks up all pending records accumulated in `email_outbox` where `next_attempt_at <= NOW()` and processes them in FIFO order. No jobs are lost.
 
-### 7.3 Step 1: Stuck Job Recovery
-Before picking up new jobs, the worker checks for rows stuck in `sending`:
+### 7.3 Step 1: Zombie Recovery (`locked_at`)
+Before claiming new jobs, recover jobs stuck in `sending` due to server crashes:
 ```sql
 UPDATE email_outbox
 SET status = 'pending',
@@ -264,53 +299,83 @@ WHERE status = 'sending'
   AND locked_at < NOW() - INTERVAL '5 minutes';
 ```
 
-### 7.4 Step 2: Concurrency & Batch Selection
-The worker fetches up to 10 runnable rows:
+### 7.4 Step 2: Atomic Batch Claiming
+Claims up to 10 rows and updates their status in a single atomic SQL statement, committing immediately:
 ```sql
-SELECT id, to_recipients, cc_recipients, bcc_recipients, subject, body_html, attempts
-FROM email_outbox
-WHERE status = 'pending'
-  AND next_attempt_at <= NOW()
-ORDER BY next_attempt_at ASC
-LIMIT 10
-FOR UPDATE SKIP LOCKED;
+UPDATE email_outbox
+SET status = 'sending',
+    locked_at = NOW(),
+    attempts = attempts + 1,
+    updated_at = NOW()
+WHERE id IN (
+    SELECT id
+    FROM email_outbox
+    WHERE status = 'pending'
+      AND next_attempt_at <= NOW()
+    ORDER BY next_attempt_at ASC
+    LIMIT 10
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id, event_type, request_id, from_address, to_recipients, cc_recipients, 
+          bcc_recipients, subject, body_html, attempts;
 ```
 
-### 7.5 Step 3: Sending & State Transitions
-For each row in the batch:
-1. Set `status = 'sending'`, `locked_at = NOW()`, `attempts = attempts + 1`, `updated_at = NOW()`.
-2. Apply send-time redirection rules.
-3. Call `SoapMailClient.send(...)`.
-4. **On Success:**
-   - `status = 'sent'`
-   - `sent_to = actualRecipients`
-   - `sent_at = NOW()`
-   - `locked_at = NULL`
-   - `last_error = NULL`
-5. **On Failure:**
-   - Log error with full details.
-   - If `attempts >= 5`:
-     - `status = 'failed'`
-     - `locked_at = NULL`
-     - `last_error = extractedShortError`
+### 7.5 Step 3: Dispatch & Exponential Backoff
+For each claimed job (executed in Node.js outside SQL transaction):
+1. Format actual recipients and apply dev redirection if configured.
+2. Call `SoapMailClient.send(...)`.
+3. **If Successful:**
+   ```sql
+   UPDATE email_outbox
+   SET status = 'sent',
+       sent_to = $2,
+       sent_at = NOW(),
+       locked_at = NULL,
+       last_error = NULL,
+       updated_at = NOW()
+   WHERE id = $1;
+   ```
+4. **If Failed:**
+   - Decode XML error and extract first line (max 500 chars).
    - If `attempts < 5`:
-     - `status = 'pending'`
-     - `locked_at = NULL`
-     - `last_error = extractedShortError`
-     - `next_attempt_at = NOW() + backoff` (Backoff schedule: attempt 1 = 1m, attempt 2 = 5m, attempt 3 = 15m, attempt 4 = 60m).
+     ```sql
+     UPDATE email_outbox
+     SET status = 'pending',
+         locked_at = NULL,
+         last_error = $2,
+         next_attempt_at = NOW() + $3::interval,
+         updated_at = NOW()
+     WHERE id = $1;
+     ```
+     *Backoff intervals:* 1m (attempt 1), 5m (attempt 2), 15m (attempt 3), 60m (attempt 4).
+   - If `attempts >= 5`:
+     ```sql
+     UPDATE email_outbox
+     SET status = 'failed',
+         locked_at = NULL,
+         last_error = $2,
+         updated_at = NOW()
+     WHERE id = $1;
+     ```
+
+### 7.6 Admin Failure Alerts (`ADMIN_ALERT`)
+When jobs transition to `status = 'failed'`:
+1. **Batch Aggregation:** If multiple jobs fail in the same worker run, aggregate them into a single `ADMIN_ALERT` notification rather than spamming multiple alert emails.
+2. **Alert Content:** Summary table containing Request No, Event Type, Original Recipients, Attempts count, and `last_error`. **Does not include original `body_html`.**
+3. **Recipient:** Sent to `MAIL_DEFAULT_TO` (subject to `MAIL_REDIRECT_TO` if active).
+4. **Loop Prevention:** If an `ADMIN_ALERT` job itself fails, **it must never create another `ADMIN_ALERT`**.
+5. **System Failure Notice:** If the SOAP service or network is completely down, `ADMIN_ALERT` emails will also fail to deliver. The specification explicitly dictates that administrators must rely on server error logs and the Admin GET API for monitoring during service outages.
 
 ---
 
-## 8. Admin API Endpoints
-
-All admin notification routes are protected by the admin guard.
+## 8. Admin Guard & Management APIs
 
 ### 8.1 Admin Guard Specification
-- Controllers verify the session via `request.session.userId`.
-- Loads the user profile via `AuthService.getProfile(userId)`.
-- Verifies `actor.role === 'admin'`.
-- If configured in `.env` (`ADMIN_LDAP_GROUP`), can additionally check LDAP group membership; otherwise uses the authoritative database profile role.
-- Unauthenticated requests return `401 Unauthorized`; non-admin users return `403 Forbidden`.
+- Protects all `/api/admin/notifications/*` routes.
+- **Session Check:** Verifies `request.session.userId`.
+- **Database Role Check:** Loads profile via `AuthService.getProfile(userId)` and verifies `role === 'admin'`.
+- **Optional LDAP Group Check:** If `ADMIN_LDAP_GROUP` is configured in `.env`, the guard or LDAP login flow verifies that the user belongs to the designated directory group.
+- Unauthorized callers receive `401 Unauthorized`; non-admin callers receive `403 Forbidden`.
 
 ### 8.2 Endpoints
 
@@ -320,10 +385,11 @@ All admin notification routes are protected by the admin guard.
   - `page` (number, default: 1)
   - `limit` (number, default: 20, max: 100)
   - `status` (optional: `'pending' | 'sending' | 'sent' | 'failed'`)
+  - `isFallback` (optional boolean: filter fallback deliveries)
 - **Behavior:**
-  - **Excludes `body_html`** from the query to ensure fast performance and low payload sizes.
-  - Orders by `created_at DESC`.
-- **Response:**
+  - **Excludes `body_html`** from query to maintain lightweight responses.
+  - Returns `created_at DESC` order.
+- **Response Format:**
   ```json
   {
     "items": [
@@ -331,11 +397,13 @@ All admin notification routes are protected by the admin guard.
         "id": "c71a3962-e6bb-4934-8c88-e925bf157774",
         "eventType": "REQUEST_SUBMITTED",
         "requestId": "92f7680a-9d90-4131-b753-1e56b464ad19",
-        "to": "kasidet.watthanaphonphairot@nxp.com",
-        "cc": "danunan.maliyan@nxp.com",
-        "sentTo": "kasidet.watthanaphonphairot@nxp.com",
-        "subject": "[TEST] [PSF Request] New Request: PSF-2026-0001 - New Setup",
+        "fromAddress": "dev.requester@nxp.com",
+        "to": "dev.setup-gntc@nxp.com, dev.setup-mfg@nxp.com",
+        "cc": null,
+        "sentTo": "To: kasidet.watthanaphonphairot@nxp.com, danunan.maliyan@nxp.com",
+        "subject": "[PSF Request] New Request: PSF-2026-0001 - Setup File Title",
         "status": "sent",
+        "isFallback": false,
         "attempts": 1,
         "nextAttemptAt": "2026-10-05T03:00:00.000Z",
         "lockedAt": null,
@@ -349,35 +417,29 @@ All admin notification routes are protected by the admin guard.
     "limit": 20
   }
   ```
+  *(Note: Notice that the database `subject` does NOT contain `[TEST]`, and `sentTo` reflects the full redirect list).*
 
 #### 2. Resend Failed Notification
 - **Route:** `POST /api/admin/notifications/:id/resend`
 - **Behavior:**
-  - Resend is allowed **only for rows with `status = 'failed'`**.
-  - If the row is not in `failed` status, throws `BadRequestException("Only failed notifications can be reset for resending")`.
-  - Resets `status = 'pending'`, `attempts = 0`, `next_attempt_at = NOW()`, `last_error = NULL`, `locked_at = NULL`.
-- **Response:** Updated outbox summary.
+  - **Allowed ONLY for rows with `status = 'failed'`.**
+  - If status is not `'failed'`, returns `400 Bad Request` (`"Only failed notifications can be reset for resending"`).
+  - Resets: `status = 'pending'`, `attempts = 0`, `next_attempt_at = NOW()`, `last_error = NULL`, `locked_at = NULL`.
+- **Response:** Updated notification summary.
 
 #### 3. Immediate Test Email
 - **Route:** `POST /api/admin/notifications/test`
-- **Request Body:**
-  ```json
-  {
-    "to": "kasidet.watthanaphonphairot@nxp.com",
-    "subject": "Manual Admin SOAP Test",
-    "body": "Hello from Admin Test"
-  }
-  ```
 - **Behavior:**
+  - Rejects with `BadRequestException("Mail service is disabled (MAIL_ENABLED=false)")` if `MAIL_ENABLED=false`.
+  - Dispatches a fixed, safe, pre-defined test template (`"PSF Setup File - SOAP Email Test"`). Does not accept arbitrary caller HTML bodies to prevent open relay abuse.
   - Applies send-time redirection (`MAIL_REDIRECT_TO` if active).
-  - Invokes `SoapMailClient.send(...)` immediately.
-  - Inserts a record into `email_outbox` with `event_type = 'ADMIN_TEST'` and final status (`sent` or `failed`).
-  - Returns immediate execution result.
-- **Response:**
+  - Immediately dispatches via `SoapMailClient`.
+  - Records an outbox entry with `event_type = 'ADMIN_TEST'` and final status (`sent` or `failed`).
+- **Response Format:**
   ```json
   {
     "success": true,
-    "sentTo": "kasidet.watthanaphonphairot@nxp.com",
+    "sentTo": "To: kasidet.watthanaphonphairot@nxp.com, danunan.maliyan@nxp.com",
     "message": "Test email sent successfully",
     "outboxId": "uuid..."
   }
@@ -385,8 +447,9 @@ All admin notification routes are protected by the admin guard.
 
 ---
 
-## 9. Environment Variables (`.env.example`)
+## 9. Environment Configuration & Validation
 
+### 9.1 `.env.example`
 ```env
 # ------------------------------------------------------------------------------
 # Mail & Notification Configuration (SOAP Web Service + Outbox)
@@ -397,20 +460,21 @@ MAIL_ENABLED=true
 # NXP Internal SendMail SOAP Web Service URL
 MAIL_SOAP_URL=http://thgbnklak1ms170.wbi.nxp.com/MailService/SendMailService.asmx
 
-# System sender identifier
+# System sender identifier in SOAP payload
 MAIL_SYSTEM_NAME="PSF Setup File"
 
 # Internal SMTP Server relay configuration for SOAP payload
 MAIL_SMTP_SERVER=smtp.th-bnk01.nxp.com
 MAIL_SMTP_PORT=25
-MAIL_FROM=kasidet.watthanaphonphairot@nxp.com
 
-# Default fallback recipients when workflow profiles lack configured email
-MAIL_DEFAULT_TO=kasidet.watthanaphonphairot@nxp.com
-MAIL_DEFAULT_CC=danunan.maliyan@nxp.com
+# System fallback sender mailbox (Production should use a system mailbox, not a personal email)
+MAIL_FROM=no-reply.psf@nxp.com
+
+# Administrator mailbox for alerts and fallback notifications (comma-separated if multiple)
+MAIL_DEFAULT_TO=kasidet.watthanaphonphairot@nxp.com,danunan.maliyan@nxp.com
 
 # Safe redirection in development/testing (comma-separated).
-# If set, ALL outgoing emails will be sent strictly to these addresses.
+# If set, ALL outgoing emails (including fallback & alerts) are sent strictly to these addresses.
 MAIL_REDIRECT_TO=kasidet.watthanaphonphairot@nxp.com,danunan.maliyan@nxp.com
 
 # Worker polling interval (milliseconds)
@@ -419,9 +483,20 @@ MAIL_POLL_INTERVAL_MS=15000
 # SOAP request timeout (milliseconds)
 MAIL_TIMEOUT_MS=10000
 
-# Application base URL for email action buttons/links
-APP_BASE_URL=http://127.0.0.1:5173
+# Frontend application base URL for deep links (Placeholder; do not use localhost/127.0.0.1 in production)
+APP_BASE_URL=https://psf-app.nxp.com
+
+# Optional LDAP Admin Group for Admin Guard verification
+ADMIN_LDAP_GROUP=
 ```
+
+### 9.2 Startup Configuration Validation (`mail.config.ts`)
+When the NestJS application boots:
+1. If `MAIL_ENABLED=true`:
+   - `MAIL_SOAP_URL`, `MAIL_SMTP_SERVER`, `MAIL_SMTP_PORT`, `MAIL_FROM`, `MAIL_DEFAULT_TO`, and `APP_BASE_URL` are strictly required. If any are missing, startup throws a fatal configuration error.
+   - If `MAIL_REDIRECT_TO` is empty (production mode):
+     - `APP_BASE_URL` **must not** contain `localhost` or `127.0.0.1`.
+     - Validates that `MAIL_FROM` conforms to email syntax.
 
 ---
 
@@ -429,45 +504,69 @@ APP_BASE_URL=http://127.0.0.1:5173
 
 ```
 backend/src/notifications/
-├── notifications.module.ts              # NestJS module bundling providers and controllers
+├── notifications.module.ts              # NestJS module definition
 ├── mail.config.ts                      # Validated environment configuration service
-├── soap-mail.client.ts                 # HTTP client building SOAP XML & invoking Web Service
-├── mail.service.ts                     # High-level mail dispatcher & address validator
-├── email-templates.ts                  # Pure functions generating subjects & HTML layouts
-├── recipient-resolver.ts               # Determines To/CC from request actor & database profiles
-├── notification.service.ts             # Enqueues outbox records in DB transaction
-├── outbox.worker.ts                    # Background timer, stuck job recovery & retry queue
+├── soap-mail.client.ts                 # SOAP XML builder, CDATA/XML escaper & HTTP client
+├── mail.service.ts                     # Dispatcher handling send-time redirection & audit logging
+├── email-templates.ts                  # Pure template functions for subjects, bodies, and banners
+├── recipient-resolver.ts               # Logic determining To/CC from actor and database profiles
+├── notification.service.ts             # Enqueues outbox records within caller DB transactions
+├── outbox.worker.ts                    # Non-overlapping worker (chained setTimeout, recovery, claim)
 ├── notifications.controller.ts         # Admin-only endpoints (list, resend, test)
 └── __tests__/
-    ├── soap-mail.client.spec.ts        # Unit tests for SOAP request/response/fault
-    ├── email-templates.spec.ts         # Unit tests for escaping & layout generation
-    ├── recipient-resolver.spec.ts      # Unit tests for fallback & recipient lookup
-    ├── outbox.worker.spec.ts           # Unit tests for locked_at recovery & backoff
-    └── notifications.controller.spec.ts# Unit tests for admin authorization & resend
+    ├── soap-mail.client.spec.ts        # Unit tests for XML escaping, response parsing, and fault decoding
+    ├── email-templates.spec.ts         # Unit tests for HTML escaping, fallback banners, and layout
+    ├── recipient-resolver.spec.ts      # Unit tests for profile lookup and fallback to MAIL_DEFAULT_TO
+    ├── mail.config.spec.ts             # Unit tests for startup validation and production localhost rejection
+    ├── outbox.worker.spec.ts           # Unit tests for atomic claim, locked_at recovery, backoff & alert aggregation
+    └── notifications.controller.spec.ts# Unit tests for admin guard, resend restrictions & test endpoint
 ```
 
 ---
 
 ## 11. Verification & Testing Strategy
 
-1. **Unit Tests (Jest):**
-   - `SoapMailClient`:
-     - Successful response parsing (`200 OK` with `<SendMailResponse />`).
-     - Error response handling (`500` with `soap:Fault` parsing first-line `faultstring`).
-     - Timeout handling via `AbortSignal.timeout`.
-     - CDATA handling for strings containing `]]>`.
-   - `EmailTemplates`:
-     - Escapes special characters (`<script>`, quotes, ampersands).
-     - Renders missing fields as `"-"`.
-     - Confirms PSF Created data is never included in the output.
-   - `OutboxWorker`:
-     - Validates backoff calculation (1m, 5m, 15m, 60m).
-     - Validates stuck recovery query (`locked_at < NOW() - 5m`).
-     - Validates that send-time redirection replaces `i_strTo` and prepends `[TEST]`.
-   - `NotificationsController`:
-     - Rejects non-admin requests with 403.
-     - Rejects resend requests if `status !== 'failed'`.
-2. **Database Integration Tests (`@electric-sql/pglite`):**
-   - Verify table creation, enum checks, and `SKIP LOCKED` behavior with concurrent workers.
-3. **End-to-End Live Check:**
-   - Execute `POST /api/admin/notifications/test` against the local development server to confirm delivery to `kasidet.watthanaphonphairot@nxp.com` and `danunan.maliyan@nxp.com`.
+### 11.1 Unit Tests (Jest)
+1. **`soap-mail.client.spec.ts`:**
+   - Validates that all non-CDATA fields are XML-escaped (`&`, `<`, `>`, `"`, `'`).
+   - Validates that `]]>` in CDATA is properly escaped to `]]]]><![CDATA[>`.
+   - Simulates `HTTP 200` with empty `<SendMailResponse />` -> returns success.
+   - Simulates `HTTP 500` with `<soap:Fault>` -> decodes XML entities, extracts first line of `faultstring`, truncates to 500 chars.
+   - Simulates request timeout via `AbortSignal.timeout`.
+2. **`mail.config.spec.ts`:**
+   - Rejects missing `MAIL_DEFAULT_TO` when `MAIL_ENABLED=true`.
+   - Rejects `APP_BASE_URL` with `localhost`/`127.0.0.1` when `MAIL_REDIRECT_TO` is empty.
+3. **`recipient-resolver.spec.ts`:**
+   - Resolves actor email as `from_address`, falling back to `MAIL_FROM` if actor email is null.
+   - Fallback to `MAIL_DEFAULT_TO` with `is_fallback = true` when target users lack emails.
+4. **`outbox.worker.spec.ts`:**
+   - Tests backoff interval logic (1m, 5m, 15m, 60m).
+   - Tests `locked_at` reset logic for entries older than 5 minutes.
+   - Tests `ADMIN_ALERT` aggregation: verifies that when multiple jobs reach `failed` status, a single aggregated alert is created without recursion.
+5. **`requests.service.spec.ts` Integration:**
+   - Confirms `submitRequest` and `updateRequestStatus` call `notificationService.enqueue`.
+   - Confirms that if outbox enqueue encounters a missing recipient, it does not throw or abort the request transaction.
+
+### 11.2 Database Integration Tests (`@electric-sql/pglite`)
+- Because PGlite operates over a single in-process connection, tests will verify single-connection sequential semantics:
+  - Table initialization and constraints check (`status` and `event_type` enums).
+  - Atomic claim query (`UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING *`).
+  - Stuck recovery query (`WHERE status = 'sending' AND locked_at < NOW() - INTERVAL '5 minutes'`).
+
+### 11.3 Live End-to-End Smoke Test
+- Execute `POST /api/admin/notifications/test` against the local development server.
+- Verify receipt of email at `kasidet.watthanaphonphairot@nxp.com` and `danunan.maliyan@nxp.com`.
+- Inspect outbox record to verify clean subject, `sent_to` audit value, and `ADMIN_TEST` event type.
+
+---
+
+## 12. Open Questions & IT Infrastructure Inquiries
+
+The following technical questions should be reviewed with NXP IT / Network / Web Service administrators:
+
+1. **SMTP Relay Sender Authentication (`From` Spoofing):**
+   - *Question:* Does the internal SMTP relay server (`smtp.th-bnk01.nxp.com:25`) permit arbitrary employee email addresses in the `From` header (`i_strFrom`), or does SPF/relay security require that `From` match a designated service account?
+   - *Impact:* If relay rejects non-service From addresses, all emails must use `MAIL_FROM` as `From` and populate the actor email in a `Reply-To` header (if supported by `SendMailService.asmx`).
+2. **Automatic Footer Customization:**
+   - *Question:* Is it possible to disable or modify the automatic footer (`"This is sent from system, please don't reply directly"`) appended by `SendMailService.asmx`?
+   - *Impact:* Because the current design places the user's actual email in the `From` field, an unchangeable "please don't reply directly" footer may confuse recipients who wish to reply to the requester or engineer.
