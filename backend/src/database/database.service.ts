@@ -2,7 +2,7 @@ import {
   Inject,
   Injectable,
   Logger,
-  OnModuleDestroy,
+  OnApplicationShutdown,
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -11,7 +11,7 @@ import { Pool } from 'pg';
 export const DATABASE_POOL = 'DATABASE_POOL';
 
 @Injectable()
-export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(DatabaseService.name);
 
   constructor(
@@ -30,7 +30,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     await this.verifyConnection('startup');
   }
 
-  async onModuleDestroy(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     await this.pool.end();
   }
 

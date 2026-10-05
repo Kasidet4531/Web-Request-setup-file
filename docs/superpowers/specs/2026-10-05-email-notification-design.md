@@ -1,5 +1,12 @@
 # Design Specification: Email Notification System (SOAP + Outbox)
 
+> **Historical initial design.** The [accepted review](2026-10-05-email-notification-review.md)
+> and [implemented behavior guide](../../email-notifications.md) supersede conflicting
+> requirements below. From is fixed to `noreply-psf@nxp.com`; To/CC and suppression
+> belong to the destination status, including submission and every bulk-replaced
+> request. Role-driven recipient defaults and actor-driven From below are not
+> the implemented policy. Company connectivity has not been exercised here.
+
 - **Date:** 2026-10-05
 - **Branch:** `feat/email-notification`
 - **Scope:** Backend notification outbox, SOAP web service dispatch, email templates, workflow hooks, worker lifecycle, admin monitoring API, and security controls.

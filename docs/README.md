@@ -18,6 +18,7 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
+| [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and offline/LAN verification scope on feat/email-notification |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
 | [docs/audit-history-access.md](audit-history-access.md) | Product-owner clarification: every authenticated role can view Audit History; supersedes older Admin-only requirements and records the implementation gap |
 | [CONTEXT.md](../CONTEXT.md) | Current domain glossary |

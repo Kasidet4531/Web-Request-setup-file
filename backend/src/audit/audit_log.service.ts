@@ -242,8 +242,29 @@ export class AuditLogService implements OnModuleInit {
       actorDisplayName: row.actor_display_name,
       actorRole: row.actor_role,
       createdAt: this.serializeTimestamp(row.created_at),
-      metadata: row.metadata_json,
+      metadata:
+        row.action_type === REQUEST_AUDIT_ACTION.WORKFLOW_CATALOG_UPDATED &&
+        actor?.role !== 'admin'
+          ? this.publicCatalogMetadata(row.metadata_json)
+          : row.metadata_json,
     }));
+  }
+
+  private publicCatalogMetadata(
+    metadata: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const redact = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(redact);
+      if (typeof value === 'object' && value !== null) {
+        return Object.fromEntries(
+          Object.entries(value)
+            .filter(([key]) => key !== 'emailPolicy')
+            .map(([key, item]) => [key, redact(item)]),
+        );
+      }
+      return value;
+    };
+    return redact(metadata) as Record<string, unknown>;
   }
 
   private async ensureStorage(): Promise<void> {

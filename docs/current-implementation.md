@@ -1,5 +1,12 @@
 # Current implementation — unified-local-auth
 
+> **Email branch addition, 5 October 2026:** `feat/email-notification` adds status
+> recipient policies, submission/transition/bulk outbox hooks, SOAP dispatch,
+> background retry and admin notification APIs. Shared audit hides recipient
+> policies from non-admins. See [email notifications](email-notifications.md) for
+> current behavior and source links. The audit below remains the dated UI/auth
+> baseline; this addition does not claim company delivery or deployment.
+
 > **Status clarification, 4 October 2026:** [Database Status names and interaction rules](status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status.
 
 > **Implementation update, 5 October 2026:** Authorized working-tree changes implement [authenticated all-role Audit History](audit-history-access.md), explicit manual Save Status and the approved Desktop shell and request tabs. Light/Dark and sidebar collapse preferences are remembered per browser. Local unit, HTTP, SQL and browser checks passed; see [implementation verification](superpowers/plans/2026-10-05-stitch-desktop-implementation.md). The configured PostgreSQL and LDAP services have not been exercised or mutated by this implementation work. This is not deployment evidence.

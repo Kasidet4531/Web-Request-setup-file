@@ -97,11 +97,18 @@ export interface UpdateDraftRequesterDataPayload extends PsfRequestPayload {
 
 export type WorkflowStatusKind = 'draft' | 'open' | 'completed' | 'cancelled'
 
+export interface StatusEmailPolicy {
+  enabled: boolean
+  to: string[]
+  cc: string[]
+}
+
 export interface StatusCatalogEntry {
   id: string
   name: string
   kind: WorkflowStatusKind
   requestCount: number | null
+  emailPolicy?: StatusEmailPolicy
 }
 
 export interface WorkflowConfiguration {
@@ -116,6 +123,7 @@ export type WorkflowConfigurationOperation =
   | { action: 'rename'; id: string; name: string; expectedUpdatedAt: string }
   | { action: 'delete'; id: string; replacementId?: string; replacementTriggerId?: string | null; expectedUpdatedAt: string }
   | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
+  | { action: 'email-policy'; id: string; emailPolicy: StatusEmailPolicy; expectedUpdatedAt: string }
 
 export interface PsfRequestQuery {
   scope?: 'all' | 'related' | 'my-drafts'
@@ -197,7 +205,7 @@ export type AdminWorkflowTransitionConfiguration = WorkflowConfiguration
 
 export interface WorkflowStatusesResponse {
   statuses: string[]
-  entries: Array<Omit<StatusCatalogEntry, 'requestCount'>>
+  entries: Array<Omit<StatusCatalogEntry, 'requestCount' | 'emailPolicy'>>
   psfVisibilityTriggerId: string | null
   updatedAt: string
 }

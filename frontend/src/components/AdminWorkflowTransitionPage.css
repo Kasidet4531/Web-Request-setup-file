@@ -1,0 +1,77 @@
+.admin-workflow-transition__email-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 104px;
+}
+
+.admin-workflow-transition__email-editor {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  scroll-margin-block: 24px;
+}
+
+.admin-workflow-transition__email-editor h2 {
+  overflow-wrap: anywhere;
+}
+
+.admin-workflow-transition__email-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.admin-workflow-transition__recipient-field {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-workflow-transition__recipient-field textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.admin-workflow-transition__email-error {
+  color: var(--destructive);
+}
+
+.admin-workflow-transition__delivery-preview {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  overflow-wrap: anywhere;
+}
+
+.admin-workflow-transition__delivery-preview h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-workflow-transition__delivery-preview p {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 899px) {
+  .admin-workflow-transition__email-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+/* Keep the existing fixed status layout readable with the new delivery column. */
+.admin-workflow-transition .admin-workflow-transition__table table {
+  min-width: 900px;
+}
+
+.admin-workflow-transition .admin-workflow-transition__table th:first-child { width: 40%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(2) { width: 12%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(3) { width: 8%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(4) { width: 14%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(5) { width: 26%; }
+
+.admin-workflow-transition .admin-workflow-transition__email-error {
+  color: var(--destructive);
+}

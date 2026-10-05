@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
@@ -16,6 +17,8 @@ import { DATABASE_POOL } from '../database/database.service';
 import { resolvePsfCreatedInformationSchema } from './form_schema.constants';
 import type { FormSchemaJson } from './form_schema.constants';
 import { assertValidRequiredFormData } from '../requests/form-data-validation';
+import type { StatusEmailPolicy } from '../notifications/notification.types';
+import { NotificationService } from '../notifications/notification.service';
 
 export type StatusKind = 'draft' | 'open' | 'completed' | 'cancelled';
 
@@ -24,6 +27,7 @@ export interface StatusCatalogEntry {
   name: string;
   kind: StatusKind;
   requestCount: number | null;
+  emailPolicy: StatusEmailPolicy;
 }
 
 export interface WorkflowConfiguration {
@@ -38,6 +42,12 @@ export type WorkflowConfigurationOperation =
       action: 'create';
       name: string;
       kind: Exclude<StatusKind, 'draft'>;
+      expectedUpdatedAt: string;
+    }
+  | {
+      action: 'email-policy';
+      id: string;
+      emailPolicy: StatusEmailPolicy;
       expectedUpdatedAt: string;
     }
   | { action: 'rename'; id: string; name: string; expectedUpdatedAt: string }
@@ -58,7 +68,7 @@ export type PublicWorkflowConfiguration = Omit<
   WorkflowConfiguration,
   'entries'
 > & {
-  entries: Array<Omit<StatusCatalogEntry, 'requestCount'>>;
+  entries: Array<Omit<StatusCatalogEntry, 'requestCount' | 'emailPolicy'>>;
 };
 
 interface WorkflowConfigurationRow {
@@ -70,6 +80,7 @@ interface StoredStatus {
   id: string;
   name: string;
   kind: StatusKind;
+  emailPolicy: StatusEmailPolicy;
 }
 
 interface StoredWorkflowConfiguration {
@@ -97,7 +108,7 @@ const DRAFT_NAME = 'Draft';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UPDATED_AT_SQL = `TO_CHAR(updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
-const DEFAULT_ENTRIES: StoredStatus[] = [
+const DEFAULT_ENTRIES: Array<Omit<StoredStatus, 'emailPolicy'>> = [
   { id: '00000000-0000-4000-8000-000000000001', name: 'Draft', kind: 'draft' },
   {
     id: '00000000-0000-4000-8000-000000000002',
@@ -186,6 +197,7 @@ export class WorkflowTransitionService implements OnModuleInit {
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     private readonly auditLogService: AuditLogService,
+    @Optional() private readonly notificationService?: NotificationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -204,7 +216,13 @@ export class WorkflowTransitionService implements OnModuleInit {
       `,
       [
         CONFIGURATION_KEY,
-        { entries: DEFAULT_ENTRIES, psfVisibilityTriggerId: null },
+        {
+          entries: DEFAULT_ENTRIES.map((entry) => ({
+            ...entry,
+            emailPolicy: disabledEmailPolicy(),
+          })),
+          psfVisibilityTriggerId: null,
+        },
       ],
     );
   }
@@ -262,10 +280,11 @@ export class WorkflowTransitionService implements OnModuleInit {
         operation.expectedUpdatedAt,
         before.updatedAt,
       );
-      const entries = before.entries.map(({ id, name, kind }) => ({
+      const entries = before.entries.map(({ id, name, kind, emailPolicy }) => ({
         id,
         name,
         kind,
+        emailPolicy,
       }));
       let triggerId = before.psfVisibilityTriggerId;
       let requestChanges: Array<{
@@ -281,7 +300,18 @@ export class WorkflowTransitionService implements OnModuleInit {
             id: this.newStatusId(entries),
             name: operation.name,
             kind: operation.kind,
+            emailPolicy: disabledEmailPolicy(),
           });
+          break;
+        }
+        case 'email-policy': {
+          const target = this.requireEntry(entries, operation.id);
+          if (target.kind === 'draft' && operation.emailPolicy.enabled) {
+            throw new BadRequestException(
+              'Draft cannot enable email notifications.',
+            );
+          }
+          target.emailPolicy = operation.emailPolicy;
           break;
         }
         case 'rename': {
@@ -438,6 +468,19 @@ export class WorkflowTransitionService implements OnModuleInit {
                 },
                 client,
               );
+              await this.notificationService?.enqueueRequest(client, {
+                eventType: 'REQUEST_STATUS_CHANGED',
+                requestId: change.id,
+                fromStatus: change.fromStatus,
+                targetStatus: {
+                  id: replacement.id,
+                  name: replacement.name,
+                  kind: replacement.kind,
+                  emailPolicy: replacement.emailPolicy,
+                },
+                actor,
+                bulkReplacement: true,
+              });
             }
           }
           entries.splice(
@@ -541,7 +584,19 @@ export class WorkflowTransitionService implements OnModuleInit {
           'The stored workflow status catalog is invalid.',
         );
       }
-      return { id: entry.id, name: entry.name, kind: entry.kind };
+      let emailPolicy: StatusEmailPolicy;
+      try {
+        emailPolicy =
+          entry.emailPolicy === undefined
+            ? disabledEmailPolicy()
+            : this.normalizeEmailPolicy(entry.emailPolicy);
+      } catch {
+        throw new ConflictException(
+          'The stored workflow email policy is invalid.',
+        );
+      }
+      if (entry.kind === 'draft') emailPolicy.enabled = false;
+      return { id: entry.id, name: entry.name, kind: entry.kind, emailPolicy };
     });
     this.assertCatalogInvariants(entries);
     const triggerId = input.psfVisibilityTriggerId;
@@ -596,6 +651,22 @@ export class WorkflowTransitionService implements OnModuleInit {
           action,
           name: input.name,
           kind: input.kind,
+          expectedUpdatedAt,
+        };
+      case 'email-policy':
+        this.assertOnlyKeys(input, [
+          'action',
+          'id',
+          'emailPolicy',
+          'expectedUpdatedAt',
+        ]);
+        if (typeof input.id !== 'string' || !this.isUuid(input.id)) {
+          throw new BadRequestException('email-policy requires a status id.');
+        }
+        return {
+          action,
+          id: input.id,
+          emailPolicy: this.normalizeEmailPolicy(input.emailPolicy),
           expectedUpdatedAt,
         };
       case 'rename':
@@ -682,6 +753,61 @@ export class WorkflowTransitionService implements OnModuleInit {
       default:
         throw new BadRequestException('Unsupported workflow operation.');
     }
+  }
+
+  private normalizeEmailPolicy(input: unknown): StatusEmailPolicy {
+    if (
+      !isRecord(input) ||
+      typeof input.enabled !== 'boolean' ||
+      !Array.isArray(input.to) ||
+      !Array.isArray(input.cc)
+    ) {
+      throw new BadRequestException(
+        'Email policy requires enabled, To and CC address lists.',
+      );
+    }
+    this.assertOnlyKeys(input, ['enabled', 'to', 'cc']);
+    const normalize = (addresses: unknown[]): string[] => {
+      const result = new Set<string>();
+      for (const address of addresses) {
+        if (typeof address !== 'string' || /[\r\n]/.test(address)) {
+          throw new BadRequestException(
+            'Email recipients must be valid email addresses.',
+          );
+        }
+        const normalized = address.trim().toLowerCase();
+        if (!normalized) continue;
+        if (
+          normalized.length > 254 ||
+          !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(
+            normalized,
+          ) ||
+          normalized.split('@')[0].length > 64 ||
+          normalized
+            .split('@')[1]
+            .split('.')
+            .some((label) => label.length > 63) ||
+          normalized.startsWith('.') ||
+          normalized.split('@')[0].endsWith('.') ||
+          normalized.includes('..')
+        ) {
+          throw new BadRequestException(
+            'Email recipients must be valid email addresses.',
+          );
+        }
+        result.add(normalized);
+      }
+      return [...result];
+    };
+    const to = normalize(input.to);
+    const toSet = new Set(to);
+    const cc = normalize(input.cc).filter((address) => !toSet.has(address));
+    if (input.enabled && to.length === 0) {
+      throw new BadRequestException(
+        'An enabled email policy requires at least one To recipient.',
+      );
+    }
+    return { enabled: input.enabled, to, cc };
   }
 
   private async persistConfiguration(
@@ -860,6 +986,12 @@ export class WorkflowTransitionService implements OnModuleInit {
           name: operation.name,
           kind: operation.kind,
         };
+      case 'email-policy':
+        return {
+          action: operation.action,
+          id: operation.id,
+          emailPolicy: operation.emailPolicy,
+        };
       case 'rename':
         return {
           action: operation.action,
@@ -889,7 +1021,12 @@ export class WorkflowTransitionService implements OnModuleInit {
     value: WorkflowConfiguration | StoredWorkflowConfiguration,
   ): StoredWorkflowConfiguration {
     return {
-      entries: value.entries.map(({ id, name, kind }) => ({ id, name, kind })),
+      entries: value.entries.map(({ id, name, kind, emailPolicy }) => ({
+        id,
+        name,
+        kind,
+        emailPolicy,
+      })),
       psfVisibilityTriggerId: value.psfVisibilityTriggerId,
     };
   }
@@ -897,4 +1034,8 @@ export class WorkflowTransitionService implements OnModuleInit {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function disabledEmailPolicy(): StatusEmailPolicy {
+  return { enabled: false, to: [], cc: [] };
 }

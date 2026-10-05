@@ -657,6 +657,102 @@ describe('AppController (e2e)', () => {
     expect(authService.listUsers).toHaveBeenCalledTimes(1);
   });
 
+  it('saves destination email policy through the admin API and hides recipients in the shared catalog', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    const policy = {
+      enabled: true,
+      to: ['TEAM@nxp.com', 'person@nxp.com'],
+      cc: ['copy@nxp.com', 'team@nxp.com'],
+    };
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({
+        action: 'email-policy',
+        id: DEFAULT_STATUS_ENTRIES[2].id,
+        emailPolicy: policy,
+        expectedUpdatedAt: WORKFLOW_REVISION,
+      })
+      .expect(200)
+      .expect(
+        ({
+          body,
+        }: {
+          body: { entries: Array<{ id: string; emailPolicy: unknown }> };
+        }) => {
+          expect(
+            body.entries.find(
+              (entry) => entry.id === DEFAULT_STATUS_ENTRIES[2].id,
+            )?.emailPolicy,
+          ).toEqual({
+            enabled: true,
+            to: ['team@nxp.com', 'person@nxp.com'],
+            cc: ['copy@nxp.com'],
+          });
+        },
+      );
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'requester',
+      displayName: 'Requester',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server)
+      .get('/api/workflow/statuses')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(JSON.stringify(body)).not.toContain('emailPolicy');
+        expect(JSON.stringify(body)).not.toContain('@nxp.com');
+      });
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({
+        action: 'email-policy',
+        id: DEFAULT_STATUS_ENTRIES[2].id,
+        emailPolicy: policy,
+        expectedUpdatedAt: NEXT_WORKFLOW_REVISION,
+      })
+      .expect(403);
+  });
+
+  it('registers notification admin routes and rejects non-admin access and disabled test delivery', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    activeUserId = undefined;
+    await request(server).get('/api/admin/notifications').expect(401);
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'requester',
+      displayName: 'Requester',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server).get('/api/admin/notifications').expect(403);
+    await request(server)
+      .post('/api/admin/notifications/test')
+      .send({ to: 'arbitrary@nxp.com', html: '<p>arbitrary</p>' })
+      .expect(403);
+    activeUserId = 'admin-1';
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      setupOwnerDepartment: null,
+    });
+    pool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ total: '0' }] });
+    await request(server)
+      .get('/api/admin/notifications')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual({ items: [], total: 0, page: 1, limit: 20 });
+      });
+    await request(server).post('/api/admin/notifications/test').expect(400);
+  });
+
   it('registers revision-checked admin catalog operations, rejects legacy role matrices, and keeps shared status choices role-independent', async () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
     await request(server)
@@ -668,6 +764,7 @@ describe('AppController (e2e)', () => {
           entries: DEFAULT_STATUS_ENTRIES.map((entry) => ({
             ...entry,
             requestCount: entry.kind === 'draft' ? null : 0,
+            emailPolicy: { enabled: false, to: [], cc: [] },
           })),
           psfVisibilityTriggerId: null,
           updatedAt: WORKFLOW_REVISION,
@@ -708,6 +805,7 @@ describe('AppController (e2e)', () => {
             name: 'Renamed business stage',
             kind: 'open',
             requestCount: 0,
+            emailPolicy: { enabled: false, to: [], cc: [] },
           });
           expect(body.updatedAt).toBe(NEXT_WORKFLOW_REVISION);
         },

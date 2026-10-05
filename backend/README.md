@@ -6,6 +6,10 @@ NestJS API using the Express adapter, PostgreSQL via `pg.Pool`,
 `express-session` and ExcelJS. See [current implementation](../docs/current-implementation.md)
 for the supported API and authorization behavior.
 
+On `feat/email-notification`, destination statuses also configure To/CC and email
+suppression. See [email notifications](../docs/email-notifications.md) for setup,
+outbox behavior, offline tests and admin APIs. Delivery defaults to disabled.
+
 ## Setup
 
 Run commands from this directory. The previous verification used Node 22.16.0;

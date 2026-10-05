@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
@@ -26,6 +27,7 @@ import {
 } from '../admin/form_schema.constants';
 import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
+import { NotificationService } from '../notifications/notification.service';
 import {
   RequestSearchFilters,
   RequestSearchResult,
@@ -177,6 +179,7 @@ export class RequestsService implements OnModuleInit {
     private readonly workflowTransitionService: WorkflowTransitionService,
     private readonly searchIndexService: SearchIndexService,
     private readonly auditLogService: AuditLogService,
+    @Optional() private readonly notificationService?: NotificationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -876,6 +879,14 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
+      await this.notificationService?.enqueueRequest(client, {
+        eventType: 'REQUEST_STATUS_CHANGED',
+        requestId: updatedRow.id,
+        fromStatus: currentRequest.status,
+        targetStatus: target,
+        actor: dto.actor,
+      });
+
       return this.mapRequestRow(updatedRow, dto.actor);
     });
   }
@@ -1041,6 +1052,14 @@ export class RequestsService implements OnModuleInit {
         },
         client,
       );
+
+      await this.notificationService?.enqueueRequest(client, {
+        eventType: 'REQUEST_SUBMITTED',
+        requestId: submittedRow.id,
+        fromStatus: DRAFT_STATUS,
+        targetStatus: target,
+        actor,
+      });
 
       return this.mapRequestRow(submittedRow, actor);
     });
