@@ -18,6 +18,8 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
+| [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
+| [docs/audit-history-access.md](audit-history-access.md) | Product-owner clarification: every authenticated role can view Audit History; supersedes older Admin-only requirements and records the implementation gap |
 | [CONTEXT.md](../CONTEXT.md) | Current domain glossary |
 | [README.md](../README.md) | Project entry point and development scope |
 | [backend/README.md](../backend/README.md) | Backend environment, startup writes and commands |

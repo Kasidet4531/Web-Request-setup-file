@@ -1,0 +1,521 @@
+{
+  "viewport": {
+    "deviceScaleFactor": 1,
+    "isMobile": false,
+    "hasTouch": false,
+    "isLandscape": false,
+    "width": 1280,
+    "height": 800
+  },
+  "colorScheme": "light",
+  "snapshot": {
+    "id": "399_0",
+    "role": "RootWebArea",
+    "name": "PSF Request Portal \u2014 Request Detail (v1 Desktop)",
+    "url": "http://127.0.0.1:4182/screens/5509305733922996617",
+    "children": [
+      {
+        "id": "399_1",
+        "role": "complementary",
+        "name": "Main Navigation",
+        "children": [
+          {
+            "id": "399_2",
+            "role": "link",
+            "name": "PSF Request Portal Home",
+            "url": "http://127.0.0.1:4182/dashboard",
+            "children": [
+              {
+                "id": "399_3",
+                "role": "StaticText",
+                "name": "PSF"
+              },
+              {
+                "id": "399_4",
+                "role": "StaticText",
+                "name": "Request Portal"
+              }
+            ]
+          },
+          {
+            "id": "399_5",
+            "role": "navigation",
+            "name": "Portal Navigation",
+            "children": [
+              {
+                "id": "399_6",
+                "role": "link",
+                "name": "Dashboard",
+                "url": "http://127.0.0.1:4182/dashboard",
+                "children": [
+                  {
+                    "id": "399_7",
+                    "role": "StaticText",
+                    "name": "Dashboard"
+                  }
+                ]
+              },
+              {
+                "id": "399_8",
+                "role": "link",
+                "name": "Requests",
+                "url": "http://127.0.0.1:4182/requests",
+                "children": [
+                  {
+                    "id": "399_9",
+                    "role": "StaticText",
+                    "name": "Requests"
+                  }
+                ]
+              },
+              {
+                "id": "399_10",
+                "role": "link",
+                "name": "My Drafts",
+                "url": "http://127.0.0.1:4182/my-drafts",
+                "children": [
+                  {
+                    "id": "399_11",
+                    "role": "StaticText",
+                    "name": "My Drafts"
+                  }
+                ]
+              },
+              {
+                "id": "399_12",
+                "role": "link",
+                "name": "Audit History",
+                "url": "http://127.0.0.1:4182/history",
+                "children": [
+                  {
+                    "id": "399_13",
+                    "role": "StaticText",
+                    "name": "Audit History"
+                  }
+                ]
+              },
+              {
+                "id": "399_14",
+                "role": "link",
+                "name": "Export",
+                "url": "http://127.0.0.1:4182/admin/export-profile",
+                "children": [
+                  {
+                    "id": "399_15",
+                    "role": "StaticText",
+                    "name": "Export"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "399_16",
+            "role": "button",
+            "name": "Switch to dark mode"
+          },
+          {
+            "id": "399_17",
+            "role": "StaticText",
+            "name": "Sam Taylor"
+          },
+          {
+            "id": "399_18",
+            "role": "StaticText",
+            "name": "Requester"
+          }
+        ]
+      },
+      {
+        "id": "399_19",
+        "role": "main",
+        "children": [
+          {
+            "id": "399_20",
+            "role": "link",
+            "name": "\u2190 Back to Requests",
+            "url": "http://127.0.0.1:4182/requests",
+            "children": [
+              {
+                "id": "399_21",
+                "role": "StaticText",
+                "name": "\u2190 Back to Requests"
+              }
+            ]
+          },
+          {
+            "id": "399_22",
+            "role": "StaticText",
+            "name": "PSF-2026-0039"
+          },
+          {
+            "id": "399_23",
+            "role": "heading",
+            "name": "ST Fab template map review",
+            "level": 1
+          },
+          {
+            "id": "399_24",
+            "role": "button",
+            "name": "View full status: 93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+            "expandable": true
+          },
+          {
+            "id": "399_25",
+            "role": "StaticText",
+            "name": "Due "
+          },
+          {
+            "id": "399_26",
+            "role": "StaticText",
+            "name": "06 Oct 2026"
+          },
+          {
+            "id": "399_27",
+            "role": "StaticText",
+            "name": "Priority "
+          },
+          {
+            "id": "399_28",
+            "role": "StaticText",
+            "name": "Normal"
+          },
+          {
+            "id": "399_29",
+            "role": "StaticText",
+            "name": "Requester "
+          },
+          {
+            "id": "399_30",
+            "role": "StaticText",
+            "name": "Priya Rao"
+          },
+          {
+            "id": "399_31",
+            "role": "StaticText",
+            "name": "Owner "
+          },
+          {
+            "id": "399_32",
+            "role": "StaticText",
+            "name": "Rowan Miller / GNTC"
+          },
+          {
+            "id": "399_33",
+            "role": "StaticText",
+            "name": "Change Status"
+          },
+          {
+            "id": "399_34",
+            "role": "combobox",
+            "name": "Choose Status",
+            "expandable": true,
+            "haspopup": "menu",
+            "value": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+            "children": [
+              {
+                "id": "399_35",
+                "role": "option",
+                "name": "5% -- Reject (Information not complete)",
+                "selectable": true,
+                "value": "5% -- Reject (Information not complete)"
+              },
+              {
+                "id": "399_36",
+                "role": "option",
+                "name": "10% -- Test Engineer Data Entry",
+                "selectable": true,
+                "value": "10% -- Test Engineer Data Entry"
+              },
+              {
+                "id": "399_37",
+                "role": "option",
+                "name": "20% -- PSF File Creating",
+                "selectable": true,
+                "value": "20% -- PSF File Creating"
+              },
+              {
+                "id": "399_38",
+                "role": "option",
+                "name": "30% -- Compare Old and New layout",
+                "selectable": true,
+                "value": "30% -- Compare Old and New layout"
+              },
+              {
+                "id": "399_39",
+                "role": "option",
+                "name": "40% -- Feedback Requester(Layout mismatch)",
+                "selectable": true,
+                "value": "40% -- Feedback Requester(Layout mismatch)"
+              },
+              {
+                "id": "399_40",
+                "role": "option",
+                "name": "80% -- Wait for create DCC",
+                "selectable": true,
+                "value": "80% -- Wait for create DCC"
+              },
+              {
+                "id": "399_41",
+                "role": "option",
+                "name": "81% -- Edit Template Map (Bin62)",
+                "selectable": true,
+                "value": "81% -- Edit Template Map (Bin62)"
+              },
+              {
+                "id": "399_42",
+                "role": "option",
+                "name": "82% -- Wait for sent Template Map",
+                "selectable": true,
+                "value": "82% -- Wait for sent Template Map"
+              },
+              {
+                "id": "399_43",
+                "role": "option",
+                "name": "83% -- Complete Excel probe pattern",
+                "selectable": true,
+                "value": "83% -- Complete Excel probe pattern"
+              },
+              {
+                "id": "399_44",
+                "role": "option",
+                "name": "85 % -- Reject check list",
+                "selectable": true,
+                "value": "85 % -- Reject check list"
+              },
+              {
+                "id": "399_45",
+                "role": "option",
+                "name": "90% -- Wait for buyoff check list",
+                "selectable": true,
+                "value": "90% -- Wait for buyoff check list"
+              },
+              {
+                "id": "399_46",
+                "role": "option",
+                "name": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+                "selectable": true,
+                "selected": true,
+                "value": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)"
+              },
+              {
+                "id": "399_47",
+                "role": "option",
+                "name": "95% -- Reject (Wrong site location and wafer map)",
+                "selectable": true,
+                "value": "95% -- Reject (Wrong site location and wafer map)"
+              },
+              {
+                "id": "399_48",
+                "role": "option",
+                "name": "99% -- Wait requestor Buyoff site location and wafer map",
+                "selectable": true,
+                "value": "99% -- Wait requestor Buyoff site location and wafer map"
+              },
+              {
+                "id": "399_49",
+                "role": "option",
+                "name": "100% -- Completed",
+                "selectable": true,
+                "value": "100% -- Completed"
+              },
+              {
+                "id": "399_50",
+                "role": "option",
+                "name": "0% -- Rejected (Cancel Request)",
+                "selectable": true,
+                "value": "0% -- Rejected (Cancel Request)"
+              }
+            ]
+          },
+          {
+            "id": "399_51",
+            "role": "button",
+            "name": "Save Status",
+            "disableable": true,
+            "disabled": true
+          },
+          {
+            "id": "399_52",
+            "role": "tab",
+            "name": "Requester Information",
+            "selectable": true,
+            "selected": true
+          },
+          {
+            "id": "399_53",
+            "role": "tab",
+            "name": "PSF Created Information",
+            "selectable": true
+          },
+          {
+            "id": "399_54",
+            "role": "tab",
+            "name": "History",
+            "selectable": true
+          },
+          {
+            "id": "399_55",
+            "role": "form",
+            "children": [
+              {
+                "id": "399_56",
+                "role": "heading",
+                "name": "Requester Information",
+                "level": 2
+              },
+              {
+                "id": "399_57",
+                "role": "StaticText",
+                "name": "Request specifications and schedule."
+              },
+              {
+                "id": "399_58",
+                "role": "StaticText",
+                "name": "Saved"
+              },
+              {
+                "id": "399_59",
+                "role": "button",
+                "name": "Edit information"
+              },
+              {
+                "id": "399_60",
+                "role": "StaticText",
+                "name": "Product Type "
+              },
+              {
+                "id": "399_61",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_62",
+                "role": "StaticText",
+                "name": "Transfer Product"
+              },
+              {
+                "id": "399_63",
+                "role": "StaticText",
+                "name": "Title "
+              },
+              {
+                "id": "399_64",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_65",
+                "role": "StaticText",
+                "name": "ST Fab template map review"
+              },
+              {
+                "id": "399_66",
+                "role": "StaticText",
+                "name": "Requester Name "
+              },
+              {
+                "id": "399_67",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_68",
+                "role": "StaticText",
+                "name": "Priya Rao"
+              },
+              {
+                "id": "399_69",
+                "role": "StaticText",
+                "name": "Due Date "
+              },
+              {
+                "id": "399_70",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_71",
+                "role": "StaticText",
+                "name": "06 Oct 2026"
+              },
+              {
+                "id": "399_72",
+                "role": "StaticText",
+                "name": "Priority "
+              },
+              {
+                "id": "399_73",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_74",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "399_75",
+                "role": "StaticText",
+                "name": "Product "
+              },
+              {
+                "id": "399_76",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_77",
+                "role": "StaticText",
+                "name": "S32K3"
+              },
+              {
+                "id": "399_78",
+                "role": "StaticText",
+                "name": "Wafer FAB "
+              },
+              {
+                "id": "399_79",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_80",
+                "role": "StaticText",
+                "name": "ST Fab"
+              },
+              {
+                "id": "399_81",
+                "role": "StaticText",
+                "name": "Probecard Name "
+              },
+              {
+                "id": "399_82",
+                "role": "StaticText",
+                "name": "*"
+              },
+              {
+                "id": "399_83",
+                "role": "StaticText",
+                "name": "PC-039"
+              },
+              {
+                "id": "399_84",
+                "role": "DisclosureTriangle",
+                "name": "Additional details (3)",
+                "expandable": true
+              }
+            ]
+          },
+          {
+            "id": "399_85",
+            "role": "status",
+            "atomic": true,
+            "live": "polite",
+            "relevant": "additions text"
+          }
+        ]
+      }
+    ]
+  }
+}

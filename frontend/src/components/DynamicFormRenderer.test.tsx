@@ -251,3 +251,37 @@ describe('DynamicFormRenderer', () => {
     expect(html).toMatch(/aria-describedby="[^"]+title-autofill-status"/)
   })
 })
+
+
+describe('DynamicFormRenderer field policy', () => {
+  it('locks actual field keys individually while preserving editing of other fields', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} readOnlyFieldKeys={['title']} values={{ title: 'Locked identity', priority: 'Urgent' }} />)
+    expect(html).toMatch(/<output[^>]*>Locked identity<\/output>/)
+    expect(html).not.toContain('value="Locked identity"')
+    expect(html).toContain('<select')
+    expect(html).toContain('type="submit"')
+  })
+
+  it('groups only optional fields, preserving sections and making future required fields visible', () => {
+    const configured: FormSchema = { ...schema, sections: [...schema.sections, { sectionKey: 'engineering', title: 'Engineering checks', fields: [
+      { fieldKey: 'new_required', canonicalKey: 'new_required', label: 'Future Required', type: 'text', required: true },
+      { fieldKey: 'new_optional', canonicalKey: 'new_optional', label: 'Future Optional', type: 'text', required: false },
+    ] }] }
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={configured} collapseOptionalFields />)
+    const groups = [...html.matchAll(/<details[^>]*>([\s\S]*?)<\/details>/g)]
+    expect(groups).toHaveLength(2)
+    expect(groups[0][1]).toContain('Additional details')
+    expect(groups[0][1]).toContain('Request Note')
+    expect(groups[0][1]).not.toContain('Priority')
+    expect(groups[1][1]).toContain('Future Optional')
+    expect(groups[1][1]).not.toContain('Future Required')
+    expect(html).toContain('Future Required')
+    expect(html.indexOf('Requester Information')).toBeLessThan(html.indexOf('Engineering checks'))
+    expect(html).not.toContain('<details open')
+  })
+
+  it('opens optional details when a field inside has an error', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} collapseOptionalFields errors={{ request_note: 'Too long' }} />)
+    expect(html).toMatch(/<details[^>]*open=""[^>]*>[\s\S]*Too long/)
+  })
+})

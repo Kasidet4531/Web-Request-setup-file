@@ -1,0 +1,47 @@
+{
+  "role": "owner",
+  "screenId": "9460294393186616301",
+  "success": true,
+  "layoutVerified": true,
+  "baseline": {
+    "tabs": 0,
+    "forms": 2,
+    "options": [
+      "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "5% -- Reject (Information not complete)",
+      "10% -- Test Engineer Data Entry",
+      "20% -- PSF File Creating",
+      "30% -- Compare Old and New layout",
+      "40% -- Feedback Requester(Layout mismatch)",
+      "80% -- Wait for create DCC",
+      "81% -- Edit Template Map (Bin62)",
+      "82% -- Wait for sent Template Map",
+      "83% -- Complete Excel probe pattern",
+      "85 % -- Reject check list",
+      "90% -- Wait for buyoff check list",
+      "95% -- Reject (Wrong site location and wafer map)",
+      "99% -- Wait requestor Buyoff site location and wafer map",
+      "100% -- Completed",
+      "0% -- Rejected (Cancel Request)"
+    ],
+    "status": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+    "ellipsis": "ellipsis",
+    "nowrap": "nowrap",
+    "truncated": true,
+    "overflow": false,
+    "history": true,
+    "audit": true,
+    "requesterFields": 11,
+    "psfFields": 10,
+    "canvas": "rgb(246, 245, 242)"
+  },
+  "interactions": {
+    "selectionDoesNotCommit": true,
+    "dirtyGatesStatus": true,
+    "formDoesNotChangeStatus": true,
+    "formClearsDirty": true,
+    "manualSaveCommits": true,
+    "fullValue": true,
+    "psfFormDoesNotChangeStatus": true
+  }
+}

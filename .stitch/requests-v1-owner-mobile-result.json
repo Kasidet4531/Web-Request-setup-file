@@ -1,0 +1,96 @@
+{
+  "success": true,
+  "data": {
+    "resource": "screen",
+    "id": "b6ade8d12a3a46c48c72ff954794c442",
+    "project": "15540984743145901568",
+    "title": "PSF Request Portal — Requests (Mobile Setup Owner)",
+    "device": "DESKTOP",
+    "screenType": "DESIGN",
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=b6ade8d12a3a46c48c72ff954794c442",
+    "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Uhaiuu1Fu4RUoXRMg2DV7NHo5Iy-eV2PALFuGyB5ajtBC2CA93xGcUcCxwxKk2MoKK_HAAW255AwmkLnW_NW15YSlTkj4SgmsC0AM7R0d7cZ0G0BjiiRa1ysJdN2hqjZN4oXR_Zzl6MtyEvscOWe9WrkHya29ZdFf05M9p9RAHaN5kKC8DbiFOpFohWsXpFvs9Kgk3Scu8Iptv6cOTLE9xFmMuDhOSh-3ZDfwUWkXPPocBbzroi0Qfu08",
+    "htmlCode": {
+      "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2RhM2E1NGFjMmFjMzRiNjg4MTlkZjk4MTQ2N2U1ZjMxEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+      "mimeType": "text/html",
+      "name": "projects/15540984743145901568/files/af82774a40fb4ed2bb692244f9fd8cbf"
+    },
+    "rawScreen": {
+      "outputComponents": [
+        {
+          "design": {
+            "screens": [
+              {
+                "deviceType": "DESKTOP",
+                "generatedBy": "create_datastore_entry",
+                "height": "2344",
+                "htmlCode": {
+                  "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2RhM2E1NGFjMmFjMzRiNjg4MTlkZjk4MTQ2N2U1ZjMxEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+                  "mimeType": "text/html",
+                  "name": "projects/15540984743145901568/files/af82774a40fb4ed2bb692244f9fd8cbf"
+                },
+                "id": "b6ade8d12a3a46c48c72ff954794c442",
+                "name": "projects/15540984743145901568/screens/b6ade8d12a3a46c48c72ff954794c442",
+                "screenMetadata": {
+                  "agentType": "PRO_AGENT",
+                  "status": "COMPLETE"
+                },
+                "screenType": "DESIGN",
+                "screenshot": {
+                  "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Uhaiuu1Fu4RUoXRMg2DV7NHo5Iy-eV2PALFuGyB5ajtBC2CA93xGcUcCxwxKk2MoKK_HAAW255AwmkLnW_NW15YSlTkj4SgmsC0AM7R0d7cZ0G0BjiiRa1ysJdN2hqjZN4oXR_Zzl6MtyEvscOWe9WrkHya29ZdFf05M9p9RAHaN5kKC8DbiFOpFohWsXpFvs9Kgk3Scu8Iptv6cOTLE9xFmMuDhOSh-3ZDfwUWkXPPocBbzroi0Qfu08",
+                  "name": "projects/15540984743145901568/files/aced3a8885f24e7d9d4fba1f01b45a64"
+                },
+                "theme": {},
+                "title": "PSF Request Portal — Requests (Mobile Setup Owner)",
+                "width": "2560"
+              }
+            ],
+            "theme": {}
+          }
+        },
+        {
+          "text": "I have designed and delivered the mobile `/requests` page for the Setup Owner role in the PSF Request Portal redesign project (Screen `PSF Request Portal — Requests (Mobile Setup Owner)`), strictly adhering to your specifications and **DESIGN.md**:\n\n### Highlights of the Implementation:\n\n1. **Purpose & Scoped Catalog View**\n   - **Header**: Features the exact title `Requests` and supporting sentence *\"Browse shared PSF requests.\"* alongside the clarifying note *\"• Private drafts are in My Drafts\"* linking directly to `/my-drafts`.\n   - **Shared Catalog Scope**: Displays shared submitted work without copying Dashboard count tiles, scopes, or invented assignment actions.\n\n2. **Setup Owner Shell & Navigation**\n   - **Header & Mobile Drawer**: Includes a top menu toggle (44×44px touch target) opening a sliding navigation drawer with an accessible close button.\n   - **Navigation Routes**: Contains `Dashboard` (`/dashboard`), `Requests` (`/requests` — active with leading brand indicator), `My Drafts` (`/my-drafts`), and `Audit History` (`/history`).\n   - **Role Restrictions**: `Export` and `Admin` tools are excluded for the Setup Owner role.\n   - **User Profile**: Configured as fictional **Alex Morgan**, `Setup Owner · MFG` with avatar initials `AM`.\n   - **Primary Action**: \"New Request\" button linking to `/requests/new`.\n\n3. **Toolbar & Read-Only Filter Controls**\n   - **Persistent Search**: Visible search input with placeholder *\"Search request no., title, PSF or probecard\"*.\n   - **Collapsible Filters Disclosure**: Accessible \"Filters\" toggle button opening without page overflow to reveal:\n     - **Status Select**: Contains `All statuses` and all **16 non-draft catalog options** decoded with exact spelling, spacing, and backslash intact (including the full 71-character `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`).\n     - **Product Type Text Input**: Plain text filter input.\n     - **Clear Filters**: One-click filter reset action.\n\n4. **Five Fictional Illustrative Rows & Data Representation**\n   - Rendered as vertical cards optimized for mobile viewports (390px) without horizontal table clipping:\n     1. **PSF-2026-0042**: *S32K3 probe layout update* | `New Product` | `20% -- PSF File Creating` (open kind icon) | `01 Oct 2026` (`OVERDUE`, `High`) | Alex Morgan / Mei Tan · MFG\n     2. **PSF-2026-0039**: *ST Fab template map review* | `Transfer Product` | Full `93%` status string wrapped cleanly | `06 Oct 2026` (`Normal`) | Priya Rao / Rowan Miller · GNTC\n     3. **PSF-2026-0035**: *Wafer map site verification* | `Existing Product` | `99% -- Wait requestor Buyoff site location and wafer map` (open kind icon) | `08 Oct 2026` (`Normal`) | Alex Morgan / Mei Tan · MFG\n     4. **PSF-2026-0028**: *Probe pattern release* | `New Product` | `100% -- Completed` (completed kind green badge) | `02 Oct 2026` (`Normal`) | Jordan Lee / Rowan Miller · GNTC\n     5. **PSF-2026-0019**: *Cancelled layout request* | `Existing Product` | `0% -- Rejected (Cancel Request)` (cancelled kind slate badge) | `09 Oct 2026` (`Normal`) | Priya Rao / Mei Tan · MFG\n   - Each card provides a 44px link affordance to `/requests/<id>`.\n\n5. **Client-side Interactivity & Theme Toggle**\n   - **Theme Toggle**: Accessible button in the header labeled `\"Switch to dark mode\"` / `\"Switch to light mode\"`, toggling `data-theme` on the root element. Uses NXP-inspired dark surface tones (`#101B24`, `#1A2C39`) with legible contrast across badges, inputs, and drawers.\n   - **Footer & Pagination**: Retains the single sample page footer (`Showing 1–5 of 5 requests`, `Page 1 of 1`, disabled Previous/Next) and includes an empty state when filters match zero records."
+        },
+        {
+          "suggestion": "View the Dark mode counterpart of this mobile Requests page"
+        },
+        {
+          "suggestion": "Generate the desktop counterpart for this Requests page"
+        },
+        {
+          "suggestion": "Proceed to the My Drafts route (/my-drafts)"
+        }
+      ],
+      "projectId": "15540984743145901568",
+      "sessionId": "8483041433556015077",
+      "deviceType": "DESKTOP",
+      "generatedBy": "create_datastore_entry",
+      "height": "2344",
+      "htmlCode": {
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2RhM2E1NGFjMmFjMzRiNjg4MTlkZjk4MTQ2N2U1ZjMxEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+        "mimeType": "text/html",
+        "name": "projects/15540984743145901568/files/af82774a40fb4ed2bb692244f9fd8cbf"
+      },
+      "id": "b6ade8d12a3a46c48c72ff954794c442",
+      "name": "projects/15540984743145901568/screens/b6ade8d12a3a46c48c72ff954794c442",
+      "screenMetadata": {
+        "agentType": "PRO_AGENT",
+        "status": "COMPLETE"
+      },
+      "screenType": "DESIGN",
+      "screenshot": {
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Uhaiuu1Fu4RUoXRMg2DV7NHo5Iy-eV2PALFuGyB5ajtBC2CA93xGcUcCxwxKk2MoKK_HAAW255AwmkLnW_NW15YSlTkj4SgmsC0AM7R0d7cZ0G0BjiiRa1ysJdN2hqjZN4oXR_Zzl6MtyEvscOWe9WrkHya29ZdFf05M9p9RAHaN5kKC8DbiFOpFohWsXpFvs9Kgk3Scu8Iptv6cOTLE9xFmMuDhOSh-3ZDfwUWkXPPocBbzroi0Qfu08",
+        "name": "projects/15540984743145901568/files/aced3a8885f24e7d9d4fba1f01b45a64"
+      },
+      "theme": {},
+      "title": "PSF Request Portal — Requests (Mobile Setup Owner)",
+      "width": "2560",
+      "agentText": "I have designed and delivered the mobile `/requests` page for the Setup Owner role in the PSF Request Portal redesign project (Screen `PSF Request Portal — Requests (Mobile Setup Owner)`), strictly adhering to your specifications and **DESIGN.md**:\n\n### Highlights of the Implementation:\n\n1. **Purpose & Scoped Catalog View**\n   - **Header**: Features the exact title `Requests` and supporting sentence *\"Browse shared PSF requests.\"* alongside the clarifying note *\"• Private drafts are in My Drafts\"* linking directly to `/my-drafts`.\n   - **Shared Catalog Scope**: Displays shared submitted work without copying Dashboard count tiles, scopes, or invented assignment actions.\n\n2. **Setup Owner Shell & Navigation**\n   - **Header & Mobile Drawer**: Includes a top menu toggle (44×44px touch target) opening a sliding navigation drawer with an accessible close button.\n   - **Navigation Routes**: Contains `Dashboard` (`/dashboard`), `Requests` (`/requests` — active with leading brand indicator), `My Drafts` (`/my-drafts`), and `Audit History` (`/history`).\n   - **Role Restrictions**: `Export` and `Admin` tools are excluded for the Setup Owner role.\n   - **User Profile**: Configured as fictional **Alex Morgan**, `Setup Owner · MFG` with avatar initials `AM`.\n   - **Primary Action**: \"New Request\" button linking to `/requests/new`.\n\n3. **Toolbar & Read-Only Filter Controls**\n   - **Persistent Search**: Visible search input with placeholder *\"Search request no., title, PSF or probecard\"*.\n   - **Collapsible Filters Disclosure**: Accessible \"Filters\" toggle button opening without page overflow to reveal:\n     - **Status Select**: Contains `All statuses` and all **16 non-draft catalog options** decoded with exact spelling, spacing, and backslash intact (including the full 71-character `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`).\n     - **Product Type Text Input**: Plain text filter input.\n     - **Clear Filters**: One-click filter reset action.\n\n4. **Five Fictional Illustrative Rows & Data Representation**\n   - Rendered as vertical cards optimized for mobile viewports (390px) without horizontal table clipping:\n     1. **PSF-2026-0042**: *S32K3 probe layout update* | `New Product` | `20% -- PSF File Creating` (open kind icon) | `01 Oct 2026` (`OVERDUE`, `High`) | Alex Morgan / Mei Tan · MFG\n     2. **PSF-2026-0039**: *ST Fab template map review* | `Transfer Product` | Full `93%` status string wrapped cleanly | `06 Oct 2026` (`Normal`) | Priya Rao / Rowan Miller · GNTC\n     3. **PSF-2026-0035**: *Wafer map site verification* | `Existing Product` | `99% -- Wait requestor Buyoff site location and wafer map` (open kind icon) | `08 Oct 2026` (`Normal`) | Alex Morgan / Mei Tan · MFG\n     4. **PSF-2026-0028**: *Probe pattern release* | `New Product` | `100% -- Completed` (completed kind green badge) | `02 Oct 2026` (`Normal`) | Jordan Lee / Rowan Miller · GNTC\n     5. **PSF-2026-0019**: *Cancelled layout request* | `Existing Product` | `0% -- Rejected (Cancel Request)` (cancelled kind slate badge) | `09 Oct 2026` (`Normal`) | Priya Rao / Mei Tan · MFG\n   - Each card provides a 44px link affordance to `/requests/<id>`.\n\n5. **Client-side Interactivity & Theme Toggle**\n   - **Theme Toggle**: Accessible button in the header labeled `\"Switch to dark mode\"` / `\"Switch to light mode\"`, toggling `data-theme` on the root element. Uses NXP-inspired dark surface tones (`#101B24`, `#1A2C39`) with legible contrast across badges, inputs, and drawers.\n   - **Footer & Pagination**: Retains the single sample page footer (`Showing 1–5 of 5 requests`, `Page 1 of 1`, disabled Previous/Next) and includes an empty state when filters match zero records.",
+      "suggestions": [
+        "View the Dark mode counterpart of this mobile Requests page",
+        "Generate the desktop counterpart for this Requests page",
+        "Proceed to the My Drafts route (/my-drafts)"
+      ],
+      "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Uhaiuu1Fu4RUoXRMg2DV7NHo5Iy-eV2PALFuGyB5ajtBC2CA93xGcUcCxwxKk2MoKK_HAAW255AwmkLnW_NW15YSlTkj4SgmsC0AM7R0d7cZ0G0BjiiRa1ysJdN2hqjZN4oXR_Zzl6MtyEvscOWe9WrkHya29ZdFf05M9p9RAHaN5kKC8DbiFOpFohWsXpFvs9Kgk3Scu8Iptv6cOTLE9xFmMuDhOSh-3ZDfwUWkXPPocBbzroi0Qfu08"
+    }
+  }
+}

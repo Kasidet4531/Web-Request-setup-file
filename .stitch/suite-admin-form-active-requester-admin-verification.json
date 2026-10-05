@@ -1,0 +1,47 @@
+{
+  "key": "admin-form-active-requester-admin",
+  "route": "/admin/form-config/psf-request/2",
+  "role": "admin",
+  "modes": [
+    {
+      "mode": "light",
+      "image": "suite-admin-form-active-requester-admin-light.png",
+      "check": {
+        "mode": "light",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Requester Information Form",
+        "bodyText": "Back\nAdministration\n\u203a\nForm Management\n\u203a\nActive v2\nRequester Information Form\n\nActive v2 \u00b7 psf-request\n\nForm title *\nSection title\nRead only\nField\tType\tRequired\t\nProduct Type\tradio\tRequired\tRead only\nTitle\ttext\tRequired\tRead only\nRequester Name\ttext\tRequired\tRead only\nDue Date\tdate\tRequired\tRead only\nPriority\tselect\tRequired\tRead only\nProduct\ttext\tRequired\tRead only\nWafer FAB\ttext\tRequired\tRead only\nProbecard Name\ttext\tRequired\tRead only\nReference PSF Name\ttext\tOptional\tRead only\nRequest Note\ttex",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nForm Management\n\u203a\nActive v2",
+        "themeControl": true,
+        "statusLines": true
+      }
+    },
+    {
+      "mode": "dark",
+      "image": "suite-admin-form-active-requester-admin-dark.png",
+      "check": {
+        "mode": "dark",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Requester Information Form",
+        "bodyText": "Back\nAdministration\n\u203a\nForm Management\n\u203a\nActive v2\nRequester Information Form\n\nActive v2 \u00b7 psf-request\n\nForm title *\nSection title\nRead only\nField\tType\tRequired\t\nProduct Type\tradio\tRequired\tRead only\nTitle\ttext\tRequired\tRead only\nRequester Name\ttext\tRequired\tRead only\nDue Date\tdate\tRequired\tRead only\nPriority\tselect\tRequired\tRead only\nProduct\ttext\tRequired\tRead only\nWafer FAB\ttext\tRequired\tRead only\nProbecard Name\ttext\tRequired\tRead only\nReference PSF Name\ttext\tOptional\tRead only\nRequest Note\ttex",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nForm Management\n\u203a\nActive v2",
+        "themeControl": true,
+        "statusLines": true
+      }
+    }
+  ],
+  "navigation": {
+    "expanded": 220,
+    "collapsed": 72,
+    "labels": true,
+    "controlsStayVisible": true,
+    "correct": true,
+    "restored": true,
+    "themePreserved": true
+  },
+  "success": true
+}

@@ -1,0 +1,47 @@
+{
+  "key": "admin-status-admin",
+  "route": "/admin/workflow",
+  "role": "admin",
+  "modes": [
+    {
+      "mode": "light",
+      "image": "suite-admin-status-admin-light.png",
+      "check": {
+        "mode": "light",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Status Management",
+        "bodyText": "Back\nAdministration\n\u203a\nStatus Management\nStatus Management\n\nMaintain exact Status names and types. Status changes are selected and saved manually.\n\nRequester PSF visibility\n\nFirst entry into the configured Status releases PSF data. Access remains available afterward.\n\nVisibility trigger\nChoose\u2026\nNone\n5% -- Reject (Information not complete)\n10% -- Test Engineer Data Entry\n20% -- PSF File Creating\n30% -- Compare Old and New layout\n40% -- Feedback Requester(Layout mismatch)\n80% -- Wait for create DCC",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nStatus Management",
+        "themeControl": true,
+        "statusLines": true
+      }
+    },
+    {
+      "mode": "dark",
+      "image": "suite-admin-status-admin-dark.png",
+      "check": {
+        "mode": "dark",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Status Management",
+        "bodyText": "Back\nAdministration\n\u203a\nStatus Management\nStatus Management\n\nMaintain exact Status names and types. Status changes are selected and saved manually.\n\nRequester PSF visibility\n\nFirst entry into the configured Status releases PSF data. Access remains available afterward.\n\nVisibility trigger\nChoose\u2026\nNone\n5% -- Reject (Information not complete)\n10% -- Test Engineer Data Entry\n20% -- PSF File Creating\n30% -- Compare Old and New layout\n40% -- Feedback Requester(Layout mismatch)\n80% -- Wait for create DCC",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nStatus Management",
+        "themeControl": true,
+        "statusLines": true
+      }
+    }
+  ],
+  "navigation": {
+    "expanded": 220,
+    "collapsed": 72,
+    "labels": true,
+    "controlsStayVisible": true,
+    "correct": true,
+    "restored": true,
+    "themePreserved": true
+  },
+  "success": true
+}

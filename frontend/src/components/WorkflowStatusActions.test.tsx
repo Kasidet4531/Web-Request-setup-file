@@ -15,8 +15,14 @@ function renderActions(overrides: Partial<WorkflowStatusActionsProps> = {}) {
 }
 
 describe('Workflow status guidance', () => {
+  it('labels the explicit submitted-status commit separately from Draft submission', () => {
+    expect(renderActions({ selectedStatus: 'Complete' })).toContain('Save Status')
+    expect(renderActions({ selectedStatus: 'Complete' })).not.toContain('Apply status')
+    expect(renderActions({ currentStatus: 'Draft', isDraft: true })).toContain('Submit request')
+  })
+
   it('explains the unchanged selection without implying the request is blocked', () => {
-    expect(renderActions()).toContain('Choose a different status to apply a change.')
+    expect(renderActions()).toContain('Choose a different status, then Save Status.')
   })
 
   it('explains the next step for a draft while leaving submission explicit', () => {

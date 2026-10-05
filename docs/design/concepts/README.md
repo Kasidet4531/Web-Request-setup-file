@@ -1,5 +1,7 @@
 # Direction C concept set
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
 These five ImageGen concepts propose one engineering-operations design for the existing PSF application. They are review artifacts, not raster assets to embed in the application. Records, people, versions, and counts are illustrative synthetic data.
 
 | Concept | Screen / purpose |

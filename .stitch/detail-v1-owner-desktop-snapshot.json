@@ -1,0 +1,482 @@
+{
+  "viewport": {
+    "deviceScaleFactor": 1,
+    "isMobile": false,
+    "hasTouch": false,
+    "isLandscape": false,
+    "width": 1280,
+    "height": 800
+  },
+  "colorScheme": "light",
+  "snapshot": {
+    "id": "431_0",
+    "role": "RootWebArea",
+    "name": "PSF Request Portal \u2014 Request Detail (v1 Desktop)",
+    "url": "http://127.0.0.1:4182/screens/7406103081578952994",
+    "children": [
+      {
+        "id": "431_1",
+        "role": "complementary",
+        "name": "Main Navigation",
+        "children": [
+          {
+            "id": "431_2",
+            "role": "link",
+            "name": "PSF Request Portal Home",
+            "url": "http://127.0.0.1:4182/dashboard",
+            "children": [
+              {
+                "id": "431_3",
+                "role": "StaticText",
+                "name": "PSF"
+              },
+              {
+                "id": "431_4",
+                "role": "StaticText",
+                "name": "Request Portal"
+              }
+            ]
+          },
+          {
+            "id": "431_5",
+            "role": "navigation",
+            "name": "Portal Navigation",
+            "children": [
+              {
+                "id": "431_6",
+                "role": "link",
+                "name": "Dashboard",
+                "url": "http://127.0.0.1:4182/dashboard",
+                "children": [
+                  {
+                    "id": "431_7",
+                    "role": "StaticText",
+                    "name": "Dashboard"
+                  }
+                ]
+              },
+              {
+                "id": "431_8",
+                "role": "link",
+                "name": "Requests",
+                "url": "http://127.0.0.1:4182/requests",
+                "children": [
+                  {
+                    "id": "431_9",
+                    "role": "StaticText",
+                    "name": "Requests"
+                  }
+                ]
+              },
+              {
+                "id": "431_10",
+                "role": "link",
+                "name": "My Drafts",
+                "url": "http://127.0.0.1:4182/my-drafts",
+                "children": [
+                  {
+                    "id": "431_11",
+                    "role": "StaticText",
+                    "name": "My Drafts"
+                  }
+                ]
+              },
+              {
+                "id": "431_12",
+                "role": "link",
+                "name": "Audit History",
+                "url": "http://127.0.0.1:4182/history",
+                "children": [
+                  {
+                    "id": "431_13",
+                    "role": "StaticText",
+                    "name": "Audit History"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "431_14",
+            "role": "button",
+            "name": "Switch to dark mode"
+          },
+          {
+            "id": "431_15",
+            "role": "StaticText",
+            "name": "Alex Morgan"
+          },
+          {
+            "id": "431_16",
+            "role": "StaticText",
+            "name": "Setup Owner \u00b7 MFG"
+          }
+        ]
+      },
+      {
+        "id": "431_17",
+        "role": "main",
+        "children": [
+          {
+            "id": "431_18",
+            "role": "link",
+            "name": "\u2190 Back to Requests",
+            "url": "http://127.0.0.1:4182/requests",
+            "children": [
+              {
+                "id": "431_19",
+                "role": "StaticText",
+                "name": "\u2190 Back to Requests"
+              }
+            ]
+          },
+          {
+            "id": "431_20",
+            "role": "StaticText",
+            "name": "PSF-2026-0039"
+          },
+          {
+            "id": "431_21",
+            "role": "heading",
+            "name": "ST Fab template map review",
+            "level": 1
+          },
+          {
+            "id": "431_22",
+            "role": "button",
+            "name": "View full status: 93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+            "expandable": true
+          },
+          {
+            "id": "431_23",
+            "role": "StaticText",
+            "name": "Due "
+          },
+          {
+            "id": "431_24",
+            "role": "StaticText",
+            "name": "06 Oct 2026"
+          },
+          {
+            "id": "431_25",
+            "role": "StaticText",
+            "name": "Priority "
+          },
+          {
+            "id": "431_26",
+            "role": "StaticText",
+            "name": "Normal"
+          },
+          {
+            "id": "431_27",
+            "role": "StaticText",
+            "name": "Requester "
+          },
+          {
+            "id": "431_28",
+            "role": "StaticText",
+            "name": "Priya Rao"
+          },
+          {
+            "id": "431_29",
+            "role": "StaticText",
+            "name": "Owner "
+          },
+          {
+            "id": "431_30",
+            "role": "StaticText",
+            "name": "Rowan Miller / GNTC"
+          },
+          {
+            "id": "431_31",
+            "role": "StaticText",
+            "name": "Change Status"
+          },
+          {
+            "id": "431_32",
+            "role": "combobox",
+            "name": "Choose Status",
+            "expandable": true,
+            "haspopup": "menu",
+            "value": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+            "children": [
+              {
+                "id": "431_33",
+                "role": "option",
+                "name": "5% -- Reject (Information not complete)",
+                "selectable": true,
+                "value": "5% -- Reject (Information not complete)"
+              },
+              {
+                "id": "431_34",
+                "role": "option",
+                "name": "10% -- Test Engineer Data Entry",
+                "selectable": true,
+                "value": "10% -- Test Engineer Data Entry"
+              },
+              {
+                "id": "431_35",
+                "role": "option",
+                "name": "20% -- PSF File Creating",
+                "selectable": true,
+                "value": "20% -- PSF File Creating"
+              },
+              {
+                "id": "431_36",
+                "role": "option",
+                "name": "30% -- Compare Old and New layout",
+                "selectable": true,
+                "value": "30% -- Compare Old and New layout"
+              },
+              {
+                "id": "431_37",
+                "role": "option",
+                "name": "40% -- Feedback Requester(Layout mismatch)",
+                "selectable": true,
+                "value": "40% -- Feedback Requester(Layout mismatch)"
+              },
+              {
+                "id": "431_38",
+                "role": "option",
+                "name": "80% -- Wait for create DCC",
+                "selectable": true,
+                "value": "80% -- Wait for create DCC"
+              },
+              {
+                "id": "431_39",
+                "role": "option",
+                "name": "81% -- Edit Template Map (Bin62)",
+                "selectable": true,
+                "value": "81% -- Edit Template Map (Bin62)"
+              },
+              {
+                "id": "431_40",
+                "role": "option",
+                "name": "82% -- Wait for sent Template Map",
+                "selectable": true,
+                "value": "82% -- Wait for sent Template Map"
+              },
+              {
+                "id": "431_41",
+                "role": "option",
+                "name": "83% -- Complete Excel probe pattern",
+                "selectable": true,
+                "value": "83% -- Complete Excel probe pattern"
+              },
+              {
+                "id": "431_42",
+                "role": "option",
+                "name": "85 % -- Reject check list",
+                "selectable": true,
+                "value": "85 % -- Reject check list"
+              },
+              {
+                "id": "431_43",
+                "role": "option",
+                "name": "90% -- Wait for buyoff check list",
+                "selectable": true,
+                "value": "90% -- Wait for buyoff check list"
+              },
+              {
+                "id": "431_44",
+                "role": "option",
+                "name": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+                "selectable": true,
+                "selected": true,
+                "value": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)"
+              },
+              {
+                "id": "431_45",
+                "role": "option",
+                "name": "95% -- Reject (Wrong site location and wafer map)",
+                "selectable": true,
+                "value": "95% -- Reject (Wrong site location and wafer map)"
+              },
+              {
+                "id": "431_46",
+                "role": "option",
+                "name": "99% -- Wait requestor Buyoff site location and wafer map",
+                "selectable": true,
+                "value": "99% -- Wait requestor Buyoff site location and wafer map"
+              },
+              {
+                "id": "431_47",
+                "role": "option",
+                "name": "100% -- Completed",
+                "selectable": true,
+                "value": "100% -- Completed"
+              },
+              {
+                "id": "431_48",
+                "role": "option",
+                "name": "0% -- Rejected (Cancel Request)",
+                "selectable": true,
+                "value": "0% -- Rejected (Cancel Request)"
+              }
+            ]
+          },
+          {
+            "id": "431_49",
+            "role": "button",
+            "name": "Save Status",
+            "disableable": true,
+            "disabled": true
+          },
+          {
+            "id": "431_50",
+            "role": "tab",
+            "name": "Requester Information",
+            "selectable": true
+          },
+          {
+            "id": "431_51",
+            "role": "tab",
+            "name": "PSF Created Information",
+            "selectable": true,
+            "selected": true
+          },
+          {
+            "id": "431_52",
+            "role": "tab",
+            "name": "History",
+            "selectable": true
+          },
+          {
+            "id": "431_53",
+            "role": "form",
+            "children": [
+              {
+                "id": "431_54",
+                "role": "heading",
+                "name": "PSF Created Information",
+                "level": 2
+              },
+              {
+                "id": "431_55",
+                "role": "StaticText",
+                "name": "Setup details maintained by the setup team."
+              },
+              {
+                "id": "431_56",
+                "role": "StaticText",
+                "name": "Saved"
+              },
+              {
+                "id": "431_57",
+                "role": "button",
+                "name": "Edit information"
+              },
+              {
+                "id": "431_58",
+                "role": "StaticText",
+                "name": "First Die Ref. (X,Y)"
+              },
+              {
+                "id": "431_59",
+                "role": "StaticText",
+                "name": "120, 84"
+              },
+              {
+                "id": "431_60",
+                "role": "StaticText",
+                "name": "Probe & Coordinate Quadrant"
+              },
+              {
+                "id": "431_61",
+                "role": "StaticText",
+                "name": "Quadrant I"
+              },
+              {
+                "id": "431_62",
+                "role": "StaticText",
+                "name": "Wafer ID Format"
+              },
+              {
+                "id": "431_63",
+                "role": "StaticText",
+                "name": "LOT-WAFER-XX"
+              },
+              {
+                "id": "431_64",
+                "role": "StaticText",
+                "name": "Mirror Die Available"
+              },
+              {
+                "id": "431_65",
+                "role": "StaticText",
+                "name": "Yes"
+              },
+              {
+                "id": "431_66",
+                "role": "StaticText",
+                "name": "Prepare FPC & Physical Wafer to PSF Cabinet E2"
+              },
+              {
+                "id": "431_67",
+                "role": "StaticText",
+                "name": "No"
+              },
+              {
+                "id": "431_68",
+                "role": "StaticText",
+                "name": "PSF Setup File Name"
+              },
+              {
+                "id": "431_69",
+                "role": "StaticText",
+                "name": "S32K3_STFAB_REV02.psf"
+              },
+              {
+                "id": "431_70",
+                "role": "StaticText",
+                "name": "Job File Name"
+              },
+              {
+                "id": "431_71",
+                "role": "StaticText",
+                "name": "S32K3_STFAB.job"
+              },
+              {
+                "id": "431_72",
+                "role": "StaticText",
+                "name": "Template"
+              },
+              {
+                "id": "431_73",
+                "role": "StaticText",
+                "name": "STFAB_TEMPLATE_02"
+              },
+              {
+                "id": "431_74",
+                "role": "StaticText",
+                "name": "Layout"
+              },
+              {
+                "id": "431_75",
+                "role": "StaticText",
+                "name": "LAYOUT_REV_B"
+              },
+              {
+                "id": "431_76",
+                "role": "StaticText",
+                "name": "Attachment Reference"
+              },
+              {
+                "id": "431_77",
+                "role": "StaticText",
+                "name": "MAP_REVIEW_039.pdf"
+              }
+            ]
+          },
+          {
+            "id": "431_78",
+            "role": "status",
+            "atomic": true,
+            "live": "polite",
+            "relevant": "additions text"
+          }
+        ]
+      }
+    ]
+  }
+}

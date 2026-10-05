@@ -153,7 +153,7 @@ export class AuditLogService implements OnModuleInit {
   // ponytail: unpaged global audit list; add cursor pagination when audit volume is measured.
   async findGlobalAuditLogs(
     filters: GlobalAuditLogFilters = {},
-    actor?: Pick<AuthenticatedUserProfile, 'id'>,
+    actor?: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
   ): Promise<GlobalAuditLogEntry[]> {
     const requestId = this.parseOptionalUuid(filters.requestId);
     const user = this.normalizeOptionalString(filters.user);
@@ -197,6 +197,15 @@ export class AuditLogService implements OnModuleInit {
         OR psf_request.id IS NULL
         OR psf_request.status <> 'Draft'
         OR psf_request.requester_user_id = $${values.length}::uuid
+      )`);
+    }
+
+    // Apply visibility before results are selected, including explicit action filters.
+    // Request-specific history uses the same event suppression before PSF release.
+    if (actor?.role === 'requester') {
+      where.push(`(
+        audit_log.action_type <> ${addParameter(REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED)}
+        OR psf_request.psf_released_at IS NOT NULL
       )`);
     }
 

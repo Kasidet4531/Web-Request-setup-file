@@ -1,0 +1,497 @@
+{
+  "viewport": {
+    "deviceScaleFactor": 1,
+    "isMobile": true,
+    "hasTouch": true,
+    "isLandscape": false,
+    "width": 390,
+    "height": 844
+  },
+  "colorScheme": "light",
+  "snapshot": {
+    "id": "194_0",
+    "role": "RootWebArea",
+    "name": "PSF Request Portal \u2014 Dashboard (v4 Neutral)",
+    "url": "http://127.0.0.1:4182/screens/4400343785376533824",
+    "children": [
+      {
+        "id": "194_1",
+        "role": "banner",
+        "name": "Mobile Navigation Bar",
+        "children": [
+          {
+            "id": "194_2",
+            "role": "button",
+            "name": "Open navigation drawer",
+            "expandable": true
+          },
+          {
+            "id": "194_3",
+            "role": "StaticText",
+            "name": "PSF"
+          },
+          {
+            "id": "194_4",
+            "role": "StaticText",
+            "name": "Request Portal"
+          },
+          {
+            "id": "194_5",
+            "role": "button",
+            "name": "Switch to dark mode"
+          }
+        ]
+      },
+      {
+        "id": "194_6",
+        "role": "main",
+        "children": [
+          {
+            "id": "194_7",
+            "role": "heading",
+            "name": "Dashboard",
+            "level": 1
+          },
+          {
+            "id": "194_8",
+            "role": "StaticText",
+            "name": "Your MFG department work, at a glance."
+          },
+          {
+            "id": "194_9",
+            "role": "link",
+            "name": "New Request",
+            "url": "http://127.0.0.1:4182/requests/new",
+            "children": [
+              {
+                "id": "194_10",
+                "role": "StaticText",
+                "name": "New Request"
+              }
+            ]
+          },
+          {
+            "id": "194_11",
+            "role": "region",
+            "name": "Work scope",
+            "children": [
+              {
+                "id": "194_12",
+                "role": "StaticText",
+                "name": "Work scope"
+              },
+              {
+                "id": "194_13",
+                "role": "combobox",
+                "name": "Work scope",
+                "expandable": true,
+                "haspopup": "menu",
+                "value": "PSF department work",
+                "children": [
+                  {
+                    "id": "194_14",
+                    "role": "option",
+                    "name": "Related work",
+                    "selectable": true,
+                    "value": "Related work"
+                  },
+                  {
+                    "id": "194_15",
+                    "role": "option",
+                    "name": "Created by me",
+                    "selectable": true,
+                    "value": "Created by me"
+                  },
+                  {
+                    "id": "194_16",
+                    "role": "option",
+                    "name": "PSF department work",
+                    "selectable": true,
+                    "selected": true,
+                    "value": "PSF department work"
+                  }
+                ]
+              },
+              {
+                "id": "194_17",
+                "role": "StaticText",
+                "name": "MFG"
+              }
+            ]
+          },
+          {
+            "id": "194_18",
+            "role": "region",
+            "name": "Request Status Summaries",
+            "children": [
+              {
+                "id": "194_19",
+                "role": "button",
+                "name": "OPEN WORK 44",
+                "pressed": true
+              },
+              {
+                "id": "194_20",
+                "role": "button",
+                "name": "OVERDUE 24"
+              },
+              {
+                "id": "194_21",
+                "role": "button",
+                "name": "COMPLETED 6"
+              }
+            ]
+          },
+          {
+            "id": "194_22",
+            "role": "region",
+            "name": "Work Queue Container",
+            "children": [
+              {
+                "id": "194_23",
+                "role": "heading",
+                "name": "Work queue",
+                "level": 2
+              },
+              {
+                "id": "194_24",
+                "role": "StaticText",
+                "name": "Open work"
+              },
+              {
+                "id": "194_25",
+                "role": "searchbox",
+                "name": "Search request no., title, PSF or probecard"
+              },
+              {
+                "id": "194_26",
+                "role": "button",
+                "name": "Show filters",
+                "expandable": true
+              },
+              {
+                "id": "194_27",
+                "role": "link",
+                "name": "S32K3 probe layout update",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0042",
+                "children": [
+                  {
+                    "id": "194_28",
+                    "role": "StaticText",
+                    "name": "S32K3 probe layout update"
+                  }
+                ]
+              },
+              {
+                "id": "194_29",
+                "role": "StaticText",
+                "name": "PSF-2026-0042"
+              },
+              {
+                "id": "194_30",
+                "role": "StaticText",
+                "name": "\u00b7"
+              },
+              {
+                "id": "194_31",
+                "role": "StaticText",
+                "name": "PC-042"
+              },
+              {
+                "id": "194_32",
+                "role": "button",
+                "name": "View full status: 20% -- PSF File Creating",
+                "expandable": true
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Due date"
+              },
+              {
+                "id": "194_34",
+                "role": "StaticText",
+                "name": "01 Oct 2026"
+              },
+              {
+                "id": "194_35",
+                "role": "StaticText",
+                "name": "OVERDUE \u00b7 HIGH"
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Owner / Dept"
+              },
+              {
+                "id": "194_36",
+                "role": "StaticText",
+                "name": "Mei Tan / MFG"
+              },
+              {
+                "id": "194_37",
+                "role": "link",
+                "name": "ST Fab template map review",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0039",
+                "children": [
+                  {
+                    "id": "194_38",
+                    "role": "StaticText",
+                    "name": "ST Fab template map review"
+                  }
+                ]
+              },
+              {
+                "id": "194_39",
+                "role": "StaticText",
+                "name": "PSF-2026-0039"
+              },
+              {
+                "id": "194_40",
+                "role": "StaticText",
+                "name": "\u00b7"
+              },
+              {
+                "id": "194_41",
+                "role": "StaticText",
+                "name": "PC-039"
+              },
+              {
+                "id": "194_42",
+                "role": "button",
+                "name": "View full status: 93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+                "expandable": true
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Due date"
+              },
+              {
+                "id": "194_43",
+                "role": "StaticText",
+                "name": "06 Oct 2026"
+              },
+              {
+                "id": "194_44",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Owner / Dept"
+              },
+              {
+                "id": "194_45",
+                "role": "StaticText",
+                "name": "Alex Morgan / MFG"
+              },
+              {
+                "id": "194_46",
+                "role": "link",
+                "name": "Wafer map site verification",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0035",
+                "children": [
+                  {
+                    "id": "194_47",
+                    "role": "StaticText",
+                    "name": "Wafer map site verification"
+                  }
+                ]
+              },
+              {
+                "id": "194_48",
+                "role": "StaticText",
+                "name": "PSF-2026-0035"
+              },
+              {
+                "id": "194_49",
+                "role": "StaticText",
+                "name": "\u00b7"
+              },
+              {
+                "id": "194_50",
+                "role": "StaticText",
+                "name": "PC-035"
+              },
+              {
+                "id": "194_51",
+                "role": "button",
+                "name": "View full status: 99% -- Wait requestor Buyoff site location and wafer map",
+                "expandable": true
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Due date"
+              },
+              {
+                "id": "194_52",
+                "role": "StaticText",
+                "name": "08 Oct 2026"
+              },
+              {
+                "id": "194_53",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Owner / Dept"
+              },
+              {
+                "id": "194_54",
+                "role": "StaticText",
+                "name": "Mei Tan / MFG"
+              },
+              {
+                "id": "194_55",
+                "role": "link",
+                "name": "PSF layout comparison",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0031",
+                "children": [
+                  {
+                    "id": "194_56",
+                    "role": "StaticText",
+                    "name": "PSF layout comparison"
+                  }
+                ]
+              },
+              {
+                "id": "194_57",
+                "role": "StaticText",
+                "name": "PSF-2026-0031"
+              },
+              {
+                "id": "194_58",
+                "role": "StaticText",
+                "name": "\u00b7"
+              },
+              {
+                "id": "194_59",
+                "role": "StaticText",
+                "name": "PC-031"
+              },
+              {
+                "id": "194_60",
+                "role": "button",
+                "name": "View full status: 30% -- Compare Old and New layout",
+                "expandable": true
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Due date"
+              },
+              {
+                "id": "194_61",
+                "role": "StaticText",
+                "name": "09 Oct 2026"
+              },
+              {
+                "id": "194_62",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Owner / Dept"
+              },
+              {
+                "id": "194_63",
+                "role": "StaticText",
+                "name": "Alex Morgan / MFG"
+              },
+              {
+                "id": "194_64",
+                "role": "link",
+                "name": "Test engineer setup data",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0029",
+                "children": [
+                  {
+                    "id": "194_65",
+                    "role": "StaticText",
+                    "name": "Test engineer setup data"
+                  }
+                ]
+              },
+              {
+                "id": "194_66",
+                "role": "StaticText",
+                "name": "PSF-2026-0029"
+              },
+              {
+                "id": "194_67",
+                "role": "StaticText",
+                "name": "\u00b7"
+              },
+              {
+                "id": "194_68",
+                "role": "StaticText",
+                "name": "PC-029"
+              },
+              {
+                "id": "194_69",
+                "role": "button",
+                "name": "View full status: 10% -- Test Engineer Data Entry",
+                "expandable": true
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Due date"
+              },
+              {
+                "id": "194_70",
+                "role": "StaticText",
+                "name": "12 Oct 2026"
+              },
+              {
+                "id": "194_71",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "194_33",
+                "role": "StaticText",
+                "name": "Owner / Dept"
+              },
+              {
+                "id": "194_72",
+                "role": "StaticText",
+                "name": "Mei Tan / MFG"
+              },
+              {
+                "id": "194_73",
+                "role": "StaticText",
+                "name": "5 sample requests shown \u00b7 Open work 44"
+              },
+              {
+                "id": "194_74",
+                "role": "button",
+                "name": "Previous page",
+                "disableable": true,
+                "disabled": true
+              },
+              {
+                "id": "194_75",
+                "role": "StaticText",
+                "name": "Page 1 of 1"
+              },
+              {
+                "id": "194_76",
+                "role": "button",
+                "name": "Next page",
+                "disableable": true,
+                "disabled": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "key": "admin-forms-requester-admin",
+  "route": "/admin/form-config?formKey=psf-request",
+  "role": "admin",
+  "modes": [
+    {
+      "mode": "light",
+      "image": "suite-admin-forms-requester-admin-light.png",
+      "check": {
+        "mode": "light",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Form Management",
+        "bodyText": "Back\nAdministration\n\u203a\nForm Management\nForm Management\n\nManage saved versions for Requester Information.\n\nRequester Information\nPSF Created Information\nVersion\tTitle / Description\tState\tCreated\tActions\nv3\tPSF Request Form\nDraft copy for review\tDraft\t05 Oct 2026\t\nEdit\nPublish\nDiscard\n\nv2\tPSF Request Form\tActive\t02 Oct 2026\tDuplicate as draft",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nForm Management",
+        "themeControl": true,
+        "statusLines": true
+      }
+    },
+    {
+      "mode": "dark",
+      "image": "suite-admin-forms-requester-admin-dark.png",
+      "check": {
+        "mode": "dark",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Form Management",
+        "bodyText": "Back\nAdministration\n\u203a\nForm Management\nForm Management\n\nManage saved versions for Requester Information.\n\nRequester Information\nPSF Created Information\nVersion\tTitle / Description\tState\tCreated\tActions\nv3\tPSF Request Form\nDraft copy for review\tDraft\t05 Oct 2026\t\nEdit\nPublish\nDiscard\n\nv2\tPSF Request Form\tActive\t02 Oct 2026\tDuplicate as draft",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nForm Management",
+        "themeControl": true,
+        "statusLines": true
+      }
+    }
+  ],
+  "navigation": {
+    "expanded": 220,
+    "collapsed": 72,
+    "labels": true,
+    "controlsStayVisible": true,
+    "correct": true,
+    "restored": true,
+    "themePreserved": true
+  },
+  "success": true
+}

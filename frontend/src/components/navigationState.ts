@@ -1,3 +1,4 @@
+import type { RequestBreadcrumb } from './requestBreadcrumb'
 import {
   FileSpreadsheet,
   FileText,
@@ -8,6 +9,7 @@ import {
   Sliders,
   Users,
   Wand2,
+  Settings,
   FileText as DraftFileText,
 } from 'lucide-react'
 
@@ -25,7 +27,7 @@ export type NavSection = {
 }
 
 /**
- * Visibility mirrors the current server permission matrix (ADR 0014 / T01).
+ * Visibility follows the approved authenticated-role destinations.
  * Hiding a link is presentation only; the backend remains the enforcement point.
  */
 export function navSectionsForRole(role: UserRole | null): NavSection[] {
@@ -38,15 +40,15 @@ export function navSectionsForRole(role: UserRole | null): NavSection[] {
       label: 'Work',
       items: [
         { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { to: '/requests', label: 'All PSF Requests', icon: FileText },
-        ...(role ? [{ to: '/my-drafts', label: 'My drafts', icon: DraftFileText }] : []),
+        { to: '/requests', label: 'Requests', icon: FileText },
+        ...(role ? [{ to: '/my-drafts', label: 'My Drafts', icon: DraftFileText }] : []),
         ...(canCreateRequest
           ? [{ to: '/requests/new', label: 'Create Request', icon: PlusCircle }]
           : []),
         ...(canExport
           ? [{ to: '/admin/export-profile', label: 'Export to Excel', icon: FileSpreadsheet }]
           : []),
-        ...(isAdmin ? [{ to: '/history', label: 'Audit History', icon: History }] : []),
+        ...(role ? [{ to: '/history', label: 'Audit History', icon: History }] : []),
       ],
     },
   ]
@@ -55,6 +57,7 @@ export function navSectionsForRole(role: UserRole | null): NavSection[] {
     sections.push({
       label: 'Administration',
       items: [
+        { to: '/admin', label: 'Administration', icon: Settings },
         { to: '/admin/users', label: 'Users & Roles', icon: Users },
         { to: '/admin/form-config', label: 'Form Management', icon: Sliders },
         { to: '/admin/workflow', label: 'Status Management', icon: ListChecks },
@@ -70,10 +73,12 @@ export function isStandaloneAuthenticationPath(pathname: string): boolean {
   return pathname === '/login' || pathname === '/login/'
 }
 
-export function resolveActivePath(pathname: string, sections: NavSection[]): string | null {
+export function resolveActivePath(pathname: string, sections: NavSection[], request: RequestBreadcrumb | null = null): string | null {
   const normalised =
     pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
   const items = sections.flatMap((section) => section.items)
+  const segments = normalised.split('/').filter(Boolean)
+  if (request?.isDraft && segments[0] === 'requests' && segments[1] === request.requestId && items.some((item) => item.to === '/my-drafts')) return '/my-drafts'
 
   const exact = items.find((item) => item.to === normalised)
   if (exact) {
@@ -91,7 +96,7 @@ export function resolveActivePath(pathname: string, sections: NavSection[]): str
 export function contextualAdminSections(role: UserRole | null): NavSection[] {
   if (role !== 'admin') return []
   const sections = navSectionsForRole(role)
-  const adminItems = sections.find((section) => section.label === 'Administration')?.items ?? []
+  const adminItems = (sections.find((section) => section.label === 'Administration')?.items ?? []).filter((item) => item.to !== '/admin')
   const workItems = sections.find((section) => section.label === 'Work')?.items ?? []
   return [
     { label: 'Request configuration', items: adminItems.filter((item) => item.to !== '/admin/users') },

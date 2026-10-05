@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "source": "headless_browser",
+    "url": "http://127.0.0.1:4180/screens/a22d8f79e3814f7685a3e9d6fa6e8af5",
+    "route": "/screens/a22d8f79e3814f7685a3e9d6fa6e8af5",
+    "title": "Capture /screens/a22d8f79e3814f7685a3e9d6fa6e8af5",
+    "outputPath": "/home/kasidet4531/Desktop/Web_Setup_file/Web-Request-setup-file/.stitch/requests-v1-requester-mobile-dark.html",
+    "pageId": 1,
+    "screenshotPath": "/home/kasidet4531/Desktop/Web_Setup_file/Web-Request-setup-file/.stitch/requests-v1-requester-mobile-dark.png",
+    "matchedLiveTab": true,
+    "telemetry": {
+      "visibleTextLength": 1132,
+      "interactiveCount": 37,
+      "leafNodeCount": 228,
+      "loadingIndicatorsFound": []
+    },
+    "status": "saved",
+    "htmlBytes": 70377
+  }
+}

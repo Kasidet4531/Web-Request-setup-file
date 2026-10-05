@@ -1,0 +1,116 @@
+{
+  "projectId": "15540984743145901568",
+  "page": "/dashboard",
+  "status": "awaiting_user_review",
+  "version": "desktop-navigation-suite-2026-10-05",
+  "date": "2026-10-05",
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "direction": "Desktop only; single-line Status ellipsis with full-value disclosure; active summary checkmark and category-colored outline, no Filter label",
+  "screens": [
+    {
+      "key": "dashboard-requester",
+      "page": "dashboard",
+      "role": "requester",
+      "route": "/dashboard",
+      "title": "Dashboard",
+      "htmlSource": "suite-dashboard-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "12918096961075440925",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=12918096961075440925",
+      "lightImage": "suite-dashboard-requester-light.png",
+      "darkImage": "suite-dashboard-requester-dark.png",
+      "verification": "suite-dashboard-requester-verification.json"
+    },
+    {
+      "key": "dashboard-owner",
+      "page": "dashboard",
+      "role": "owner",
+      "route": "/dashboard",
+      "title": "Dashboard",
+      "htmlSource": "suite-dashboard-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "3360253266530025101",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=3360253266530025101",
+      "lightImage": "suite-dashboard-owner-light.png",
+      "darkImage": "suite-dashboard-owner-dark.png",
+      "verification": "suite-dashboard-owner-verification.json"
+    }
+  ],
+  "dataEvidence": "database-design-evidence.json",
+  "statusCatalogEvidence": "status-catalog-evidence.json",
+  "continueOnlyAfterDashboardFeedback": false,
+  "auditHistoryForEveryAuthenticatedRole": true,
+  "noAutomaticStatusChanges": true,
+  "screenCount": 2,
+  "visualStateCount": 4,
+  "verification": "suite-verification.json",
+  "review": "suite-review.md",
+  "devices": [
+    "desktop"
+  ],
+  "mobileDesignInScope": false,
+  "selectedSummaryIndication": "checkmark + category-colored outline + aria-pressed + Work queue scope label",
+  "approvedAt": "2026-10-04",
+  "nextAuthorizedPage": "/requests",
+  "bodyDirection": "Dashboard v5 body",
+  "currentReviewScope": "Common collapsible sidebar, explicit parent Back and breadcrumbs; page body retained",
+  "priorBodyReview": {
+    "version": 5,
+    "review": "dashboard-v5-review.md",
+    "screens": [
+      {
+        "role": "requester",
+        "screenId": "17424635658553134230",
+        "url": "https://stitch.google.com/projects/15540984743145901568?node-id=17424635658553134230",
+        "device": "desktop",
+        "states": [
+          {
+            "mode": "light",
+            "image": "dashboard-v5-requester-desktop-light.png",
+            "overdueSelectionImage": "dashboard-v5-requester-desktop-light-overdue-selected.png"
+          },
+          {
+            "mode": "dark",
+            "image": "dashboard-v5-requester-desktop-dark.png",
+            "overdueSelectionImage": "dashboard-v5-requester-desktop-dark-overdue-selected.png"
+          }
+        ],
+        "prototype": "dashboard-v5-requester-final.html"
+      },
+      {
+        "role": "owner",
+        "screenId": "736498082458463041",
+        "url": "https://stitch.google.com/projects/15540984743145901568?node-id=736498082458463041",
+        "device": "desktop",
+        "states": [
+          {
+            "mode": "light",
+            "image": "dashboard-v5-owner-desktop-light.png",
+            "overdueSelectionImage": "dashboard-v5-owner-desktop-light-overdue-selected.png"
+          },
+          {
+            "mode": "dark",
+            "image": "dashboard-v5-owner-desktop-dark.png",
+            "overdueSelectionImage": "dashboard-v5-owner-desktop-dark-overdue-selected.png"
+          }
+        ],
+        "prototype": "dashboard-v5-owner-final.html"
+      }
+    ],
+    "status": "approved_by_user"
+  },
+  "continueOnlyAfterRequestsFeedback": false,
+  "scopeAuthorization": "All remaining pages together, including all Admin pages",
+  "productionSourceModified": false
+}

@@ -372,10 +372,10 @@ describe('RequestHeaderSummary', () => {
     const request = buildSubmittedRequest()
     const html = renderToStaticMarkup(<RequestHeaderSummary request={request} />)
 
-    expect(html).toContain('Request No.')
+    expect(html.match(/PSF-0001/g)).toHaveLength(1)
     expect(html).toContain('PSF-0001')
     expect(html).toContain('Production probe card setup')
-    expect(html).toContain('Existing Product')
+    expect(html).not.toContain('<span>Product Type</span>')
     expect(html).not.toContain('status-badge--submitted')
     expect(html).toContain('Urgent')
     expect(html).toContain('05/08/2026')
@@ -416,10 +416,10 @@ describe('WorkflowStatusActions', () => {
     expect(html).toContain('Need More Information')
     expect(html).toContain('Rejected')
     expect(html).not.toContain('Cancelled')
-    expect(html).toContain('Apply status')
+    expect(html).toContain('Save Status')
   })
 
-  it('keeps the only current status selected and disables Apply status when no transition is available', () => {
+  it('keeps the only current status selected and disables Save Status when no transition is available', () => {
     const html = renderToStaticMarkup(
       <WorkflowStatusActions
         allowedNextStatuses={[]}
@@ -435,10 +435,10 @@ describe('WorkflowStatusActions', () => {
     expect(html).toContain('Completed')
     expect(html).toContain('<select')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>/)
-    expect(html).toContain('Apply status')
+    expect(html).toContain('Save Status')
   })
 
-  it('disables Apply status until an authorized next status is selected', () => {
+  it('disables Save Status until an authorized next status is selected', () => {
     const html = renderToStaticMarkup(
       <WorkflowStatusActions
         allowedNextStatuses={['Setup In Progress']}
@@ -467,7 +467,7 @@ describe('WorkflowStatusActions', () => {
 
     expect(html).toMatch(/<select[^>]*disabled=""[^>]*>/)
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>/)
-    expect(html).toContain('Applying status…')
+    expect(html).toContain('Saving Status…')
   })
 })
 
@@ -1358,7 +1358,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(requestDetailApi.submitPsfRequest).not.toHaveBeenCalled()
   })
 
-  it('shows the persisted status beside the request number without loading the workflow map', async () => {
+  it('shows the persisted exact status with a neutral fallback when its catalog kind is unavailable', async () => {
     const request = { ...buildSubmittedRequest(), status: 'Custom review' }
     requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
     requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
@@ -1372,7 +1372,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(header).toContain('PSF-0001')
     expect(header).toContain('Custom review')
     expect(header).toContain('ui-status--neutral')
-    expect(requestDetailApi.fetchWorkflowStatuses).not.toHaveBeenCalled()
+    expect(requestDetailApi.fetchWorkflowStatuses).toHaveBeenCalledOnce()
   })
 
   it('loads request history inside the existing detail shell through the request-scoped API', async () => {
@@ -1780,6 +1780,9 @@ describe('RequestDetailShell workflow actions', () => {
     requestDetailHookHarness.runEffects()
     await flushRequestDetailAsyncWork()
     let rendered = renderRequestDetailWithRequesterChild()
+    const editButton = requireRenderedElement(rendered.requesterForm, (element) => element.type === 'button' && element.props.children === 'Edit information')
+    ;(editButton.props.onClick as () => void)()
+    rendered = renderRequestDetailWithRequesterChild()
     let requesterRenderer = requireRenderedElement(rendered.requesterForm, (element) => element.type === DynamicFormRenderer)
     const editRequester = requesterRenderer.props.onChange
     if (typeof editRequester !== 'function') throw new Error('Expected actual requester field callback')
@@ -1945,9 +1948,9 @@ describe('Request history route', () => {
     expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledExactlyOnceWith('request-1')
     expect(panel.props.entries).toEqual(entries)
     expect(panel.props.loading).toBe(false)
-    const header = requireRenderedElement(page, (element) => typeof element.props.title === 'string' && element.props.title.endsWith(' history'))
-    const link = requireRenderedElement(header.props.actions, (element) => element.props.to === '/requests/$requestId')
-    expect(link.props.params).toEqual({ requestId: 'request-1' })
+    const header = requireRenderedElement(page, (element) => element.props.title === 'Request History')
+    expect(header.props.description).toContain('PSF-0001')
+    expect(header.props.actions).toBeUndefined()
   })
   it('never displays the previous request identity or history while another request loads or denies access', async () => {
     const entries = [{ actionType: 'DRAFT_CREATED', actorDisplayName: 'Previous owner', actorRole: 'requester', createdAt: '2026-10-03T00:00:00Z', metadata: {} }]
@@ -1958,14 +1961,14 @@ describe('Request history route', () => {
     requestDetailApi.fetchPsfRequest.mockRejectedValueOnce(new Error('Private draft'))
     requestDetailApi.fetchPsfRequestHistory.mockRejectedValueOnce(new Error('Private draft'))
     const pending = render('request-2')
-    const header = requireRenderedElement(pending, (element) => element.props.title === 'Request history')
+    const header = requireRenderedElement(pending, (element) => element.props.title === 'Request History')
     expect(header.props.description).toBe('Activity visible to you for this request.')
     const pendingPanel = requireRenderedElement(pending, (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
     expect(pendingPanel.props.entries).toEqual([])
     expect(pendingPanel.props.loading).toBe(true)
     requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     const denied = render('request-2')
-    expect(requireRenderedElement(denied, (element) => element.props.title === 'Request history').props.description).toBe('Activity visible to you for this request.')
+    expect(requireRenderedElement(denied, (element) => element.props.title === 'Request History').props.description).toBe('Activity visible to you for this request.')
     const deniedPanel = requireRenderedElement(denied, (element) => element.type === RequestsWorkspace.RequestHistoryPanel)
     expect(deniedPanel.props.entries).toEqual([])
     expect(deniedPanel.props.error).toBe('Private draft')
@@ -2050,5 +2053,184 @@ describe('Queue filter disclosure', () => {
     expect(ref.current.open).toBe(true)
     for (const cleanup of cleanups) if (typeof cleanup === 'function') cleanup()
     expect(query.removeEventListener).toHaveBeenCalledWith('change', onChange)
+  })
+})
+
+
+describe('Tabbed Detail and PSF edit lifecycle', () => {
+  beforeEach(() => {
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchPsfRequest.mockReset().mockResolvedValue({ ...buildSubmittedRequest(), psfCreatedDataVisible: true, canEditPsfCreatedData: true, psfCreatedData: { psf_setup_file_name: 'SERVER.psf' } })
+    requestDetailApi.fetchPsfRequestHistory.mockReset().mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockReset().mockResolvedValue({ allowedNextStatuses: ['100% -- Completed'] })
+    requestDetailApi.updatePsfCreatedData.mockReset()
+  })
+  const tab = (page: unknown, label: string) => requireRenderedElement(page, e => e.props.role === 'tab' && e.props.children === label)
+  const psf = (page: unknown) => requireRenderedElement(page, e => e.type === RequestsWorkspace.PsfCreatedInformationPanel)
+  const load = async () => { renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return renderRequestDetailShell() }
+
+  it('rebases clean PSF values from a requester snapshot and saves the current values with its new revision', async () => {
+    let page = await load()
+    const initial = psf(page).props.request as PsfRequestResponse
+    const refreshed = { ...initial, updatedAt: 'requester-save-r2', psfCreatedData: { psf_setup_file_name: 'OTHER-OWNER.psf' } }
+    const form = requireRenderedElement(page, e => e.type === ActiveSchemaForm)
+    ;(form.props.onRequestSaved as (snapshot: PsfRequestResponse) => void)(refreshed)
+    page = renderRequestDetailShell()
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'OTHER-OWNER.psf' })
+    expect(psf(page).props.dirty).toBe(false)
+    expect(psf(page).props.editing).toBe(false)
+    requestDetailApi.updatePsfCreatedData.mockResolvedValueOnce({ ...refreshed, updatedAt: 'psf-save-r3' })
+    ;(psf(page).props.onEdit as () => void)()
+    page = renderRequestDetailShell()
+    ;(psf(page).props.onSave as (values: Record<string, string>) => void)(psf(page).props.values as Record<string, string>)
+    await flushRequestDetailAsyncWork()
+    expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      expectedUpdatedAt: 'requester-save-r2', psfCreatedData: { psf_setup_file_name: 'OTHER-OWNER.psf' },
+    })
+  })
+
+  it('preserves current dirty PSF edits even when a requester callback was captured before the edit', async () => {
+    let page = await load()
+    const initial = psf(page).props.request as PsfRequestResponse
+    const form = requireRenderedElement(page, e => e.type === ActiveSchemaForm)
+    const acceptSnapshot = form.props.onRequestSaved as (snapshot: PsfRequestResponse) => void
+    ;(psf(page).props.onEdit as () => void)()
+    ;(psf(page).props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'INTENDED-LOCAL.psf')
+    const refreshed = { ...initial, updatedAt: 'requester-conflict-r2', psfCreatedData: { psf_setup_file_name: 'OTHER-OWNER.psf' } }
+    acceptSnapshot(refreshed)
+    page = renderRequestDetailShell()
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'INTENDED-LOCAL.psf' })
+    expect(psf(page).props.dirty).toBe(true)
+    expect(psf(page).props.editing).toBe(true)
+    expect(psf(page).props.request).toBe(refreshed)
+    requestDetailApi.updatePsfCreatedData.mockResolvedValueOnce({ ...refreshed, updatedAt: 'psf-save-r3', psfCreatedData: { psf_setup_file_name: 'INTENDED-LOCAL.psf' } })
+    ;(psf(page).props.onSave as (values: Record<string, string>) => void)(psf(page).props.values as Record<string, string>)
+    await flushRequestDetailAsyncWork()
+    expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
+      expectedUpdatedAt: 'requester-conflict-r2', psfCreatedData: { psf_setup_file_name: 'INTENDED-LOCAL.psf' },
+    })
+  })
+
+  it('recognizes PSF edits already saved in the newest requester snapshot as clean', async () => {
+    let page = await load()
+    const initial = psf(page).props.request as PsfRequestResponse
+    ;(psf(page).props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'LATEST-SAVED.psf')
+    page = renderRequestDetailShell()
+    const form = requireRenderedElement(page, e => e.type === ActiveSchemaForm)
+    ;(form.props.onRequestSaved as (snapshot: PsfRequestResponse) => void)({
+      ...initial, updatedAt: 'refreshed-r2', psfCreatedData: { psf_setup_file_name: 'LATEST-SAVED.psf' },
+    })
+    page = renderRequestDetailShell()
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'LATEST-SAVED.psf' })
+    expect(psf(page).props.dirty).toBe(false)
+    expect(navigation.blocker?.enableBeforeUnload).toBe(false)
+  })
+
+  it('ignores requester snapshots from a previous route identity or a different request', async () => {
+    let page = await load()
+    const initial = psf(page).props.request as PsfRequestResponse
+    const acceptOldSnapshot = requireRenderedElement(page, e => e.type === ActiveSchemaForm).props.onRequestSaved as (snapshot: PsfRequestResponse) => void
+    acceptOldSnapshot({ ...initial, id: 'wrong-request' })
+    expect(psf(renderRequestDetailShell()).props.request).toBe(initial)
+    const nextRequest = { ...initial, id: 'request-2', requestNo: 'PSF-0002', psfCreatedData: { psf_setup_file_name: 'NEXT.psf' } }
+    requestDetailApi.fetchPsfRequest.mockResolvedValueOnce(nextRequest)
+    renderRequestDetailShell('request-2')
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    page = renderRequestDetailShell('request-2')
+    expect(psf(page).props.request).toBe(nextRequest)
+    acceptOldSnapshot({ ...initial, updatedAt: 'late-request-1-r2' })
+    page = renderRequestDetailShell('request-2')
+    expect(psf(page).props.request).toBe(nextRequest)
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'NEXT.psf' })
+  })
+
+  it('opens a different request in its default tab and view mode after a clean edit session', async () => {
+    let page = await load()
+    ;(psf(page).props.onEdit as () => void)()
+    ;(tab(page, 'History').props.onClick as () => void)()
+    page = renderRequestDetailShell()
+    expect(psf(page).props.editing).toBe(true)
+    const nextRequest = { ...psf(page).props.request as PsfRequestResponse, id: 'request-2', requestNo: 'PSF-0002' }
+    requestDetailApi.fetchPsfRequest.mockResolvedValueOnce(nextRequest)
+    renderRequestDetailShell('request-2')
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    page = renderRequestDetailShell('request-2')
+    expect(psf(page).props.editing).toBe(false)
+    expect(tab(page, 'PSF Created Information').props['aria-selected']).toBe(true)
+  })
+
+  it('defaults an authorized PSF editor to the PSF tab with fields initially in view mode', async () => {
+    const page = await load()
+    expect(tab(page, 'PSF Created Information').props['aria-selected']).toBe(true)
+    expect(psf(page).props.editing).toBe(false)
+    const form = requireRenderedElement(page, e => e.type === ActiveSchemaForm)
+    expect(form.props.explicitEdit).toBe(true)
+  })
+
+  it('keeps the mounted requester form and dirty PSF edits when switching tabs', async () => {
+    let page = await load()
+    ;(psf(page).props.onEdit as () => void)()
+    ;(psf(page).props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'LOCAL.psf')
+    page = renderRequestDetailShell()
+    ;(tab(page, 'History').props.onClick as () => void)()
+    page = renderRequestDetailShell()
+    expect(tab(page, 'History').props['aria-selected']).toBe(true)
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'LOCAL.psf' })
+    expect(psf(page).props.editing).toBe(true)
+    expect(findRenderedElement(page, e => e.type === ActiveSchemaForm)).not.toBeNull()
+    expect(navigation.blocker?.enableBeforeUnload).toBe(true)
+    expect(requestDetailApi.updatePsfCreatedData).not.toHaveBeenCalled()
+  })
+
+  it('cancels PSF edits back to the saved server baseline without a write', async () => {
+    let page = await load()
+    ;(psf(page).props.onEdit as () => void)()
+    ;(psf(page).props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'LOCAL.psf')
+    page = renderRequestDetailShell()
+    ;(psf(page).props.onCancel as () => void)()
+    page = renderRequestDetailShell()
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'SERVER.psf' })
+    expect(psf(page).props.editing).toBe(false)
+    expect(navigation.blocker?.enableBeforeUnload).toBe(false)
+    expect(requestDetailApi.updatePsfCreatedData).not.toHaveBeenCalled()
+  })
+
+  it('Cancel after a PSF revision conflict restores the refreshed baseline', async () => {
+    let page = await load()
+    ;(psf(page).props.onEdit as () => void)()
+    ;(psf(page).props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'LOCAL.psf')
+    requestDetailApi.updatePsfCreatedData.mockRejectedValueOnce(new ApiError('Conflict', 409, 'Conflict', undefined))
+    requestDetailApi.fetchPsfRequest.mockResolvedValueOnce({ ...buildSubmittedRequest(), psfCreatedDataVisible: true, canEditPsfCreatedData: true, psfCreatedData: { psf_setup_file_name: 'NEW-SERVER.psf' }, updatedAt: 'new-opaque-revision' })
+    ;(psf(page).props.onSave as (values: Record<string,string>) => void)({ psf_setup_file_name: 'LOCAL.psf' })
+    await flushRequestDetailAsyncWork()
+    page = renderRequestDetailShell()
+    expect(psf(page).props.editing).toBe(true)
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'LOCAL.psf' })
+    ;(psf(page).props.onCancel as () => void)()
+    page = renderRequestDetailShell()
+    expect(psf(page).props.values).toEqual({ psf_setup_file_name: 'NEW-SERVER.psf' })
+  })
+})
+
+
+describe('Private draft table presentation', () => {
+  it('shows creator-only visibility and the persisted update timestamp with a Continue link', () => {
+    requestDetailHookHarness.beginRender()
+    const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
+      referencePsfName: null, psfSetupFileName: null, probecardName: null, status: 'Draft',
+      priority: 'Normal', requester: 'Engineer', setupOwner: null, setupOwnerRole: null,
+      productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
+    const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true })
+    expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Visibility')).toBeTruthy()
+    expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Updated')).toBeTruthy()
+    const visibility = requireRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Visibility')
+    expect(visibility.props.children).toBe('Only you')
+    const updated = requireRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Updated')
+    expect(updated.props.children).toContain('11:00')
+    const link = requireRenderedElement(rendered, element => element.props.children === 'Continue')
+    expect(link.props.params).toEqual({ requestId: 'draft-uuid' })
+    expect(findRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Responsibility')).toBeNull()
   })
 })

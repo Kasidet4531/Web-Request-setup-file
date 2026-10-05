@@ -1,5 +1,7 @@
 # Production UI Integration Implementation Plan
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
 > **Historical scoped plan (2026-10-02 audit):** This records the original task scope, approvals, execution instructions and checkpoints. It is not current implementation guidance or new authorization to execute commands, change data, configure agents or deploy. Historical verification claims apply only to their recorded environment and scope. Use [Current implementation](../current-implementation.md) for the checked-in baseline.
 
 > **For agentic workers:** Use the `executing-plans` skill for approved execution, one task at a time. Subagent execution requires separate authorization and a verified non-Astra/non-shared-quota model; this plan does not authorize delegation. Checkboxes track documented task progress; only the scoped T01 documentation updates are complete in this revision.
@@ -52,7 +54,7 @@ Anonymous requests cannot gain protected API access. Request-controller identity
 
 - Existing request routes under `/api/requests`: `POST /` create, `GET /` list; `GET /:requestId`, `GET /:requestId/history`, `GET /:requestId/status-options`; `PUT /:requestId/requester-data`, `POST /:requestId/upgrade-schema`, `POST /:requestId/submit`, `PUT /:requestId/psf-created-data`, `PUT /:requestId/status`. Source: `backend/src/requests/requests.controller.ts` and DTOs in `requests.service.ts`; frontend consumer: `frontend/src/services/api.ts`.
 - List identity is `requestId`; detail identity is `id`. UUID links do not become request-number URLs. List uses server `limit`/`offset`/`total`; no browser all-record filtering. `/api/requests/summary` is proposed by T12, not existing baseline.
-- Form key is `psf-request`; status strings include exactly `Draft`, `Setup In Progress`, `Need More Information`, `Submitted`, `PSF Created`, `Completed`. Do not treat this illustrative list as a new complete status catalog; server options remain authoritative.
+- Form key is `psf-request`; Status strings are the exact configured database names documented in [the current catalog](../status-catalog-and-manual-updates.md). Runtime server catalog options remain authoritative; do not restore the old short-stage list.
 - Draft save sends `formVersion` and `requesterData`; positive integer version validation already exists. Preserve submit/upgrade DTOs from the cited service rather than inventing a new body. Detail carries `schemaSnapshot`, `formVersion`, `psfCreatedInformationSchema`, `psfCreatedDataVisible`, `canEditPsfCreatedData`, and `updatedAt`.
 - PSF write body uses `psfCreatedData` plus the **unmodified** detail `updatedAt` string as `expectedUpdatedAt`; preserve microseconds. Status body is `{status}`; actor is resolved server-side. T07/T23 must not silently add a client concurrency field without an approved additive contract.
 - `/api/me` is the existing frontend session seam (`frontend/src/services/auth-session.ts`, `services/api.ts`); the current client does **not** broadcast a generic 401 invalidation, which is the T03 defect. 403 is not logout. Login is LDAP-backed and local roles are resolved from the profile; no prototype persona authentication.
@@ -76,7 +78,7 @@ B0 plus the task cards and §9 are the durable audit handoff. Do not require una
 ### Global constraints
 
 1. Never import prototype `AppContext`, mock data, state router, client authentication, generated audit, numbering, simulated files, client export authorization or autofill algorithm.
-2. Preserve exact API identifiers: `Draft`, `Setup In Progress`, `Need More Information`; `psf-request`; list `requestId` versus detail `id`. Do not convert production DTOs into prototype models.
+2. Preserve exact configured database Status strings and API identifiers: `psf-request`; list `requestId` versus detail `id`. Do not convert production DTOs into prototype models.
 3. Preserve requester schema snapshots and explicit draft upgrade. Preserve the exact `expectedUpdatedAt` string for PSF optimistic concurrency; do not reserialize through `Date`.
 4. Backend enforcement is mandatory even if frontend routes/buttons are hidden. The audited allow-all guard placeholders are not authorization implementations.
 5. Keep the shared setup-owner queue. Do not introduce exclusive assignment or infer permissions from owner association.
@@ -94,14 +96,14 @@ All decision records must identify the approver, selected behavior, affected tes
 
 | Gate | Decision required; no assumed resolution | Blocks |
 |---|---|---|
-| D01 | Confirm role matrix: Setup Owner export access; Global History admin-only versus broader access; admin requester-data edits after submission. Existing endpoint restrictions remain unchanged meanwhile. | Permission expansion in T23/T26/T27 and D04; not T02/T04 revocation fixes |
+| D01 | History page access resolved by the product owner on 4 October 2026: every authenticated role can view Audit History; see [the confirmed requirement](../audit-history-access.md). Setup Owner export access and admin requester-data edits after submission remain separate decisions. Implement the approved History navigation/API access update together; source restrictions remain an implementation gap until changed and verified. | Permission expansion in T23/T26/T27 and D04; not T02/T04 revocation fixes |
 | D02 | Define dashboard population/labels, open and overdue terminal exclusions, due-date comparison, Bangkok business-day boundary and list/export inclusive date behavior. Confirm owner all-status default in canonical docs. | T12/T13, dashboard T24; date semantics portion of T26 |
 | D03 | Define Need More Information correction fields, actor, resubmit path and locking; PSF completion prerequisites; same-status request should reject or be a true no-op. | T07 and T23; unrelated status enforcement stays intact |
 | D04 | Old-draft remain means editable-only or also submittable; approved cross-version mapping; PSF snapshot capture point and legacy representation; section visibility/editability policy. | T20/T21/T21R/T22 as applicable; existing old-draft submit restrictions remain until approved |
 | D05 | Keep existing request-number appearance or change future display format; yearly allocation/reset semantics if required. Historical identifiers must not change. | T08 allocation design; UI never chooses numbers |
 | D06 | Deployment owner supplies actual TLS/proxy topology, trusted proxy boundary, session lifetime/restart/logout requirements, persistent-store choice and test environment. Initial-admin startup upsert behavior must be explicitly accepted or separately corrected. | T05 configuration/store integration; T27 worker-recovery design; final production gate |
 | D07 | Export revocation/retention contract: approved fail-closed artifact policy, lifetime, deletion obligations, stable dataset semantics, maximum rows/memory and threshold boundary. Current-role reauthorization is a safety requirement; exact invalidation representation is reviewed, not guessed. | T02/T04 architecture contract; T27–T29 scale/retention decisions |
-| D08 | Audit visibility/redaction and which fields/actions require old/new values; reason/comment capture, if required. Never manufacture historical field diffs. | T18/T19 richer audit presentation; T23 only if new reason/diff metadata is required |
+| D08 | Page-access portion resolved: Requester, Setup Owner and Admin can view Audit History. Detailed metadata visibility/redaction and which fields/actions require old/new values; reason/comment capture, if required. Never manufacture historical field diffs. | T18/T19 richer audit presentation; T23 only if new reason/diff metadata is required |
 | D09 | Explicit funding/scope approval for attachments, export-profile CRUD, corporate directory administration, notifications, visual form builder or arbitrary statuses. | Deferred DEF01–DEF06 tasks only |
 
 ### Gate owners, timing and MVP manifest
@@ -856,9 +858,9 @@ T02 starts after AR1's fail-closed contract approval. T03 is independent of T02'
 
 **Rollback:** hide new configuration entry and use compatible snapshot renderer; do not fall back blindly to active schema. **Risk:** HIGH. **PR size:** MEDIUM.
 
-### T23 — Close approved workflow gaps through existing transitions
+### T23 — Historical workflow-gap task; current constraints supersede stage actions
 
-**Goal / why:** Complete Need More Information/completion behavior only after product decisions, not from prototype assumptions. Covers A13.
+**Current amendment, 4 October 2026:** The previous named-stage/correction workflow below is historical. Do not invent a Need More Information state, stage action buttons, directed transition matrix or automatic Status change. Use the complete configured Status catalog and preserve explicit request lifecycle and data visibility. Covers A13 only within the current contract.
 
 **Files/functions:** `backend/src/admin/workflow_transition.service.ts`; `backend/src/requests/requests.service.ts` requester edit/submit/status paths; `frontend/src/components/RequestsWorkspace.tsx` (`WorkflowStatusActions`); tests `workflow_transition.service.spec.ts`, `requests.service.spec.ts`, `requests.audit.spec.ts`, `RequestsWorkspace.test.tsx`; extend T07's `backend/test/form-version-lifecycle.e2e-spec.ts`.
 
@@ -867,7 +869,7 @@ T02 starts after AR1's fail-closed contract approval. T03 is independent of T02'
 **Steps:**
 - [ ] Record approved state/actor/field matrix with concrete request correction/resubmit and PSF completion cases.
 - [ ] Add direct-API denied and allowed-path regressions before implementing minimal backend rules in existing endpoints.
-- [ ] Derive named action buttons solely from returned allowed targets; preserve dropdown for supported manual transitions.
+- [ ] Superseded: do not create named stage-action buttons. Status changes must never be inferred from form saves, filters or other actions; follow the current Status contract.
 - [ ] Preserve shared queue and authoritative owner association; no arbitrary status catalog or duplicate named-action endpoints.
 
 **Tests to add/update:** approved correction/resubmit; forbidden actor/field; missing required PSF data; same-status invariant; direct endpoint bypass; owner association/audit; dirty form interactions.
@@ -937,22 +939,22 @@ T25 in the graph means all five independently reviewable tasks below. Each cover
 
 **Rollback:** revert page/CSS only; retain backend last-admin guard. **Risk:** MEDIUM. **PR size:** SMALL.
 
-#### T25c — Restyle workflow transition administration
+#### T25c — Status catalog administration; transition-editor scope superseded
 
-**Goal / why:** Improve the real transition editor without replacing it with a mock status catalog.
+**Current amendment, 4 October 2026:** The real page now manages a database Status catalog. Restyle exact names/kinds, protected Draft, create/rename/delete-with-replacement and release settings; do not build a transition editor.
 
 **Files/functions:** `frontend/src/components/AdminWorkflowTransitionPage.tsx`; `frontend/src/index.css`; `frontend/src/components/AdminWorkflowTransitionPage.test.tsx`, `AdminWorkflowTransitionPage.interaction.test.tsx`.
 
 **Dependencies:** T25a; schedule after T25b for CSS ownership. **Parallel:** unrelated backend work, not T23's frontend changes or CSS writers.
 
 **Steps:**
-- [ ] Capture current matrix/role/department save behavior.
-- [ ] Restyle existing controls and error states; retain fixed status values and server transition contract.
-- [ ] Keep arbitrary status creation/colors-as-domain configuration out of scope; verify keyboard controls.
+- [ ] Capture current catalog operations, exact database names, kinds, revision checks and release settings.
+- [ ] Restyle catalog controls and error states; retain configured full strings and current server catalog validation.
+- [ ] Preserve supported Admin catalog creation without inventing stage paths or colors-as-domain configuration; verify keyboard controls.
 
-**Tests to add/update:** load/save failure, approved role/department payload, unchanged fixed statuses, accessible controls.
+**Tests to add/update:** catalog load/save failure, supported catalog payloads, exact names, revision conflicts, protected Draft and accessible controls.
 
-**Verification commands:** F, V, R. **Acceptance:** actual transition administration unchanged, no client-only rule enforcement.
+**Verification commands:** F, V, R. **Acceptance:** actual catalog administration preserved; no directed transition matrix or client-only rule enforcement.
 
 **Rollback:** revert visual page/CSS only. **Risk:** MEDIUM. **PR size:** SMALL.
 
@@ -1086,7 +1088,7 @@ Before deployment, record the named operator and independent release reviewer, a
 
 Execute and retain live evidence in this order:
 1. **Deployment/migrations:** verify actual app/worker versions and M migration completion/lock release; reconcile source/target/legacy counts with zero unexplained mismatches. Confirm no unsafe old writer/worker remains before resuming affected intake.
-2. **Identity and denial:** through real TLS/proxy, login with approved LDAP accounts, deny anonymous protected access, requester B reading/writing requester A's test request, unauthorized PSF/admin/global-history access and another user's export job. Test current-role revocation with a disposable account, not by demoting a real operator/last admin.
+2. **Identity and denial:** through real TLS/proxy, login with approved LDAP accounts, deny anonymous protected access, requester B reading/writing requester A's test request, unauthorized PSF/admin access, anonymous global-history access and another user's export job. Verify authenticated Requester, both Setup Owner departments and Admin can view global Audit History while private Draft and PSF field masking remain enforced. Test current-role revocation with a disposable account, not by demoting a real operator/last admin.
 3. **Create/read/write:** create/save/reopen the approved draft, find it via scoped list/pagination, read detail/history and perform the allowed submit/PSF/status flow included in the manifest. Verify resulting source/projection/audit and summary semantics, not merely HTTP 200; preserve cleanup evidence and approved historical retention.
 4. **Export:** verify sync XLSX and async enqueue→processing→terminal→authorized download, denial after revocation, explicit failure/recovery and expired access under approved safe fixtures. Validate actual workbook content/masking, not only a download link. Staging may use accelerated expiry; never shorten real users' retention merely to make live smoke convenient.
 5. **Session restart where applicable:** perform an approved controlled restart and verify D06's promised persistence or logout, old-ID invalidation and secure cookies. Do not casually restart production to test a promise already outside the release change; record applicability and representative staging evidence with reviewer acceptance.
@@ -1190,9 +1192,9 @@ These are not disguised prerequisites. Each requires D09 and a fresh small task 
 
 **Verification commands:** F, B/H if publisher changes, V, R. **Acceptance:** no second schema model or unsupported field controls. **Rollback:** retain JSON editor and existing persisted schemas. **Risk:** MEDIUM–HIGH. **PR size:** SMALL per editing capability, not a full builder rewrite.
 
-### DEF06 — Arbitrary status catalog
+### DEF06 — Historical deferred catalog task; configurable catalog already exists
 
-**Goal / why:** Only if product explicitly requires statuses beyond current fixed catalog; transition matrix styling does not require it.
+**Current amendment, 4 October 2026:** The fixed-catalog premise is obsolete: the inspected PostgreSQL catalog has 17 configurable entries. Do not execute this task to restore a fixed catalog or transition matrix. Any additional domain behavior needs its own approved scope; use the current catalog and kinds.
 
 **Likely files/functions:** `backend/src/admin/workflow_transition.service.ts`, `backend/src/requests/requests.service.ts`, `search-index.service.ts`, `backend/src/export/excel_export.service.ts`; `frontend/src/services/api.ts`, `RequestsWorkspace.tsx`; existing workflow/search/export tests.
 
@@ -1200,7 +1202,7 @@ These are not disguised prerequisites. Each requires D09 and a fresh small task 
 
 **Steps:** approve terminal/open/overdue/export semantics and legacy compatibility; break into additive catalog contract then consumers; implement only approved statuses without renaming historical values; never import prototype `allStatuses` as authority.
 
-**Tests:** old statuses readable, unknown target denied, approved matrix enforced, aggregate/export classification and historic audit stable.
+**Tests:** stored full Status strings readable, unknown target denied, catalog-kind aggregate/export classification and historic audit stable. No transition matrix is required.
 
 **Verification commands:** B, H, F, DB/V, R. **Acceptance:** every consumer has explicit semantics; otherwise task remains deferred. **Rollback:** disable new transitions, retain catalog/history needed to read existing records. **Risk:** HIGH. **PR size:** MEDIUM per contract/consumer slice; LARGE cross-system PR forbidden.
 

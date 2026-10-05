@@ -1,5 +1,7 @@
 # PSF Setup File — Historical Target Diagrams
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
 > **Historical design snapshot:** these diagrams describe the original target, including bcrypt, Nginx, attachments and a fixed workflow. They are not the current runtime. See [current diagrams](../diagrams.md) and [current implementation](../current-implementation.md). Original diagram bodies are preserved as design evidence.
 
 > Visual diagrams for the PSF Setup File Web Application architecture.
@@ -385,7 +387,9 @@ flowchart TB
 
 ## 2. Request Lifecycle State Machine
 
-Shows all valid status transitions, including optional statuses.
+> **Superseded Status instructions:** Old short stages, transition permissions/paths and automatic owner assignment through Status changes below must not be reimplemented. Use [the current Status catalog and action constraints](../status-catalog-and-manual-updates.md).
+
+Historical diagram: Shows all valid status transitions, including optional statuses.
 
 ```mermaid
 stateDiagram-v2

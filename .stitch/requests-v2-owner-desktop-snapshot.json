@@ -1,0 +1,650 @@
+{
+  "viewport": {
+    "deviceScaleFactor": 1,
+    "isMobile": false,
+    "hasTouch": false,
+    "isLandscape": false,
+    "width": 1280,
+    "height": 800
+  },
+  "colorScheme": "light",
+  "snapshot": {
+    "id": "309_0",
+    "role": "RootWebArea",
+    "name": "PSF Request Portal \u2014 Requests (v2 Desktop)",
+    "url": "http://127.0.0.1:4182/screens/7979127696275533627",
+    "children": [
+      {
+        "id": "309_1",
+        "role": "complementary",
+        "name": "Main Navigation",
+        "children": [
+          {
+            "id": "309_2",
+            "role": "link",
+            "name": "PSF Request Portal Home",
+            "url": "http://127.0.0.1:4182/dashboard",
+            "children": [
+              {
+                "id": "309_3",
+                "role": "StaticText",
+                "name": "PSF"
+              },
+              {
+                "id": "309_4",
+                "role": "StaticText",
+                "name": "Request Portal"
+              }
+            ]
+          },
+          {
+            "id": "309_5",
+            "role": "navigation",
+            "name": "Portal Navigation",
+            "children": [
+              {
+                "id": "309_6",
+                "role": "link",
+                "name": "Dashboard",
+                "url": "http://127.0.0.1:4182/dashboard",
+                "children": [
+                  {
+                    "id": "309_7",
+                    "role": "StaticText",
+                    "name": "Dashboard"
+                  }
+                ]
+              },
+              {
+                "id": "309_8",
+                "role": "link",
+                "name": "Requests",
+                "url": "http://127.0.0.1:4182/requests",
+                "children": [
+                  {
+                    "id": "309_9",
+                    "role": "StaticText",
+                    "name": "Requests"
+                  }
+                ]
+              },
+              {
+                "id": "309_10",
+                "role": "link",
+                "name": "My Drafts",
+                "url": "http://127.0.0.1:4182/my-drafts",
+                "children": [
+                  {
+                    "id": "309_11",
+                    "role": "StaticText",
+                    "name": "My Drafts"
+                  }
+                ]
+              },
+              {
+                "id": "309_12",
+                "role": "link",
+                "name": "Audit History",
+                "url": "http://127.0.0.1:4182/history",
+                "children": [
+                  {
+                    "id": "309_13",
+                    "role": "StaticText",
+                    "name": "Audit History"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "309_14",
+            "role": "button",
+            "name": "Switch to dark mode"
+          },
+          {
+            "id": "309_15",
+            "role": "StaticText",
+            "name": "Alex Morgan"
+          },
+          {
+            "id": "309_16",
+            "role": "StaticText",
+            "name": "Setup Owner \u00b7 MFG"
+          }
+        ]
+      },
+      {
+        "id": "309_17",
+        "role": "main",
+        "children": [
+          {
+            "id": "309_18",
+            "role": "heading",
+            "name": "Requests",
+            "level": 1
+          },
+          {
+            "id": "309_19",
+            "role": "StaticText",
+            "name": "Browse shared PSF requests. Private drafts are in My Drafts."
+          },
+          {
+            "id": "309_20",
+            "role": "link",
+            "name": "New Request",
+            "url": "http://127.0.0.1:4182/requests/new",
+            "children": [
+              {
+                "id": "309_21",
+                "role": "StaticText",
+                "name": "New Request"
+              }
+            ]
+          },
+          {
+            "id": "309_22",
+            "role": "region",
+            "name": "Work Queue Container",
+            "children": [
+              {
+                "id": "309_23",
+                "role": "heading",
+                "name": "Request records",
+                "level": 2
+              },
+              {
+                "id": "309_24",
+                "role": "StaticText",
+                "name": "All requests"
+              },
+              {
+                "id": "309_25",
+                "role": "searchbox",
+                "name": "Search request no., title, PSF or probecard"
+              },
+              {
+                "id": "309_26",
+                "role": "combobox",
+                "name": "Filter by Status",
+                "expandable": true,
+                "haspopup": "menu",
+                "value": "All statuses",
+                "children": [
+                  {
+                    "id": "309_27",
+                    "role": "option",
+                    "name": "All statuses",
+                    "selectable": true,
+                    "selected": true,
+                    "value": "All statuses"
+                  },
+                  {
+                    "id": "309_28",
+                    "role": "option",
+                    "name": "5% -- Reject (Information not complete)",
+                    "selectable": true,
+                    "value": "5% -- Reject (Information not complete)"
+                  },
+                  {
+                    "id": "309_29",
+                    "role": "option",
+                    "name": "10% -- Test Engineer Data Entry",
+                    "selectable": true,
+                    "value": "10% -- Test Engineer Data Entry"
+                  },
+                  {
+                    "id": "309_30",
+                    "role": "option",
+                    "name": "20% -- PSF File Creating",
+                    "selectable": true,
+                    "value": "20% -- PSF File Creating"
+                  },
+                  {
+                    "id": "309_31",
+                    "role": "option",
+                    "name": "30% -- Compare Old and New layout",
+                    "selectable": true,
+                    "value": "30% -- Compare Old and New layout"
+                  },
+                  {
+                    "id": "309_32",
+                    "role": "option",
+                    "name": "40% -- Feedback Requester(Layout mismatch)",
+                    "selectable": true,
+                    "value": "40% -- Feedback Requester(Layout mismatch)"
+                  },
+                  {
+                    "id": "309_33",
+                    "role": "option",
+                    "name": "80% -- Wait for create DCC",
+                    "selectable": true,
+                    "value": "80% -- Wait for create DCC"
+                  },
+                  {
+                    "id": "309_34",
+                    "role": "option",
+                    "name": "81% -- Edit Template Map (Bin62)",
+                    "selectable": true,
+                    "value": "81% -- Edit Template Map (Bin62)"
+                  },
+                  {
+                    "id": "309_35",
+                    "role": "option",
+                    "name": "82% -- Wait for sent Template Map",
+                    "selectable": true,
+                    "value": "82% -- Wait for sent Template Map"
+                  },
+                  {
+                    "id": "309_36",
+                    "role": "option",
+                    "name": "83% -- Complete Excel probe pattern",
+                    "selectable": true,
+                    "value": "83% -- Complete Excel probe pattern"
+                  },
+                  {
+                    "id": "309_37",
+                    "role": "option",
+                    "name": "85 % -- Reject check list",
+                    "selectable": true,
+                    "value": "85 % -- Reject check list"
+                  },
+                  {
+                    "id": "309_38",
+                    "role": "option",
+                    "name": "90% -- Wait for buyoff check list",
+                    "selectable": true,
+                    "value": "90% -- Wait for buyoff check list"
+                  },
+                  {
+                    "id": "309_39",
+                    "role": "option",
+                    "name": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+                    "selectable": true,
+                    "value": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)"
+                  },
+                  {
+                    "id": "309_40",
+                    "role": "option",
+                    "name": "95% -- Reject (Wrong site location and wafer map)",
+                    "selectable": true,
+                    "value": "95% -- Reject (Wrong site location and wafer map)"
+                  },
+                  {
+                    "id": "309_41",
+                    "role": "option",
+                    "name": "99% -- Wait requestor Buyoff site location and wafer map",
+                    "selectable": true,
+                    "value": "99% -- Wait requestor Buyoff site location and wafer map"
+                  },
+                  {
+                    "id": "309_42",
+                    "role": "option",
+                    "name": "100% -- Completed",
+                    "selectable": true,
+                    "value": "100% -- Completed"
+                  },
+                  {
+                    "id": "309_43",
+                    "role": "option",
+                    "name": "0% -- Rejected (Cancel Request)",
+                    "selectable": true,
+                    "value": "0% -- Rejected (Cancel Request)"
+                  }
+                ]
+              },
+              {
+                "id": "309_44",
+                "role": "textbox",
+                "name": "Product type"
+              },
+              {
+                "id": "309_45",
+                "role": "button",
+                "name": "Clear active filters"
+              },
+              {
+                "id": "309_46",
+                "role": "StaticText",
+                "name": "REQUEST"
+              },
+              {
+                "id": "309_47",
+                "role": "StaticText",
+                "name": "STATUS"
+              },
+              {
+                "id": "309_48",
+                "role": "StaticText",
+                "name": "SCHEDULE"
+              },
+              {
+                "id": "309_49",
+                "role": "StaticText",
+                "name": "RESPONSIBILITY"
+              },
+              {
+                "id": "309_50",
+                "role": "link",
+                "name": "S32K3 probe layout update",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0042",
+                "children": [
+                  {
+                    "id": "309_51",
+                    "role": "StaticText",
+                    "name": "S32K3 probe layout update"
+                  }
+                ]
+              },
+              {
+                "id": "309_52",
+                "role": "StaticText",
+                "name": "PSF-2026-0042"
+              },
+              {
+                "id": "309_53",
+                "role": "StaticText",
+                "name": "New Product"
+              },
+              {
+                "id": "309_54",
+                "role": "button",
+                "name": "View full status: 20% -- PSF File Creating",
+                "expandable": true
+              },
+              {
+                "id": "309_55",
+                "role": "StaticText",
+                "name": "01 Oct 2026"
+              },
+              {
+                "id": "309_56",
+                "role": "StaticText",
+                "name": "OVERDUE \u00b7 HIGH"
+              },
+              {
+                "id": "309_57",
+                "role": "StaticText",
+                "name": "Requester"
+              },
+              {
+                "id": "309_58",
+                "role": "StaticText",
+                "name": " Alex Morgan"
+              },
+              {
+                "id": "309_59",
+                "role": "StaticText",
+                "name": "Owner"
+              },
+              {
+                "id": "309_60",
+                "role": "StaticText",
+                "name": " Mei Tan / MFG"
+              },
+              {
+                "id": "309_61",
+                "role": "link",
+                "name": "ST Fab template map review",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0039",
+                "children": [
+                  {
+                    "id": "309_62",
+                    "role": "StaticText",
+                    "name": "ST Fab template map review"
+                  }
+                ]
+              },
+              {
+                "id": "309_63",
+                "role": "StaticText",
+                "name": "PSF-2026-0039"
+              },
+              {
+                "id": "309_64",
+                "role": "StaticText",
+                "name": "Transfer Product"
+              },
+              {
+                "id": "309_65",
+                "role": "button",
+                "name": "View full status: 93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+                "expandable": true
+              },
+              {
+                "id": "309_66",
+                "role": "StaticText",
+                "name": "06 Oct 2026"
+              },
+              {
+                "id": "309_67",
+                "role": "StaticText",
+                "name": "NORMAL"
+              },
+              {
+                "id": "309_68",
+                "role": "StaticText",
+                "name": "Requester"
+              },
+              {
+                "id": "309_69",
+                "role": "StaticText",
+                "name": " Priya Rao"
+              },
+              {
+                "id": "309_70",
+                "role": "StaticText",
+                "name": "Owner"
+              },
+              {
+                "id": "309_71",
+                "role": "StaticText",
+                "name": " Rowan Miller / GNTC"
+              },
+              {
+                "id": "309_72",
+                "role": "link",
+                "name": "Wafer map site verification",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0035",
+                "children": [
+                  {
+                    "id": "309_73",
+                    "role": "StaticText",
+                    "name": "Wafer map site verification"
+                  }
+                ]
+              },
+              {
+                "id": "309_74",
+                "role": "StaticText",
+                "name": "PSF-2026-0035"
+              },
+              {
+                "id": "309_75",
+                "role": "StaticText",
+                "name": "Existing Product"
+              },
+              {
+                "id": "309_76",
+                "role": "button",
+                "name": "View full status: 99% -- Wait requestor Buyoff site location and wafer map",
+                "expandable": true
+              },
+              {
+                "id": "309_77",
+                "role": "StaticText",
+                "name": "08 Oct 2026"
+              },
+              {
+                "id": "309_78",
+                "role": "StaticText",
+                "name": "NORMAL"
+              },
+              {
+                "id": "309_79",
+                "role": "StaticText",
+                "name": "Requester"
+              },
+              {
+                "id": "309_80",
+                "role": "StaticText",
+                "name": " Alex Morgan"
+              },
+              {
+                "id": "309_81",
+                "role": "StaticText",
+                "name": "Owner"
+              },
+              {
+                "id": "309_82",
+                "role": "StaticText",
+                "name": " Mei Tan / MFG"
+              },
+              {
+                "id": "309_83",
+                "role": "link",
+                "name": "Probe pattern release",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0028",
+                "children": [
+                  {
+                    "id": "309_84",
+                    "role": "StaticText",
+                    "name": "Probe pattern release"
+                  }
+                ]
+              },
+              {
+                "id": "309_85",
+                "role": "StaticText",
+                "name": "PSF-2026-0028"
+              },
+              {
+                "id": "309_86",
+                "role": "StaticText",
+                "name": "New Product"
+              },
+              {
+                "id": "309_87",
+                "role": "button",
+                "name": "View full status: 100% -- Completed",
+                "expandable": true
+              },
+              {
+                "id": "309_88",
+                "role": "StaticText",
+                "name": "02 Oct 2026"
+              },
+              {
+                "id": "309_89",
+                "role": "StaticText",
+                "name": "NORMAL"
+              },
+              {
+                "id": "309_90",
+                "role": "StaticText",
+                "name": "Requester"
+              },
+              {
+                "id": "309_91",
+                "role": "StaticText",
+                "name": " Jordan Lee"
+              },
+              {
+                "id": "309_92",
+                "role": "StaticText",
+                "name": "Owner"
+              },
+              {
+                "id": "309_93",
+                "role": "StaticText",
+                "name": " Rowan Miller / GNTC"
+              },
+              {
+                "id": "309_94",
+                "role": "link",
+                "name": "Cancelled layout request",
+                "url": "http://127.0.0.1:4182/requests/PSF-2026-0019",
+                "children": [
+                  {
+                    "id": "309_95",
+                    "role": "StaticText",
+                    "name": "Cancelled layout request"
+                  }
+                ]
+              },
+              {
+                "id": "309_96",
+                "role": "StaticText",
+                "name": "PSF-2026-0019"
+              },
+              {
+                "id": "309_97",
+                "role": "StaticText",
+                "name": "Existing Product"
+              },
+              {
+                "id": "309_98",
+                "role": "button",
+                "name": "View full status: 0% -- Rejected (Cancel Request)",
+                "expandable": true
+              },
+              {
+                "id": "309_99",
+                "role": "StaticText",
+                "name": "09 Oct 2026"
+              },
+              {
+                "id": "309_100",
+                "role": "StaticText",
+                "name": "NORMAL"
+              },
+              {
+                "id": "309_101",
+                "role": "StaticText",
+                "name": "Requester"
+              },
+              {
+                "id": "309_102",
+                "role": "StaticText",
+                "name": " Priya Rao"
+              },
+              {
+                "id": "309_103",
+                "role": "StaticText",
+                "name": "Owner"
+              },
+              {
+                "id": "309_104",
+                "role": "StaticText",
+                "name": " Mei Tan / MFG"
+              },
+              {
+                "id": "309_105",
+                "role": "StaticText",
+                "name": "1\u20135 of 5 sample requests"
+              },
+              {
+                "id": "309_106",
+                "role": "button",
+                "name": "Previous page",
+                "disableable": true,
+                "disabled": true
+              },
+              {
+                "id": "309_107",
+                "role": "StaticText",
+                "name": "Page 1 of 1"
+              },
+              {
+                "id": "309_108",
+                "role": "button",
+                "name": "Next page",
+                "disableable": true,
+                "disabled": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

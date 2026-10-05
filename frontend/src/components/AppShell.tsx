@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
-import { RequestBreadcrumbContext, requestDocumentTitle, type RequestBreadcrumb } from './requestBreadcrumb'
+import { ArrowLeft, ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
+import { RequestBreadcrumbContext, requestDocumentTitle, requestParent, type RequestBreadcrumb } from './requestBreadcrumb'
 import { NavSidebar } from './NavSidebar'
 import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
-import { contextualAdminSections, isStandaloneAuthenticationPath, resolveActivePath, type UserRole } from './navigationState'
+import { isStandaloneAuthenticationPath, type UserRole } from './navigationState'
+import { persistSidebarCollapsed, readSidebarCollapsed, useTheme } from './theme'
 import { subscribeAuthSessionChanged } from '../services/auth-session'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
@@ -20,7 +21,7 @@ type AuthState =
   | { status: 'anonymous' }
   | { status: 'error'; error: string }
 
-type Crumb = { label: string; to?: string; search?: { formKey: FormVersionBreadcrumb['formKey'] } }
+type Crumb = { label: string; to?: string; backLabel?: string; search?: { formKey: FormVersionBreadcrumb['formKey'] } }
 
 /**
  * Request crumbs use route paths only; form versions use the version already
@@ -38,21 +39,25 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
   }
 
   if (segments[0] === 'requests') {
-    if (!segments[1]) return [{ label: 'All PSF Requests' }]
-    const crumbs: Crumb[] = [{ label: 'PSF Requests', to: '/requests' }]
-    if (segments[1] === 'new') crumbs.push({ label: 'Create New Request' })
+    if (!segments[1]) return [{ label: 'Requests' }]
+    const parent = requestParent(pathname, request)
+    const crumbs: Crumb[] = [{ label: parent.to === '/my-drafts' ? 'My Drafts' : 'Requests', to: parent.to === '/my-drafts' ? '/my-drafts' : '/requests' }]
+    if (segments[1] === 'new') crumbs.push({ label: 'New Request' })
     else {
-      crumbs.push({ label: request?.requestId === segments[1] ? request.requestNo : 'Request detail' })
-      if (segments[2] === 'history') crumbs.push({ label: 'Audit History' })
+      const isHistory = segments[2] === 'history'
+      if (isHistory && request?.isDraft && request.requestId === segments[1]) crumbs[0] = { label: 'My Drafts', to: '/my-drafts' }
+      crumbs.push({ label: request?.requestId === segments[1] ? request.requestNo : 'Request detail', ...(isHistory ? { to: parent.to, backLabel: 'request' } : {}) })
+      if (isHistory) crumbs.push({ label: 'Request History' })
     }
     return crumbs
   }
 
-  if (segments[0] === 'history') return [{ label: 'Global Audit History' }]
-  if (segments[0] === 'my-drafts') return [{ label: 'My drafts' }]
+  if (segments[0] === 'history') return [{ label: 'Audit History' }]
+  if (segments[0] === 'my-drafts') return [{ label: 'My Drafts' }]
 
   if (segments[0] === 'admin') {
-    const crumbs: Crumb[] = [{ label: 'Admin Console' }]
+    if (segments[1] === 'export-profile') return [{ label: 'Export to Excel' }]
+    const crumbs: Crumb[] = [{ label: 'Administration', ...(segments[1] ? { to: '/admin' } : {}) }]
     const labels: Record<string, string> = {
       users: 'Users & Roles',
       'form-config': 'Form Management',
@@ -64,7 +69,7 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
 
     if (segments[1] === 'form-config' && segments[2]) {
       const explicitFormKey = segments.length > 3 ? segments[2] : null
-      const formKey = explicitFormKey === 'psf-created-information' ? explicitFormKey : formVersion?.formKey ?? 'psf-request'
+      const formKey = explicitFormKey === 'psf-created-information' ? explicitFormKey : 'psf-request'
       const version = explicitFormKey ? segments[3] : segments[2]
       crumbs.push({
         label: labels['form-config'],
@@ -134,6 +139,7 @@ function UserMenu({ user, onLoggedOut }: { user: AuthenticatedUserProfile; onLog
         aria-label={`Account: ${user.displayName}`}
         aria-expanded={isOpen}
         className="user-menu__trigger"
+        title={`${user.displayName} · ${roleLabel(user)}`}
         onClick={() => setIsOpen((open) => !open)}
         type="button"
       >
@@ -162,7 +168,7 @@ function UserMenu({ user, onLoggedOut }: { user: AuthenticatedUserProfile; onLog
             }}
             type="button"
           >
-            <LogOut size={13} /> Log out
+            <LogOut size={13} /> Sign out
           </button>
         </div>
       ) : null}
@@ -178,20 +184,26 @@ export function AppShell() {
   const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0)
   const [formVersionBreadcrumb, setFormVersionBreadcrumb] = useState<FormVersionBreadcrumb | null>(null)
   const [requestBreadcrumb, setRequestBreadcrumb] = useState<RequestBreadcrumb | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === 'undefined' || !window.matchMedia('(max-width: 899px)').matches,
-  )
+  const [desktopCollapsed, setDesktopCollapsed] = useState(readSidebarCollapsed)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [mobileNavigation, setMobileNavigation] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches)
   const navigationRef = useRef<HTMLElement>(null)
   const navigationTriggerRef = useRef<HTMLButtonElement>(null)
-  const mobileDrawerOpen = mobileNavigation && sidebarOpen
-  const [darkMode, setDarkMode] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
-  )
+  const sidebarOpen = mobileNavigation ? mobileOpen : !desktopCollapsed
+  const mobileDrawerOpen = mobileNavigation && mobileOpen
+  const { theme, toggleTheme } = useTheme()
+  const toggleNavigation = () => {
+    if (mobileNavigation) setMobileOpen((open) => !open)
+    else {
+      const collapsed = !desktopCollapsed
+      setDesktopCollapsed(collapsed)
+      persistSidebarCollapsed(collapsed)
+    }
+  }
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 899px)')
-    const handleChange = () => { setMobileNavigation(media.matches); setSidebarOpen(!media.matches) }
+    const handleChange = () => { setMobileNavigation(media.matches); setMobileOpen(false) }
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
   }, [])
@@ -206,7 +218,7 @@ export function AppShell() {
     const trigger = navigationTriggerRef.current
     navigation?.querySelector<HTMLButtonElement>('.sidebar__close')?.focus()
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); setSidebarOpen(false) }
+      if (event.key === 'Escape') { event.preventDefault(); setMobileOpen(false) }
       if (event.key === 'Tab') {
         const controls = navigation?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')
         const first = controls?.[0]
@@ -268,16 +280,9 @@ export function AppShell() {
     await navigate({ to: '/login' })
   }
 
-  const toggleDarkMode = () => {
-    setDarkMode((current) => {
-      const next = !current
-      document.documentElement.classList.toggle('dark', next)
-      return next
-    })
-  }
-
   const role = authState.status === 'authenticated' ? authState.user.role : null
   const breadcrumbs = breadcrumbsForPath(pathname, formVersionBreadcrumb, requestBreadcrumb)
+  const parent = breadcrumbs.findLast((crumb) => crumb.to)
   const canCreateRequest = authState.status === 'authenticated'
   const isFormVersion = pathname.startsWith('/admin/form-config/')
 
@@ -314,9 +319,15 @@ export function AppShell() {
   return (
     <div className="app-layout">
       <a className="skip-link" href="#main-content">Skip to content</a>
-      <NavSidebar collapsed={!sidebarOpen} role={role} mobile={mobileNavigation} navigationRef={navigationRef}
-        onClose={() => setSidebarOpen(false)} onNavigate={() => { if (mobileNavigation) setSidebarOpen(false) }} />
-      {mobileDrawerOpen ? <button className="navigation-backdrop" tabIndex={-1} aria-label="Close navigation backdrop" type="button" onClick={() => setSidebarOpen(false)} /> : null}
+      <NavSidebar collapsed={!sidebarOpen} role={role} request={requestBreadcrumb} mobile={mobileNavigation} navigationRef={navigationRef}
+        onClose={() => setMobileOpen(false)} onNavigate={() => { if (mobileNavigation) setMobileOpen(false) }}
+        footer={<>
+          <button aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className="sidebar__theme" onClick={toggleTheme} type="button">
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}<span className="sidebar__footer-label">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+          </button>
+          <UserMenu onLoggedOut={() => void handleLogout()} user={authState.user} />
+        </>} />
+      {mobileDrawerOpen ? <button className="navigation-backdrop" tabIndex={-1} aria-label="Close navigation backdrop" type="button" onClick={() => setMobileOpen(false)} /> : null}
 
       <div className="app-layout__body" inert={mobileDrawerOpen || undefined}>
         <header className={isFormVersion ? 'app-header app-header--form-version' : 'app-header'}>
@@ -325,61 +336,45 @@ export function AppShell() {
               ref={navigationTriggerRef}
               aria-controls="primary-navigation"
               aria-expanded={sidebarOpen}
-              aria-label={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
+              aria-label={mobileNavigation ? sidebarOpen ? 'Hide navigation' : 'Show navigation' : sidebarOpen ? 'Collapse navigation' : 'Expand navigation'}
               className="icon-button"
-              onClick={() => setSidebarOpen((open) => !open)}
+              onClick={toggleNavigation}
               type="button"
             >
-              {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+              {mobileDrawerOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
 
+            {parent?.to ? <Link className="btn-ghost header-back" to={parent.to} search={parent.search}><ArrowLeft size={15} /><span>Back to {parent.backLabel ?? parent.label}</span></Link> : null}
             <nav aria-label="Breadcrumbs" className="breadcrumbs">
+              <ol>
               {breadcrumbs.map((crumb, index) => (
-                <span className="breadcrumbs" key={`${crumb.label}-${index}`}>
-                  {index > 0 ? <ChevronRight className="breadcrumbs__sep" size={13} /> : null}
+                <li key={`${crumb.label}-${index}`}>
+                  {index > 0 ? <ChevronRight aria-hidden="true" className="breadcrumbs__sep" size={13} /> : null}
                   {crumb.to ? (
                     <Link className="breadcrumbs__link" search={crumb.search} to={crumb.to}>
                       {crumb.label}
                     </Link>
                   ) : (
-                    <span className="breadcrumbs__current">{crumb.label}</span>
+                    <span className="breadcrumbs__current" aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{crumb.label}</span>
                   )}
-                </span>
+                </li>
               ))}
+              </ol>
             </nav>
           </div>
 
           <div className="header-actions">
-            {canCreateRequest && pathname !== '/requests/new' ? (
+            {canCreateRequest && !['/requests/new', '/dashboard', '/requests', '/my-drafts'].includes(pathname) ? (
               <Link className={pathname.startsWith('/admin') ? 'btn-secondary header-new-request' : 'btn-primary header-new-request'} aria-label="New Request" to="/requests/new">
                 <Plus size={14} /><span>New Request</span>
               </Link>
             ) : null}
 
-            <button
-              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="icon-button"
-              onClick={toggleDarkMode}
-              type="button"
-            >
-              {darkMode ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-
-            {authState.status === 'authenticated' ? (
-              <UserMenu onLoggedOut={() => void handleLogout()} user={authState.user} />
-            ) : null}
           </div>
         </header>
 
         <main className="app-main" id="main-content" tabIndex={-1}>
           <div className="app-main__inner">
-            {role === 'admin' && pathname.startsWith('/admin') ? <nav aria-label="Administration tools" className="context-navigation">
-              <Link className={pathname === '/admin' ? 'context-navigation__home is-active' : 'context-navigation__home'} to="/admin" aria-current={pathname === '/admin' ? 'page' : undefined}>Administration</Link>
-              {contextualAdminSections(role).map((section) => <div className="context-navigation__group" key={section.label}>
-                <span>{section.label}</span>
-                <div>{section.items.map((item) => <Link key={item.to} to={item.to} aria-current={resolveActivePath(pathname, contextualAdminSections(role)) === item.to ? 'page' : undefined}>{item.label}</Link>)}</div>
-              </div>)}
-            </nav> : null}
             <FormVersionBreadcrumbContext.Provider value={setFormVersionBreadcrumb}>
               <RequestBreadcrumbContext.Provider value={setRequestBreadcrumb}><Outlet /></RequestBreadcrumbContext.Provider>
             </FormVersionBreadcrumbContext.Provider>

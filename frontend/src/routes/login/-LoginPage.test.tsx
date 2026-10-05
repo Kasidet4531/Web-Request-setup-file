@@ -7,6 +7,9 @@ vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
 afterEach(() => vi.unstubAllEnvs())
 
 describe('local login visibility', () => {
+  it('provides an accessible theme control on company sign-in', () => {
+    expect(renderToStaticMarkup(<LoginPage />)).toContain('aria-label="Switch to dark mode"')
+  })
   it('offers the four local roles only when explicitly enabled in development', () => {
     vi.stubEnv('DEV', true)
     vi.stubEnv('VITE_DEV_AUTH_ENABLED', 'true')

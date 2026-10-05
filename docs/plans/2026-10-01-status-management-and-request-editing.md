@@ -1,5 +1,7 @@
 # Status Management and Request Editing — Scope and Design Plan
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
 > **Historical scoped plan (2026-10-02 audit):** This records the original task scope, approvals, execution instructions and checkpoints. It is not current implementation guidance or new authorization to execute commands, change data, configure agents or deploy. Historical verification claims apply only to their recorded environment and scope. Use [Current implementation](../current-implementation.md) for the checked-in baseline.
 
 ## Current Integration Checkpoint — 2026-10-02

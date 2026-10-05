@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>PSF Request Portal — Mobile Dashboard</title>
+<!-- Tailwind CSS v3 with forms & container queries -->
+
+<!-- Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style data-purpose="theme-variables">
+  :root, [data-theme="light"] {
+    --bg-canvas: #F4F7FA;
+    --bg-surface: #FFFFFF;
+    --bg-surface-subtle: #F8FAFC;
+    --bg-header: #FFFFFF;
+    --border-color: #DCE5EB;
+    --border-subtle: #EDF2F7;
+    --text-primary: #173248;
+    --text-secondary: #526575;
+    --text-muted: #64748B;
+    --color-primary: #006F95;
+    --color-primary-hover: #005877;
+    --color-primary-text: #FFFFFF;
+    --wash-blue: #E8F6FC;
+    --wash-blue-border: #006F95;
+    --wash-blue-text: #006F95;
+    --wash-orange: #FFF3DA;
+    --wash-orange-border: #FCA600;
+    --wash-orange-text: #8A4700;
+    --wash-green: #EDF8E5;
+    --wash-green-border: #69CA00;
+    --wash-green-text: #28651D;
+    --wash-red: #FFF0F1;
+    --wash-red-border: rgba(180, 35, 50, 0.3);
+    --wash-red-text: #B42332;
+    --input-bg: #FFFFFF;
+    --badge-neutral-bg: #F1F5F9;
+    --badge-neutral-border: #CBD5E1;
+    --badge-neutral-text: #475569;
+    --link-accent: #006F95;
+  }
+
+  [data-theme="dark"] {
+    --bg-canvas: #101B24;
+    --bg-surface: #1A2C39;
+    --bg-surface-subtle: #14232F;
+    --bg-header: #14232F;
+    --border-color: #344A59;
+    --border-subtle: #223746;
+    --text-primary: #EDF4F8;
+    --text-secondary: #B3C4D0;
+    --text-muted: #839BAE;
+    --color-primary: #00A9E0;
+    --color-primary-hover: #33BBE7;
+    --color-primary-text: #101B24;
+    --wash-blue: rgba(0, 169, 224, 0.15);
+    --wash-blue-border: #00A9E0;
+    --wash-blue-text: #55C8EF;
+    --wash-orange: rgba(252, 166, 0, 0.16);
+    --wash-orange-border: #FCA600;
+    --wash-orange-text: #FFBE3B;
+    --wash-green: rgba(105, 202, 0, 0.16);
+    --wash-green-border: #69CA00;
+    --wash-green-text: #7FE512;
+    --wash-red: rgba(220, 38, 38, 0.18);
+    --wash-red-border: rgba(239, 68, 68, 0.5);
+    --wash-red-text: #FF6B7A;
+    --input-bg: #14232F;
+    --badge-neutral-bg: #223746;
+    --badge-neutral-border: #3D586B;
+    --badge-neutral-text: #B3C4D0;
+    --link-accent: #55C8EF;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Off-canvas mobile navigation transition */
+  #mobile-nav-drawer {
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  #mobile-nav-drawer.open {
+    transform: translateX(0);
+  }
+  #mobile-nav-backdrop {
+    transition: opacity 0.25s ease-out;
+  }
+  #mobile-nav-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+</style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}[type='text'],input:where(:not([type])),[type='email'],[type='url'],[type='password'],[type='number'],[type='date'],[type='datetime-local'],[type='month'],[type='search'],[type='tel'],[type='time'],[type='week'],[multiple],textarea,select{-webkit-appearance:none;appearance:none;background-color:#fff;border-color:#6b7280;border-width:1px;border-radius:0px;padding-top:0.5rem;padding-right:0.75rem;padding-bottom:0.5rem;padding-left:0.75rem;font-size:1rem;line-height:1.5rem;--tw-shadow:0 0 #0000;}[type='text']:focus, input:where(:not([type])):focus, [type='email']:focus, [type='url']:focus, [type='password']:focus, [type='number']:focus, [type='date']:focus, [type='datetime-local']:focus, [type='month']:focus, [type='search']:focus, [type='tel']:focus, [type='time']:focus, [type='week']:focus, [multiple]:focus, textarea:focus, select:focus{outline:2px solid transparent;outline-offset:2px;--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);border-color:#2563eb}input::placeholder,textarea::placeholder{color:#6b7280;opacity:1}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-date-and-time-value{min-height:1.5em;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit,::-webkit-datetime-edit-year-field,::-webkit-datetime-edit-month-field,::-webkit-datetime-edit-day-field,::-webkit-datetime-edit-hour-field,::-webkit-datetime-edit-minute-field,::-webkit-datetime-edit-second-field,::-webkit-datetime-edit-millisecond-field,::-webkit-datetime-edit-meridiem-field{padding-top:0;padding-bottom:0}select{background-image:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");background-position:right 0.5rem center;background-repeat:no-repeat;background-size:1.5em 1.5em;padding-right:2.5rem;print-color-adjust:exact}[multiple],[size]:where(select:not([size="1"])){background-image:initial;background-position:initial;background-repeat:unset;background-size:initial;padding-right:0.75rem;print-color-adjust:unset}[type='checkbox'],[type='radio']{-webkit-appearance:none;appearance:none;padding:0;print-color-adjust:exact;display:inline-block;vertical-align:middle;background-origin:border-box;-webkit-user-select:none;user-select:none;flex-shrink:0;height:1rem;width:1rem;color:#2563eb;background-color:#fff;border-color:#6b7280;border-width:1px;--tw-shadow:0 0 #0000}[type='checkbox']{border-radius:0px}[type='radio']{border-radius:100%}[type='checkbox']:focus,[type='radio']:focus{outline:2px solid transparent;outline-offset:2px;--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:2px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}[type='checkbox']:checked,[type='radio']:checked{border-color:transparent;background-color:currentColor;background-size:100% 100%;background-position:center;background-repeat:no-repeat}[type='checkbox']:checked{background-image:url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");}@media (forced-colors: active) {[type='checkbox']:checked{-webkit-appearance:auto;appearance:auto}}[type='radio']:checked{background-image:url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e");}@media (forced-colors: active) {[type='radio']:checked{-webkit-appearance:auto;appearance:auto}}[type='checkbox']:checked:hover,[type='checkbox']:checked:focus,[type='radio']:checked:hover,[type='radio']:checked:focus{border-color:transparent;background-color:currentColor}[type='checkbox']:indeterminate{background-image:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3e%3cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3e%3c/svg%3e");border-color:transparent;background-color:currentColor;background-size:100% 100%;background-position:center;background-repeat:no-repeat;}@media (forced-colors: active) {[type='checkbox']:indeterminate{-webkit-appearance:auto;appearance:auto}}[type='checkbox']:indeterminate:hover,[type='checkbox']:indeterminate:focus{border-color:transparent;background-color:currentColor}[type='file']{background:unset;border-color:inherit;border-width:0;border-radius:0;padding:0;font-size:unset;line-height:inherit}[type='file']:focus{outline:1px solid ButtonText;outline:1px auto -webkit-focus-ring-color}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.inset-y-0{top:0px;bottom:0px}.bottom-0{bottom:0px}.bottom-1{bottom:0.25rem}.left-0{left:0px}.top-0{top:0px}.top-1{top:0.25rem}.z-30{z-index:30}.z-40{z-index:40}.z-50{z-index:50}.-ml-2{margin-left:-0.5rem}.-mr-1{margin-right:-0.25rem}.mb-1{margin-bottom:0.25rem}.mr-1{margin-right:0.25rem}.mt-0\.5{margin-top:0.125rem}.mt-1{margin-top:0.25rem}.block{display:block}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}.hidden{display:none}.h-10{height:2.5rem}.h-11{height:2.75rem}.h-2\.5{height:0.625rem}.h-3{height:0.75rem}.h-3\.5{height:0.875rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-6{height:1.5rem}.h-7{height:1.75rem}.h-8{height:2rem}.h-9{height:2.25rem}.min-h-screen{min-height:100vh}.w-1{width:0.25rem}.w-10{width:2.5rem}.w-2\.5{width:0.625rem}.w-3{width:0.75rem}.w-3\.5{width:0.875rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-7{width:1.75rem}.w-8{width:2rem}.w-\[290px\]{width:290px}.w-full{width:100%}.min-w-0{min-width:0px}.max-w-\[390px\]{max-width:390px}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.-translate-x-full{--tw-translate-x:-100%;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-not-allowed{cursor:not-allowed}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;user-select:none}.list-none{list-style-type:none}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-0\.5{gap:0.125rem}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-2\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.625rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.625rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.break-words{overflow-wrap:break-word}.rounded{border-radius:0.25rem}.rounded-\[10px\]{border-radius:10px}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.rounded-r{border-top-right-radius:0.25rem;border-bottom-right-radius:0.25rem}.border{border-width:1px}.border-2{border-width:2px}.border-x{border-left-width:1px;border-right-width:1px}.border-b{border-bottom-width:1px}.border-l-4{border-left-width:4px}.border-t{border-top-width:1px}.bg-\[\#00A9E0\]{--tw-bg-opacity:1;background-color:rgb(0 169 224 / var(--tw-bg-opacity, 1))}.bg-black\/60{background-color:rgb(0 0 0 / 0.6)}.bg-transparent{background-color:transparent}.stroke-\[2\.5\]{stroke-width:2.5}.stroke-\[2\]{stroke-width:2}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-3\.5{padding:0.875rem}.p-4{padding:1rem}.px-1{padding-left:0.25rem;padding-right:0.25rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-3\.5{padding-left:0.875rem;padding-right:0.875rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-4{padding-top:1rem;padding-bottom:1rem}.pb-6{padding-bottom:1.5rem}.pl-3{padding-left:0.75rem}.pl-9{padding-left:2.25rem}.pr-3{padding-right:0.75rem}.pt-1{padding-top:0.25rem}.pt-2{padding-top:0.5rem}.text-left{text-align:left}.text-center{text-align:center}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[12px\]{font-size:12px}.text-\[13px\]{font-size:13px}.text-\[14px\]{font-size:14px}.text-\[15px\]{font-size:15px}.text-\[20px\]{font-size:20px}.text-\[24px\]{font-size:24px}.text-\[9px\]{font-size:9px}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.leading-none{line-height:1}.leading-snug{line-height:1.375}.leading-tight{line-height:1.25}.tracking-tight{letter-spacing:-0.025em}.tracking-wider{letter-spacing:0.05em}.text-\[\#101B24\]{--tw-text-opacity:1;color:rgb(16 27 36 / var(--tw-text-opacity, 1))}.opacity-0{opacity:0}.opacity-50{opacity:0.5}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-shadow{transition-property:box-shadow;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}.hover\:opacity-80:hover{opacity:0.8}.focus\:border-transparent:focus{border-color:transparent}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-\[\#00A9E0\]:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(0 169 224 / var(--tw-ring-opacity, 1))}.focus-visible\:ring-1:focus-visible{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus-visible\:ring-2:focus-visible{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus-visible\:ring-\[\#00A9E0\]:focus-visible{--tw-ring-opacity:1;--tw-ring-color:rgb(0 169 224 / var(--tw-ring-opacity, 1))}.focus-visible\:ring-offset-2:focus-visible{--tw-ring-offset-width:2px}.active\:scale-\[0\.99\]:active{--tw-scale-x:0.99;--tw-scale-y:0.99;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.group[open] .group-open\:rotate-180{--tw-rotate:180deg;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}</style><style data-stitch-frozen="true">:root, [data-theme="light"] { --bg-canvas: #F4F7FA; --bg-surface: #FFFFFF; --bg-surface-subtle: #F8FAFC; --bg-header: #FFFFFF; --border-color: #DCE5EB; --border-subtle: #EDF2F7; --text-primary: #173248; --text-secondary: #526575; --text-muted: #64748B; --color-primary: #006F95; --color-primary-hover: #005877; --color-primary-text: #FFFFFF; --wash-blue: #E8F6FC; --wash-blue-border: #006F95; --wash-blue-text: #006F95; --wash-orange: #FFF3DA; --wash-orange-border: #FCA600; --wash-orange-text: #8A4700; --wash-green: #EDF8E5; --wash-green-border: #69CA00; --wash-green-text: #28651D; --wash-red: #FFF0F1; --wash-red-border: rgba(180, 35, 50, 0.3); --wash-red-text: #B42332; --input-bg: #FFFFFF; --badge-neutral-bg: #F1F5F9; --badge-neutral-border: #CBD5E1; --badge-neutral-text: #475569; --link-accent: #006F95; }
+[data-theme="dark"] { --bg-canvas: #101B24; --bg-surface: #1A2C39; --bg-surface-subtle: #14232F; --bg-header: #14232F; --border-color: #344A59; --border-subtle: #223746; --text-primary: #EDF4F8; --text-secondary: #B3C4D0; --text-muted: #839BAE; --color-primary: #00A9E0; --color-primary-hover: #33BBE7; --color-primary-text: #101B24; --wash-blue: rgba(0, 169, 224, 0.15); --wash-blue-border: #00A9E0; --wash-blue-text: #55C8EF; --wash-orange: rgba(252, 166, 0, 0.16); --wash-orange-border: #FCA600; --wash-orange-text: #FFBE3B; --wash-green: rgba(105, 202, 0, 0.16); --wash-green-border: #69CA00; --wash-green-text: #7FE512; --wash-red: rgba(220, 38, 38, 0.18); --wash-red-border: rgba(239, 68, 68, 0.5); --wash-red-text: #FF6B7A; --input-bg: #14232F; --badge-neutral-bg: #223746; --badge-neutral-border: #3D586B; --badge-neutral-text: #B3C4D0; --link-accent: #55C8EF; }
+body { background-color: var(--bg-canvas); color: var(--text-primary); font-family: Inter, system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+#mobile-nav-drawer { transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+#mobile-nav-drawer.open { transform: translateX(0px); }
+#mobile-nav-backdrop { transition: opacity 0.25s ease-out; }
+#mobile-nav-backdrop.open { opacity: 1; pointer-events: auto; }
+.touch-target { min-width: 44px; min-height: 44px; }
+*, ::before, ::after { --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; }
+::backdrop { --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; }
+*, ::after, ::before { box-sizing: border-box; border-width: 0px; border-style: solid; border-color: rgb(229, 231, 235); }
+::after, ::before { --tw-content: ''; }
+:host, html { line-height: 1.5; text-size-adjust: 100%; tab-size: 4; font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; font-feature-settings: normal; font-variation-settings: normal; -webkit-tap-highlight-color: transparent; }
+body { margin: 0px; line-height: inherit; }
+hr { height: 0px; color: inherit; border-top-width: 1px; }
+abbr:where([title]) { text-decoration: underline dotted; }
+h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+a { color: inherit; text-decoration: inherit; }
+b, strong { font-weight: bolder; }
+code, kbd, pre, samp { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-feature-settings: normal; font-variation-settings: normal; font-size: 1em; }
+small { font-size: 80%; }
+sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
+sub { bottom: -0.25em; }
+sup { top: -0.5em; }
+table { text-indent: 0px; border-color: inherit; border-collapse: collapse; }
+button, input, optgroup, select, textarea { font-family: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-size: 100%; font-weight: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; margin: 0px; padding: 0px; }
+button, select { text-transform: none; }
+button, input:where([type="button"]), input:where([type="reset"]), input:where([type="submit"]) { appearance: button; background-color: transparent; background-image: none; }
+progress { vertical-align: baseline; }
+::-webkit-inner-spin-button, ::-webkit-outer-spin-button { height: auto; }
+[type="search"] { appearance: textfield; outline-offset: -2px; }
+::-webkit-search-decoration { appearance: none; }
+::-webkit-file-upload-button { appearance: button; font: inherit; }
+summary { display: list-item; }
+blockquote, dd, dl, figure, h1, h2, h3, h4, h5, h6, hr, p, pre { margin: 0px; }
+fieldset { margin: 0px; padding: 0px; }
+legend { padding: 0px; }
+menu, ol, ul { list-style: none; margin: 0px; padding: 0px; }
+dialog { padding: 0px; }
+textarea { resize: vertical; }
+input::placeholder, textarea::placeholder { opacity: 1; color: rgb(156, 163, 175); }
+[role="button"], button { cursor: pointer; }
+:disabled { cursor: default; }
+audio, canvas, embed, iframe, img, object, svg, video { display: block; vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+[hidden]:where(:not([hidden="until-found"])) { display: none; }
+[type="text"], input:where(:not([type])), [type="email"], [type="url"], [type="password"], [type="number"], [type="date"], [type="datetime-local"], [type="month"], [type="search"], [type="tel"], [type="time"], [type="week"], [multiple], textarea, select { appearance: none; background-color: rgb(255, 255, 255); border-color: rgb(107, 114, 128); border-width: 1px; border-radius: 0px; padding: 0.5rem 0.75rem; font-size: 1rem; line-height: 1.5rem; --tw-shadow: 0 0 #0000; }
+[type="text"]:focus, input:where(:not([type])):focus, [type="email"]:focus, [type="url"]:focus, [type="password"]:focus, [type="number"]:focus, [type="date"]:focus, [type="datetime-local"]:focus, [type="month"]:focus, [type="search"]:focus, [type="tel"]:focus, [type="time"]:focus, [type="week"]:focus, [multiple]:focus, textarea:focus, select:focus { outline: transparent solid 2px; outline-offset: 2px; --tw-ring-inset: var(--tw-empty,/*!*/ /*!*/); --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: #2563eb; --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow); border-color: rgb(37, 99, 235); }
+input::placeholder, textarea::placeholder { color: rgb(107, 114, 128); opacity: 1; }
+::-webkit-datetime-edit-fields-wrapper { padding: 0px; }
+::-webkit-date-and-time-value { min-height: 1.5em; text-align: inherit; }
+::-webkit-datetime-edit { display: inline-flex; }
+::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field { padding-top: 0px; padding-bottom: 0px; }
+select { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; print-color-adjust: exact; }
+[multiple], [size]:where(select:not([size="1"])) { background-image: initial; background-position: initial; background-repeat: unset; background-size: initial; padding-right: 0.75rem; print-color-adjust: unset; }
+[type="checkbox"], [type="radio"] { appearance: none; padding: 0px; print-color-adjust: exact; display: inline-block; vertical-align: middle; background-origin: border-box; user-select: none; flex-shrink: 0; height: 1rem; width: 1rem; color: rgb(37, 99, 235); background-color: rgb(255, 255, 255); border-color: rgb(107, 114, 128); border-width: 1px; --tw-shadow: 0 0 #0000; }
+[type="checkbox"] { border-radius: 0px; }
+[type="radio"] { border-radius: 100%; }
+[type="checkbox"]:focus, [type="radio"]:focus { outline: transparent solid 2px; outline-offset: 2px; --tw-ring-inset: var(--tw-empty,/*!*/ /*!*/); --tw-ring-offset-width: 2px; --tw-ring-offset-color: #fff; --tw-ring-color: #2563eb; --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow); }
+[type="checkbox"]:checked, [type="radio"]:checked { border-color: transparent; background-color: currentcolor; background-size: 100% 100%; background-position: center center; background-repeat: no-repeat; }
+[type="checkbox"]:checked { background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e"); }
+@media (forced-colors: active) {
+  [type="checkbox"]:checked { appearance: auto; }
+}
+[type="radio"]:checked { background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e"); }
+@media (forced-colors: active) {
+  [type="radio"]:checked { appearance: auto; }
+}
+[type="checkbox"]:checked:hover, [type="checkbox"]:checked:focus, [type="radio"]:checked:hover, [type="radio"]:checked:focus { border-color: transparent; background-color: currentcolor; }
+[type="checkbox"]:indeterminate { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3e%3cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3e%3c/svg%3e"); border-color: transparent; background-color: currentcolor; background-size: 100% 100%; background-position: center center; background-repeat: no-repeat; }
+@media (forced-colors: active) {
+  [type="checkbox"]:indeterminate { appearance: auto; }
+}
+[type="checkbox"]:indeterminate:hover, [type="checkbox"]:indeterminate:focus { border-color: transparent; background-color: currentcolor; }
+[type="file"] { background: unset; border-color: inherit; border-width: 0px; border-radius: 0px; padding: 0px; font-size: unset; line-height: inherit; }
+[type="file"]:focus { outline: -webkit-focus-ring-color auto 1px; }
+.pointer-events-none { pointer-events: none; }
+.fixed { position: fixed; }
+.absolute { position: absolute; }
+.relative { position: relative; }
+.sticky { position: sticky; }
+.inset-0 { inset: 0px; }
+.inset-y-0 { top: 0px; bottom: 0px; }
+.bottom-0 { bottom: 0px; }
+.bottom-1 { bottom: 0.25rem; }
+.left-0 { left: 0px; }
+.top-0 { top: 0px; }
+.top-1 { top: 0.25rem; }
+.z-30 { z-index: 30; }
+.z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
+.-ml-2 { margin-left: -0.5rem; }
+.-mr-1 { margin-right: -0.25rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mr-1 { margin-right: 0.25rem; }
+.mt-0\.5 { margin-top: 0.125rem; }
+.mt-1 { margin-top: 0.25rem; }
+.block { display: block; }
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.grid { display: grid; }
+.hidden { display: none; }
+.h-10 { height: 2.5rem; }
+.h-11 { height: 2.75rem; }
+.h-2\.5 { height: 0.625rem; }
+.h-3 { height: 0.75rem; }
+.h-3\.5 { height: 0.875rem; }
+.h-4 { height: 1rem; }
+.h-5 { height: 1.25rem; }
+.h-6 { height: 1.5rem; }
+.h-7 { height: 1.75rem; }
+.h-8 { height: 2rem; }
+.h-9 { height: 2.25rem; }
+.min-h-screen { min-height: 100vh; }
+.w-1 { width: 0.25rem; }
+.w-10 { width: 2.5rem; }
+.w-2\.5 { width: 0.625rem; }
+.w-3 { width: 0.75rem; }
+.w-3\.5 { width: 0.875rem; }
+.w-4 { width: 1rem; }
+.w-5 { width: 1.25rem; }
+.w-6 { width: 1.5rem; }
+.w-7 { width: 1.75rem; }
+.w-8 { width: 2rem; }
+.w-\[290px\] { width: 290px; }
+.w-full { width: 100%; }
+.min-w-0 { min-width: 0px; }
+.max-w-\[390px\] { max-width: 390px; }
+.flex-1 { flex: 1 1 0%; }
+.flex-shrink-0 { flex-shrink: 0; }
+.-translate-x-full { --tw-translate-x: -100%; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+.cursor-not-allowed { cursor: not-allowed; }
+.cursor-pointer { cursor: pointer; }
+.select-none { user-select: none; }
+.list-none { list-style-type: none; }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0px, 1fr)); }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-start { align-items: flex-start; }
+.items-center { align-items: center; }
+.items-baseline { align-items: baseline; }
+.justify-end { justify-content: flex-end; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-0\.5 { gap: 0.125rem; }
+.gap-1 { gap: 0.25rem; }
+.gap-1\.5 { gap: 0.375rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.space-y-1 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.25rem * var(--tw-space-y-reverse)); }
+.space-y-2 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.5rem * var(--tw-space-y-reverse)); }
+.space-y-2\.5 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.625rem * var(--tw-space-y-reverse)); }
+.space-y-3 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)); }
+.space-y-4 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1rem * var(--tw-space-y-reverse)); }
+.overflow-hidden { overflow: hidden; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.break-words { overflow-wrap: break-word; }
+.rounded { border-radius: 0.25rem; }
+.rounded-\[10px\] { border-radius: 10px; }
+.rounded-full { border-radius: 9999px; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-md { border-radius: 0.375rem; }
+.rounded-r { border-top-right-radius: 0.25rem; border-bottom-right-radius: 0.25rem; }
+.border { border-width: 1px; }
+.border-2 { border-width: 2px; }
+.border-x { border-left-width: 1px; border-right-width: 1px; }
+.border-b { border-bottom-width: 1px; }
+.border-l-4 { border-left-width: 4px; }
+.border-t { border-top-width: 1px; }
+.bg-\[\#00A9E0\] { --tw-bg-opacity: 1; background-color: rgb(0 169 224 / var(--tw-bg-opacity, 1)); }
+.bg-black\/60 { background-color: rgba(0, 0, 0, 0.6); }
+.bg-transparent { background-color: transparent; }
+.stroke-\[2\.5\] { stroke-width: 2.5; }
+.stroke-\[2\] { stroke-width: 2; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 0.75rem; }
+.p-3\.5 { padding: 0.875rem; }
+.p-4 { padding: 1rem; }
+.px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+.px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.pb-6 { padding-bottom: 1.5rem; }
+.pl-3 { padding-left: 0.75rem; }
+.pl-9 { padding-left: 2.25rem; }
+.pr-3 { padding-right: 0.75rem; }
+.pt-1 { padding-top: 0.25rem; }
+.pt-2 { padding-top: 0.5rem; }
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.text-\[10px\] { font-size: 10px; }
+.text-\[11px\] { font-size: 11px; }
+.text-\[12px\] { font-size: 12px; }
+.text-\[13px\] { font-size: 13px; }
+.text-\[14px\] { font-size: 14px; }
+.text-\[15px\] { font-size: 15px; }
+.text-\[20px\] { font-size: 20px; }
+.text-\[24px\] { font-size: 24px; }
+.text-\[9px\] { font-size: 9px; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.font-bold { font-weight: 700; }
+.font-medium { font-weight: 500; }
+.font-normal { font-weight: 400; }
+.font-semibold { font-weight: 600; }
+.uppercase { text-transform: uppercase; }
+.leading-none { line-height: 1; }
+.leading-snug { line-height: 1.375; }
+.leading-tight { line-height: 1.25; }
+.tracking-tight { letter-spacing: -0.025em; }
+.tracking-wider { letter-spacing: 0.05em; }
+.text-\[\#101B24\] { --tw-text-opacity: 1; color: rgb(16 27 36 / var(--tw-text-opacity, 1)); }
+.opacity-0 { opacity: 0; }
+.opacity-50 { opacity: 0.5; }
+.shadow-2xl { --tw-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); --tw-shadow-colored: 0 25px 50px -12px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); }
+.shadow-sm { --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); }
+.transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-opacity { transition-property: opacity; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-shadow { transition-property: box-shadow; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-transform { transition-property: transform; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.duration-200 { transition-duration: 200ms; }
+.hover\:underline:hover { text-decoration-line: underline; }
+.hover\:opacity-80:hover { opacity: 0.8; }
+.focus\:border-transparent:focus { border-color: transparent; }
+.focus\:outline-none:focus { outline: transparent solid 2px; outline-offset: 2px; }
+.focus\:ring-2:focus { --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000); }
+.focus\:ring-\[\#00A9E0\]:focus { --tw-ring-opacity: 1; --tw-ring-color: rgb(0 169 224 / var(--tw-ring-opacity, 1)); }
+.focus-visible\:ring-1:focus-visible { --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000); }
+.focus-visible\:ring-2:focus-visible { --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000); }
+.focus-visible\:ring-\[\#00A9E0\]:focus-visible { --tw-ring-opacity: 1; --tw-ring-color: rgb(0 169 224 / var(--tw-ring-opacity, 1)); }
+.focus-visible\:ring-offset-2:focus-visible { --tw-ring-offset-width: 2px; }
+.active\:scale-\[0\.99\]:active { --tw-scale-x: 0.99; --tw-scale-y: 0.99; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+.group[open] .group-open\:rotate-180 { --tw-rotate: 180deg; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }</style></head>
+<body class="min-h-screen flex flex-col items-center">
+<!-- Top Wrapper matching 390px mobile viewport specs -->
+<div class="w-full max-w-[390px] min-h-screen flex flex-col relative shadow-sm border-x transition-colors duration-200" style="background-color: var(--bg-canvas); border-color: var(--border-color);">
+<!-- BEGIN: TopBar -->
+<header class="sticky top-0 z-30 px-4 py-2 flex items-center justify-between border-b transition-colors duration-200" data-purpose="top-navigation-bar" style="background-color: var(--bg-header); border-color: var(--border-color);">
+<!-- Left: Hamburger button with 44px target -->
+<button aria-controls="mobile-nav-drawer" aria-expanded="false" aria-label="Open menu" class="touch-target flex items-center justify-center -ml-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9E0]" id="btn-open-nav" style="color: var(--text-primary);" type="button">
+<svg aria-hidden="true" class="w-6 h-6 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<line x1="4" x2="20" y1="6" y2="6"></line>
+<line x1="4" x2="20" y1="12" y2="12"></line>
+<line x1="4" x2="20" y1="18" y2="18"></line>
+</svg>
+</button>
+<!-- Center Brand Identity -->
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded bg-[#00A9E0] flex items-center justify-center text-[#101B24] font-bold text-xs shadow-sm">
+  PSF
+</div>
+<span class="font-bold text-[15px] tracking-tight" style="color: var(--text-primary);">Request Portal</span>
+</div>
+<!-- Right: Theme Toggle & Requester Avatar -->
+<div class="flex items-center justify-end -mr-1">
+<button aria-label="Switch to dark mode" class="touch-target flex items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9E0] mr-1" id="theme-toggle-btn" style="color: var(--text-secondary);" title="Switch to dark mode" type="button">
+<!-- Sun icon for dark mode (default) -->
+<svg class="w-5 h-5 stroke-[2] hidden" fill="none" id="theme-icon-sun" stroke="currentColor" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="4"></circle>
+<path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+</svg>
+<!-- Moon icon for light mode (hidden in dark mode) -->
+<svg class="w-5 h-5 stroke-[2]" fill="none" id="theme-icon-moon" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+</svg>
+</button>
+<div aria-label="Sam Taylor" class="w-8 h-8 rounded-full border flex items-center justify-center text-xs font-semibold" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);" title="Sam Taylor (Requester · Systems Eng)">
+    ST
+  </div>
+</div>
+</header>
+<!-- END: TopBar -->
+<!-- BEGIN: OffCanvasDrawer -->
+<!-- Backdrop overlay -->
+<div aria-hidden="true" class="fixed inset-0 bg-black/60 z-40 opacity-0 pointer-events-none transition-opacity" id="mobile-nav-backdrop"></div>
+<!-- Nav slide-over panel -->
+<aside aria-label="Site Navigation" aria-modal="true" class="fixed top-0 left-0 bottom-0 w-[290px] z-50 shadow-2xl -translate-x-full flex flex-col justify-between transition-transform" id="mobile-nav-drawer" role="dialog" style="background-color: var(--bg-header); border-right: 1px solid var(--border-color);">
+<div>
+<!-- Drawer Header -->
+<div class="p-4 border-b flex items-center justify-between" style="border-color: var(--border-color);">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded bg-[#00A9E0] flex items-center justify-center text-[#101B24] font-bold text-xs">
+  PSF
+</div>
+<span class="font-bold text-[15px]" style="color: var(--text-primary);">Request Portal</span>
+</div>
+<button aria-label="Close menu" class="touch-target flex items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A9E0]" id="btn-close-nav" style="color: var(--text-secondary);" type="button">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<line x1="18" x2="6" y1="6" y2="18"></line>
+<line x1="6" x2="18" y1="6" y2="18"></line>
+</svg>
+</button>
+</div>
+<!-- Requester Profile Summary -->
+<div class="p-4 border-b flex items-center gap-3" style="background-color: var(--bg-surface-subtle); border-color: var(--border-color);">
+<div class="w-10 h-10 rounded-full border flex items-center justify-center text-sm font-semibold" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);">
+  ST
+</div>
+<div class="flex flex-col min-w-0">
+<span class="text-sm font-semibold truncate" style="color: var(--text-primary);">Sam Taylor</span>
+<span class="text-xs truncate" style="color: var(--text-secondary);">Requester · Systems Eng</span>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav aria-label="Main Navigation" class="p-3 space-y-1">
+<!-- Active: Dashboard -->
+<a class="relative flex items-center gap-3 px-3 py-2.5 rounded-md font-semibold text-[14px]" href="#" style="background-color: var(--wash-blue); color: var(--wash-blue-text);">
+<span class="absolute left-0 top-1 bottom-1 w-1 rounded-r" style="background-color: var(--wash-blue-border);"></span>
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<rect height="9" rx="1" width="7" x="3" y="3"></rect>
+<rect height="5" rx="1" width="7" x="14" y="3"></rect>
+<rect height="9" rx="1" width="7" x="14" y="12"></rect>
+<rect height="5" rx="1" width="7" x="3" y="16"></rect>
+</svg>
+Dashboard
+</a>
+<!-- Requests -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-[14px] transition-colors hover:opacity-80" href="#" style="color: var(--text-secondary);">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+</svg>
+Requests
+</a>
+<!-- My Drafts -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-[14px] transition-colors hover:opacity-80" href="#" style="color: var(--text-secondary);">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+</svg>
+My Drafts
+</a>
+<!-- Export -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-[14px] transition-colors hover:opacity-80" href="#" style="color: var(--text-secondary);">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+</svg>
+Export
+</a>
+</nav>
+</div>
+<div class="p-4 border-t text-center" style="border-color: var(--border-color);">
+<p class="text-[11px]" style="color: var(--text-secondary);">Engineering Internal Portal</p>
+</div>
+</aside>
+<!-- END: OffCanvasDrawer -->
+<!-- BEGIN: MainContent -->
+<main class="flex-1 px-4 py-4 space-y-4">
+<!-- Header Section: Title + Primary Action -->
+<section class="space-y-3" data-purpose="dashboard-header">
+<div class="flex items-start justify-between">
+<div>
+<h1 class="text-[24px] leading-tight font-semibold" style="color: var(--text-primary);">Dashboard</h1>
+<p class="text-[13px] mt-0.5" style="color: var(--text-secondary);">Your requests, at a glance.</p>
+</div>
+</div>
+<!-- Full-width Primary Action Button: Cyan in Dark, Accessible Blue in Light -->
+<button class="w-full h-11 font-semibold text-[14px] rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99]" style="background-color: var(--color-primary); color: var(--color-primary-text);" type="button">
+<svg aria-hidden="true" class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<line x1="12" x2="12" y1="5" y2="19"></line>
+<line x1="5" x2="19" y1="12" y2="12"></line>
+</svg>
+<span>+ New Request</span>
+</button>
+</section>
+<!-- Three Summary Filter Buttons in One Single Row -->
+<section data-purpose="summary-filter-metrics">
+<div aria-label="Status quick filters" class="grid grid-cols-3 gap-2" role="group">
+<!-- 1. Open Work (active) -->
+<button aria-pressed="true" class="touch-target flex flex-col justify-between p-2 rounded-lg border-2 text-left relative focus:outline-none focus-visible:ring-2" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border);" type="button">
+<div class="flex items-center justify-between w-full">
+<span class="text-[10px] font-bold uppercase tracking-wider truncate" style="color: var(--wash-blue-text);">Open Work</span>
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--wash-blue-text);" viewBox="0 0 24 24">
+<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-[20px] font-bold leading-none" style="color: var(--text-primary);">25</span>
+<span class="text-[9px] font-medium px-1 py-0.5 rounded leading-none" style="background-color: var(--wash-blue-border); color: var(--color-primary-text);">Filtered</span>
+</div>
+</button>
+<!-- 2. Overdue -->
+<button aria-pressed="false" class="touch-target flex flex-col justify-between p-2 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2" style="background-color: var(--wash-orange); border-color: var(--wash-orange-border);" type="button">
+<div class="flex items-center justify-between w-full">
+<span class="text-[10px] font-bold uppercase tracking-wider truncate" style="color: var(--wash-orange-text);">Overdue</span>
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--wash-orange-text);" viewBox="0 0 24 24">
+<path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-[20px] font-bold leading-none" style="color: var(--wash-orange-text);">15</span>
+<span class="text-[10px] font-medium flex items-center" style="color: var(--wash-orange-text);">View →</span>
+</div>
+</button>
+<!-- 3. Completed -->
+<button aria-pressed="false" class="touch-target flex flex-col justify-between p-2 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2" style="background-color: var(--wash-green); border-color: var(--wash-green-border);" type="button">
+<div class="flex items-center justify-between w-full">
+<span class="text-[10px] font-bold uppercase tracking-wider truncate" style="color: var(--wash-green-text);">Completed</span>
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--wash-green-text);" viewBox="0 0 24 24">
+<path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-[20px] font-bold leading-none" style="color: var(--wash-green-text);">0</span>
+<span class="text-[10px] font-medium flex items-center" style="color: var(--wash-green-text);">View →</span>
+</div>
+</button>
+</div>
+</section>
+<!-- Search & Filters Collapsible Disclosure -->
+<section class="space-y-2" data-purpose="search-and-filters">
+<!-- Search Field -->
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style="color: var(--text-secondary);">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<circle cx="11" cy="11" r="8"></circle>
+<line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+</svg>
+</div>
+<input aria-label="Search requests" class="w-full h-11 pl-9 pr-3 rounded-lg border text-[13px] transition-shadow focus:outline-none focus:ring-2 focus:ring-[#00A9E0]" placeholder="Request no., title, PSF or probecard" style="background-color: var(--input-bg); border-color: var(--border-color); color: var(--text-primary);" type="search" value="">
+</div>
+<!-- Filter Disclosure Component -->
+<details class="group border rounded-lg overflow-hidden text-sm" id="filter-disclosure" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+<summary aria-label="Filters" class="list-none flex items-center justify-between px-3.5 py-2.5 cursor-pointer select-none text-[13px] font-medium" style="color: var(--text-primary);">
+<div class="flex items-center gap-2">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-secondary);" viewBox="0 0 24 24">
+<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+</svg>
+<span>Filter Parameters</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" style="background-color: var(--wash-blue); color: var(--wash-blue-text);">
+  All statuses
+</span>
+</div>
+<svg class="w-4 h-4 transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-secondary);" viewBox="0 0 24 24">
+<polyline points="6 9 12 15 18 9"></polyline>
+</svg>
+</summary>
+<div class="p-3 border-t space-y-3" style="background-color: var(--bg-surface-subtle); border-color: var(--border-color);">
+<div>
+<label class="block text-xs font-semibold mb-1" for="filter-status" style="color: var(--text-secondary);">Filter by status</label>
+<select aria-label="Filter by status" class="w-full h-9 rounded-md border text-xs focus:ring-2 focus:ring-[#00A9E0] focus:border-transparent" id="filter-status" style="background-color: var(--input-bg); border-color: var(--border-color); color: var(--text-primary);">
+<option selected="">All statuses</option>
+<option>20% -- PSF File Creating</option>
+<option>30% -- Compare Old and New layout</option>
+<option>93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)</option>
+<option>10% -- Test Engineer Data Entry</option>
+<option>99% -- Wait requestor Buyoff site location and wafer map</option>
+<option>100% -- Completed</option>
+<option>0% -- Rejected (Cancel Request)</option>
+</select>
+</div>
+<div class="flex justify-end pt-1">
+<button class="px-3 py-1.5 rounded border text-xs font-medium flex items-center gap-1.5 transition-colors" style="background-color: var(--bg-surface); border-color: var(--border-color); color: var(--text-secondary);" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+Clear filters
+</button>
+</div>
+</div>
+</details>
+</section>
+<!-- BEGIN: RequestQueueList -->
+<section class="space-y-2.5" data-purpose="related-requests-queue">
+<!-- Section Header with total count -->
+<div class="flex items-center justify-between pt-1">
+<h2 class="text-[15px] font-bold flex items-center gap-2" style="color: var(--text-primary);">
+  Open requests
+  <span class="text-[12px] font-semibold px-2 py-0.5 rounded-full" style="background-color: var(--wash-blue); color: var(--wash-blue-text);">25 total</span>
+</h2>
+</div>
+<!-- 5 Mobile Cards representing exact catalog items -->
+<div class="space-y-2.5" role="list">
+<!-- Row 1: PSF wafer-map setup (OVERDUE) -->
+<article class="border rounded-[10px] p-3.5 shadow-sm space-y-2.5 border-l-4 transition-colors" role="listitem" style="background-color: var(--bg-surface); border-color: var(--border-color); border-left-color: #DC2626;">
+<div class="flex items-start justify-between gap-2">
+<div class="min-w-0 flex-1">
+<a class="font-semibold text-[15px] hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-[#00A9E0] block" href="#" style="color: var(--text-primary);">PSF wafer-map setup</a>
+<span class="font-mono text-[12px]" style="color: var(--text-secondary);">SAMPLE-001 · PC-SAMPLE-A</span>
+</div>
+<a aria-label="View details for PSF wafer-map setup" class="touch-target flex items-center justify-center" href="#" style="color: var(--text-secondary);">
+<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</a>
+</div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border leading-snug" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);">
+<svg class="w-3 h-3 stroke-[2] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<polygon points="5 3 19 12 5 21 5 3"></polygon>
+</svg>
+<span>20% -- PSF File Creating</span>
+</span>
+</div>
+<div class="pt-2 border-t flex items-center justify-between text-xs flex-wrap gap-1" style="border-color: var(--border-subtle); color: var(--text-secondary);">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold" style="color: var(--wash-red-text);">01 Oct 2026</span>
+<span class="text-[10px] font-bold tracking-tight border px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5" style="background-color: var(--wash-red); border-color: var(--wash-red-border); color: var(--wash-red-text);">
+<svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+<path clip-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" fill-rule="evenodd"></path>
+</svg>
+          ! OVERDUE
+        </span>
+<span class="text-[10px] font-semibold border px-1.5 py-0.2 rounded" style="background-color: var(--badge-neutral-bg); border-color: var(--badge-neutral-border); color: var(--badge-neutral-text);">High</span>
+</div>
+<div class="font-medium" style="color: var(--text-primary);">Owner A <span class="font-normal" style="color: var(--text-secondary);">/ MFG</span></div>
+</div>
+</article>
+<!-- Row 2: Reference PSF layout comparison -->
+<article class="border rounded-[10px] p-3.5 shadow-sm space-y-2.5 transition-colors" role="listitem" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+<div class="flex items-start justify-between gap-2">
+<div class="min-w-0 flex-1">
+<a class="font-semibold text-[15px] hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-[#00A9E0] block" href="#" style="color: var(--text-primary);">Reference PSF layout comparison</a>
+<span class="font-mono text-[12px]" style="color: var(--text-secondary);">SAMPLE-002 · PC-SAMPLE-B</span>
+</div>
+<a aria-label="View details for Reference PSF layout comparison" class="touch-target flex items-center justify-center" href="#" style="color: var(--text-secondary);">
+<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</a>
+</div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border leading-snug" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);">
+<svg class="w-3 h-3 stroke-[2] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span>30% -- Compare Old and New layout</span>
+</span>
+</div>
+<div class="pt-2 border-t flex items-center justify-between text-xs flex-wrap gap-1" style="border-color: var(--border-subtle); color: var(--text-secondary);">
+<div class="flex items-center gap-1.5">
+<span class="font-medium" style="color: var(--text-primary);">07 Oct 2026</span>
+<span class="text-[10px] font-semibold border px-1.5 py-0.2 rounded" style="background-color: var(--badge-neutral-bg); border-color: var(--badge-neutral-border); color: var(--badge-neutral-text);">Normal</span>
+</div>
+<div class="font-medium" style="color: var(--text-primary);">Owner B <span class="font-normal" style="color: var(--text-secondary);">/ MFG</span></div>
+</div>
+</article>
+<!-- Row 3: Template map and FI script update -->
+<article class="border rounded-[10px] p-3.5 shadow-sm space-y-2.5 transition-colors" role="listitem" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+<div class="flex items-start justify-between gap-2">
+<div class="min-w-0 flex-1">
+<a class="font-semibold text-[15px] hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-[#00A9E0] block" href="#" style="color: var(--text-primary);" title="Template map and FI script update">Template map and FI script update</a>
+<span class="font-mono text-[12px]" style="color: var(--text-secondary);">SAMPLE-003 · PC-SAMPLE-C</span>
+</div>
+<a aria-label="View details for Template map and FI script update" class="touch-target flex items-center justify-center" href="#" style="color: var(--text-secondary);">
+<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</a>
+</div>
+<div>
+<span class="inline-flex items-start gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border leading-snug break-words w-full" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);">
+<svg class="w-3 h-3 stroke-[2] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="min-w-0">93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)</span>
+</span>
+</div>
+<div class="pt-2 border-t flex items-center justify-between text-xs flex-wrap gap-1" style="border-color: var(--border-subtle); color: var(--text-secondary);">
+<div class="flex items-center gap-1.5">
+<span class="font-medium" style="color: var(--text-primary);">09 Oct 2026</span>
+<span class="text-[10px] font-semibold border px-1.5 py-0.2 rounded" style="background-color: var(--badge-neutral-bg); border-color: var(--badge-neutral-border); color: var(--badge-neutral-text);">Normal</span>
+</div>
+<div class="font-medium" style="color: var(--text-primary);">Owner C <span class="font-normal" style="color: var(--text-secondary);">/ MFG</span></div>
+</div>
+</article>
+<!-- Row 4: Probecard setup data entry -->
+<article class="border rounded-[10px] p-3.5 shadow-sm space-y-2.5 transition-colors" role="listitem" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+<div class="flex items-start justify-between gap-2">
+<div class="min-w-0 flex-1">
+<a class="font-semibold text-[15px] hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-[#00A9E0] block" href="#" style="color: var(--text-primary);">Probecard setup data entry</a>
+<span class="font-mono text-[12px]" style="color: var(--text-secondary);">SAMPLE-004 · PC-SAMPLE-D</span>
+</div>
+<a aria-label="View details for Probecard setup data entry" class="touch-target flex items-center justify-center" href="#" style="color: var(--text-secondary);">
+<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</a>
+</div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border leading-snug" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);">
+<svg class="w-3 h-3 stroke-[2] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<polygon points="5 3 19 12 5 21 5 3"></polygon>
+</svg>
+<span>10% -- Test Engineer Data Entry</span>
+</span>
+</div>
+<div class="pt-2 border-t flex items-center justify-between text-xs flex-wrap gap-1" style="border-color: var(--border-subtle); color: var(--text-secondary);">
+<div class="flex items-center gap-1.5">
+<span class="font-medium" style="color: var(--text-primary);">12 Oct 2026</span>
+<span class="text-[10px] font-semibold border px-1.5 py-0.2 rounded" style="background-color: var(--wash-orange); border-color: var(--wash-orange-border); color: var(--wash-orange-text);">Urgent</span>
+</div>
+<div class="font-medium" style="color: var(--text-primary);">Owner A <span class="font-normal" style="color: var(--text-secondary);">/ MFG</span></div>
+</div>
+</article>
+<!-- Row 5: Wafer-map requester buyoff (open-work blue styling, NOT completed green) -->
+<article class="border rounded-[10px] p-3.5 shadow-sm space-y-2.5 transition-colors" role="listitem" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+<div class="flex items-start justify-between gap-2">
+<div class="min-w-0 flex-1">
+<a class="font-semibold text-[15px] hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-[#00A9E0] block" href="#" style="color: var(--text-primary);">Wafer-map requester buyoff</a>
+<span class="font-mono text-[12px]" style="color: var(--text-secondary);">SAMPLE-005 · PC-SAMPLE-E</span>
+</div>
+<a aria-label="View details for Wafer-map requester buyoff" class="touch-target flex items-center justify-center" href="#" style="color: var(--text-secondary);">
+<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</a>
+</div>
+<div>
+<!-- Blue/cyan open-work badge as per instructions -->
+<span class="inline-flex items-start gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border leading-snug break-words w-full" style="background-color: var(--wash-blue); border-color: var(--wash-blue-border); color: var(--wash-blue-text);">
+<svg class="w-3 h-3 stroke-[2] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="10"></circle>
+<path d="M12 6v6l4 2"></path>
+</svg>
+<span class="min-w-0">99% -- Wait requestor Buyoff site location and wafer map</span>
+</span>
+</div>
+<div class="pt-2 border-t flex items-center justify-between text-xs flex-wrap gap-1" style="border-color: var(--border-subtle); color: var(--text-secondary);">
+<div class="flex items-center gap-1.5">
+<span class="font-medium" style="color: var(--text-primary);">16 Oct 2026</span>
+<span class="text-[10px] font-semibold border px-1.5 py-0.2 rounded" style="background-color: var(--badge-neutral-bg); border-color: var(--badge-neutral-border); color: var(--badge-neutral-text);">Low</span>
+</div>
+<div class="font-medium" style="color: var(--text-primary);">Owner B <span class="font-normal" style="color: var(--text-secondary);">/ MFG</span></div>
+</div>
+</article>
+</div>
+</section>
+<!-- END: RequestQueueList -->
+<!-- BEGIN: PaginationFooter -->
+<footer class="pt-2 pb-6 space-y-3" data-purpose="mobile-pagination">
+<div class="text-center text-[12px]" style="color: var(--text-secondary);">Preview: 5 sample rows · 25 open requests · 25 per page</div>
+<nav aria-label="Pagination" class="flex items-center justify-between border rounded-lg px-2 py-1.5 shadow-sm" style="background-color: var(--bg-surface); border-color: var(--border-color);">
+<button class="touch-target px-3 py-1 text-xs font-medium bg-transparent rounded cursor-not-allowed flex items-center gap-1 opacity-50" disabled="" style="color: var(--text-secondary);" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="15 18 9 12 15 6"></polyline>
+</svg>
+Previous
+</button>
+<span class="text-xs font-medium" style="color: var(--text-primary);">
+Page 1 of 1
+</span>
+<button class="touch-target px-3 py-1 text-xs font-medium bg-transparent rounded cursor-not-allowed flex items-center gap-1 opacity-50" disabled="" style="color: var(--text-secondary);" type="button">
+Next
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</button>
+</nav>
+</footer>
+<!-- END: PaginationFooter -->
+</main>
+<!-- END: MainContent -->
+</div>
+<!-- Scripts for Drawer and Theme Toggle -->
+
+</body></html>

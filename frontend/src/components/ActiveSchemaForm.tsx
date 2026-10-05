@@ -31,6 +31,10 @@ import type {
 
 const PSF_REQUEST_FORM_KEY = 'psf-request'
 
+function isRequesterIdentityKey(canonicalKey: string): boolean {
+  return canonicalKey === 'requester' || canonicalKey === 'requester_name'
+}
+
 function buildInitialValues(schema: FormSchema): DynamicFormValues {
   return schema.sections.reduce<DynamicFormValues>((values, section) => {
     section.fields.forEach((field) => {
@@ -46,6 +50,8 @@ export interface ActiveSchemaFormProps {
   headerTitle?: string
   requestId?: string
   disabled?: boolean
+  explicitEdit?: boolean
+  requesterIdentity?: string
   onDirtyChange?: (dirty: boolean) => void
   onDraftSchemaSubmitAllowedChange?: (allowed: boolean) => void
   onRequestSaved?: (request: PsfRequestResponse) => void
@@ -150,7 +156,7 @@ export function DraftSchemaUpgradeDecision({
 
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
-export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
+export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
   const savedValuesRef = useRef<DynamicFormValues>({})
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
@@ -175,6 +181,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const [upgradePending, setUpgradePending] = useState(false)
   const [values, setValues] = useState<DynamicFormValues>({})
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [editingInformation, setEditingInformation] = useState(false)
   const draftSchemaUpgradeLock = useRef(createDraftSchemaUpgradeLock())
   const autofillLookupGeneration = useRef(0)
   const fieldEditVersions = useRef<Record<string, number>>({})
@@ -237,6 +244,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           setUpgradeError(null)
           setErrors({})
           setCurrentRequest(request)
+          setEditingInformation(false)
           // Publish the same snapshot so the shell cannot rebase this load onto its old request.
           if (mode === 'request') onRequestSavedRef.current?.(request)
           setActiveRequestSchema(requestSchema)
@@ -270,6 +278,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         setUpgradeError(null)
         setErrors({})
         setCurrentRequest(null)
+        setEditingInformation(false)
         setActiveRequestSchema(null)
         setDraftSchemaDecision('not-needed')
         setDraftSchemaVersion('not-applicable')
@@ -302,6 +311,24 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       mounted = false
     }
   }, [loadKey, mode, onDirtyChange, onDraftSchemaSubmitAllowedChange, requestId])
+
+  useEffect(() => {
+    if (mode !== 'request' || requestId || currentRequest || !activeSchema || loadedSchemaKey !== loadKey || !requesterIdentity?.trim()) return
+    const identityFields = activeSchema.schema.sections.flatMap((section) => section.fields)
+      .filter((field) => isRequesterIdentityKey(field.canonicalKey))
+    if (!identityFields.some((field) => valuesRef.current[field.fieldKey] !== requesterIdentity)) return
+
+    const nextBaseline = { ...savedValuesRef.current }
+    const nextValues = { ...valuesRef.current }
+    identityFields.forEach((field) => {
+      nextBaseline[field.fieldKey] = requesterIdentity
+      nextValues[field.fieldKey] = requesterIdentity
+    })
+    savedValuesRef.current = nextBaseline
+    // Account data can arrive after schema loading and must preserve typed fields.
+    replaceValues(nextValues)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(nextBaseline))
+  }, [activeSchema, currentRequest, loadedSchemaKey, loadKey, mode, onDirtyChange, requestId, requesterIdentity])
 
   useEffect(() => {
     if (
@@ -464,15 +491,35 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     mode,
     requestSnapshotPending && requestSnapshot ? requestSnapshot : currentRequest,
   )
-  const formReadOnly = readOnly || disabled || requestSnapshotPending || saving || upgradePending || hasInconsistentDraftSchema
+  const usesExplicitEdit = explicitEdit && mode === 'request' && Boolean(currentRequest && currentRequest.status !== DRAFT_STATUS)
+  const formUnavailable = readOnly || disabled || requestSnapshotPending || saving || upgradePending || hasInconsistentDraftSchema
+  const formReadOnly = formUnavailable || (usesExplicitEdit && !editingInformation)
+  const readOnlyFieldKeys = activeSchema?.schema.sections.flatMap((section) => section.fields
+    .filter((field) => isRequesterIdentityKey(field.canonicalKey))
+    .map((field) => field.fieldKey)) ?? []
   const submitLabel = useMemo(() => {
+    if (usesExplicitEdit) return 'Save information'
     if (currentRequest) {
       if (currentRequest.status === DRAFT_STATUS) return 'Save draft changes'
       return currentRequest.canEditRequesterData ? 'Save requester information' : 'Requester edits locked'
     }
 
     return mode === 'request' ? 'Save draft request' : 'Preview only'
-  }, [currentRequest, mode])
+  }, [currentRequest, mode, usesExplicitEdit])
+
+  function cancelInformationEdit() {
+    if (formUnavailable) return
+    invalidateRuntimeAutofill()
+    fieldEditVersions.current = {}
+    replaceValues({ ...savedValuesRef.current })
+    setAutofillStatuses({})
+    setErrors({})
+    setAutofillError(null)
+    setSaveError(null)
+    setSaveMessage(null)
+    onDirtyChange?.(false)
+    setEditingInformation(false)
+  }
 
   function isCurrentRuntimeAutofillLookup(
     generation: number,
@@ -525,7 +572,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       currentValues: valuesRef.current,
       lookupEditVersions,
       schema,
-      suggestedValues: response.suggestedValues,
+      suggestedValues: Object.fromEntries(Object.entries(response.suggestedValues)
+        .filter(([canonicalKey]) => !isRequesterIdentityKey(canonicalKey))),
     })
     if (applied.appliedFieldKeys.length === 0) {
       return
@@ -543,7 +591,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   }
 
   function updateField(fieldKey: string, value: string) {
-    if (formReadOnly) {
+    if (formReadOnly || readOnlyFieldKeys.includes(fieldKey)) {
       return
     }
 
@@ -670,7 +718,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setAutofillError(null)
       setAutofillStatuses({})
       replaceValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
-      setSaveMessage(`Draft ${savedRequest.requestNo} saved.`)
+      setEditingInformation(false)
+      setSaveMessage(savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.')
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && currentRequest) {
         try {
@@ -866,24 +915,36 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       <div className="active-schema-form__identity">
         <div>
           {headerTitle ? <h2>{headerTitle}</h2> : null}
-          <span className="active-schema-form__version">{activeSchema.title} · {activeSchema.formKey} · version {activeSchema.version}</span>
+          <span className="active-schema-form__version">{headerTitle ? 'Form version' : `${activeSchema.title} · version`} {activeSchema.version}</span>
         </div>
         <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+        {usesExplicitEdit && !editingInformation && !readOnly ? (
+          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={() => { if (!formUnavailable) setEditingInformation(true) }} type="button">
+            Edit information
+          </button>
+        ) : null}
       </div>
       <DynamicFormRenderer
+        collapseOptionalFields={mode === 'request' && (!currentRequest || currentRequest.status === DRAFT_STATUS || usesExplicitEdit)}
         errors={errors}
-        footerActions={!formReadOnly ? <div className="active-schema-form__footer">
-          <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
-          <p className="ui-help">{currentRequest ? 'Requester information is saved separately from PSF information.' : 'You can review and submit after saving the draft.'}</p>
-        </div> : undefined}
+        footerActions={!formReadOnly && (usesExplicitEdit || currentRequest) ? <>
+          {usesExplicitEdit ? <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button> : null}
+          {currentRequest ? (
+            <div className="active-schema-form__footer">
+              <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+              <p className="ui-help">Requester information is saved separately from PSF information.</p>
+            </div>
+          ) : null}
+        </> : undefined}
         headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}
         onChange={!formReadOnly ? updateField : undefined}
         onSubmit={!formReadOnly ? saveDraft : undefined}
         readOnly={formReadOnly}
+        readOnlyFieldKeys={readOnlyFieldKeys}
         schema={activeSchema.schema}
         showSchemaHeader={false}
-        submitLabel={saving ? 'Saving draft…' : submitLabel}
+        submitLabel={saving ? usesExplicitEdit ? 'Saving information…' : 'Saving draft…' : submitLabel}
         values={values}
       />
     </div>

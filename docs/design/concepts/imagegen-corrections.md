@@ -1,5 +1,7 @@
 # Final ImageGen correction prompts
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
 These are the final prompts used with the built-in ImageGen tool. The initial target and queue were passed as reference images for each desktop correction. Mobile used the queue and initial detail as references. The written specification records remaining generated artifacts and exact implementation requirements.
 
 ## Detail

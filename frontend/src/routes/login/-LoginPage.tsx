@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { ArrowRight, Eye, EyeOff, Lock, User } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Lock, Moon, Sun, User } from 'lucide-react'
 import { AsyncNotice } from '../../components/ui/AsyncNotice'
 import { ApiError, loginWithPassword } from '../../services/api'
 import nxpLogo from '../../assets/NXP.png'
 import { DevelopmentLogin } from './-DevelopmentLogin'
+import { useTheme } from '../../components/theme'
 
 export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
   const navigate = useNavigate()
+  const { theme, toggleTheme } = useTheme()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -36,6 +38,9 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
 
   return (
     <div className="login-page">
+      <button className="icon-button login-theme-control" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme} type="button">
+        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
       <div className="login-page__content">
         <section className="page-card login-card" aria-labelledby="login-title">
         <div className="login-card__brand">
@@ -47,10 +52,6 @@ export function LoginPage({ redirectTo = '/dashboard' }: { redirectTo?: string }
         </div>
 
           <form className="login-form" aria-busy={isSubmitting} onSubmit={(event) => void handleSubmit(event)}>
-          <div>
-            <h2>Company sign-in</h2>
-            <p className="login-form__hint">Use your company LDAP username and password.</p>
-          </div>
           <label className="form-field" htmlFor="login-username">
             <span>Username</span>
             <span className="login-form__control">

@@ -1,0 +1,466 @@
+{
+  "viewport": {
+    "deviceScaleFactor": 1,
+    "isMobile": true,
+    "hasTouch": true,
+    "isLandscape": false,
+    "width": 390,
+    "height": 844
+  },
+  "colorScheme": "light",
+  "snapshot": {
+    "id": "80_0",
+    "role": "RootWebArea",
+    "name": "PSF Request Portal \u2014 Requests",
+    "url": "http://127.0.0.1:4180/screens/b6ade8d12a3a46c48c72ff954794c442",
+    "children": [
+      {
+        "id": "80_1",
+        "role": "banner",
+        "children": [
+          {
+            "id": "80_2",
+            "role": "button",
+            "name": "Open navigation menu",
+            "expandable": true
+          },
+          {
+            "id": "80_3",
+            "role": "link",
+            "name": "PSF Request Portal",
+            "url": "http://127.0.0.1:4180/dashboard",
+            "children": [
+              {
+                "id": "80_4",
+                "role": "StaticText",
+                "name": "PSF"
+              },
+              {
+                "id": "80_5",
+                "role": "StaticText",
+                "name": "Request Portal"
+              }
+            ]
+          },
+          {
+            "id": "80_6",
+            "role": "button",
+            "name": "Switch to dark mode",
+            "description": "Switch to dark mode"
+          },
+          {
+            "id": "80_7",
+            "role": "StaticText",
+            "name": "AM"
+          }
+        ]
+      },
+      {
+        "id": "80_8",
+        "role": "main",
+        "children": [
+          {
+            "id": "80_9",
+            "role": "heading",
+            "name": "Requests",
+            "level": 1
+          },
+          {
+            "id": "80_10",
+            "role": "StaticText",
+            "name": "Browse shared PSF requests. "
+          },
+          {
+            "id": "80_11",
+            "role": "StaticText",
+            "name": "\u2022 Private drafts are in "
+          },
+          {
+            "id": "80_12",
+            "role": "link",
+            "name": "My Drafts",
+            "url": "http://127.0.0.1:4180/my-drafts",
+            "children": [
+              {
+                "id": "80_13",
+                "role": "StaticText",
+                "name": "My Drafts"
+              }
+            ]
+          },
+          {
+            "id": "80_14",
+            "role": "link",
+            "name": "New Request",
+            "url": "http://127.0.0.1:4180/requests/new",
+            "children": [
+              {
+                "id": "80_15",
+                "role": "StaticText",
+                "name": "New Request"
+              }
+            ]
+          },
+          {
+            "id": "80_16",
+            "role": "region",
+            "name": "Shared requests",
+            "children": [
+              {
+                "id": "80_17",
+                "role": "StaticText",
+                "name": "Search requests"
+              },
+              {
+                "id": "80_18",
+                "role": "searchbox",
+                "name": "Search request no., title, PSF or probecard"
+              },
+              {
+                "id": "80_19",
+                "role": "button",
+                "name": "Filters",
+                "expandable": true
+              },
+              {
+                "id": "80_20",
+                "role": "heading",
+                "name": "Shared requests",
+                "level": 2
+              },
+              {
+                "id": "80_21",
+                "role": "StaticText",
+                "name": "5 total"
+              },
+              {
+                "id": "80_22",
+                "role": "link",
+                "name": "S32K3 probe layout update",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0042",
+                "children": [
+                  {
+                    "id": "80_23",
+                    "role": "StaticText",
+                    "name": "S32K3 probe layout update"
+                  }
+                ]
+              },
+              {
+                "id": "80_24",
+                "role": "StaticText",
+                "name": "PSF-2026-0042"
+              },
+              {
+                "id": "80_25",
+                "role": "StaticText",
+                "name": "New Product"
+              },
+              {
+                "id": "80_26",
+                "role": "link",
+                "name": "View details for S32K3 probe layout update",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0042"
+              },
+              {
+                "id": "80_27",
+                "role": "StaticText",
+                "name": "20% -- PSF File Creating"
+              },
+              {
+                "id": "80_28",
+                "role": "StaticText",
+                "name": "01 Oct 2026"
+              },
+              {
+                "id": "80_29",
+                "role": "StaticText",
+                "name": "OVERDUE"
+              },
+              {
+                "id": "80_30",
+                "role": "StaticText",
+                "name": "High"
+              },
+              {
+                "id": "80_31",
+                "role": "StaticText",
+                "name": "Alex Morgan"
+              },
+              {
+                "id": "80_32",
+                "role": "StaticText",
+                "name": "/"
+              },
+              {
+                "id": "80_33",
+                "role": "StaticText",
+                "name": "Mei Tan \u00b7 MFG"
+              },
+              {
+                "id": "80_34",
+                "role": "link",
+                "name": "ST Fab template map review",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0039",
+                "children": [
+                  {
+                    "id": "80_35",
+                    "role": "StaticText",
+                    "name": "ST Fab template map review"
+                  }
+                ]
+              },
+              {
+                "id": "80_36",
+                "role": "StaticText",
+                "name": "PSF-2026-0039"
+              },
+              {
+                "id": "80_37",
+                "role": "StaticText",
+                "name": "Transfer Product"
+              },
+              {
+                "id": "80_38",
+                "role": "link",
+                "name": "View details for ST Fab template map review",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0039"
+              },
+              {
+                "id": "80_39",
+                "role": "StaticText",
+                "name": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)"
+              },
+              {
+                "id": "80_40",
+                "role": "StaticText",
+                "name": "06 Oct 2026"
+              },
+              {
+                "id": "80_41",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "80_42",
+                "role": "StaticText",
+                "name": "Priya Rao"
+              },
+              {
+                "id": "80_43",
+                "role": "StaticText",
+                "name": "/"
+              },
+              {
+                "id": "80_44",
+                "role": "StaticText",
+                "name": "Rowan Miller \u00b7 GNTC"
+              },
+              {
+                "id": "80_45",
+                "role": "link",
+                "name": "Wafer map site verification",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0035",
+                "children": [
+                  {
+                    "id": "80_46",
+                    "role": "StaticText",
+                    "name": "Wafer map site verification"
+                  }
+                ]
+              },
+              {
+                "id": "80_47",
+                "role": "StaticText",
+                "name": "PSF-2026-0035"
+              },
+              {
+                "id": "80_48",
+                "role": "StaticText",
+                "name": "Existing Product"
+              },
+              {
+                "id": "80_49",
+                "role": "link",
+                "name": "View details for Wafer map site verification",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0035"
+              },
+              {
+                "id": "80_50",
+                "role": "StaticText",
+                "name": "99% -- Wait requestor Buyoff site location and wafer map"
+              },
+              {
+                "id": "80_51",
+                "role": "StaticText",
+                "name": "08 Oct 2026"
+              },
+              {
+                "id": "80_52",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "80_53",
+                "role": "StaticText",
+                "name": "Alex Morgan"
+              },
+              {
+                "id": "80_54",
+                "role": "StaticText",
+                "name": "/"
+              },
+              {
+                "id": "80_55",
+                "role": "StaticText",
+                "name": "Mei Tan \u00b7 MFG"
+              },
+              {
+                "id": "80_56",
+                "role": "link",
+                "name": "Probe pattern release",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0028",
+                "children": [
+                  {
+                    "id": "80_57",
+                    "role": "StaticText",
+                    "name": "Probe pattern release"
+                  }
+                ]
+              },
+              {
+                "id": "80_58",
+                "role": "StaticText",
+                "name": "PSF-2026-0028"
+              },
+              {
+                "id": "80_59",
+                "role": "StaticText",
+                "name": "New Product"
+              },
+              {
+                "id": "80_60",
+                "role": "link",
+                "name": "View details for Probe pattern release",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0028"
+              },
+              {
+                "id": "80_61",
+                "role": "StaticText",
+                "name": "100% -- Completed"
+              },
+              {
+                "id": "80_62",
+                "role": "StaticText",
+                "name": "02 Oct 2026"
+              },
+              {
+                "id": "80_63",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "80_64",
+                "role": "StaticText",
+                "name": "Jordan Lee"
+              },
+              {
+                "id": "80_65",
+                "role": "StaticText",
+                "name": "/"
+              },
+              {
+                "id": "80_66",
+                "role": "StaticText",
+                "name": "Rowan Miller \u00b7 GNTC"
+              },
+              {
+                "id": "80_67",
+                "role": "link",
+                "name": "Cancelled layout request",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0019",
+                "children": [
+                  {
+                    "id": "80_68",
+                    "role": "StaticText",
+                    "name": "Cancelled layout request"
+                  }
+                ]
+              },
+              {
+                "id": "80_69",
+                "role": "StaticText",
+                "name": "PSF-2026-0019"
+              },
+              {
+                "id": "80_70",
+                "role": "StaticText",
+                "name": "Existing Product"
+              },
+              {
+                "id": "80_71",
+                "role": "link",
+                "name": "View details for Cancelled layout request",
+                "url": "http://127.0.0.1:4180/requests/PSF-2026-0019"
+              },
+              {
+                "id": "80_72",
+                "role": "StaticText",
+                "name": "0% -- Rejected (Cancel Request)"
+              },
+              {
+                "id": "80_73",
+                "role": "StaticText",
+                "name": "09 Oct 2026"
+              },
+              {
+                "id": "80_74",
+                "role": "StaticText",
+                "name": "Normal"
+              },
+              {
+                "id": "80_75",
+                "role": "StaticText",
+                "name": "Priya Rao"
+              },
+              {
+                "id": "80_76",
+                "role": "StaticText",
+                "name": "/"
+              },
+              {
+                "id": "80_77",
+                "role": "StaticText",
+                "name": "Mei Tan \u00b7 MFG"
+              },
+              {
+                "id": "80_78",
+                "role": "StaticText",
+                "name": "Showing 1\u20135 of 5 requests"
+              },
+              {
+                "id": "80_79",
+                "role": "button",
+                "name": "Previous page",
+                "disableable": true,
+                "disabled": true
+              },
+              {
+                "id": "80_80",
+                "role": "StaticText",
+                "name": "Page 1 of 1"
+              },
+              {
+                "id": "80_81",
+                "role": "button",
+                "name": "Next page",
+                "disableable": true,
+                "disabled": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
