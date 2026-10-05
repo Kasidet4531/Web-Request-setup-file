@@ -1,39 +1,43 @@
+import type { RequestBreadcrumb } from './requestBreadcrumb'
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Settings, X } from 'lucide-react'
-import type { RefObject } from 'react'
+import { X } from 'lucide-react'
+import type { ReactNode, RefObject } from 'react'
 import { navSectionsForRole, resolveActivePath, type UserRole } from './navigationState'
 
 export function NavSidebar({
   collapsed = false,
   role,
+  request = null,
   mobile = false,
   onClose,
   onNavigate,
   navigationRef,
+  footer,
 }: {
   collapsed?: boolean
   role: UserRole | null
+  request?: RequestBreadcrumb | null
   mobile?: boolean
   onClose?: () => void
   onNavigate?: () => void
   navigationRef?: RefObject<HTMLElement | null>
+  footer?: ReactNode
 }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
   const sections = navSectionsForRole(role)
-  const activePath = resolveActivePath(pathname, sections)
-  const visibleSections = mobile ? sections : sections.filter((section) => section.label === 'Work').map((section) => ({ ...section, items: section.items.filter((item) => item.to !== '/requests/new') }))
-  const shortLabels: Record<string, string> = { '/requests': 'Requests', '/requests/new': 'Create', '/admin/export-profile': 'Export', '/history': 'History' }
+  const activePath = resolveActivePath(pathname, sections, request)
+  const hiddenDrawer = mobile && collapsed
 
   return (
     <aside
       id="primary-navigation"
       ref={navigationRef}
-      aria-hidden={collapsed || undefined}
+      aria-hidden={hiddenDrawer || undefined}
       aria-label="Primary"
-      className={collapsed ? 'app-sidebar app-sidebar--collapsed' : 'app-sidebar'}
-      inert={collapsed || undefined}
+      className={`app-sidebar${collapsed ? ' app-sidebar--collapsed' : ''}${mobile ? ' app-sidebar--mobile' : ''}`}
+      inert={hiddenDrawer || undefined}
       role={mobile && !collapsed ? 'dialog' : undefined}
       aria-modal={mobile && !collapsed ? true : undefined}
     >
@@ -42,11 +46,11 @@ export function NavSidebar({
           <div className="sidebar__title"><span>PSF</span><span>Request Portal</span></div>
           <div className="sidebar__subtitle">Setup File Management</div>
         </div>
-        <button className="icon-button sidebar__close" aria-label="Close navigation" type="button" onClick={onClose}><X size={18} /></button>
+        {mobile ? <button className="icon-button sidebar__close" aria-label="Close navigation" type="button" onClick={onClose}><X size={18} /></button> : null}
       </div>
 
       <div className="sidebar__body">
-        {visibleSections.map((section) => (
+        {sections.map((section) => (
           <div key={section.label}>
             <div className="sidebar__section-label">{section.label}</div>
             <nav className="sidebar__nav" aria-label={section.label}>
@@ -62,22 +66,20 @@ export function NavSidebar({
                     }
                     to={item.to}
                     aria-label={item.label}
+                    title={item.label}
                     aria-current={isActive ? 'page' : undefined}
                     onClick={onNavigate}
                   >
                     <Icon size={16} />
-                    <span>{mobile ? item.label : shortLabels[item.to] ?? item.label}</span>
+                    <span className="sidebar__link-label">{item.label}</span>
                   </Link>
                 )
               })}
             </nav>
           </div>
         ))}
-        {!mobile && role === 'admin' ? <nav className="sidebar__nav sidebar__admin" aria-label="Administration">
-          <Link to="/admin" aria-label="Administration" onClick={onNavigate} className={`sidebar__link${pathname.startsWith('/admin') && pathname !== '/admin/export-profile' ? ' sidebar__link--active' : ''}`} aria-current={pathname === '/admin' ? 'page' : undefined}><Settings size={18} /><span>Admin</span></Link>
-        </nav> : null}
       </div>
-      <div className="sidebar__footer">Engineering operations</div>
+      {footer ? <div className="sidebar__footer">{footer}</div> : null}
     </aside>
   )
 }

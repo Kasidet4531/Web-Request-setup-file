@@ -1,5 +1,9 @@
 # Frontend
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. The 4 October clarification was documentation-only; the approved 5 October implementation now updates source. See the current implementation and verification record.
+
+> **4 October 2026 product requirement:** Audit History navigation and page viewing are available to Requester, Setup Owner and Admin. See [the implemented rule and verification](../docs/audit-history-access.md); older Admin-only History guidance must not drive future UI work.
+
 React + TypeScript with TanStack Router file routes, Vite and Lucide icons.
 The runtime is a client application, not TanStack Start. See
 [current implementation](../docs/current-implementation.md#frontend-routes-and-session-state).

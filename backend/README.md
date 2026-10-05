@@ -1,5 +1,7 @@
 # Backend
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
+
 NestJS API using the Express adapter, PostgreSQL via `pg.Pool`,
 `express-session` and ExcelJS. See [current implementation](../docs/current-implementation.md)
 for the supported API and authorization behavior.

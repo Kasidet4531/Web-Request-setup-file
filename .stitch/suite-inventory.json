@@ -1,0 +1,493 @@
+{
+  "date": "2026-10-05",
+  "projectId": "15540984743145901568",
+  "status": "approved_for_implementation",
+  "approvalDate": "2026-10-05",
+  "approvalContext": "Product owner approved all 31 Desktop role/state captures in Light/Dark and authorized application implementation; browser and full integrated QA remain pending. Source changes are working-tree implementation, not deployment evidence.",
+  "desktopOnly": true,
+  "scope": "All remaining primary and Admin pages plus common navigation updates",
+  "screens": [
+    {
+      "key": "dashboard-requester",
+      "page": "dashboard",
+      "role": "requester",
+      "route": "/dashboard",
+      "title": "Dashboard",
+      "htmlSource": "suite-dashboard-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "12918096961075440925",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=12918096961075440925"
+    },
+    {
+      "key": "requests-requester",
+      "page": "requests",
+      "role": "requester",
+      "route": "/requests",
+      "title": "Requests",
+      "htmlSource": "suite-requests-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "9880368216225540594",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=9880368216225540594"
+    },
+    {
+      "key": "detail-requester",
+      "page": "detail",
+      "role": "requester",
+      "route": "/requests/PSF-2026-0039",
+      "title": "Request Detail",
+      "htmlSource": "suite-detail-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "7621893470971561441",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=7621893470971561441"
+    },
+    {
+      "key": "dashboard-owner",
+      "page": "dashboard",
+      "role": "owner",
+      "route": "/dashboard",
+      "title": "Dashboard",
+      "htmlSource": "suite-dashboard-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "3360253266530025101",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=3360253266530025101"
+    },
+    {
+      "key": "requests-owner",
+      "page": "requests",
+      "role": "owner",
+      "route": "/requests",
+      "title": "Requests",
+      "htmlSource": "suite-requests-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "10964833883209500206",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=10964833883209500206"
+    },
+    {
+      "key": "detail-owner",
+      "page": "detail",
+      "role": "owner",
+      "route": "/requests/PSF-2026-0039",
+      "title": "Request Detail",
+      "htmlSource": "suite-detail-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "13760605604055105348",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=13760605604055105348"
+    },
+    {
+      "key": "new-request-requester",
+      "page": "new-request",
+      "role": "requester",
+      "route": "/requests/new",
+      "title": "New Request",
+      "htmlSource": "suite-new-request-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "7049584366369927789",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=7049584366369927789"
+    },
+    {
+      "key": "my-drafts-requester",
+      "page": "my-drafts",
+      "role": "requester",
+      "route": "/my-drafts",
+      "title": "My Drafts",
+      "htmlSource": "suite-my-drafts-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "5463900447438137991",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=5463900447438137991"
+    },
+    {
+      "key": "draft-detail-requester",
+      "page": "draft-detail",
+      "role": "requester",
+      "route": "/requests/DRAFT-2026-0012",
+      "title": "ST Fab template map review",
+      "htmlSource": "suite-draft-detail-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "10752246070385433494",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=10752246070385433494"
+    },
+    {
+      "key": "new-request-owner",
+      "page": "new-request",
+      "role": "owner",
+      "route": "/requests/new",
+      "title": "New Request",
+      "htmlSource": "suite-new-request-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "11725053362149875942",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=11725053362149875942"
+    },
+    {
+      "key": "my-drafts-owner",
+      "page": "my-drafts",
+      "role": "owner",
+      "route": "/my-drafts",
+      "title": "My Drafts",
+      "htmlSource": "suite-my-drafts-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "4561225278074530880",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=4561225278074530880"
+    },
+    {
+      "key": "draft-detail-owner",
+      "page": "draft-detail",
+      "role": "owner",
+      "route": "/requests/DRAFT-2026-0012",
+      "title": "ST Fab template map review",
+      "htmlSource": "suite-draft-detail-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "11593276805698257844",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=11593276805698257844"
+    },
+    {
+      "key": "request-history-requester",
+      "page": "request-history",
+      "role": "requester",
+      "route": "/requests/PSF-2026-0039/history",
+      "title": "Request History",
+      "htmlSource": "suite-request-history-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "15654756040507272096",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=15654756040507272096"
+    },
+    {
+      "key": "audit-history-requester",
+      "page": "audit-history",
+      "role": "requester",
+      "route": "/history",
+      "title": "Audit History",
+      "htmlSource": "suite-audit-history-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "13287506031561753362",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=13287506031561753362"
+    },
+    {
+      "key": "request-history-owner",
+      "page": "request-history",
+      "role": "owner",
+      "route": "/requests/PSF-2026-0039/history",
+      "title": "Request History",
+      "htmlSource": "suite-request-history-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "16772701750426698848",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=16772701750426698848"
+    },
+    {
+      "key": "audit-history-owner",
+      "page": "audit-history",
+      "role": "owner",
+      "route": "/history",
+      "title": "Audit History",
+      "htmlSource": "suite-audit-history-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "16046167029017161966",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=16046167029017161966"
+    },
+    {
+      "key": "audit-history-admin",
+      "page": "audit-history",
+      "role": "admin",
+      "route": "/history",
+      "title": "Audit History",
+      "htmlSource": "suite-audit-history-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "8993818983778680877",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=8993818983778680877"
+    },
+    {
+      "key": "export-requester",
+      "page": "export",
+      "role": "requester",
+      "route": "/admin/export-profile",
+      "title": "Export to Excel",
+      "htmlSource": "suite-export-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "14998026508623173160",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=14998026508623173160"
+    },
+    {
+      "key": "export-admin",
+      "page": "export",
+      "role": "admin",
+      "route": "/admin/export-profile",
+      "title": "Export to Excel",
+      "htmlSource": "suite-export-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "8838975277194552739",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=8838975277194552739"
+    },
+    {
+      "key": "login-public",
+      "page": "login",
+      "role": "public",
+      "route": "/login",
+      "title": "Company sign-in",
+      "htmlSource": "suite-login-public.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "3832818407496273134",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=3832818407496273134"
+    },
+    {
+      "key": "admin-admin",
+      "page": "admin",
+      "role": "admin",
+      "route": "/admin",
+      "title": "Administration",
+      "htmlSource": "suite-admin-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "13319518955257527315",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=13319518955257527315"
+    },
+    {
+      "key": "admin-users-admin",
+      "page": "admin-users",
+      "role": "admin",
+      "route": "/admin/users",
+      "title": "Users & Roles",
+      "htmlSource": "suite-admin-users-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "14697717261015693809",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=14697717261015693809"
+    },
+    {
+      "key": "admin-status-admin",
+      "page": "admin-status",
+      "role": "admin",
+      "route": "/admin/workflow",
+      "title": "Status Management",
+      "htmlSource": "suite-admin-status-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "10495529682721251919",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=10495529682721251919"
+    },
+    {
+      "key": "admin-forms-requester-admin",
+      "page": "admin-forms-requester",
+      "role": "admin",
+      "route": "/admin/form-config?formKey=psf-request",
+      "title": "Form Management",
+      "htmlSource": "suite-admin-forms-requester-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "11595710009703226268",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=11595710009703226268"
+    },
+    {
+      "key": "admin-form-editor-requester-admin",
+      "page": "admin-form-editor-requester",
+      "role": "admin",
+      "route": "/admin/form-config/psf-request/3",
+      "title": "Requester Information Form",
+      "htmlSource": "suite-admin-form-editor-requester-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "1111836746780652368",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=1111836746780652368"
+    },
+    {
+      "key": "admin-forms-psf-admin",
+      "page": "admin-forms-psf",
+      "role": "admin",
+      "route": "/admin/form-config?formKey=psf-created-information",
+      "title": "Form Management",
+      "htmlSource": "suite-admin-forms-psf-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "5769791481467384463",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=5769791481467384463"
+    },
+    {
+      "key": "admin-form-editor-psf-admin",
+      "page": "admin-form-editor-psf",
+      "role": "admin",
+      "route": "/admin/form-config/psf-created-information/2",
+      "title": "PSF Created Information Form",
+      "htmlSource": "suite-admin-form-editor-psf-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "5079366848255975639",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=5079366848255975639"
+    },
+    {
+      "key": "admin-autofill-admin",
+      "page": "admin-autofill",
+      "role": "admin",
+      "route": "/admin/autofill",
+      "title": "Auto-fill Rules",
+      "htmlSource": "suite-admin-autofill-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "2187442404172737842",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=2187442404172737842"
+    },
+    {
+      "key": "admin-master-data-admin",
+      "page": "admin-master-data",
+      "role": "admin",
+      "route": "/admin/master-data",
+      "title": "Master Data",
+      "htmlSource": "suite-admin-master-data-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "16640110873866473275",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=16640110873866473275"
+    },
+    {
+      "key": "admin-form-active-requester-admin",
+      "page": "admin-form-active-requester",
+      "role": "admin",
+      "route": "/admin/form-config/psf-request/2",
+      "title": "Requester Information Form — Active",
+      "htmlSource": "suite-admin-form-active-requester-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "16780460359036933340",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=16780460359036933340"
+    },
+    {
+      "key": "admin-form-active-psf-admin",
+      "page": "admin-form-active-psf",
+      "role": "admin",
+      "route": "/admin/form-config/psf-created-information/1",
+      "title": "PSF Created Information Form — Active",
+      "htmlSource": "suite-admin-form-active-psf-admin.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "10463777411470288956",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=10463777411470288956"
+    }
+  ],
+  "screenCount": 31,
+  "visualStateCount": 62,
+  "aliases": {
+    "/admin/form-config/$version": "Requester editor alias",
+    "/admin/form-config/$formKey/$version": "Explicit form-family editor",
+    "/": "Dashboard redirect"
+  },
+  "review": "suite-review.md",
+  "verification": "suite-verification.json",
+  "productionSourceModified": true,
+  "implementation": {
+    "status": "complete_in_working_tree",
+    "verifiedDate": "2026-10-05",
+    "verificationPath": "../docs/superpowers/plans/2026-10-05-stitch-desktop-implementation.md",
+    "configuredPostgresAndLdapExercised": false,
+    "deployed": false
+  }
+}

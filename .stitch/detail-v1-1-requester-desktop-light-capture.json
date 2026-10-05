@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "source": "headless_browser",
+    "url": "http://127.0.0.1:4182/screens/5633881947599169946",
+    "route": "/screens/5633881947599169946",
+    "title": "Capture /screens/5633881947599169946",
+    "outputPath": "/home/kasidet4531/Desktop/Web_Setup_file/Web-Request-setup-file/.stitch/detail-v1-1-requester-desktop-light.html",
+    "pageId": 1,
+    "screenshotPath": "/home/kasidet4531/Desktop/Web_Setup_file/Web-Request-setup-file/.stitch/detail-v1-1-requester-desktop-light.png",
+    "matchedLiveTab": true,
+    "telemetry": {
+      "visibleTextLength": 1302,
+      "interactiveCount": 33,
+      "leafNodeCount": 145,
+      "loadingIndicatorsFound": []
+    },
+    "status": "saved",
+    "htmlBytes": 72512
+  }
+}

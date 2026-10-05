@@ -1,5 +1,7 @@
 # Frontend redesign audit
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
+
 Audit date: 2026-10-03. Source baseline: `e079324`, with an initially clean working tree. This records the existing frontend and the contracts a visual redesign must preserve. It is not evidence of a production deployment or live business-flow verification. Source code takes precedence over older documentation and historical ADRs.
 
 ## Audit method and evidence
@@ -12,7 +14,7 @@ The 24 paired captures are `/private/tmp/psf-before-{screen}-{desktop|mobile}.pn
 
 ## Route inventory
 
-Navigation is role-sensitive, while backend checks remain authoritative. Every authenticated role can create requests and access its own drafts. Admin tools and global history are admin-only; Excel export is available to requesters and admins.
+Navigation is role-sensitive, while backend checks remain authoritative. Every authenticated role can create requests and access its own drafts. Observed source baseline: Admin tools and global history are restricted to Admin; the latter is superseded as a product requirement by [all-role Audit History access, confirmed 4 October 2026](../audit-history-access.md). Excel export is available to requesters and admins.
 
 | Route | Current function and boundary |
 | --- | --- |
@@ -23,7 +25,7 @@ Navigation is role-sensitive, while backend checks remain authoritative. Every a
 | `/my-drafts` | Creator-owned drafts. |
 | `/requests/new` | Active-schema form; saving creates a Draft. |
 | `/requests/$requestId` | Requester/PSF forms, status actions and embedded request history. |
-| `/history` | Admin global audit filters and action rows. |
+| `/history` | Observed Admin-only global audit filters/action rows; target access is now every authenticated role, pending implementation. |
 | `/admin/users` | Admin user roles and setup-owner departments. |
 | `/admin/form-config` | Version lists for both managed form families. |
 | `/admin/form-config/$version` | Requester-form version editor. |
@@ -86,7 +88,7 @@ Evidence: [catalog operations](../../backend/src/admin/workflow_transition.servi
 
 Autofill remains suggestions from one latest currently completed exact-match source, using canonical keys and completion timestamp/ID ordering. Preserve manual values, edits made while lookups are pending, stale-result guards and field status feedback. Rules target `psf-request`; publishing can inactivate invalid rules or skip removed targets. Show inactive reasons and retain explicit valid rule editing to reactivate them.
 
-Keep per-request action history and field changes within metadata; global audit remains admin-only and unpaged. Do not expose masked PSF history through a redesigned timeline.
+Keep per-request action history and field changes within metadata; global audit is unpaged. The observed Admin-only gate must be replaced during implementation of the [confirmed all-role access requirement](../audit-history-access.md); it is not a redesign constraint. Do not expose masked PSF history through a redesigned timeline.
 
 Excel export is backend-generated XLSX for admins/requesters only. Requesters export creator-owned records; admins exclude foreign Drafts. Preserve status/from/to filtering, immediate XLSX download and 202 queued-job polling with queued/running/completed/failed states. Counts strictly greater than the configured threshold queue; the default is 2000. Jobs are owner-scoped. Export fields use canonical identities/exportable flags across active and captured schemas, with unreleased PSF values masked. The current export page preview uses the general request-list endpoint, whose scope differs from export; it is not proof of exact export contents.
 

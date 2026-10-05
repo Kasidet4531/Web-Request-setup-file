@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-04",
+  "artifactChecks": [
+    {
+      "role": "requester",
+      "device": "desktop",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "pngBytes": 167176
+    },
+    {
+      "role": "requester",
+      "device": "desktop",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "pngBytes": 166806
+    },
+    {
+      "role": "requester",
+      "device": "mobile",
+      "mode": "light",
+      "width": 390,
+      "height": 844,
+      "pngBytes": 86214
+    },
+    {
+      "role": "requester",
+      "device": "mobile",
+      "mode": "dark",
+      "width": 390,
+      "height": 844,
+      "pngBytes": 85083
+    },
+    {
+      "role": "owner",
+      "device": "desktop",
+      "mode": "light",
+      "width": 1280,
+      "height": 800,
+      "pngBytes": 161705
+    },
+    {
+      "role": "owner",
+      "device": "desktop",
+      "mode": "dark",
+      "width": 1280,
+      "height": 800,
+      "pngBytes": 163586
+    },
+    {
+      "role": "owner",
+      "device": "mobile",
+      "mode": "light",
+      "width": 390,
+      "height": 844,
+      "pngBytes": 89007
+    },
+    {
+      "role": "owner",
+      "device": "mobile",
+      "mode": "dark",
+      "width": 390,
+      "height": 844,
+      "pngBytes": 88127
+    }
+  ],
+  "visualReview": "All four screens inspected in both theme states; theme buttons tested",
+  "horizontalOverflowFound": false,
+  "ownerScope": "PSF department work / MFG",
+  "mobileMenuAndThemeTargetPx": 44,
+  "ownerDarkStatusContrast": 5.21,
+  "productionSourceChanged": false
+}

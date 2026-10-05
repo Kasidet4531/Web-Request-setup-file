@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type PsfRequestResponse } from '../services/api'
 import type { ActiveFormSchemaResponse, FormSchema } from '../types/forms'
-import { ActiveSchemaForm, DraftSchemaUpgradeDecision } from './ActiveSchemaForm'
+import { ActiveSchemaForm, DraftSchemaUpgradeDecision, type ActiveSchemaFormProps } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 
 const requestApi = vi.hoisted(() => ({
   createDraftRequest: vi.fn(),
   fetchActiveFormSchema: vi.fn(),
   fetchPsfRequest: vi.fn(),
+  fetchRuntimeAutofillSuggestions: vi.fn(),
   submitPsfRequest: vi.fn(),
   updateDraftRequesterData: vi.fn(),
   upgradeDraftSchema: vi.fn(),
@@ -1133,5 +1134,180 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     expect(getFormRenderer(page).props.schema).toEqual(snapshotSchema)
     expect(getFormRenderer(page).props.values).toEqual(remainingValues)
     expect(requestApi.upgradeDraftSchema).not.toHaveBeenCalled()
+  })
+})
+
+
+const submittedSchema: FormSchema = {
+  ...snapshotSchema,
+  sections: [{ ...snapshotSchema.sections[0], fields: [
+    { fieldKey: 'identity', canonicalKey: 'requester', label: 'Requester Name', type: 'text', required: true },
+    { fieldKey: 'product_type', canonicalKey: 'product_type', label: 'Product Type', type: 'text', required: true, autofillTrigger: true },
+    { fieldKey: 'legacy_note', canonicalKey: 'legacy_note', label: 'Legacy Note', type: 'textarea', required: false },
+  ] }],
+}
+const submittedValues = { identity: 'Signed-in requester', product_type: 'New Product', legacy_note: 'Saved note' }
+
+function renderExplicitForm(props: Partial<ActiveSchemaFormProps> = {}) {
+  hookHarness.beginRender()
+  return ActiveSchemaForm({ mode: 'request', requestId: 'request-1', explicitEdit: true, ...props })
+}
+function clickButton(page: unknown, label: string) {
+  const matches = (element: RenderedElement) => element.type === 'button' && element.props.children === label
+  const button = findRenderedElement(page, matches) ?? requireRenderedElement(getFormRenderer(page).props.footerActions, matches)
+  const onClick = button.props.onClick
+  if (typeof onClick !== 'function') throw new Error(`Expected ${label} action`)
+  onClick()
+}
+async function loadSubmittedForm(props: Partial<ActiveSchemaFormProps> = {}) {
+  renderExplicitForm(props)
+  hookHarness.runEffects()
+  await flushAsyncWork()
+  return renderExplicitForm(props)
+}
+
+describe('ActiveSchemaForm explicit submitted editing', () => {
+  beforeEach(() => {
+    hookHarness.reset()
+    Object.values(requestApi).forEach((method) => method.mockReset())
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: submittedValues }))
+    requestApi.fetchActiveFormSchema.mockResolvedValue(currentActiveRequestSchema)
+  })
+
+  it('starts in view mode and lets authorized users explicitly edit and save information with identity locked', async () => {
+    let page = await loadSubmittedForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(true)
+    expect(getFormRenderer(page).props.onSubmit).toBeUndefined()
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect(getFormRenderer(page).props.readOnlyFieldKeys).toEqual(['identity'])
+    expect(getFormRenderer(page).props.submitLabel).toBe('Save information')
+    const change = getFormRenderer(page).props.onChange as (fieldKey: string, value: string) => void
+    change('identity', 'Forged requester')
+    change('legacy_note', 'Edited note')
+    page = renderExplicitForm()
+    expect(getFormRenderer(page).props.values).toEqual({ ...submittedValues, legacy_note: 'Edited note' })
+    requestApi.updateDraftRequesterData.mockResolvedValueOnce(buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: { ...submittedValues, legacy_note: 'Edited note' } }))
+    await (getFormRenderer(page).props.onSubmit as (values: unknown) => Promise<void>)(getFormRenderer(page).props.values)
+    page = renderExplicitForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(true)
+    expect(getFormRenderer(page).props.values).toEqual({ ...submittedValues, legacy_note: 'Edited note' })
+    expect(requestApi.updateDraftRequesterData).toHaveBeenCalledWith('request-1', { formVersion: 1, expectedUpdatedAt: '2026-08-08T00:00:00.000Z', requesterData: { ...submittedValues, legacy_note: 'Edited note' } })
+  })
+
+  it('retains edit mode and local values after a failed save, then Cancel clears the error and restores saved values', async () => {
+    const onDirtyChange = vi.fn()
+    const props = { onDirtyChange }
+    let page = await loadSubmittedForm(props)
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm(props)
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', 'Unsaved note')
+    requestApi.updateDraftRequesterData.mockRejectedValueOnce(new Error('Save unavailable'))
+    page = renderExplicitForm(props)
+    await (getFormRenderer(page).props.onSubmit as (values: unknown) => Promise<void>)(getFormRenderer(page).props.values)
+    page = renderExplicitForm(props)
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect((getFormRenderer(page).props.values as Record<string, string>).legacy_note).toBe('Unsaved note')
+    expect(findRenderedElement(page, (element) => element.props.title === 'Save unavailable')).not.toBeNull()
+    clickButton(page, 'Cancel')
+    page = renderExplicitForm(props)
+    expect(getFormRenderer(page).props.values).toEqual(submittedValues)
+    expect(getFormRenderer(page).props.readOnly).toBe(true)
+    expect(findRenderedElement(page, (element) => element.props.title === 'Save unavailable')).toBeNull()
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+    expect(requestApi.fetchPsfRequest).toHaveBeenCalledOnce()
+  })
+
+  it('keeps edits through conflict recovery and Cancel restores the latest server baseline without reloading', async () => {
+    let page = await loadSubmittedForm()
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm()
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', 'Local edit')
+    requestApi.updateDraftRequesterData.mockRejectedValueOnce(new ApiError('Changed', 409, 'Conflict', null))
+    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: { ...submittedValues, legacy_note: 'New server baseline' }, updatedAt: '2026-08-09T00:00:00.000Z' }))
+    page = renderExplicitForm()
+    await (getFormRenderer(page).props.onSubmit as (values: unknown) => Promise<void>)(getFormRenderer(page).props.values)
+    page = renderExplicitForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect((getFormRenderer(page).props.values as Record<string, string>).legacy_note).toBe('Local edit')
+    clickButton(page, 'Cancel')
+    page = renderExplicitForm()
+    expect((getFormRenderer(page).props.values as Record<string, string>).legacy_note).toBe('New server baseline')
+    expect(requestApi.fetchPsfRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('rebases an external snapshot while editing and ignores a late autofill response after Cancel', async () => {
+    let finishLookup: ((value: unknown) => void) | undefined
+    requestApi.fetchRuntimeAutofillSuggestions.mockImplementationOnce(() => new Promise((resolve) => { finishLookup = resolve }))
+    let page = await loadSubmittedForm()
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm()
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', 'Local note')
+    const snapshot = buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: { ...submittedValues, legacy_note: '' }, updatedAt: '2026-08-10T00:00:00.000Z' })
+    renderExplicitForm({ requestSnapshot: snapshot })
+    hookHarness.runEffects()
+    page = renderExplicitForm({ requestSnapshot: snapshot })
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect((getFormRenderer(page).props.values as Record<string, string>).legacy_note).toBe('Local note')
+    // The trigger stays equal to the saved value, so generation invalidation is
+    // what stops the late response after Cancel (rather than value mismatch).
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('product_type', 'New Product')
+    clickButton(page, 'Cancel')
+    finishLookup?.({ matched: true, suggestedValues: { legacy_note: 'Late suggestion' } })
+    await flushAsyncWork()
+    page = renderExplicitForm({ requestSnapshot: snapshot })
+    expect(getFormRenderer(page).props.readOnly).toBe(true)
+    expect(getFormRenderer(page).props.values).toEqual({ ...submittedValues, legacy_note: '' })
+    expect(getFormRenderer(page).props.fieldStatuses).toEqual({})
+  })
+
+  it('does not offer Edit information to an unauthorized user', async () => {
+    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ status: 'In progress', canEditRequesterData: false, schemaSnapshot: submittedSchema }))
+    const page = await loadSubmittedForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(true)
+    expect(findRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Edit information')).toBeNull()
+  })
+
+  it.each(['requester', 'requester_name'])('leaves %s identity to the signed-in account when autofill arrives before account data', async (canonicalKey) => {
+    const schema = { ...submittedSchema, sections: submittedSchema.sections.map((section) => ({ ...section, fields: section.fields.map((field) => field.fieldKey === 'identity' ? { ...field, canonicalKey } : field) })) }
+    requestApi.fetchActiveFormSchema.mockResolvedValue({ ...currentActiveRequestSchema, schema })
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValueOnce({ matched: true, suggestedValues: { [canonicalKey]: 'A different requester', legacy_note: 'Suggested note' } })
+    const props = { requestId: undefined }
+    let page = await loadSubmittedForm(props)
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('product_type', 'New Product')
+    await flushAsyncWork()
+    page = renderExplicitForm(props)
+    expect(getFormRenderer(page).props.values).toEqual({ identity: '', product_type: 'New Product', legacy_note: 'Suggested note' })
+    expect(getFormRenderer(page).props.fieldStatuses).toEqual({ legacy_note: 'auto-filled' })
+  })
+
+  it('keeps New and Draft flows immediately editable with optional fields grouped', async () => {
+    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft())
+    const page = await loadSubmittedForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect(getFormRenderer(page).props.collapseOptionalFields).toBe(true)
+    expect(findRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Edit information')).toBeNull()
+    hookHarness.reset()
+    const newPage = await loadNewDraftForm()
+    expect(getFormRenderer(newPage).props.readOnly).toBe(false)
+    expect(getFormRenderer(newPage).props.collapseOptionalFields).toBe(true)
+  })
+
+  it.each(['requester', 'requester_name'])('fills signed-in %s identity after other New Request edits without making initialization dirty', async (canonicalKey) => {
+    const schema = { ...submittedSchema, sections: submittedSchema.sections.map((section) => ({ ...section, fields: section.fields.map((field) => field.fieldKey === 'identity' ? { ...field, canonicalKey } : field) })) }
+    requestApi.fetchActiveFormSchema.mockResolvedValue({ ...currentActiveRequestSchema, schema })
+    const onDirtyChange = vi.fn()
+    const props = { requestId: undefined, onDirtyChange }
+    let page = await loadSubmittedForm(props)
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', 'Entered before account arrived')
+    renderExplicitForm({ ...props, requesterIdentity: 'Current account name' })
+    hookHarness.runEffects()
+    page = renderExplicitForm({ ...props, requesterIdentity: 'Current account name' })
+    expect(getFormRenderer(page).props.values).toEqual({ identity: 'Current account name', product_type: '', legacy_note: 'Entered before account arrived' })
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', '')
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+    expect(requestApi.fetchActiveFormSchema).toHaveBeenCalledOnce()
   })
 })

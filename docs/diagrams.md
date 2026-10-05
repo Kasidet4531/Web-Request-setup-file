@@ -57,7 +57,8 @@ flowchart TD
   Draft --> Submit[Explicit submit to selected work status]
   Submit --> Validate[Validate captured requirements]
   Validate --> Shared[Shared non-Draft work]
-  Shared --> Status[Change to another configured non-Draft status]
+  Shared --> Choice[User explicitly selects full catalog Status]
+  Choice --> Status[Explicit save after selection]
   Status --> Trigger{Entering configured PSF release trigger?}
   Trigger -->|Yes| PsfCheck[Validate captured PSF requirements]
   PsfCheck --> Release[Set release timestamp if absent]
@@ -67,7 +68,7 @@ flowchart TD
 
 Sources: [requests](../backend/src/requests/requests.service.ts),
 [status catalog](../backend/src/admin/workflow_transition.service.ts).
-This is a logical overview, not an exhaustive error/permission state machine.
+This is a logical overview, not a stage sequence or automatic workflow. Opening requests, filtering, autofill and saving either form do not change Status. The current catalog strings and no-automation rule are in [the Status contract](status-catalog-and-manual-updates.md).
 Catalog kinds are draft/open/completed/cancelled; percentage labels do not impose
 progression. The initial release trigger is unconfigured. Once released,
 requester PSF visibility persists through later status changes.

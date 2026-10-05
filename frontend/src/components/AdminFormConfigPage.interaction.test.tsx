@@ -24,13 +24,14 @@ const formConfigApi = vi.hoisted(() => ({
 }))
 const navigate = vi.hoisted(() => vi.fn())
 const setBreadcrumb = vi.hoisted(() => vi.fn())
-const blockerHarness = vi.hoisted(() => ({ options: null as unknown }))
+const blockerHarness = vi.hoisted(() => ({ options: null as unknown, status: 'idle' as 'idle' | 'blocked', destination: null as string | null, committedPath: null as string | null, proceed: vi.fn(), reset: vi.fn() }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-router')>(),
   useNavigate: () => navigate,
   useBlocker: (options: unknown) => {
     blockerHarness.options = options
+    return blockerHarness
   },
 }))
 
@@ -302,6 +303,10 @@ function getConfirmation(page: unknown): RenderedElement {
   return requireRenderedElement(page, (element) => element.type === ConfirmDialog)
 }
 
+function getLeaveConfirmation(page: unknown): RenderedElement {
+  return requireRenderedElement(page, (element) => element.type === ConfirmDialog && element.props.confirmLabel === 'Discard and leave')
+}
+
 function getButton(page: unknown, label: string): RenderedElement {
   return requireRenderedElement(
     page,
@@ -341,6 +346,7 @@ type BlockerArgs = {
 
 type BlockerOptions = {
   enableBeforeUnload?: boolean | (() => boolean)
+  withResolver?: boolean
   shouldBlockFn: (args: BlockerArgs) => boolean | Promise<boolean>
 }
 
@@ -362,6 +368,10 @@ async function attemptEditorNavigation(
     current: { pathname: currentPathname },
     next: { pathname: nextPathname },
   })
+  if (blocked) {
+    blockerHarness.status = 'blocked'
+    blockerHarness.destination = nextPathname
+  }
   return blocked ? currentPathname : nextPathname
 }
 
@@ -384,6 +394,11 @@ describe('AdminFormConfigPage interactions', () => {
     formConfigApi.saveAdminFormConfigDraft.mockReset()
     navigate.mockReset()
     blockerHarness.options = null
+    blockerHarness.status = 'idle'
+    blockerHarness.destination = null
+    blockerHarness.committedPath = null
+    blockerHarness.reset.mockReset().mockImplementation(() => { blockerHarness.status = 'idle' })
+    blockerHarness.proceed.mockReset().mockImplementation(() => { blockerHarness.committedPath = blockerHarness.destination; blockerHarness.status = 'idle' })
     formConfigHookHarness.reset()
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { confirm: vi.fn(() => true) } })
   })
@@ -421,50 +436,53 @@ describe('AdminFormConfigPage interactions', () => {
     expect(window.confirm).not.toHaveBeenCalled()
   })
 
-  it('routes editor exits through the central blocker instead of an overlapping Back-link guard', async () => {
+  it('routes editor exits through one custom Stay or Discard dialog, preserving edits until navigation is confirmed', async () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
-    const page = await loadAdminFormConfigPage()
-    const findBack = (tree: unknown) => requireRenderedElement(tree, (element) => element.props.to === '/admin/form-config' && element.props.className === 'secondary-button')
-    const confirm = window.confirm as ReturnType<typeof vi.fn>
-    expect(findBack(page).props.onClick).toBeUndefined()
-
+    let page = await loadAdminFormConfigPage()
+    const back = requireRenderedElement(page, (element) => element.props.to === '/admin/form-config' && element.props.className === 'secondary-button')
+    expect(back.props.onClick).toBeUndefined()
+    expect(getBlockerOptions().withResolver).toBe(true)
     const editedText = JSON.stringify({ ...editableSchema, title: 'Unsaved' })
     ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: editedText } })
     renderAdminFormConfigPage()
-    confirm.mockReturnValue(false)
     expect(await attemptEditorNavigation('/admin/form-config')).toBe('/admin/form-config/2')
-    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and leave this page?')
-    expect(confirm).toHaveBeenCalledOnce()
-
-    confirm.mockReturnValue(true)
-    expect(await attemptEditorNavigation('/admin/form-config')).toBe('/admin/form-config')
-    expect(confirm).toHaveBeenCalledTimes(2)
-    expect(getEditor(renderAdminFormConfigPage()).props.value).toBe(editedText)
+    page = renderAdminFormConfigPage()
+    expect(getLeaveConfirmation(page).props.open).toBe(true)
+    expect(getLeaveConfirmation(page).props.cancelLabel).toBe('Stay on page')
+    expect(window.confirm).not.toHaveBeenCalled()
+    ;(getLeaveConfirmation(page).props.onCancel as () => void)()
+    expect(blockerHarness.committedPath).toBeNull()
+    page = renderAdminFormConfigPage()
+    expect(getLeaveConfirmation(page).props.open).toBe(false)
+    expect(getEditor(page).props.value).toBe(editedText)
+    expect(await attemptEditorNavigation('/admin/form-config')).toBe('/admin/form-config/2')
+    page = renderAdminFormConfigPage()
+    ;(getLeaveConfirmation(page).props.onConfirm as () => void)()
+    expect(blockerHarness.committedPath).toBe('/admin/form-config')
+    expect(formConfigApi.saveAdminFormConfigDraft).not.toHaveBeenCalled()
+    expect(formConfigApi.discardAdminFormConfigDraft).not.toHaveBeenCalled()
   })
 
-  it('guards sidebar, New Request, and browser Back exits once while preserving cancelled edits', async () => {
+  it('guards sidebar, New Request, and browser Back while allowing clean or same-page navigation', async () => {
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion()]))
     const page = await loadAdminFormConfigPage()
     expect(getBlockerOptions().enableBeforeUnload).toBe(false)
+    expect(await attemptEditorNavigation('/dashboard')).toBe('/dashboard')
     const editedText = JSON.stringify({ ...editableSchema, title: 'Keep these edits' })
     ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: editedText } })
     renderAdminFormConfigPage()
     expect(getBlockerOptions().enableBeforeUnload).toBe(true)
-
-    const confirm = window.confirm as ReturnType<typeof vi.fn>
-    confirm.mockReturnValue(false)
-    expect(await attemptEditorNavigation('/dashboard')).toBe('/admin/form-config/2')
-    expect(confirm).toHaveBeenCalledOnce()
-    expect(getEditor(renderAdminFormConfigPage()).props.value).toBe(editedText)
-
-    confirm.mockReturnValue(true)
-    expect(await attemptEditorNavigation('/requests/new')).toBe('/requests/new')
-    expect(confirm).toHaveBeenCalledTimes(2)
-
-    confirm.mockReturnValue(false)
-    expect(await attemptEditorNavigation('/admin/form-config', 'BACK')).toBe('/admin/form-config/2')
-    expect(confirm).toHaveBeenCalledTimes(3)
-    expect(getBlockerOptions().enableBeforeUnload).toBe(true)
+    expect(await attemptEditorNavigation('/admin/form-config/2')).toBe('/admin/form-config/2')
+    expect(blockerHarness.status).toBe('idle')
+    for (const [destination, action] of [['/dashboard', 'PUSH'], ['/requests/new', 'PUSH'], ['/admin/form-config', 'BACK']] as const) {
+      expect(await attemptEditorNavigation(destination, action)).toBe('/admin/form-config/2')
+      const dialog = getLeaveConfirmation(renderAdminFormConfigPage())
+      expect(dialog.props.open).toBe(true)
+      ;(dialog.props.onCancel as () => void)()
+      expect(getEditor(renderAdminFormConfigPage()).props.value).toBe(editedText)
+      expect(blockerHarness.committedPath).toBeNull()
+    }
+    expect(window.confirm).not.toHaveBeenCalled()
   })
 
   it('shows the selected active version read-only and duplicates it into a fresh draft', async () => {
@@ -854,29 +872,25 @@ describe('AdminFormConfigPage interactions', () => {
     expect(findRenderedElement(page, (element) => element.type === 'h1' && element.props.children === 'v2 · PSF Request Form')).toBeNull()
   })
 
-  it('routes a dirty form-family switch through the central blocker exactly once', async () => {
+  it('routes a dirty form-family switch through the custom blocker while Stay preserves the selected family and edits', async () => {
     const formKey = 'psf-created-information'
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildPsfCreatedVersion()], formKey))
     let page = await loadAdminFormConfigPage('7', formKey)
-    const editor = getEditor(page)
-    ;(editor.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: JSON.stringify({ ...buildPsfCreatedVersion().schema, title: 'Unsaved PSF schema' }) } })
+    const editedText = JSON.stringify({ ...buildPsfCreatedVersion().schema, title: 'Unsaved PSF schema' })
+    ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: editedText } })
     page = renderAdminFormConfigPage('7', formKey)
-    const confirm = window.confirm as ReturnType<typeof vi.fn>
-    confirm.mockReturnValue(false)
     ;(getFormKeySelector(page).props.onChange as (event: { target: { value: FormKey } }) => void)({ target: { value: 'psf-request' } })
     expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config', search: { formKey: 'psf-request' } })
-    expect(confirm).not.toHaveBeenCalled()
     expect(await attemptEditorNavigation('/admin/form-config', 'PUSH', '/admin/form-config/psf-created-information/7'))
       .toBe('/admin/form-config/psf-created-information/7')
-    expect(confirm).toHaveBeenCalledWith('Discard unsaved form changes and leave this page?')
-    expect(confirm).toHaveBeenCalledOnce()
-
-    confirm.mockReturnValue(true)
-    ;(getFormKeySelector(page).props.onChange as (event: { target: { value: FormKey } }) => void)({ target: { value: 'psf-request' } })
-    expect(navigate).toHaveBeenCalledTimes(2)
-    expect(await attemptEditorNavigation('/admin/form-config', 'PUSH', '/admin/form-config/psf-created-information/7'))
-      .toBe('/admin/form-config')
-    expect(confirm).toHaveBeenCalledTimes(2)
+    page = renderAdminFormConfigPage('7', formKey)
+    expect(getLeaveConfirmation(page).props.open).toBe(true)
+    ;(getLeaveConfirmation(page).props.onCancel as () => void)()
+    page = renderAdminFormConfigPage('7', formKey)
+    expect(getFormKeySelector(page).props.value).toBe(formKey)
+    expect(getEditor(page).props.value).toBe(editedText)
+    expect(blockerHarness.committedPath).toBeNull()
+    expect(window.confirm).not.toHaveBeenCalled()
   })
 
   it('duplicates a PSF version and opens its explicit form-key editor URL', async () => {

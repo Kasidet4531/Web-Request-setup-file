@@ -1,5 +1,7 @@
 # Connected backend review — 2026-10-03
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
 ## Runtime and authorization
 
 The user authorized starting the configured development backend, including its existing storage initialization, and requested review against PostgreSQL data. Backend runs on port 3000; the frontend on `http://127.0.0.1:5173` proxies `/api` to it. The Codex browser is authenticated through the existing development Admin sign-in. This is a server session backed by `app_users`; application records, status catalog and form schemas come from PostgreSQL.

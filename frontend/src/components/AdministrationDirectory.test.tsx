@@ -7,21 +7,16 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 describe('AdministrationTools', () => {
-  it('groups every authorized administrator destination into its working category', () => {
+  it('links each of the six authorized administration and reporting tools once', () => {
     const html = renderToStaticMarkup(<AdministrationTools role="admin" />)
-    expect(html).toContain('Request configuration')
-    expect(html).toContain('Access')
-    expect(html).toContain('Reporting')
-    for (const path of ['/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile']) {
+    expect(html).toContain('Audit History')
+    for (const path of ['/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history']) {
       expect(html.match(new RegExp(`href="${path}"`, 'g'))).toHaveLength(1)
     }
-    expect(html.indexOf('href="/admin/form-config"')).toBeLessThan(html.indexOf('id="administration-access"'))
-    expect(html.indexOf('href="/admin/users"')).toBeLessThan(html.indexOf('id="administration-reporting"'))
   })
 
   it('keeps only authorized reporting visible to requesters', () => {
     const html = renderToStaticMarkup(<AdministrationTools role="requester" />)
-    expect(html).toContain('Reporting')
     expect(html).toContain('href="/admin/export-profile"')
     expect(html).not.toContain('href="/admin/form-config"')
     expect(html).not.toContain('href="/admin/users"')

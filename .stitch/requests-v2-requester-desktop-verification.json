@@ -1,0 +1,54 @@
+{
+  "screenId": "5670599282614645185",
+  "role": "requester",
+  "device": "desktop",
+  "bothThemesVerified": true,
+  "noHorizontalOverflow": true,
+  "sharedListNotDashboardScope": true,
+  "exactDatabaseCatalog": true,
+  "singleLineStatusWithFullDisclosure": true,
+  "combinedProductAndStatusFilters": true,
+  "searchEmptyAndReset": true,
+  "noStatusMutation": true,
+  "catalogKindStyling": true,
+  "navigationPermissions": true,
+  "base": {
+    "width": 1280,
+    "scroll": 1280,
+    "statuses": [
+      "20% -- PSF File Creating",
+      "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "99% -- Wait requestor Buyoff site location and wafer map",
+      "100% -- Completed",
+      "0% -- Rejected (Cancel Request)"
+    ],
+    "options": [
+      "5% -- Reject (Information not complete)",
+      "10% -- Test Engineer Data Entry",
+      "20% -- PSF File Creating",
+      "30% -- Compare Old and New layout",
+      "40% -- Feedback Requester(Layout mismatch)",
+      "80% -- Wait for create DCC",
+      "81% -- Edit Template Map (Bin62)",
+      "82% -- Wait for sent Template Map",
+      "83% -- Complete Excel probe pattern",
+      "85 % -- Reject check list",
+      "90% -- Wait for buyoff check list",
+      "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "95% -- Reject (Wrong site location and wafer map)",
+      "99% -- Wait requestor Buyoff site location and wafer map",
+      "100% -- Completed",
+      "0% -- Rejected (Cancel Request)"
+    ],
+    "summaries": 0,
+    "scope": false,
+    "navigation": [
+      "Dashboard",
+      "Requests",
+      "My Drafts",
+      "Audit History",
+      "Export"
+    ],
+    "nowrap": true
+  }
+}

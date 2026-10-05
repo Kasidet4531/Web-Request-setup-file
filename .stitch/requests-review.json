@@ -1,0 +1,108 @@
+{
+  "projectId": "15540984743145901568",
+  "page": "/requests",
+  "status": "awaiting_user_review",
+  "date": "2026-10-05",
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "roles": [
+    "requester",
+    "owner"
+  ],
+  "devices": [
+    "desktop"
+  ],
+  "scope": "shared submitted work; private Drafts excluded",
+  "filters": [
+    "keyword",
+    "status",
+    "productType"
+  ],
+  "statusReference": "../docs/status-catalog-and-manual-updates.md",
+  "auditHistoryForEveryAuthenticatedRole": true,
+  "noAutomaticStatusChanges": true,
+  "sampleRecords": "five fictional records; not live API data",
+  "requestsFrontendPageLimit": 100,
+  "productionSourceModified": false,
+  "screens": [
+    {
+      "key": "requests-requester",
+      "page": "requests",
+      "role": "requester",
+      "route": "/requests",
+      "title": "Requests",
+      "htmlSource": "suite-requests-requester.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "9880368216225540594",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=9880368216225540594",
+      "lightImage": "suite-requests-requester-light.png",
+      "darkImage": "suite-requests-requester-dark.png",
+      "verification": "suite-requests-requester-verification.json"
+    },
+    {
+      "key": "requests-owner",
+      "page": "requests",
+      "role": "owner",
+      "route": "/requests",
+      "title": "Requests",
+      "htmlSource": "suite-requests-owner.html",
+      "device": "desktop",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "screenId": "10964833883209500206",
+      "url": "https://stitch.google.com/projects/15540984743145901568?node-id=10964833883209500206",
+      "lightImage": "suite-requests-owner-light.png",
+      "darkImage": "suite-requests-owner-dark.png",
+      "verification": "suite-requests-owner-verification.json"
+    }
+  ],
+  "nextProposedRoute": "/requests/$requestId",
+  "continueOnlyAfterRequestsFeedback": false,
+  "verificationSummary": "Two Desktop role previews, four Light/Dark states; exact catalog, combined filters, empty/reset, Status disclosure, kind styling, and navigation verified; no production changes.",
+  "directionSupersededBy": null,
+  "version": "desktop-navigation-suite-2026-10-05",
+  "currentDirection": "approved Dashboard v5 neutral palette; Desktop only; single-line Status ellipsis",
+  "review": "suite-review.md",
+  "verification": "suite-verification.json",
+  "approvedAt": "2026-10-04",
+  "nextAuthorizedPage": "/requests/$requestId",
+  "bodyDirection": "Requests v2 body",
+  "currentReviewScope": "Common collapsible sidebar, explicit parent Back and breadcrumbs; page body retained",
+  "priorBodyReview": {
+    "version": 2,
+    "review": "requests-v2-review.md",
+    "screens": [
+      {
+        "role": "requester",
+        "device": "desktop",
+        "screenId": "5670599282614645185",
+        "url": "https://stitch.google.com/projects/15540984743145901568?node-id=5670599282614645185",
+        "lightImage": "requests-v2-requester-desktop-light.png",
+        "darkImage": "requests-v2-requester-desktop-dark.png",
+        "htmlSource": "requests-v2-requester-final.html",
+        "verification": "requests-v2-requester-desktop-verification.json"
+      },
+      {
+        "role": "owner",
+        "device": "desktop",
+        "screenId": "7979127696275533627",
+        "url": "https://stitch.google.com/projects/15540984743145901568?node-id=7979127696275533627",
+        "lightImage": "requests-v2-owner-desktop-light.png",
+        "darkImage": "requests-v2-owner-desktop-dark.png",
+        "htmlSource": "requests-v2-owner-final.html",
+        "verification": "requests-v2-owner-desktop-verification.json"
+      }
+    ],
+    "status": "approved_by_user"
+  },
+  "continueOnlyAfterDashboardFeedback": false,
+  "scopeAuthorization": "All remaining pages together, including all Admin pages"
+}

@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "data": {
+    "status": "uploaded",
+    "file": ".stitch/detail-v2-requester-final.html",
+    "project": "15540984743145901568",
+    "title": "Request Detail v2 — Original layout · Requester · Desktop Light/Dark",
+    "screenIds": [
+      "588921235611737043"
+    ],
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=588921235611737043",
+    "route": "/requests/$requestId",
+    "routeRecorded": true,
+    "warnings": [
+      "This HTML references 6 local asset(s) (/dashboard, /requests, /my-drafts and 3 more) that won't be uploaded, so they'll render broken on Canvas. Make it self-contained first: re-capture the page with 'stitch capture <url>', or run 'stitch capture <file> --origin http://localhost:<port>' to inline the assets from your dev server."
+    ]
+  }
+}

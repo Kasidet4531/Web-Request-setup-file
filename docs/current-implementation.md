@@ -1,8 +1,12 @@
 # Current implementation — unified-local-auth
 
-Source audit date: 2026-10-02. Scope: this branch after application commit
-`01eab7b`, based on `rapid-frontend-rewrite` at `8c11bb4`. This describes checked-in
-behavior, not a production deployment. Source code takes precedence over prose.
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status.
+
+> **Implementation update, 5 October 2026:** Authorized working-tree changes implement [authenticated all-role Audit History](audit-history-access.md), explicit manual Save Status and the approved Desktop shell and request tabs. Light/Dark and sidebar collapse preferences are remembered per browser. Local unit, HTTP, SQL and browser checks passed; see [implementation verification](superpowers/plans/2026-10-05-stitch-desktop-implementation.md). The configured PostgreSQL and LDAP services have not been exercised or mutated by this implementation work. This is not deployment evidence.
+
+Original source audit date: 2026-10-02, with the 5 October working-tree updates noted here. Original scope: this branch after application commit
+`01eab7b`, based on `rapid-frontend-rewrite` at `8c11bb4`. This guide describes
+source behavior, including the working-tree updates above, not a production deployment. Source code takes precedence over prose.
 Historical specs, ADRs, plans and verification records are indexed in
 [the documentation index](README.md).
 
@@ -82,13 +86,14 @@ Sources: [schema constants](../backend/src/admin/form_schema.constants.ts),
 
 Status Management uses immutable catalog identities, verbatim names and
 `draft`/`open`/`completed`/`cancelled` kinds. The seed has 17 entries, including
-Draft; actual configured entries are database state and may differ. Admin can
+Draft; actual configured entries are database state and may differ. The 4 October read-only inspection confirmed 17 configured entries, all stored request Status values in that catalog, and a maximum label length of 71 characters; see [the exact snapshot and current interaction constraints](status-catalog-and-manual-updates.md). Admin can
 create, rename, delete with replacement and configure the PSF release trigger.
 Percentages in labels are display text. There is no directed transition matrix:
 the configured non-Draft statuses other than the current status are offered.
-Draft submission selects a work status explicitly; normal status updates cannot
+Form saves and autofill do not advance Status automatically. There are no preset named-stage action requirements. Draft submission selects a work status explicitly; normal status updates cannot
 submit a Draft or return shared work to Draft. Catalog/request mutations use
 opaque microsecond revisions, transactions, row/config locks, projections and audit.
+Request Detail selects exact runtime catalog values and commits a pending choice only through **Save Status**, separately from form saves. Dirty form data blocks Status saving. Existing submission, access and revision checks remain in place.
 Sources: [catalog](../backend/src/admin/workflow_transition.service.ts),
 [request mutations](../backend/src/requests/requests.service.ts).
 
@@ -108,8 +113,7 @@ Sources: [visibility and release](../backend/src/requests/requests.service.ts),
 Autofill operates on `psf-request` rules. For an active valid rule, it chooses
 one latest currently completed matching request using exact stored trigger value,
 completion timestamp and an ID tie-break. It returns suggestions; it does not
-combine fields from multiple historical requests. Global audit is Admin-only and
-currently unpaged. Requester/PSF edit audit metadata includes per-field key,
+combine fields from multiple historical requests. Global audit now resolves the authenticated stored actor for every role and filters creator-private Draft events before returning rows. Requesters' unreleased PSF update events are also omitted; requestless configuration events remain shared. Global audit is currently unpaged. Requester/PSF edit audit metadata includes per-field key,
 label, before and after values; these are metadata within action rows, not a
 separate audit row per field.
 
@@ -211,22 +215,28 @@ Credentials belong in ignored local configuration.
 | `/admin/workflow` | AdminWorkflowTransitionPage (status catalog UI) |
 | `/admin/autofill` | AdminAutofillRulesPage |
 | `/admin/export-profile` | RequestExportPage; no export-profile CRUD |
-| `/admin/`, `/admin/master-data`, `/requests/$requestId/history` | Placeholder pages |
+| `/admin/` | Administration directory |
+| `/requests/$requestId/history` | RequestHistoryPage |
+| `/admin/master-data` | Placeholder page |
 
 Source: [file routes](../frontend/src/routes),
 [navigation permissions](../frontend/src/components/navigationState.ts).
-Request detail history and the standalone placeholder history route are distinct.
+Request Detail includes Requester Information, PSF Created Information and History tabs for submitted work; its explicit form Edit/Save/Cancel controls remain separate from Save Status. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
 Form editing uses application components, including a textarea-based advanced
 JSON editor, rather than Monaco/CodeMirror.
 Sources: [visual form editor](../frontend/src/components/AdminFormConfigEditor.tsx),
 [advanced JSON textarea](../frontend/src/components/AdminFormConfigPage.tsx).
 
 AppShell loads `/api/me` and subscribes to login/logout/profile-refresh events.
-Other API errors throw `ApiError`; every ordinary 401 does not automatically
-broadcast a global logout. UI navigation visibility does not replace backend checks.
+Other API errors throw `ApiError`; non-`/api/me` 401 responses notify the shared anonymous-session state. UI navigation visibility does not replace backend checks.
 Sources: [AppShell](../frontend/src/components/AppShell.tsx),
 [session events](../frontend/src/services/auth-session.ts),
 [API client](../frontend/src/services/api.ts).
+
+The approved Desktop shell defaults to Light on first visit and remembers explicit Light/Dark and sidebar collapse choices per browser. Collapsed Desktop navigation keeps accessible links usable; Audit History is shared across roles, while Admin tools retain Admin visibility and Export retains its existing role restrictions. Parent Back links sit beside semantic linked breadcrumbs, including Draft → My Drafts and Admin tool → Administration parents. The existing mobile drawer remains available without a mobile redesign.
+Sources: [theme and preferences](../frontend/src/components/theme.ts),
+[sidebar](../frontend/src/components/NavSidebar.tsx),
+[breadcrumb resolution](../frontend/src/components/requestBreadcrumb.ts).
 
 ## Known limits and evidence boundaries
 

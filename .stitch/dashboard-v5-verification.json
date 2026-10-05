@@ -1,0 +1,378 @@
+{
+  "date": "2026-10-04",
+  "scope": "Desktop only; Light/Dark; Stitch prototype; production source unchanged",
+  "mobileDesignInScope": false,
+  "reports": [
+    {
+      "screenId": "17424635658553134230",
+      "role": "requester",
+      "device": "desktop",
+      "noHorizontalOverflowBothThemes": true,
+      "neutralPaletteBothThemes": true,
+      "exactDatabaseCatalog": true,
+      "singleLineAndEllipsis": true,
+      "popoverWithinViewport": true,
+      "filterAndEmptyState": true,
+      "noStatusMutation": true,
+      "selectedCardCheckAndOutlineVerified": true,
+      "noFilterWordInCards": true,
+      "selectionChecks": {
+        "snapshots": [
+          {
+            "selected": [
+              "summaryOpenBtn"
+            ],
+            "checkVisible": true,
+            "inactiveChecksHidden": true,
+            "outline": "solid",
+            "words": "\n          \n            \n              \n              Open work\n            \n            \n          \n          25\n        ",
+            "queueScope": "Open work"
+          },
+          {
+            "selected": [
+              "summaryOverdueBtn"
+            ],
+            "checkVisible": true,
+            "inactiveChecksHidden": true,
+            "outline": "solid",
+            "words": "\n          \n            \n              \n              Overdue\n            \n            \n          \n          15\n        ",
+            "queueScope": "Overdue work"
+          },
+          {
+            "selected": [
+              "summaryCompletedBtn"
+            ],
+            "checkVisible": true,
+            "inactiveChecksHidden": true,
+            "outline": "solid",
+            "words": "\n          \n            \n              \n              Completed\n            \n            \n          \n          0\n        ",
+            "queueScope": "Completed work"
+          }
+        ],
+        "reset": [
+          "summaryOpenBtn"
+        ],
+        "noMutation": true
+      },
+      "base": {
+        "width": 1280,
+        "scrollWidth": 1280,
+        "canvas": "rgb(246, 245, 242)",
+        "options": [
+          "5% -- Reject (Information not complete)",
+          "10% -- Test Engineer Data Entry",
+          "20% -- PSF File Creating",
+          "30% -- Compare Old and New layout",
+          "40% -- Feedback Requester(Layout mismatch)",
+          "80% -- Wait for create DCC",
+          "81% -- Edit Template Map (Bin62)",
+          "82% -- Wait for sent Template Map",
+          "83% -- Complete Excel probe pattern",
+          "85 % -- Reject check list",
+          "90% -- Wait for buyoff check list",
+          "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+          "95% -- Reject (Wrong site location and wafer map)",
+          "99% -- Wait requestor Buyoff site location and wafer map",
+          "100% -- Completed",
+          "0% -- Rejected (Cancel Request)"
+        ],
+        "statuses": [
+          "20% -- PSF File Creating",
+          "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+          "99% -- Wait requestor Buyoff site location and wafer map",
+          "30% -- Compare Old and New layout",
+          "10% -- Test Engineer Data Entry"
+        ],
+        "clamps": [
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 143
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 424
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 331
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 212
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 184
+          }
+        ],
+        "counts": [
+          "25",
+          "15",
+          "0"
+        ]
+      },
+      "summarySelectionBothThemes": [
+        {
+          "mode": "light",
+          "checks": [
+            {
+              "id": "summaryOpenBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Open work"
+            },
+            {
+              "id": "summaryOverdueBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Overdue work"
+            },
+            {
+              "id": "summaryCompletedBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Completed work"
+            }
+          ]
+        },
+        {
+          "mode": "dark",
+          "checks": [
+            {
+              "id": "summaryOpenBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Open work"
+            },
+            {
+              "id": "summaryOverdueBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Overdue work"
+            },
+            {
+              "id": "summaryCompletedBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Completed work"
+            }
+          ]
+        }
+      ],
+      "fullStatusClickFocusEscapeCloseOutside": true
+    },
+    {
+      "screenId": "736498082458463041",
+      "role": "owner",
+      "device": "desktop",
+      "noHorizontalOverflowBothThemes": true,
+      "neutralPaletteBothThemes": true,
+      "exactDatabaseCatalog": true,
+      "singleLineAndEllipsis": true,
+      "popoverWithinViewport": true,
+      "filterAndEmptyState": true,
+      "noStatusMutation": true,
+      "selectedCardCheckAndOutlineVerified": true,
+      "noFilterWordInCards": true,
+      "selectionChecks": {
+        "snapshots": [
+          {
+            "selected": [
+              "summaryOpenBtn"
+            ],
+            "checkVisible": true,
+            "inactiveChecksHidden": true,
+            "outline": "solid",
+            "words": "\n          \n            \n              \n              Open work\n            \n            \n          \n          44\n        ",
+            "queueScope": "Open work"
+          },
+          {
+            "selected": [
+              "summaryOverdueBtn"
+            ],
+            "checkVisible": true,
+            "inactiveChecksHidden": true,
+            "outline": "solid",
+            "words": "\n          \n            \n              \n              Overdue\n            \n            \n          \n          24\n        ",
+            "queueScope": "Overdue work"
+          },
+          {
+            "selected": [
+              "summaryCompletedBtn"
+            ],
+            "checkVisible": true,
+            "inactiveChecksHidden": true,
+            "outline": "solid",
+            "words": "\n          \n            \n              \n              Completed\n            \n            \n          \n          6\n        ",
+            "queueScope": "Completed work"
+          }
+        ],
+        "reset": [
+          "summaryOpenBtn"
+        ],
+        "noMutation": true
+      },
+      "base": {
+        "width": 1280,
+        "scrollWidth": 1280,
+        "canvas": "rgb(246, 245, 242)",
+        "options": [
+          "5% -- Reject (Information not complete)",
+          "10% -- Test Engineer Data Entry",
+          "20% -- PSF File Creating",
+          "30% -- Compare Old and New layout",
+          "40% -- Feedback Requester(Layout mismatch)",
+          "80% -- Wait for create DCC",
+          "81% -- Edit Template Map (Bin62)",
+          "82% -- Wait for sent Template Map",
+          "83% -- Complete Excel probe pattern",
+          "85 % -- Reject check list",
+          "90% -- Wait for buyoff check list",
+          "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+          "95% -- Reject (Wrong site location and wafer map)",
+          "99% -- Wait requestor Buyoff site location and wafer map",
+          "100% -- Completed",
+          "0% -- Rejected (Cancel Request)"
+        ],
+        "statuses": [
+          "20% -- PSF File Creating",
+          "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+          "99% -- Wait requestor Buyoff site location and wafer map",
+          "30% -- Compare Old and New layout",
+          "10% -- Test Engineer Data Entry"
+        ],
+        "clamps": [
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 143
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 424
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 331
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 212
+          },
+          {
+            "whiteSpace": "nowrap",
+            "ellipsis": "ellipsis",
+            "height": 16,
+            "width": 137,
+            "scroll": 184
+          }
+        ],
+        "counts": [
+          "44",
+          "24",
+          "6"
+        ],
+        "scope": "PSF department work"
+      },
+      "summarySelectionBothThemes": [
+        {
+          "mode": "light",
+          "checks": [
+            {
+              "id": "summaryOpenBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Open work"
+            },
+            {
+              "id": "summaryOverdueBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Overdue work"
+            },
+            {
+              "id": "summaryCompletedBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Completed work"
+            }
+          ]
+        },
+        {
+          "mode": "dark",
+          "checks": [
+            {
+              "id": "summaryOpenBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Open work"
+            },
+            {
+              "id": "summaryOverdueBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Overdue work"
+            },
+            {
+              "id": "summaryCompletedBtn",
+              "selectedCount": 1,
+              "checkVisible": true,
+              "inactiveChecksHidden": true,
+              "outline": "solid",
+              "scope": "Completed work"
+            }
+          ]
+        }
+      ],
+      "fullStatusClickFocusEscapeCloseOutside": true
+    }
+  ]
+}

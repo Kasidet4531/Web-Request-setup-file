@@ -1,5 +1,7 @@
 # 10. Shared Queue Model for Setup File Owners
 
+> **Superseded Status instructions:** Old short stages, transition permissions/paths and automatic owner assignment through Status changes below must not be reimplemented. Use [the current Status catalog and action constraints](../status-catalog-and-manual-updates.md).
+
 > **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ. Current access distinguishes shared non-Draft work from creator-private Drafts, including for Admin and Setup File Owner; the Dashboard uses related work rather than unrestricted system-wide totals. See [request service](../../backend/src/requests/requests.service.ts).
 
 > **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.

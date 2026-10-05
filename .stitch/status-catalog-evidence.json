@@ -1,0 +1,168 @@
+{
+  "inspectedAt": "2026-10-04T13:58:50.524Z",
+  "method": "pg.Pool; BEGIN READ ONLY; default_transaction_read_only=on",
+  "source": {
+    "table": "workflow_transition_config",
+    "key": "status-catalog-v1",
+    "field": "config_json.entries[].name"
+  },
+  "entries": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Draft",
+      "kind": "draft"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "5% -- Reject (Information not complete)",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "name": "10% -- Test Engineer Data Entry",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "name": "20% -- PSF File Creating",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "30% -- Compare Old and New layout",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "name": "40% -- Feedback Requester(Layout mismatch)",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "name": "80% -- Wait for create DCC",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "name": "81% -- Edit Template Map (Bin62)",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000009",
+      "name": "82% -- Wait for sent Template Map",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000a",
+      "name": "83% -- Complete Excel probe pattern",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000b",
+      "name": "85 % -- Reject check list",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000c",
+      "name": "90% -- Wait for buyoff check list",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000d",
+      "name": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000e",
+      "name": "95% -- Reject (Wrong site location and wafer map)",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-00000000000f",
+      "name": "99% -- Wait requestor Buyoff site location and wafer map",
+      "kind": "open"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "name": "100% -- Completed",
+      "kind": "completed"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "name": "0% -- Rejected (Cancel Request)",
+      "kind": "cancelled"
+    }
+  ],
+  "maxStatusLength": 71,
+  "requestStatusCounts": [
+    {
+      "status": "0% -- Rejected (Cancel Request)",
+      "count": 6
+    },
+    {
+      "status": "100% -- Completed",
+      "count": 6
+    },
+    {
+      "status": "10% -- Test Engineer Data Entry",
+      "count": 7
+    },
+    {
+      "status": "20% -- PSF File Creating",
+      "count": 7
+    },
+    {
+      "status": "30% -- Compare Old and New layout",
+      "count": 7
+    },
+    {
+      "status": "40% -- Feedback Requester(Layout mismatch)",
+      "count": 6
+    },
+    {
+      "status": "5% -- Reject (Information not complete)",
+      "count": 7
+    },
+    {
+      "status": "80% -- Wait for create DCC",
+      "count": 6
+    },
+    {
+      "status": "81% -- Edit Template Map (Bin62)",
+      "count": 6
+    },
+    {
+      "status": "82% -- Wait for sent Template Map",
+      "count": 6
+    },
+    {
+      "status": "83% -- Complete Excel probe pattern",
+      "count": 6
+    },
+    {
+      "status": "85 % -- Reject check list",
+      "count": 6
+    },
+    {
+      "status": "90% -- Wait for buyoff check list",
+      "count": 6
+    },
+    {
+      "status": "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "count": 6
+    },
+    {
+      "status": "95% -- Reject (Wrong site location and wafer map)",
+      "count": 6
+    },
+    {
+      "status": "99% -- Wait requestor Buyoff site location and wafer map",
+      "count": 6
+    },
+    {
+      "status": "Draft",
+      "count": 2
+    }
+  ],
+  "unknownRequestStatuses": []
+}

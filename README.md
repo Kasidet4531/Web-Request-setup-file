@@ -1,5 +1,7 @@
 # PSF Setup File Request Management
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
+
 This application tracks requests to create or update PSF Setup Files. It does
 not generate the physical PSF Setup Files. Current development takes place in
 `unified-local-auth`, based on `rapid-frontend-rewrite` with removable local
@@ -7,6 +9,9 @@ authentication. The original branches remain unchanged by this documentation upd
 
 ## Start here
 
+- [Exact database Status catalog and no automatic Status changes](docs/status-catalog-and-manual-updates.md)
+
+- [Confirmed Audit History access for every authenticated role](docs/audit-history-access.md)
 - [Current implementation and source references](docs/current-implementation.md)
 - [Backend setup and commands](backend/README.md)
 - [Frontend setup and commands](frontend/README.md)

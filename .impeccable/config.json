@@ -8,6 +8,24 @@
         "value": "inter",
         "createdAt": "2026-10-03T14:03:43.434Z",
         "reason": "Lead agent: retained established engineering operations typography specified in docs/design/2026-10-03-frontend-design-spec.md:63; consistency and scanability suit this existing product."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/index.css"
+        ],
+        "createdAt": "2026-10-05T05:29:54.279Z",
+        "reason": "Agent: retain the orange and green summary-card edges shown in the approved Stitch Dashboard; .stitch/DESIGN.md section 4 explicitly permits semantic category edges. Product owner approved the complete suite before implementation."
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "frontend/src/index.css"
+        ],
+        "createdAt": "2026-10-05T05:29:54.360Z",
+        "reason": "Agent: retain Inter specified in .stitch/DESIGN.md section 3 and used in the Stitch suite approved by the product owner before implementation; preserve the operational interface typography."
       }
     ]
   }

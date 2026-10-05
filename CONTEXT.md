@@ -1,10 +1,14 @@
 # PSF Setup File Request Management
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. The 4 October clarification was documentation-only; the approved 5 October implementation now updates source. See the current implementation and verification record.
+
 This context manages the request lifecycle for creating and updating PSF Setup Files, enforcing role-based visibility and dynamic form configurations.
 
 Scope: `unified-local-auth`, source-audited on 2026-10-02. Use this glossary with
 [current implementation](docs/current-implementation.md); historical specifications
 and ADR bodies do not override the current source.
+
+Product clarification, 4 October 2026: **Audit History is viewable by every authenticated role** (Requester, Setup Owner and Admin), with a shared `/history` navigation link. See [the implemented access rule and verification](docs/audit-history-access.md). This supersedes older Admin-only History design instructions; private Draft and PSF field visibility rules remain separate.
 
 ## Language
 
@@ -39,7 +43,7 @@ A saved, creator-private PSF Request not yet explicitly submitted. Every authent
 _Avoid_: In-progress request, unsaved request
 
 **Work Status**:
-An Admin-configured catalog entry with immutable identity, verbatim name and explicit open/completed/cancelled classification. The initial catalog contains all 17 approved labels; percentages are display text, not progression. All authenticated actors may change shared work status through the single Action center. Catalog/request writes preserve opaque microsecond revisions, transactional projections and audit.
+An Admin-configured catalog entry with immutable identity, verbatim name and explicit open/completed/cancelled classification. The configured database was verified to contain 17 entries on 4 October 2026; use the [complete exact strings](docs/status-catalog-and-manual-updates.md), not old short labels. Percentages are display text, not progression or automation. All authenticated actors may change shared work status through the single Action center. Catalog/request writes preserve opaque microsecond revisions, transactional projections and audit.
 
 **PSF Visibility Release**:
 A one-time stored release set on successful entry into the explicitly configured trigger, initially unconfigured. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.

@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PSF Request Portal — Requests</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-canvas: #F4F7FA;
+      --bg-surface: #FFFFFF;
+      --bg-surface-subtle: #F8FAFC;
+      --bg-surface-hover: #F1F5F9;
+      --border-quiet: #DCE5EB;
+      --border-focus: #006F95;
+
+      --text-main: #173248;
+      --text-secondary: #526575;
+      --text-muted: #8292A1;
+
+      --brand-primary: #006F95;
+      --brand-primary-hover: #005a7a;
+      --brand-blue-accent: #00A9E0;
+      --brand-blue-wash: #E8F6FC;
+
+      --status-open-text: #006F95;
+      --status-open-bg: #E8F6FC;
+      --status-open-border: #BCE3F5;
+
+      --status-completed-text: #28651D;
+      --status-completed-bg: #EDF8E5;
+      --status-completed-border: #C8E8B7;
+
+      --status-cancelled-text: #64748B;
+      --status-cancelled-bg: #F1F5F9;
+      --status-cancelled-border: #CBD5E1;
+
+      --badge-overdue-text: #B42332;
+      --badge-overdue-bg: #FFF0F1;
+      --badge-overdue-border: #FDCFD3;
+
+      --badge-high-text: #8A4700;
+      --badge-high-bg: #FFF3DA;
+      --badge-high-border: #FCE1AC;
+
+      --badge-normal-text: #475569;
+      --badge-normal-bg: #F1F5F9;
+      --badge-normal-border: #E2E8F0;
+
+      --tag-product-bg: #EFF6FF;
+      --tag-product-text: #1E40AF;
+      --tag-product-border: #DBEAFE;
+    }
+
+    [data-theme="dark"] {
+      --bg-canvas: #101B24;
+      --bg-surface: #1A2C39;
+      --bg-surface-subtle: #14232F;
+      --bg-surface-hover: #223747;
+      --border-quiet: #344A59;
+      --border-focus: #00A9E0;
+
+      --text-main: #EDF4F8;
+      --text-secondary: #B3C4D0;
+      --text-muted: #7E93A4;
+
+      --brand-primary: #00A9E0;
+      --brand-primary-hover: #38bef0;
+      --brand-blue-accent: #00A9E0;
+      --brand-blue-wash: #163346;
+
+      --status-open-text: #55C8EF;
+      --status-open-bg: #143547;
+      --status-open-border: #1E4D68;
+
+      --status-completed-text: #7FE54E;
+      --status-completed-bg: #1A3816;
+      --status-completed-border: #2B5725;
+
+      --status-cancelled-text: #94A3B8;
+      --status-cancelled-bg: #1E293B;
+      --status-cancelled-border: #334155;
+
+      --badge-overdue-text: #FF7884;
+      --badge-overdue-bg: #3E1B20;
+      --badge-overdue-border: #6B272E;
+
+      --badge-high-text: #FDBA74;
+      --badge-high-bg: #38240D;
+      --badge-high-border: #633C0E;
+
+      --badge-normal-text: #CBD5E1;
+      --badge-normal-bg: #1E293B;
+      --badge-normal-border: #334155;
+
+      --tag-product-bg: #1E293B;
+      --tag-product-text: #93C5FD;
+      --tag-product-border: #2D3F58;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Focus styling */
+    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--border-focus);
+      outline-offset: 2px;
+    }
+
+    /* Drawer animation */
+    .drawer-backdrop {
+      transition: opacity 0.25s ease-in-out;
+    }
+    .drawer-panel {
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;border-width:0}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.inset-y-0{top:0px;bottom:0px}.bottom-0{bottom:0px}.left-0{left:0px}.right-0{right:0px}.top-0{top:0px}.z-30{z-index:30}.z-50{z-index:50}.mx-auto{margin-left:auto;margin-right:auto}.-mr-2{margin-right:-0.5rem}.-mt-1{margin-top:-0.25rem}.mb-4{margin-bottom:1rem}.mt-0\.5{margin-top:0.125rem}.mt-2{margin-top:0.5rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}.hidden{display:none}.h-11{height:2.75rem}.h-12{height:3rem}.h-2{height:0.5rem}.h-3\.5{height:0.875rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-6{height:1.5rem}.h-7{height:1.75rem}.h-8{height:2rem}.h-9{height:2.25rem}.min-h-screen{min-height:100vh}.w-11{width:2.75rem}.w-12{width:3rem}.w-2{width:0.5rem}.w-3\.5{width:0.875rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-7{width:1.75rem}.w-72{width:18rem}.w-8{width:2rem}.w-9{width:2.25rem}.w-full{width:100%}.max-w-5xl{max-width:64rem}.max-w-\[85vw\]{max-width:85vw}.max-w-xs{max-width:20rem}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.-translate-x-full{--tw-translate-x:-100%;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-not-allowed{cursor:not-allowed}.appearance-none{-webkit-appearance:none;appearance:none}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-end{align-items:flex-end}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-y-2{row-gap:0.5rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.divide-y > :not([hidden]) ~ :not([hidden]){--tw-divide-y-reverse:0;border-top-width:calc(1px * calc(1 - var(--tw-divide-y-reverse)));border-bottom-width:calc(1px * var(--tw-divide-y-reverse))}.divide-\[var\(--border-quiet\)\] > :not([hidden]) ~ :not([hidden]){border-color:var(--border-quiet)}.self-start{align-self:flex-start}.overflow-hidden{overflow:hidden}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.break-words{overflow-wrap:break-word}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-l-4{border-left-width:4px}.border-r{border-right-width:1px}.border-t{border-top-width:1px}.border-\[\#006F95\]\/30{border-color:rgb(0 111 149 / 0.3)}.border-\[var\(--badge-high-border\)\]{border-color:var(--badge-high-border)}.border-\[var\(--badge-normal-border\)\]{border-color:var(--badge-normal-border)}.border-\[var\(--badge-overdue-border\)\]{border-color:var(--badge-overdue-border)}.border-\[var\(--border-quiet\)\]{border-color:var(--border-quiet)}.border-\[var\(--brand-primary\)\]{border-color:var(--brand-primary)}.border-\[var\(--status-cancelled-border\)\]{border-color:var(--status-cancelled-border)}.border-\[var\(--status-completed-border\)\]{border-color:var(--status-completed-border)}.border-\[var\(--status-open-border\)\]{border-color:var(--status-open-border)}.border-\[var\(--tag-product-border\)\]{border-color:var(--tag-product-border)}.bg-\[\#006F95\]{--tw-bg-opacity:1;background-color:rgb(0 111 149 / var(--tw-bg-opacity, 1))}.bg-\[\#006F95\]\/15{background-color:rgb(0 111 149 / 0.15)}.bg-\[var\(--badge-high-bg\)\]{background-color:var(--badge-high-bg)}.bg-\[var\(--badge-normal-bg\)\]{background-color:var(--badge-normal-bg)}.bg-\[var\(--badge-overdue-bg\)\]{background-color:var(--badge-overdue-bg)}.bg-\[var\(--bg-canvas\)\]{background-color:var(--bg-canvas)}.bg-\[var\(--bg-surface\)\]{background-color:var(--bg-surface)}.bg-\[var\(--bg-surface-subtle\)\]{background-color:var(--bg-surface-subtle)}.bg-\[var\(--brand-blue-wash\)\]{background-color:var(--brand-blue-wash)}.bg-\[var\(--brand-primary\)\]{background-color:var(--brand-primary)}.bg-\[var\(--status-cancelled-bg\)\]{background-color:var(--status-cancelled-bg)}.bg-\[var\(--status-completed-bg\)\]{background-color:var(--status-completed-bg)}.bg-\[var\(--status-open-bg\)\]{background-color:var(--status-open-bg)}.bg-\[var\(--tag-product-bg\)\]{background-color:var(--tag-product-bg)}.bg-black\/50{background-color:rgb(0 0 0 / 0.5)}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-8{padding:2rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-3\.5{padding-left:0.875rem;padding-right:0.875rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}.pb-4{padding-bottom:1rem}.pl-3{padding-left:0.75rem}.pl-9{padding-left:2.25rem}.pr-2\.5{padding-right:0.625rem}.pr-3{padding-right:0.75rem}.pr-8{padding-right:2rem}.pt-2{padding-top:0.5rem}.pt-3{padding-top:0.75rem}.pt-4{padding-top:1rem}.text-center{text-align:center}.text-right{text-align:right}.text-2xl{font-size:1.5rem;line-height:2rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-base{font-size:1rem;line-height:1.5rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.leading-relaxed{line-height:1.625}.leading-snug{line-height:1.375}.leading-tight{line-height:1.25}.tracking-tight{letter-spacing:-0.025em}.tracking-wide{letter-spacing:0.025em}.tracking-wider{letter-spacing:0.05em}.text-\[\#006F95\]{--tw-text-opacity:1;color:rgb(0 111 149 / var(--tw-text-opacity, 1))}.text-\[var\(--badge-high-text\)\]{color:var(--badge-high-text)}.text-\[var\(--badge-normal-text\)\]{color:var(--badge-normal-text)}.text-\[var\(--badge-overdue-text\)\]{color:var(--badge-overdue-text)}.text-\[var\(--brand-primary\)\]{color:var(--brand-primary)}.text-\[var\(--status-cancelled-text\)\]{color:var(--status-cancelled-text)}.text-\[var\(--status-completed-text\)\]{color:var(--status-completed-text)}.text-\[var\(--status-open-text\)\]{color:var(--status-open-text)}.text-\[var\(--tag-product-text\)\]{color:var(--tag-product-text)}.text-\[var\(--text-main\)\]{color:var(--text-main)}.text-\[var\(--text-muted\)\]{color:var(--text-muted)}.text-\[var\(--text-secondary\)\]{color:var(--text-secondary)}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.underline{-webkit-text-decoration-line:underline;text-decoration-line:underline}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.placeholder-\[var\(--text-muted\)\]::placeholder{color:var(--text-muted)}.opacity-0{opacity:0}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.hover\:bg-\[var\(--bg-surface-hover\)\]:hover{background-color:var(--bg-surface-hover)}.hover\:bg-\[var\(--brand-primary-hover\)\]:hover{background-color:var(--brand-primary-hover)}.hover\:text-\[var\(--text-main\)\]:hover{color:var(--text-main)}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}.hover\:opacity-80:hover{opacity:0.8}.hover\:opacity-95:hover{opacity:0.95}.focus\:bg-\[var\(--bg-surface\)\]:focus{background-color:var(--bg-surface)}.active\:scale-95:active{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@media (min-width: 640px){.sm\:col-span-2{grid-column:span 2 / span 2}.sm\:col-span-4{grid-column:span 4 / span 4}.sm\:col-span-6{grid-column:span 6 / span 6}.sm\:inline{display:inline}.sm\:grid-cols-12{grid-template-columns:repeat(12, minmax(0, 1fr))}.sm\:flex-row{flex-direction:row}.sm\:items-center{align-items:center}.sm\:justify-between{justify-content:space-between}.sm\:self-auto{align-self:auto}.sm\:p-4{padding:1rem}.sm\:text-sm{font-size:0.875rem;line-height:1.25rem}}</style><style data-stitch-frozen="true">:root { --bg-canvas: #F4F7FA; --bg-surface: #FFFFFF; --bg-surface-subtle: #F8FAFC; --bg-surface-hover: #F1F5F9; --border-quiet: #DCE5EB; --border-focus: #006F95; --text-main: #173248; --text-secondary: #526575; --text-muted: #8292A1; --brand-primary: #006F95; --brand-primary-hover: #005a7a; --brand-blue-accent: #00A9E0; --brand-blue-wash: #E8F6FC; --status-open-text: #006F95; --status-open-bg: #E8F6FC; --status-open-border: #BCE3F5; --status-completed-text: #28651D; --status-completed-bg: #EDF8E5; --status-completed-border: #C8E8B7; --status-cancelled-text: #64748B; --status-cancelled-bg: #F1F5F9; --status-cancelled-border: #CBD5E1; --badge-overdue-text: #B42332; --badge-overdue-bg: #FFF0F1; --badge-overdue-border: #FDCFD3; --badge-high-text: #8A4700; --badge-high-bg: #FFF3DA; --badge-high-border: #FCE1AC; --badge-normal-text: #475569; --badge-normal-bg: #F1F5F9; --badge-normal-border: #E2E8F0; --tag-product-bg: #EFF6FF; --tag-product-text: #1E40AF; --tag-product-border: #DBEAFE; }
+[data-theme="dark"] { --bg-canvas: #101B24; --bg-surface: #1A2C39; --bg-surface-subtle: #14232F; --bg-surface-hover: #223747; --border-quiet: #344A59; --border-focus: #00A9E0; --text-main: #EDF4F8; --text-secondary: #B3C4D0; --text-muted: #7E93A4; --brand-primary: #00A9E0; --brand-primary-hover: #38bef0; --brand-blue-accent: #00A9E0; --brand-blue-wash: #163346; --status-open-text: #55C8EF; --status-open-bg: #143547; --status-open-border: #1E4D68; --status-completed-text: #7FE54E; --status-completed-bg: #1A3816; --status-completed-border: #2B5725; --status-cancelled-text: #94A3B8; --status-cancelled-bg: #1E293B; --status-cancelled-border: #334155; --badge-overdue-text: #FF7884; --badge-overdue-bg: #3E1B20; --badge-overdue-border: #6B272E; --badge-high-text: #FDBA74; --badge-high-bg: #38240D; --badge-high-border: #633C0E; --badge-normal-text: #CBD5E1; --badge-normal-bg: #1E293B; --badge-normal-border: #334155; --tag-product-bg: #1E293B; --tag-product-text: #93C5FD; --tag-product-border: #2D3F58; }
+body { background-color: var(--bg-canvas); color: var(--text-main); font-family: Inter, system-ui, -apple-system, sans-serif; transition: background-color 0.2s, color 0.2s; }
+.font-mono-code { font-family: "JetBrains Mono", monospace; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.drawer-backdrop { transition: opacity 0.25s ease-in-out; }
+.drawer-panel { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+*, ::before, ::after { --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; }
+::backdrop { --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; }
+*, ::after, ::before { box-sizing: border-box; border-width: 0px; border-style: solid; border-color: rgb(229, 231, 235); }
+::after, ::before { --tw-content: ''; }
+:host, html { line-height: 1.5; text-size-adjust: 100%; tab-size: 4; font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; font-feature-settings: normal; font-variation-settings: normal; -webkit-tap-highlight-color: transparent; }
+body { margin: 0px; line-height: inherit; }
+hr { height: 0px; color: inherit; border-top-width: 1px; }
+abbr:where([title]) { text-decoration: underline dotted; }
+h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+a { color: inherit; text-decoration: inherit; }
+b, strong { font-weight: bolder; }
+code, kbd, pre, samp { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-feature-settings: normal; font-variation-settings: normal; font-size: 1em; }
+small { font-size: 80%; }
+sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
+sub { bottom: -0.25em; }
+sup { top: -0.5em; }
+table { text-indent: 0px; border-color: inherit; border-collapse: collapse; }
+button, input, optgroup, select, textarea { font-family: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-size: 100%; font-weight: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; margin: 0px; padding: 0px; }
+button, select { text-transform: none; }
+button, input:where([type="button"]), input:where([type="reset"]), input:where([type="submit"]) { appearance: button; background-color: transparent; background-image: none; }
+progress { vertical-align: baseline; }
+::-webkit-inner-spin-button, ::-webkit-outer-spin-button { height: auto; }
+[type="search"] { appearance: textfield; outline-offset: -2px; }
+::-webkit-search-decoration { appearance: none; }
+::-webkit-file-upload-button { appearance: button; font: inherit; }
+summary { display: list-item; }
+blockquote, dd, dl, figure, h1, h2, h3, h4, h5, h6, hr, p, pre { margin: 0px; }
+fieldset { margin: 0px; padding: 0px; }
+legend { padding: 0px; }
+menu, ol, ul { list-style: none; margin: 0px; padding: 0px; }
+dialog { padding: 0px; }
+textarea { resize: vertical; }
+input::placeholder, textarea::placeholder { opacity: 1; color: rgb(156, 163, 175); }
+[role="button"], button { cursor: pointer; }
+:disabled { cursor: default; }
+audio, canvas, embed, iframe, img, object, svg, video { display: block; vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+[hidden]:where(:not([hidden="until-found"])) { display: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border-width: 0px; }
+.pointer-events-none { pointer-events: none; }
+.fixed { position: fixed; }
+.absolute { position: absolute; }
+.relative { position: relative; }
+.sticky { position: sticky; }
+.inset-0 { inset: 0px; }
+.inset-y-0 { top: 0px; bottom: 0px; }
+.bottom-0 { bottom: 0px; }
+.left-0 { left: 0px; }
+.right-0 { right: 0px; }
+.top-0 { top: 0px; }
+.z-30 { z-index: 30; }
+.z-50 { z-index: 50; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.-mr-2 { margin-right: -0.5rem; }
+.-mt-1 { margin-top: -0.25rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mt-0\.5 { margin-top: 0.125rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.grid { display: grid; }
+.hidden { display: none; }
+.h-11 { height: 2.75rem; }
+.h-12 { height: 3rem; }
+.h-2 { height: 0.5rem; }
+.h-3\.5 { height: 0.875rem; }
+.h-4 { height: 1rem; }
+.h-5 { height: 1.25rem; }
+.h-6 { height: 1.5rem; }
+.h-7 { height: 1.75rem; }
+.h-8 { height: 2rem; }
+.h-9 { height: 2.25rem; }
+.min-h-screen { min-height: 100vh; }
+.w-11 { width: 2.75rem; }
+.w-12 { width: 3rem; }
+.w-2 { width: 0.5rem; }
+.w-3\.5 { width: 0.875rem; }
+.w-4 { width: 1rem; }
+.w-5 { width: 1.25rem; }
+.w-6 { width: 1.5rem; }
+.w-7 { width: 1.75rem; }
+.w-72 { width: 18rem; }
+.w-8 { width: 2rem; }
+.w-9 { width: 2.25rem; }
+.w-full { width: 100%; }
+.max-w-5xl { max-width: 64rem; }
+.max-w-\[85vw\] { max-width: 85vw; }
+.max-w-xs { max-width: 20rem; }
+.flex-1 { flex: 1 1 0%; }
+.flex-shrink-0 { flex-shrink: 0; }
+.-translate-x-full { --tw-translate-x: -100%; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+.cursor-not-allowed { cursor: not-allowed; }
+.appearance-none { appearance: none; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0px, 1fr)); }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 0.25rem; }
+.gap-1\.5 { gap: 0.375rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-y-2 { row-gap: 0.5rem; }
+.space-y-1 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.25rem * var(--tw-space-y-reverse)); }
+.space-y-3 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)); }
+.divide-y > :not([hidden]) ~ :not([hidden]) { --tw-divide-y-reverse: 0; border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse))); border-bottom-width: calc(1px * var(--tw-divide-y-reverse)); }
+.divide-\[var\(--border-quiet\)\] > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-quiet); }
+.self-start { align-self: flex-start; }
+.overflow-hidden { overflow: hidden; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.break-words { overflow-wrap: break-word; }
+.rounded { border-radius: 0.25rem; }
+.rounded-full { border-radius: 9999px; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-md { border-radius: 0.375rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.border { border-width: 1px; }
+.border-b { border-bottom-width: 1px; }
+.border-l-4 { border-left-width: 4px; }
+.border-r { border-right-width: 1px; }
+.border-t { border-top-width: 1px; }
+.border-\[\#006F95\]\/30 { border-color: rgba(0, 111, 149, 0.3); }
+.border-\[var\(--badge-high-border\)\] { border-color: var(--badge-high-border); }
+.border-\[var\(--badge-normal-border\)\] { border-color: var(--badge-normal-border); }
+.border-\[var\(--badge-overdue-border\)\] { border-color: var(--badge-overdue-border); }
+.border-\[var\(--border-quiet\)\] { border-color: var(--border-quiet); }
+.border-\[var\(--brand-primary\)\] { border-color: var(--brand-primary); }
+.border-\[var\(--status-cancelled-border\)\] { border-color: var(--status-cancelled-border); }
+.border-\[var\(--status-completed-border\)\] { border-color: var(--status-completed-border); }
+.border-\[var\(--status-open-border\)\] { border-color: var(--status-open-border); }
+.border-\[var\(--tag-product-border\)\] { border-color: var(--tag-product-border); }
+.bg-\[\#006F95\] { --tw-bg-opacity: 1; background-color: rgb(0 111 149 / var(--tw-bg-opacity, 1)); }
+.bg-\[\#006F95\]\/15 { background-color: rgba(0, 111, 149, 0.15); }
+.bg-\[var\(--badge-high-bg\)\] { background-color: var(--badge-high-bg); }
+.bg-\[var\(--badge-normal-bg\)\] { background-color: var(--badge-normal-bg); }
+.bg-\[var\(--badge-overdue-bg\)\] { background-color: var(--badge-overdue-bg); }
+.bg-\[var\(--bg-canvas\)\] { background-color: var(--bg-canvas); }
+.bg-\[var\(--bg-surface\)\] { background-color: var(--bg-surface); }
+.bg-\[var\(--bg-surface-subtle\)\] { background-color: var(--bg-surface-subtle); }
+.bg-\[var\(--brand-blue-wash\)\] { background-color: var(--brand-blue-wash); }
+.bg-\[var\(--brand-primary\)\] { background-color: var(--brand-primary); }
+.bg-\[var\(--status-cancelled-bg\)\] { background-color: var(--status-cancelled-bg); }
+.bg-\[var\(--status-completed-bg\)\] { background-color: var(--status-completed-bg); }
+.bg-\[var\(--status-open-bg\)\] { background-color: var(--status-open-bg); }
+.bg-\[var\(--tag-product-bg\)\] { background-color: var(--tag-product-bg); }
+.bg-black\/50 { background-color: rgba(0, 0, 0, 0.5); }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-5 { padding: 1.25rem; }
+.p-8 { padding: 2rem; }
+.px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.pb-4 { padding-bottom: 1rem; }
+.pl-3 { padding-left: 0.75rem; }
+.pl-9 { padding-left: 2.25rem; }
+.pr-2\.5 { padding-right: 0.625rem; }
+.pr-3 { padding-right: 0.75rem; }
+.pr-8 { padding-right: 2rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pt-3 { padding-top: 0.75rem; }
+.pt-4 { padding-top: 1rem; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-\[10px\] { font-size: 10px; }
+.text-\[11px\] { font-size: 11px; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.font-bold { font-weight: 700; }
+.font-medium { font-weight: 500; }
+.font-normal { font-weight: 400; }
+.font-semibold { font-weight: 600; }
+.uppercase { text-transform: uppercase; }
+.leading-relaxed { line-height: 1.625; }
+.leading-snug { line-height: 1.375; }
+.leading-tight { line-height: 1.25; }
+.tracking-tight { letter-spacing: -0.025em; }
+.tracking-wide { letter-spacing: 0.025em; }
+.tracking-wider { letter-spacing: 0.05em; }
+.text-\[\#006F95\] { --tw-text-opacity: 1; color: rgb(0 111 149 / var(--tw-text-opacity, 1)); }
+.text-\[var\(--badge-high-text\)\] { color: var(--badge-high-text); }
+.text-\[var\(--badge-normal-text\)\] { color: var(--badge-normal-text); }
+.text-\[var\(--badge-overdue-text\)\] { color: var(--badge-overdue-text); }
+.text-\[var\(--brand-primary\)\] { color: var(--brand-primary); }
+.text-\[var\(--status-cancelled-text\)\] { color: var(--status-cancelled-text); }
+.text-\[var\(--status-completed-text\)\] { color: var(--status-completed-text); }
+.text-\[var\(--status-open-text\)\] { color: var(--status-open-text); }
+.text-\[var\(--tag-product-text\)\] { color: var(--tag-product-text); }
+.text-\[var\(--text-main\)\] { color: var(--text-main); }
+.text-\[var\(--text-muted\)\] { color: var(--text-muted); }
+.text-\[var\(--text-secondary\)\] { color: var(--text-secondary); }
+.text-white { --tw-text-opacity: 1; color: rgb(255 255 255 / var(--tw-text-opacity, 1)); }
+.underline { text-decoration-line: underline; }
+.antialiased { -webkit-font-smoothing: antialiased; }
+.placeholder-\[var\(--text-muted\)\]::placeholder { color: var(--text-muted); }
+.opacity-0 { opacity: 0; }
+.shadow-2xl { --tw-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); --tw-shadow-colored: 0 25px 50px -12px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); }
+.shadow-sm { --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); }
+.transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-opacity { transition-property: opacity; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-transform { transition-property: transform; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.duration-200 { transition-duration: 200ms; }
+.hover\:bg-\[var\(--bg-surface-hover\)\]:hover { background-color: var(--bg-surface-hover); }
+.hover\:bg-\[var\(--brand-primary-hover\)\]:hover { background-color: var(--brand-primary-hover); }
+.hover\:text-\[var\(--text-main\)\]:hover { color: var(--text-main); }
+.hover\:underline:hover { text-decoration-line: underline; }
+.hover\:opacity-80:hover { opacity: 0.8; }
+.hover\:opacity-95:hover { opacity: 0.95; }
+.focus\:bg-\[var\(--bg-surface\)\]:focus { background-color: var(--bg-surface); }
+.active\:scale-95:active { --tw-scale-x: .95; --tw-scale-y: .95; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+@media (min-width: 640px) {
+  .sm\:col-span-2 { grid-column: span 2 / span 2; }
+  .sm\:col-span-4 { grid-column: span 4 / span 4; }
+  .sm\:col-span-6 { grid-column: span 6 / span 6; }
+  .sm\:inline { display: inline; }
+  .sm\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0px, 1fr)); }
+  .sm\:flex-row { flex-direction: row; }
+  .sm\:items-center { align-items: center; }
+  .sm\:justify-between { justify-content: space-between; }
+  .sm\:self-auto { align-self: auto; }
+  .sm\:p-4 { padding: 1rem; }
+  .sm\:text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+}</style></head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <!-- Mobile Top Bar (390px layout) -->
+  <header class="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[var(--bg-surface)] border-b border-[var(--border-quiet)] shadow-sm">
+    <div class="flex items-center gap-3">
+      <button id="menu-toggle-btn" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-drawer" class="flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] active:scale-95 transition-transform">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+
+      <!-- PSF Request Portal Brand -->
+      <a href="/dashboard" class="flex items-center gap-2 group">
+        <div class="w-7 h-7 rounded bg-[#006F95] text-white flex items-center justify-center font-bold text-xs tracking-wider">
+          PSF
+        </div>
+        <span class="font-bold text-base tracking-tight text-[var(--text-main)]">Request Portal</span>
+      </a>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Theme toggle -->
+      <button id="theme-toggle-btn" type="button" aria-label="Switch to light mode" title="Switch to light mode" class="flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] transition-colors">
+        <!-- Sun icon (shown in dark mode) -->
+        <svg id="theme-sun-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <!-- Moon icon (shown in light mode) -->
+        <svg id="theme-moon-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+
+      <!-- Account avatar indicator (Setup Owner · MFG) -->
+      <div class="w-9 h-9 rounded-full bg-[#006F95]/15 border border-[#006F95]/30 text-[#006F95] font-semibold text-xs flex items-center justify-center" title="Alex Morgan · Setup Owner · MFG">
+        AM
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Slide-out Drawer Navigation -->
+  <div id="mobile-drawer-container" class="fixed inset-0 z-50 pointer-events-none transition-opacity duration-200" aria-hidden="true">
+    <!-- Backdrop -->
+    <div id="drawer-backdrop" class="drawer-backdrop absolute inset-0 bg-black/50 opacity-0 transition-opacity"></div>
+
+    <!-- Drawer Panel -->
+    <nav id="mobile-drawer" class="drawer-panel absolute top-0 bottom-0 left-0 w-72 max-w-[85vw] bg-[var(--bg-surface)] border-r border-[var(--border-quiet)] flex flex-col justify-between p-5 -translate-x-full shadow-2xl">
+      <div>
+        <!-- Drawer Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--border-quiet)]">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded bg-[#006F95] text-white flex items-center justify-center font-bold text-xs">
+              PSF
+            </div>
+            <span class="font-bold text-base text-[var(--text-main)]">Request Portal</span>
+          </div>
+          <button id="drawer-close-btn" type="button" aria-label="Close navigation menu" class="flex items-center justify-center w-11 h-11 -mr-2 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Role Badge in Drawer -->
+        <div class="mt-4 p-3 rounded-lg bg-[var(--bg-surface-subtle)] border border-[var(--border-quiet)] flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-[#006F95] text-white text-xs font-semibold flex items-center justify-center">
+            AM
+          </div>
+          <div class="flex flex-col">
+            <span class="text-xs font-semibold text-[var(--text-main)] leading-tight">Alex Morgan</span>
+            <span class="text-[11px] text-[var(--text-secondary)] leading-tight">Setup Owner · MFG</span>
+          </div>
+        </div>
+
+        <!-- Navigation Links for SETUP OWNER: Dashboard, Requests (selected), My Drafts, Audit History -->
+        <div class="mt-6 flex flex-col space-y-1">
+          <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition-colors">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="9"></rect>
+              <rect x="14" y="3" width="7" height="5"></rect>
+              <rect x="14" y="12" width="7" height="9"></rect>
+              <rect x="3" y="16" width="7" height="5"></rect>
+            </svg>
+            Dashboard
+          </a>
+
+          <!-- Active: Requests -->
+          <a href="/requests" aria-current="page" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold bg-[var(--brand-blue-wash)] text-[var(--brand-primary)] border-l-4 border-[var(--brand-primary)]">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Requests
+          </a>
+
+          <a href="/my-drafts" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition-colors">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            My Drafts
+          </a>
+
+          <a href="/history" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-main)] transition-colors">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            Audit History
+          </a>
+        </div>
+      </div>
+
+      <!-- Drawer Footer Action -->
+      <div class="pt-4 border-t border-[var(--border-quiet)]">
+        <a href="/requests/new" class="flex items-center justify-center gap-2 w-full h-11 px-4 rounded-lg bg-[var(--brand-primary)] text-white font-medium text-sm hover:opacity-95 transition-opacity">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New Request
+        </a>
+      </div>
+    </nav>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 px-4 py-4 max-w-5xl mx-auto w-full">
+    <!-- Header Section with Title, scope explanation, and New Request CTA -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-[var(--text-main)]">Requests</h1>
+        <p class="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
+          Browse shared PSF requests. <span class="text-[var(--text-muted)] font-normal">• Private drafts are in <a href="/my-drafts" class="underline text-[var(--brand-primary)] hover:opacity-80">My Drafts</a></span>
+        </p>
+      </div>
+
+      <div class="self-start sm:self-auto">
+        <a href="/requests/new" class="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg bg-[var(--brand-primary)] text-white text-sm font-semibold hover:bg-[var(--brand-primary-hover)] active:scale-95 transition-all shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New Request
+        </a>
+      </div>
+    </div>
+
+    <!-- Full-Width Request List Container -->
+    <section class="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-quiet)] shadow-sm overflow-hidden" aria-labelledby="requests-heading">
+
+      <!-- Toolbar: Persistent Search + Mobile Filters Disclosure Button -->
+      <div class="p-3 sm:p-4 border-b border-[var(--border-quiet)] bg-[var(--bg-surface)] space-y-3">
+        <div class="flex items-center gap-2">
+          <!-- Persistent Search Input -->
+          <div class="relative flex-1">
+            <label for="search-input" class="sr-only">Search requests</label>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--text-muted)]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </div>
+            <input type="search" id="search-input" name="q" aria-label="Search request no., title, PSF or probecard" placeholder="Search request no., title, PSF or probecard" class="w-full h-11 pl-9 pr-3 text-xs sm:text-sm bg-[var(--bg-canvas)] border border-[var(--border-quiet)] rounded-lg text-[var(--text-main)] placeholder-[var(--text-muted)] focus:bg-[var(--bg-surface)] transition-colors" value="">
+          </div>
+
+          <!-- Mobile Filters Toggle Button -->
+          <button id="filters-toggle-btn" type="button" aria-expanded="false" aria-controls="filters-disclosure-panel" aria-label="Filters" class="flex items-center justify-center gap-1.5 h-11 px-3.5 rounded-lg border border-[var(--border-quiet)] bg-[var(--bg-canvas)] text-[var(--text-main)] text-xs sm:text-sm font-medium hover:bg-[var(--bg-surface-hover)] active:scale-95 transition-transform flex-shrink-0">
+            <svg class="w-4 h-4 text-[var(--text-secondary)]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span>Filters</span>
+            <span id="active-filter-indicator" class="w-2 h-2 rounded-full bg-[var(--brand-primary)] hidden"></span>
+          </button>
+        </div>
+
+        <!-- Collapsible Filters Disclosure Area (Status + Product Type + Clear) -->
+        <div id="filters-disclosure-panel" class="hidden pt-3 border-t border-[var(--border-quiet)] grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+
+          <!-- Status Select with ALL 16 non-draft catalog options -->
+          <div class="sm:col-span-6 flex flex-col gap-1">
+            <label for="status-filter" class="text-xs font-semibold text-[var(--text-secondary)]">Status</label>
+            <div class="relative">
+              <select id="status-filter" aria-label="Filter by status" class="w-full h-11 px-3 pr-8 text-xs sm:text-sm bg-[var(--bg-canvas)] border border-[var(--border-quiet)] rounded-lg text-[var(--text-main)] appearance-none focus:bg-[var(--bg-surface)] truncate">
+                <option value="ALL" selected="">All statuses</option>
+                <option value="5% -- Reject (Information not complete)">5% -- Reject (Information not complete)</option>
+                <option value="10% -- Test Engineer Data Entry">10% -- Test Engineer Data Entry</option>
+                <option value="20% -- PSF File Creating">20% -- PSF File Creating</option>
+                <option value="30% -- Compare Old and New layout">30% -- Compare Old and New layout</option>
+                <option value="40% -- Feedback Requester(Layout mismatch)">40% -- Feedback Requester(Layout mismatch)</option>
+                <option value="80% -- Wait for create DCC">80% -- Wait for create DCC</option>
+                <option value="81% -- Edit Template Map (Bin62)">81% -- Edit Template Map (Bin62)</option>
+                <option value="82% -- Wait for sent Template Map">82% -- Wait for sent Template Map</option>
+                <option value="83% -- Complete Excel probe pattern">83% -- Complete Excel probe pattern</option>
+                <option value="85 % -- Reject check list">85 % -- Reject check list</option>
+                <option value="90% -- Wait for buyoff check list">90% -- Wait for buyoff check list</option>
+                <option value="93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)">93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)</option>
+                <option value="95% -- Reject (Wrong site location and wafer map)">95% -- Reject (Wrong site location and wafer map)</option>
+                <option value="99% -- Wait requestor Buyoff site location and wafer map">99% -- Wait requestor Buyoff site location and wafer map</option>
+                <option value="100% -- Completed">100% -- Completed</option>
+                <option value="0% -- Rejected (Cancel Request)">0% -- Rejected (Cancel Request)</option>
+              </select>
+              <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-[var(--text-muted)]">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Product Type text input (not schema editor) -->
+          <div class="sm:col-span-4 flex flex-col gap-1">
+            <label for="product-type-filter" class="text-xs font-semibold text-[var(--text-secondary)]">Product type</label>
+            <input type="text" id="product-type-filter" aria-label="Filter by product type" placeholder="e.g. New Product, Existing" class="w-full h-11 px-3 text-xs sm:text-sm bg-[var(--bg-canvas)] border border-[var(--border-quiet)] rounded-lg text-[var(--text-main)] placeholder-[var(--text-muted)] focus:bg-[var(--bg-surface)]" value="">
+          </div>
+
+          <!-- Clear Filters Button -->
+          <div class="sm:col-span-2 flex items-center">
+            <button id="clear-filters-btn" type="button" class="w-full h-11 px-3 rounded-lg border border-[var(--border-quiet)] bg-[var(--bg-canvas)] text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface-hover)] text-xs sm:text-sm font-medium transition-colors flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              <span>Clear filters</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scoped List Heading Info Bar -->
+      <div class="px-4 py-2.5 bg-[var(--bg-surface-subtle)] border-b border-[var(--border-quiet)] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <h2 id="requests-heading" class="text-xs sm:text-sm font-semibold text-[var(--text-main)]">Shared requests</h2>
+          <span id="requests-count-badge" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-quiet)]">
+            5 total
+          </span>
+        </div>
+        <span class="text-[11px] text-[var(--text-muted)] hidden sm:inline">Reference date: 04 Oct 2026</span>
+      </div>
+
+      <!-- Request List: Mobile vertical stacked cards, seamlessly responsive -->
+      <ul id="requests-list" class="divide-y divide-[var(--border-quiet)]" role="list">
+
+        <!-- ROW 1: S32K3 probe layout update (Overdue) -->
+        <li class="request-item p-4 hover:bg-[var(--bg-surface-hover)] transition-colors" data-id="PSF-2026-0042" data-title="S32K3 probe layout update" data-product="New Product" data-status="20% -- PSF File Creating">
+          <div class="flex flex-col space-y-3">
+
+            <!-- 1. Request Identity Group -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex flex-col space-y-1">
+                <a href="/requests/PSF-2026-0042" class="text-sm font-semibold text-[var(--brand-primary)] hover:underline leading-snug">
+                  S32K3 probe layout update
+                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono-code text-xs font-medium text-[var(--text-secondary)]">PSF-2026-0042</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-[var(--tag-product-bg)] text-[var(--tag-product-text)] border-[var(--tag-product-border)]">
+                    New Product
+                  </span>
+                </div>
+              </div>
+
+              <!-- Chevron detail indicator (min 44px touch) -->
+              <a href="/requests/PSF-2026-0042" aria-label="View details for S32K3 probe layout update" class="w-11 h-11 -mr-2 -mt-1 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </a>
+            </div>
+
+            <!-- 2. Status Badge (Full Catalog Text, Open Kind Icon) -->
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-[var(--status-open-bg)] text-[var(--status-open-text)] border-[var(--status-open-border)] leading-relaxed">
+                <!-- Play/gear active open status icon -->
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>20% -- PSF File Creating</span>
+              </span>
+            </div>
+
+            <!-- 3. Schedule & 4. Responsibility Groups -->
+            <div class="pt-2 border-t border-[var(--border-quiet)] flex flex-wrap items-center justify-between gap-y-2 text-xs">
+              <!-- Schedule: Priority & Due Date (Overdue badge) -->
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[var(--text-main)]">01 Oct 2026</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase border bg-[var(--badge-overdue-bg)] text-[var(--badge-overdue-text)] border-[var(--badge-overdue-border)]">
+                  Overdue
+                </span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--badge-high-bg)] text-[var(--badge-high-text)] border-[var(--badge-high-border)]">
+                  High
+                </span>
+              </div>
+
+              <!-- Responsibility: Requester & Owner / Dept -->
+              <div class="flex items-center gap-1 text-[var(--text-secondary)] text-right">
+                <span class="font-medium text-[var(--text-main)]">Alex Morgan</span>
+                <span>/</span>
+                <span>Mei Tan · MFG</span>
+              </div>
+            </div>
+
+          </div>
+        </li>
+
+        <!-- ROW 2: ST Fab template map review (Full 93% Catalog string) -->
+        <li class="request-item p-4 hover:bg-[var(--bg-surface-hover)] transition-colors" data-id="PSF-2026-0039" data-title="ST Fab template map review" data-product="Transfer Product" data-status="93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)">
+          <div class="flex flex-col space-y-3">
+
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex flex-col space-y-1">
+                <a href="/requests/PSF-2026-0039" class="text-sm font-semibold text-[var(--brand-primary)] hover:underline leading-snug">
+                  ST Fab template map review
+                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono-code text-xs font-medium text-[var(--text-secondary)]">PSF-2026-0039</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-[var(--tag-product-bg)] text-[var(--tag-product-text)] border-[var(--tag-product-border)]">
+                    Transfer Product
+                  </span>
+                </div>
+              </div>
+
+              <a href="/requests/PSF-2026-0039" aria-label="View details for ST Fab template map review" class="w-11 h-11 -mr-2 -mt-1 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </a>
+            </div>
+
+            <!-- Complete literal 93% catalog string wrapping cleanly -->
+            <div>
+              <span class="inline-flex items-start gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-[var(--status-open-bg)] text-[var(--status-open-text)] border-[var(--status-open-border)] leading-relaxed break-words">
+                <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)</span>
+              </span>
+            </div>
+
+            <div class="pt-2 border-t border-[var(--border-quiet)] flex flex-wrap items-center justify-between gap-y-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[var(--text-main)]">06 Oct 2026</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--badge-normal-bg)] text-[var(--badge-normal-text)] border-[var(--badge-normal-border)]">
+                  Normal
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1 text-[var(--text-secondary)] text-right">
+                <span class="font-medium text-[var(--text-main)]">Priya Rao</span>
+                <span>/</span>
+                <span>Rowan Miller · GNTC</span>
+              </div>
+            </div>
+
+          </div>
+        </li>
+
+        <!-- ROW 3: Wafer map site verification -->
+        <li class="request-item p-4 hover:bg-[var(--bg-surface-hover)] transition-colors" data-id="PSF-2026-0035" data-title="Wafer map site verification" data-product="Existing Product" data-status="99% -- Wait requestor Buyoff site location and wafer map">
+          <div class="flex flex-col space-y-3">
+
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex flex-col space-y-1">
+                <a href="/requests/PSF-2026-0035" class="text-sm font-semibold text-[var(--brand-primary)] hover:underline leading-snug">
+                  Wafer map site verification
+                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono-code text-xs font-medium text-[var(--text-secondary)]">PSF-2026-0035</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-[var(--tag-product-bg)] text-[var(--tag-product-text)] border-[var(--tag-product-border)]">
+                    Existing Product
+                  </span>
+                </div>
+              </div>
+
+              <a href="/requests/PSF-2026-0035" aria-label="View details for Wafer map site verification" class="w-11 h-11 -mr-2 -mt-1 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </a>
+            </div>
+
+            <!-- Complete literal 99% open-kind status with open icon -->
+            <div>
+              <span class="inline-flex items-start gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-[var(--status-open-bg)] text-[var(--status-open-text)] border-[var(--status-open-border)] leading-relaxed">
+                <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>99% -- Wait requestor Buyoff site location and wafer map</span>
+              </span>
+            </div>
+
+            <div class="pt-2 border-t border-[var(--border-quiet)] flex flex-wrap items-center justify-between gap-y-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[var(--text-main)]">08 Oct 2026</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--badge-normal-bg)] text-[var(--badge-normal-text)] border-[var(--badge-normal-border)]">
+                  Normal
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1 text-[var(--text-secondary)] text-right">
+                <span class="font-medium text-[var(--text-main)]">Alex Morgan</span>
+                <span>/</span>
+                <span>Mei Tan · MFG</span>
+              </div>
+            </div>
+
+          </div>
+        </li>
+
+        <!-- ROW 4: Probe pattern release (100% -- Completed) -->
+        <li class="request-item p-4 hover:bg-[var(--bg-surface-hover)] transition-colors" data-id="PSF-2026-0028" data-title="Probe pattern release" data-product="New Product" data-status="100% -- Completed">
+          <div class="flex flex-col space-y-3">
+
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex flex-col space-y-1">
+                <a href="/requests/PSF-2026-0028" class="text-sm font-semibold text-[var(--brand-primary)] hover:underline leading-snug">
+                  Probe pattern release
+                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono-code text-xs font-medium text-[var(--text-secondary)]">PSF-2026-0028</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-[var(--tag-product-bg)] text-[var(--tag-product-text)] border-[var(--tag-product-border)]">
+                    New Product
+                  </span>
+                </div>
+              </div>
+
+              <a href="/requests/PSF-2026-0028" aria-label="View details for Probe pattern release" class="w-11 h-11 -mr-2 -mt-1 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </a>
+            </div>
+
+            <!-- Completed Kind Status Badge -->
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-[var(--status-completed-bg)] text-[var(--status-completed-text)] border-[var(--status-completed-border)] leading-relaxed">
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <span>100% -- Completed</span>
+              </span>
+            </div>
+
+            <div class="pt-2 border-t border-[var(--border-quiet)] flex flex-wrap items-center justify-between gap-y-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[var(--text-main)]">02 Oct 2026</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--badge-normal-bg)] text-[var(--badge-normal-text)] border-[var(--badge-normal-border)]">
+                  Normal
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1 text-[var(--text-secondary)] text-right">
+                <span class="font-medium text-[var(--text-main)]">Jordan Lee</span>
+                <span>/</span>
+                <span>Rowan Miller · GNTC</span>
+              </div>
+            </div>
+
+          </div>
+        </li>
+
+        <!-- ROW 5: Cancelled layout request (0% -- Rejected (Cancel Request)) -->
+        <li class="request-item p-4 hover:bg-[var(--bg-surface-hover)] transition-colors" data-id="PSF-2026-0019" data-title="Cancelled layout request" data-product="Existing Product" data-status="0% -- Rejected (Cancel Request)">
+          <div class="flex flex-col space-y-3">
+
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex flex-col space-y-1">
+                <a href="/requests/PSF-2026-0019" class="text-sm font-semibold text-[var(--brand-primary)] hover:underline leading-snug">
+                  Cancelled layout request
+                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono-code text-xs font-medium text-[var(--text-secondary)]">PSF-2026-0019</span>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-[var(--tag-product-bg)] text-[var(--tag-product-text)] border-[var(--tag-product-border)]">
+                    Existing Product
+                  </span>
+                </div>
+              </div>
+
+              <a href="/requests/PSF-2026-0019" aria-label="View details for Cancelled layout request" class="w-11 h-11 -mr-2 -mt-1 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </a>
+            </div>
+
+            <!-- Cancelled Kind Status Badge -->
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-[var(--status-cancelled-bg)] text-[var(--status-cancelled-text)] border-[var(--status-cancelled-border)] leading-relaxed">
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                </svg>
+                <span>0% -- Rejected (Cancel Request)</span>
+              </span>
+            </div>
+
+            <div class="pt-2 border-t border-[var(--border-quiet)] flex flex-wrap items-center justify-between gap-y-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-[var(--text-main)]">09 Oct 2026</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border bg-[var(--badge-normal-bg)] text-[var(--badge-normal-text)] border-[var(--badge-normal-border)]">
+                  Normal
+                </span>
+              </div>
+
+              <div class="flex items-center gap-1 text-[var(--text-secondary)] text-right">
+                <span class="font-medium text-[var(--text-main)]">Priya Rao</span>
+                <span>/</span>
+                <span>Mei Tan · MFG</span>
+              </div>
+            </div>
+
+          </div>
+        </li>
+
+      </ul>
+
+      <!-- Useful Empty State (Hidden when items are present) -->
+      <div id="no-results-state" class="hidden p-8 text-center flex-col items-center justify-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-quiet)] flex items-center justify-center text-[var(--text-muted)] mx-auto">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </div>
+        <p class="text-sm font-semibold text-[var(--text-main)]">No matching requests found</p>
+        <p class="text-xs text-[var(--text-secondary)] max-w-xs mx-auto">
+          Try adjusting your search keyword or clearing the status/product filters to browse all shared requests.
+        </p>
+        <button id="reset-filters-btn" type="button" class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-hover)] transition-colors">
+          Reset all filters
+        </button>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div class="px-4 py-3 bg-[var(--bg-surface)] border-t border-[var(--border-quiet)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
+        <span id="pagination-summary">Showing 1–5 of 5 requests</span>
+
+        <div class="flex items-center gap-2">
+          <button type="button" disabled="" aria-label="Previous page" class="px-2.5 py-1.5 rounded border border-[var(--border-quiet)] text-[var(--text-muted)] bg-[var(--bg-canvas)] cursor-not-allowed text-xs font-medium">
+            Previous
+          </button>
+          <span class="font-medium text-[var(--text-main)]">Page 1 of 1</span>
+          <button type="button" disabled="" aria-label="Next page" class="px-2.5 py-1.5 rounded border border-[var(--border-quiet)] text-[var(--text-muted)] bg-[var(--bg-canvas)] cursor-not-allowed text-xs font-medium">
+            Next
+          </button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Interactive Logic: Theme Toggle, Drawer, Local Filters -->
+
+
+</body></html>

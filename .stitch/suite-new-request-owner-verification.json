@@ -1,0 +1,47 @@
+{
+  "key": "new-request-owner",
+  "route": "/requests/new",
+  "role": "owner",
+  "modes": [
+    {
+      "mode": "light",
+      "image": "suite-new-request-owner-light.png",
+      "check": {
+        "mode": "light",
+        "overflow": false,
+        "width": 1280,
+        "heading": "New Request",
+        "bodyText": "Back\nRequests\n\u203a\nNew Request\nNew Request\n\nSave a private draft, then review and submit from its detail page.\n\nRequester Information\n\nFields marked * are required to submit.\n\nNot saved\nProduct Type *\nNew Product\nTransfer Product\nExisting Product\nTitle *\nRequester Name *\nDue Date *\nPriority *\nChoose\u2026\nLow\nNormal\nHigh\nUrgent\nProduct *\nWafer FAB *\nProbecard Name *\nAdditional details (3)\nYour draft is private until you submit it.\nSave draft\nOpen saved draft",
+        "hasToggle": true,
+        "breadcrumb": "Requests\n\u203a\nNew Request",
+        "themeControl": true,
+        "statusLines": true
+      }
+    },
+    {
+      "mode": "dark",
+      "image": "suite-new-request-owner-dark.png",
+      "check": {
+        "mode": "dark",
+        "overflow": false,
+        "width": 1280,
+        "heading": "New Request",
+        "bodyText": "Back\nRequests\n\u203a\nNew Request\nNew Request\n\nSave a private draft, then review and submit from its detail page.\n\nRequester Information\n\nFields marked * are required to submit.\n\nNot saved\nProduct Type *\nNew Product\nTransfer Product\nExisting Product\nTitle *\nRequester Name *\nDue Date *\nPriority *\nChoose\u2026\nLow\nNormal\nHigh\nUrgent\nProduct *\nWafer FAB *\nProbecard Name *\nAdditional details (3)\nYour draft is private until you submit it.\nSave draft\nOpen saved draft",
+        "hasToggle": true,
+        "breadcrumb": "Requests\n\u203a\nNew Request",
+        "themeControl": true,
+        "statusLines": true
+      }
+    }
+  ],
+  "navigation": {
+    "expanded": 220,
+    "collapsed": 72,
+    "labels": true,
+    "controlsStayVisible": true,
+    "correct": true,
+    "restored": true,
+    "themePreserved": true
+  },
+  "success": true
+}

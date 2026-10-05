@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "data": {
+    "status": "uploaded",
+    "file": ".stitch/requests-v2-owner-final.html",
+    "project": "15540984743145901568",
+    "title": "Requests v2 — Setup Owner — Desktop / Light + Dark",
+    "screenIds": [
+      "7979127696275533627"
+    ],
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=7979127696275533627",
+    "warnings": [
+      "This HTML references 10 local asset(s) (/dashboard, /requests, /my-drafts and 7 more) that won't be uploaded, so they'll render broken on Canvas. Make it self-contained first: re-capture the page with 'stitch capture <url>', or run 'stitch capture <file> --origin http://localhost:<port>' to inline the assets from your dev server."
+    ]
+  }
+}

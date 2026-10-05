@@ -306,7 +306,7 @@ describe('AuditLogService', () => {
     });
     const result = await actual.findGlobalAuditLogs(
       { user: 'foreign.actor', actionType: 'WORKFLOW_CATALOG_UPDATED' },
-      { id: 'server-admin' },
+      { id: 'server-admin', role: 'admin' },
     );
     expect(result).toEqual([
       {

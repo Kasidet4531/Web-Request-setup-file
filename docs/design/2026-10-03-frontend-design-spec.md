@@ -1,5 +1,7 @@
 # PSF Request Portal frontend redesign
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
+
 Status: approved by the user on 3 October 2026 for implementation with the accompanying concepts, implementation plan, and verified worker routing policy. Written requirements and existing business/API contracts take precedence over generated concepts.
 
 ## Purpose and scope
@@ -24,7 +26,7 @@ Use light neutral surfaces, compact typography, open sections, crisp separators,
 
 Keep all route URLs and search parameter contracts. Labels may improve without renaming URLs.
 
-- **Work:** Dashboard; All PSF Requests; My drafts; Create Request; Export to Excel when authorized; Audit History for administrators.
+- **Work:** Dashboard; All PSF Requests; My drafts; Create Request; Export to Excel when authorized; Audit History for every authenticated role (Requester, Setup Owner and Admin), as [confirmed on 4 October 2026](../audit-history-access.md).
 - **Administration:** Users & Roles; Form Management; Status Management; Auto-fill Rules. Visible only for administrators.
 - **Account:** current name, role, setup-owner department when applicable, theme toggle, and Log out.
 

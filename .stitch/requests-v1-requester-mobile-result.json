@@ -1,0 +1,96 @@
+{
+  "success": true,
+  "data": {
+    "resource": "screen",
+    "id": "a22d8f79e3814f7685a3e9d6fa6e8af5",
+    "project": "15540984743145901568",
+    "title": "PSF Request Portal — Requests (Mobile)",
+    "device": "DESKTOP",
+    "screenType": "DESIGN",
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=a22d8f79e3814f7685a3e9d6fa6e8af5",
+    "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1UwVYlF-m0-scwAOIg4rsWQowlOZItstzIePrgTW9dAosWJCfb1mcT6T-QozBWtgPKLdo-VLgUsj3xN1IjM1GgDgq_dyEvVpfJQHtRzuDdgHefyaKz_UG7B8zTq5NkMmxH44zYD0OU03pAB8xH1rTF3nu2_JZ-fMUDpAnJUL_T-mKIAmQciTdUMXruPACQd1e9yrTkHTNc870OzeTTZYfx8SNNUGzu_UI7cvt4TYSiYOFdu42H-PDJigS8E",
+    "htmlCode": {
+      "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2U5M2Q2M2E2YzY3NTQxMzNhNjM4MzQ3YjA2MzY5MGRmEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+      "mimeType": "text/html",
+      "name": "projects/15540984743145901568/files/8295cd147c714339a750a758d4e37650"
+    },
+    "rawScreen": {
+      "outputComponents": [
+        {
+          "design": {
+            "screens": [
+              {
+                "deviceType": "DESKTOP",
+                "generatedBy": "create_datastore_entry",
+                "height": "2048",
+                "htmlCode": {
+                  "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2U5M2Q2M2E2YzY3NTQxMzNhNjM4MzQ3YjA2MzY5MGRmEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+                  "mimeType": "text/html",
+                  "name": "projects/15540984743145901568/files/8295cd147c714339a750a758d4e37650"
+                },
+                "id": "a22d8f79e3814f7685a3e9d6fa6e8af5",
+                "name": "projects/15540984743145901568/screens/a22d8f79e3814f7685a3e9d6fa6e8af5",
+                "screenMetadata": {
+                  "agentType": "PRO_AGENT",
+                  "status": "COMPLETE"
+                },
+                "screenType": "DESIGN",
+                "screenshot": {
+                  "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1UwVYlF-m0-scwAOIg4rsWQowlOZItstzIePrgTW9dAosWJCfb1mcT6T-QozBWtgPKLdo-VLgUsj3xN1IjM1GgDgq_dyEvVpfJQHtRzuDdgHefyaKz_UG7B8zTq5NkMmxH44zYD0OU03pAB8xH1rTF3nu2_JZ-fMUDpAnJUL_T-mKIAmQciTdUMXruPACQd1e9yrTkHTNc870OzeTTZYfx8SNNUGzu_UI7cvt4TYSiYOFdu42H-PDJigS8E",
+                  "name": "projects/15540984743145901568/files/45e485d10d0a4416ada21e3d175b33a4"
+                },
+                "theme": {},
+                "title": "PSF Request Portal — Requests (Mobile)",
+                "width": "2560"
+              }
+            ],
+            "theme": {}
+          }
+        },
+        {
+          "text": "I have designed and implemented the **/requests** page for the PSF Request Portal following the NXP-inspired redesign specifications in **DESIGN.md** for the **Requester** role on **Mobile** (with responsive desktop support).\n\n### Summary of What Was Delivered\n\n1. **Page Purpose & Context:**\n   - Route `/requests` rendered as the shared catalog of submitted requests for Requesters and Setup Owners.\n   - Header with title **Requests**, subtitle *\"Browse shared PSF requests.\"*, and distinct scope note *\"• Private drafts are in My Drafts\"*.\n   - Standalone **New Request** action linking to `/requests/new` for initial draft creation. No KPI summary tiles or department scope dropdowns were copied from the Dashboard.\n\n2. **Mobile Navigation & Header Shell:**\n   - Sticky top bar with 44px touch targets: Menu button, compact **PSF Request Portal** brand mark, interactive Theme Toggle (Switch to dark/light mode), and Sam Taylor avatar (`ST`).\n   - Operable sliding navigation drawer with Backdrop, Close button (`aria-label=\"Close navigation menu\"`), and exact routes:\n     - **Dashboard** (`/dashboard`)\n     - **Requests** (`/requests`, marked `aria-current=\"page\"` and active)\n     - **My Drafts** (`/my-drafts`)\n     - **Audit History** (`/history` — included for authenticated roles)\n     - **Export** (`/admin/export-profile`)\n   - Drawer footer displaying user identity: **Sam Taylor**, `Requester · Systems Eng`.\n\n3. **Search, Status & Product Type Filters:**\n   - Persistent keyword search with placeholder `\"Search request no., title, PSF or probecard\"`.\n   - Collapsible **Filters** disclosure control opening the read-only **Status** dropdown and **Product type** text input with a **Clear filters** action without creating horizontal overflow.\n   - Exact catalog containing **\"All statuses\"** plus all **16 non-draft database statuses** decoded verbatim, including the exact 71-character double-backslash string:\n     `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`\n\n4. **Five Illustrative Sample Rows in Specified Order:**\n   - **S32K3 probe layout update** (`PSF-2026-0042` · `New Product`): `20% -- PSF File Creating` (open badge), `01 Oct 2026` (`OVERDUE`, `High`), Alex Morgan / Mei Tan / MFG.\n   - **ST Fab template map review** (`PSF-2026-0039` · `Transfer Product`): full `93%` status text with natural multi-line wrapping, `06 Oct 2026` (`Normal`), Priya Rao / Rowan Miller / GNTC.\n   - **Wafer map site verification** (`PSF-2026-0035` · `Existing Product`): `99% -- Wait requestor Buyoff site location and wafer map` (open badge), `08 Oct 2026` (`Normal`), Alex Morgan / Mei Tan / MFG.\n   - **Probe pattern release** (`PSF-2026-0028` · `New Product`): `100% -- Completed` (completed green badge), `02 Oct 2026` (`Normal`), Jordan Lee / Rowan Miller / GNTC.\n   - **Cancelled layout request** (`PSF-2026-0019` · `Existing Product`): `0% -- Rejected (Cancel Request)` (cancelled neutral badge), `09 Oct 2026` (`Normal`), Priya Rao / Mei Tan / MFG.\n\n5. **List / Card Transformation & Responsive Pagination:**\n   - On mobile, renders as vertical touch-friendly cards containing the four data groups (Request, Status, Schedule, Responsibility); on desktop viewports, automatically renders the four-column table.\n   - Footer shows `\"Showing 1–5 of 5 requests\"` with disabled Previous and Next controls (`Page 1 of 1`).\n   - Includes real inline JavaScript for theme switching (`data-theme=\"light\"` / `data-theme=\"dark\"`), drawer interaction, filter disclosure, and live filtering across the 5 sample records with an empty state."
+        },
+        {
+          "suggestion": "Generate the Setup Owner variant of the Mobile Requests page"
+        },
+        {
+          "suggestion": "Inspect the Dark Mode theme styling and contrast"
+        },
+        {
+          "suggestion": "Proceed to My Drafts (/my-drafts) mobile view"
+        }
+      ],
+      "projectId": "15540984743145901568",
+      "sessionId": "16562610733002534948",
+      "deviceType": "DESKTOP",
+      "generatedBy": "create_datastore_entry",
+      "height": "2048",
+      "htmlCode": {
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2U5M2Q2M2E2YzY3NTQxMzNhNjM4MzQ3YjA2MzY5MGRmEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+        "mimeType": "text/html",
+        "name": "projects/15540984743145901568/files/8295cd147c714339a750a758d4e37650"
+      },
+      "id": "a22d8f79e3814f7685a3e9d6fa6e8af5",
+      "name": "projects/15540984743145901568/screens/a22d8f79e3814f7685a3e9d6fa6e8af5",
+      "screenMetadata": {
+        "agentType": "PRO_AGENT",
+        "status": "COMPLETE"
+      },
+      "screenType": "DESIGN",
+      "screenshot": {
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1UwVYlF-m0-scwAOIg4rsWQowlOZItstzIePrgTW9dAosWJCfb1mcT6T-QozBWtgPKLdo-VLgUsj3xN1IjM1GgDgq_dyEvVpfJQHtRzuDdgHefyaKz_UG7B8zTq5NkMmxH44zYD0OU03pAB8xH1rTF3nu2_JZ-fMUDpAnJUL_T-mKIAmQciTdUMXruPACQd1e9yrTkHTNc870OzeTTZYfx8SNNUGzu_UI7cvt4TYSiYOFdu42H-PDJigS8E",
+        "name": "projects/15540984743145901568/files/45e485d10d0a4416ada21e3d175b33a4"
+      },
+      "theme": {},
+      "title": "PSF Request Portal — Requests (Mobile)",
+      "width": "2560",
+      "agentText": "I have designed and implemented the **/requests** page for the PSF Request Portal following the NXP-inspired redesign specifications in **DESIGN.md** for the **Requester** role on **Mobile** (with responsive desktop support).\n\n### Summary of What Was Delivered\n\n1. **Page Purpose & Context:**\n   - Route `/requests` rendered as the shared catalog of submitted requests for Requesters and Setup Owners.\n   - Header with title **Requests**, subtitle *\"Browse shared PSF requests.\"*, and distinct scope note *\"• Private drafts are in My Drafts\"*.\n   - Standalone **New Request** action linking to `/requests/new` for initial draft creation. No KPI summary tiles or department scope dropdowns were copied from the Dashboard.\n\n2. **Mobile Navigation & Header Shell:**\n   - Sticky top bar with 44px touch targets: Menu button, compact **PSF Request Portal** brand mark, interactive Theme Toggle (Switch to dark/light mode), and Sam Taylor avatar (`ST`).\n   - Operable sliding navigation drawer with Backdrop, Close button (`aria-label=\"Close navigation menu\"`), and exact routes:\n     - **Dashboard** (`/dashboard`)\n     - **Requests** (`/requests`, marked `aria-current=\"page\"` and active)\n     - **My Drafts** (`/my-drafts`)\n     - **Audit History** (`/history` — included for authenticated roles)\n     - **Export** (`/admin/export-profile`)\n   - Drawer footer displaying user identity: **Sam Taylor**, `Requester · Systems Eng`.\n\n3. **Search, Status & Product Type Filters:**\n   - Persistent keyword search with placeholder `\"Search request no., title, PSF or probecard\"`.\n   - Collapsible **Filters** disclosure control opening the read-only **Status** dropdown and **Product type** text input with a **Clear filters** action without creating horizontal overflow.\n   - Exact catalog containing **\"All statuses\"** plus all **16 non-draft database statuses** decoded verbatim, including the exact 71-character double-backslash string:\n     `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`\n\n4. **Five Illustrative Sample Rows in Specified Order:**\n   - **S32K3 probe layout update** (`PSF-2026-0042` · `New Product`): `20% -- PSF File Creating` (open badge), `01 Oct 2026` (`OVERDUE`, `High`), Alex Morgan / Mei Tan / MFG.\n   - **ST Fab template map review** (`PSF-2026-0039` · `Transfer Product`): full `93%` status text with natural multi-line wrapping, `06 Oct 2026` (`Normal`), Priya Rao / Rowan Miller / GNTC.\n   - **Wafer map site verification** (`PSF-2026-0035` · `Existing Product`): `99% -- Wait requestor Buyoff site location and wafer map` (open badge), `08 Oct 2026` (`Normal`), Alex Morgan / Mei Tan / MFG.\n   - **Probe pattern release** (`PSF-2026-0028` · `New Product`): `100% -- Completed` (completed green badge), `02 Oct 2026` (`Normal`), Jordan Lee / Rowan Miller / GNTC.\n   - **Cancelled layout request** (`PSF-2026-0019` · `Existing Product`): `0% -- Rejected (Cancel Request)` (cancelled neutral badge), `09 Oct 2026` (`Normal`), Priya Rao / Mei Tan / MFG.\n\n5. **List / Card Transformation & Responsive Pagination:**\n   - On mobile, renders as vertical touch-friendly cards containing the four data groups (Request, Status, Schedule, Responsibility); on desktop viewports, automatically renders the four-column table.\n   - Footer shows `\"Showing 1–5 of 5 requests\"` with disabled Previous and Next controls (`Page 1 of 1`).\n   - Includes real inline JavaScript for theme switching (`data-theme=\"light\"` / `data-theme=\"dark\"`), drawer interaction, filter disclosure, and live filtering across the 5 sample records with an empty state.",
+      "suggestions": [
+        "Generate the Setup Owner variant of the Mobile Requests page",
+        "Inspect the Dark Mode theme styling and contrast",
+        "Proceed to My Drafts (/my-drafts) mobile view"
+      ],
+      "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1UwVYlF-m0-scwAOIg4rsWQowlOZItstzIePrgTW9dAosWJCfb1mcT6T-QozBWtgPKLdo-VLgUsj3xN1IjM1GgDgq_dyEvVpfJQHtRzuDdgHefyaKz_UG7B8zTq5NkMmxH44zYD0OU03pAB8xH1rTF3nu2_JZ-fMUDpAnJUL_T-mKIAmQciTdUMXruPACQd1e9yrTkHTNc870OzeTTZYfx8SNNUGzu_UI7cvt4TYSiYOFdu42H-PDJigS8E"
+    }
+  }
+}

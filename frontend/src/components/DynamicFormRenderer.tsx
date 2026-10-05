@@ -23,6 +23,8 @@ export interface DynamicFormRendererProps {
   values?: DynamicFormValues
   errors?: DynamicFormErrors
   readOnly?: boolean
+  readOnlyFieldKeys?: readonly string[]
+  collapseOptionalFields?: boolean
   showSchemaHeader?: boolean
   submitLabel?: string
   onChange?: (fieldKey: string, value: string) => void
@@ -39,6 +41,8 @@ export function DynamicFormRenderer({
   onChange,
   onSubmit,
   readOnly = false,
+  readOnlyFieldKeys = [],
+  collapseOptionalFields = false,
   schema,
   showSchemaHeader = true,
   submitLabel = 'Submit request',
@@ -48,8 +52,21 @@ export function DynamicFormRenderer({
 
   function handleFieldChange(fieldKey: string) {
     return (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      if (readOnly || readOnlyFieldKeys.includes(fieldKey)) return
       onChange?.(fieldKey, event.target.value)
     }
+  }
+
+  function renderField(field: FormSchemaField) {
+    return <FieldControl
+      errors={errors}
+      field={field}
+      fieldStatus={fieldStatuses[field.fieldKey]}
+      key={field.fieldKey}
+      onChange={handleFieldChange(field.fieldKey)}
+      readOnly={readOnly || readOnlyFieldKeys.includes(field.fieldKey)}
+      value={values[field.fieldKey] ?? ''}
+    />
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -70,7 +87,7 @@ export function DynamicFormRenderer({
   }
 
   return (
-    <form className="dynamic-form" noValidate onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
+    <form className={`dynamic-form${readOnly ? ' dynamic-form--readonly' : ''}`} noValidate onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
       {showSchemaHeader ? (
         <div className="dynamic-form__header">
           {headerTitle === undefined ? <p className="page-card__eyebrow">Schema preview</p> : null}
@@ -85,27 +102,30 @@ export function DynamicFormRenderer({
         <p className="ui-help">Fields marked <span aria-hidden="true">*</span> are required for submission.</p>
       ) : null}
       <div className="dynamic-form__sections">
-        {schema.sections.map((section, sectionIndex) => (
+        {schema.sections.map((section, sectionIndex) => {
+          const optionalFields = collapseOptionalFields ? section.fields.filter((field) => !field.required) : []
+          const mainFields = collapseOptionalFields ? section.fields.filter((field) => field.required) : section.fields
+          return (
           <section aria-label={section.title} className="dynamic-form__section" key={section.sectionKey}>
             {schema.sections.length === 1 && section.title === headerTitle ? null : <div className="dynamic-form__section-header">
               <span aria-hidden="true" className="dynamic-form__section-number">{String(sectionIndex + 1).padStart(2, '0')}</span>
               <h3 className="dynamic-form__section-title">{section.title}</h3>
             </div>}
             <div className="dynamic-form__grid">
-              {section.fields.map((field) => (
-                <FieldControl
-                  errors={errors}
-                  field={field}
-                  fieldStatus={fieldStatuses[field.fieldKey]}
-                  key={field.fieldKey}
-                  onChange={handleFieldChange(field.fieldKey)}
-                  readOnly={readOnly}
-                  value={values[field.fieldKey] ?? ''}
-                />
-              ))}
+              {mainFields.map(renderField)}
             </div>
+            {optionalFields.length > 0 ? (
+              <details className="dynamic-form__additional" open={optionalFields.some((field) => Boolean(errors[field.fieldKey])) || undefined}>
+                <summary className="dynamic-form__additional-summary">
+                  <span>Additional details</span>
+                  <span className="dynamic-form__additional-count">{optionalFields.length} optional {optionalFields.length === 1 ? 'field' : 'fields'}</span>
+                </summary>
+                <div className="dynamic-form__grid">{optionalFields.map(renderField)}</div>
+              </details>
+            ) : null}
           </section>
-        ))}
+          )
+        })}
       </div>
 
       {!readOnly ? (

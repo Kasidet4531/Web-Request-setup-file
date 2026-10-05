@@ -1,0 +1,1014 @@
+{
+  "success": true,
+  "data": {
+    "resource": "screen",
+    "id": "6fbb93297a1c42668395283c229c1a75,eaa4be3b53a746549f0f10df656225ad",
+    "updated": {
+      "outputComponents": [
+        {
+          "design": {
+            "screens": [
+              {
+                "designSystem": {
+                  "designSystem": {
+                    "displayName": "NXP-Inspired Operational Workspace",
+                    "styleGuidelines": "## Brand & Style\nThis design system establishes a welcoming, precise engineering workspace tailored for operations, requesters, and setup owners. The atmosphere is defined by bright surfaces, high-clarity data presentation, and a calm, functional aesthetic that prioritizes operational efficiency over decorative flair. \n\nThe visual style merges principles of **Corporate / Modern** design with utilitarian clarity:\n- **Purposeful Color:** Restrained use of blue, orange, and green accents to guide user attention to statuses and primary actions without visual noise.\n- **Data-First Layout:** Information density is carefully calibrated. Decorative charts, large welcome banners, and unrelated activity feeds are intentionally omitted to keep focus entirely on the work queue.\n- **Ergonomic Precision:** Generous spacing around primary actions combined with strict typographic hierarchies ensure operational data is read effortlessly.\n\n## Layout & Spacing\nThe layout system implements a structured **fluid grid** built on an 8px rhythm, prioritizing the work queue as the dominant canvas area.\n\n- **Desktop Layout:** A 1280px canvas featuring a fixed 200–216px navigation sidebar, 24–32px main padding, and 24px major-section gaps. The three summary controls sit prominently above a full-width request table.\n- **Mobile Layout:** A 390px canvas wrapping the desktop sidebar into an accessible slide-out drawer, replacing the horizontal table with vertical list items, and utilizing 16px horizontal gutters with zero horizontal overflow.\n\n## Elevation & Depth\nDepth is handled with extreme restraint, relying on low-contrast outlines and flat tonal layering rather than heavy drop shadows.\n\n- **Surface Tiers:** Surfaces are distinguished using precise background color shifts (e.g., pure white cards on a cool canvas background) bounded by quiet outline borders (`#DCE5EB`).\n- **Focus States:** Interactive elements utilize accessible blue focus rings and clear outline/check treatments to indicate selection without relying on disruptive elevation shifts.\n\n## Components\nComponents are built for operational clarity, speed, and high information density.\n\n- **Buttons:** Primary actions utilize solid accessible blue (`#006F95`) with white text, maintaining a 40–44px height and visible focus rings. Secondary controls feature clean outlines.\n- **Navigation:** Compact NXP wordmark paired with clear icon-and-label pairs. Active states feature a blue wash (`#E8F6FC`) and a colored leading indicator.\n- **Summary Controls:** Side-by-side interactive filter tiles (Open work, Overdue, Completed) featuring tinted surfaces and restrained icons. They act as real queue filters rather than decorative statistics.\n- **Queue / Tables:** A dominant full-width surface featuring keyword search, Status selectors, and Clear filters. Rows contain request titles/numbers, current statuses, due dates, and owners, with urgent/high priority indicated via small readable badges.\n- **Inputs & Cards:** Clean, bordered input fields paired with subtly padded panels (16–24px padding) that avoid unnecessary card nesting.",
+                    "theme": {
+                      "bodyFont": "INTER",
+                      "bodyFontFamily": "Inter",
+                      "colorMode": "LIGHT",
+                      "colorVariant": "FIDELITY",
+                      "customColor": "#006f95",
+                      "designMd": "---\nname: NXP-Inspired Operational Workspace\ncolors:\n  surface: '#f7f9fd'\n  surface-dim: '#d7dade'\n  surface-bright: '#f7f9fd'\n  surface-container-lowest: '#ffffff'\n  surface-container-low: '#f1f4f7'\n  surface-container: '#ebeef1'\n  surface-container-high: '#e6e8ec'\n  surface-container-highest: '#e0e3e6'\n  on-surface: '#181c1f'\n  on-surface-variant: '#3f484e'\n  inverse-surface: '#2d3134'\n  inverse-on-surface: '#eef1f4'\n  outline: '#6f787f'\n  outline-variant: '#bfc8cf'\n  surface-tint: '#006689'\n  primary: '#005574'\n  on-primary: '#ffffff'\n  primary-container: '#006f95'\n  on-primary-container: '#ccebff'\n  inverse-primary: '#82d0fa'\n  secondary: '#006688'\n  on-secondary: '#ffffff'\n  secondary-container: '#43c5fd'\n  on-secondary-container: '#004f6b'\n  tertiary: '#764300'\n  on-tertiary: '#ffffff'\n  tertiary-container: '#955913'\n  on-tertiary-container: '#ffe1c9'\n  error: '#ba1a1a'\n  on-error: '#ffffff'\n  error-container: '#ffdad6'\n  on-error-container: '#93000a'\n  primary-fixed: '#c3e8ff'\n  primary-fixed-dim: '#82d0fa'\n  on-primary-fixed: '#001e2c'\n  on-primary-fixed-variant: '#004c68'\n  secondary-fixed: '#c2e8ff'\n  secondary-fixed-dim: '#77d1ff'\n  on-secondary-fixed: '#001e2c'\n  on-secondary-fixed-variant: '#004d68'\n  tertiary-fixed: '#ffdcbf'\n  tertiary-fixed-dim: '#ffb873'\n  on-tertiary-fixed: '#2d1600'\n  on-tertiary-fixed-variant: '#6a3b00'\n  background: '#f7f9fd'\n  on-background: '#181c1f'\n  surface-variant: '#e0e3e6'\n  paper: '#FFFFFF'\n  cool-canvas: '#F4F7FA'\n  quiet-outline: '#DCE5EB'\n  ink: '#173248'\n  secondary-ink: '#526575'\n  nxp-blue: '#00A9E0'\n  accessible-blue: '#006F95'\n  blue-wash: '#E8F6FC'\n  nxp-orange: '#FCA600'\n  orange-ink: '#8A4700'\n  orange-wash: '#FFF3DA'\n  nxp-green: '#69CA00'\n  green-ink: '#28651D'\n  green-wash: '#EDF8E5'\n  error-ink: '#B42332'\n  error-wash: '#FFF0F1'\ntypography:\n  page-title:\n    fontFamily: Inter\n    fontSize: 28px\n    fontWeight: '600'\n    lineHeight: 36px\n  section-heading:\n    fontFamily: Inter\n    fontSize: 18px\n    fontWeight: '600'\n    lineHeight: 26px\n  summary-count:\n    fontFamily: Inter\n    fontSize: 28px\n    fontWeight: '600'\n    lineHeight: 36px\n  body:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '400'\n    lineHeight: 22px\n  body-medium:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '500'\n    lineHeight: 22px\n  request-title:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '600'\n    lineHeight: 22px\n  supporting-label:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '400'\n    lineHeight: 18px\n  supporting-label-medium:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '500'\n    lineHeight: 18px\n  code-tabular:\n    fontFamily: JetBrains Mono\n    fontSize: 13px\n    fontWeight: '400'\n    lineHeight: 20px\nrounded:\n  sm: 0.125rem\n  DEFAULT: 0.25rem\n  md: 0.375rem\n  lg: 0.5rem\n  xl: 0.75rem\n  full: 9999px\nspacing:\n  gutter: 1rem\n  margin: 1.5rem\n  space-xs: 0.25rem\n  space-sm: 0.5rem\n  space-md: 1rem\n  space-lg: 1.5rem\n  space-xl: 2rem\n---\n\n# PSF Request Portal — NXP-inspired redesign\n\n## 1. Visual theme and atmosphere\n\nApproved brief, 4 October 2026: design in Stitch only, one page at a time. Serve Requesters and Setup Owners, English interface, desktop with mobile layouts, light mode first. Reduce information displayed simultaneously and add purposeful color. Complete and review Dashboard before designing another route. Admin screens and dark mode are deferred.\n\nUse a welcoming, precise engineering workspace: bright surfaces, clear hierarchy, restrained blue/orange/green accents, generous spacing around primary actions, and readable operational data. No decorative charts, large welcome banner, unrelated activity feed, or additional KPI tiles. Display work first.\n\nSource baseline: React/TanStack Router, custom CSS, Inter and JetBrains Mono; current primary #245BBD, sidebar #14263E, background #EEF2F7. The imported Dashboard image is the recorded top-panel layout in output/playwright/top-panels/after/dashboard-desktop.png. Its DEMO requests and Development identities are documented test data, not production business records. This document specifies the proposed redesign, not an extraction claiming these proposed tokens already exist in the application.\n\n## 2. Color palette and roles\n\nThese are NXP-inspired interface colors, not a claim of strict official CI compliance.\n\n| Token | Color | Role |\n| --- | --- | --- |\n| Paper | #FFFFFF | Navigation, table, inputs |\n| Cool canvas | #F4F7FA | Page background |\n| Quiet outline | #DCE5EB | Dividers and panel borders |\n| Ink | #173248 | Main text |\n| Secondary ink | #526575 | Supporting text |\n| NXP-inspired blue | #00A9E0 | Brand accents and open-work icon/background accent |\n| Accessible action blue | #006F95 | Primary actions, links and focused controls with white text |\n| Blue wash | #E8F6FC | Active navigation and open-work summary |\n| NXP-inspired orange | #FCA600 | Warm accent and overdue-summary decoration |\n| Orange ink | #8A4700 | Readable warning text |\n| Orange wash | #FFF3DA | Overdue summary surface |\n| NXP-inspired green | #69CA00 | Brand accent and completed-summary decoration |\n| Green ink | #28651D | Readable success text |\n| Green wash | #EDF8E5 | Completed summary surface |\n| Error ink | #B42332 | Errors and overdue record labels |\n| Error wash | #FFF0F1 | Error surfaces |\n\nUse darker ink on bright accents; do not put small white text on bright orange, lime green, or cyan. Every status has a text label and icon. Selection uses an outline/check treatment as well as color. Distinguish Overdue from merely Urgent priority.\n\n## 3. Typography rules\n\nInter for English UI. Use JetBrains Mono sparingly for request numbers, with tabular numerals for counts/dates.\n\n| Style | Size / line height | Weight |\n| --- | --- | --- |\n| Page title | 28 / 36 px | 600 |\n| Section heading | 18 / 26 px | 600 |\n| Summary count | 28 / 36 px | 600 |\n| Body and controls | 14 / 22 px | 400–500 |\n| Request title | 14 / 22 px | 600 |\n| Supporting label | 12 / 18 px | 400–500 |\n\nUse ordinary title/sentence case. Limit competing headings. Full custom status names must remain available when their compact display is truncated. Avoid tiny uppercase labels repeated in every row.\n\n## 4. Component stylings\n\nButtons: 40–44 px desktop height, 44 px minimum touch area; solid accessible blue for the primary New Request action, simple outlined secondary controls, 8 px radius and visible focus state.\n\nNavigation: approximately 200–216 px wide, light background, compact NXP wordmark/PSF identity, icon plus visible English label; active Dashboard uses blue wash and a colored leading indicator. Requester links: Dashboard, Requests, My Drafts, Export, History. Setup Owner omits Export and adds the existing department scope control inside Dashboard. Do not expose Admin tools to these roles. Do not invent a role-switching control.\n\nSummary controls: exactly Open work, Overdue, Completed, side by side above the work queue, with blue/orange/green tinted surfaces and restrained icons. These are real queue filter controls in the proposed interaction, not decorative statistics. An empty completed count is valid.\n\nQueue: one dominant full-width surface with a short heading, keyword search, Status selector and Clear filters. No secondary rail consuming table width. A row contains only request title/number, current status, due date and owner/department; urgent/high priority can be a small readable indicator near the date. Product type and extra metadata move into request detail. Show around five representative rows in the design, with the existing 25-item pagination contract retained and scroll available. Long titles and configurable status names need bounded wrapping plus access to their full value.\n\nUse a restrained 8–12 px panel radius, fine borders, little or no shadow, 16–24 px panel padding. Do not place every value in a separate card.\n\n## 5. Layout principles\n\nDesktop design canvas 1280 px wide, with 24–32 px main padding and 24 px major-section gaps on an 8 px rhythm. Keep the three summaries above the table, preserving the current top-panel structure. Keep greeting/description to one short line; make the table the dominant area.\n\nMobile design canvas 390 px wide: hide desktop rail behind a menu; preserve labeled navigation in the drawer; compact top bar; three compact summary controls; persistent keyword search and a Filters button opening secondary filters; request rows become compact vertical list items rather than a horizontally overflowing table. Each item shows title/number, status, due date and owner with an accessible open action. Use 16 px horizontal gutters and no horizontal page overflow. Preserve role and scope rules.\n\n## 6. Stitch generation notes and constraints\n\nCurrent page only: /dashboard. Import the existing UI reference, then edit the uploaded screen. Do not generate or upload other routes until this page is reviewed.\n\nRequester and Setup Owner share the same layout. Owner-specific scope values must remain exactly Related work, Created by me and PSF department work; do not replace this with Assigned to me because assignment is not the current query contract. Requester sees related work under their existing permissions. Treat owner scope as a documented responsive state of this Dashboard, not another route.\n\nKeep the current workflow rules: statuses are admin-configurable and are not a mandatory linear sequence. No percent-complete chart, stepper, invented approvals, assignee write action, file generation, notifications count, or unsupported bulk action. No per-row export action for Owner. New Request opens the existing private-draft creation flow; do not imply it submits immediately. Only show explicitly fictional sample content in newly designed views.\n\nPrompt direction: \"Rework the imported Dashboard into a light NXP-inspired work queue with three compact, colored summary filter tiles above a calm full-width request list. Show the existing work controls clearly and place secondary information in the detail view. Keep all text in English and preserve Requester/Setup Owner permissions.\"",
+                      "font": "INTER",
+                      "headlineFont": "INTER",
+                      "headlineFontFamily": "Inter",
+                      "labelFont": "INTER",
+                      "labelFontFamily": "Inter",
+                      "namedColors": {
+                        "accessible-blue": "#006F95",
+                        "background": "#f7f9fd",
+                        "blue-wash": "#E8F6FC",
+                        "cool-canvas": "#F4F7FA",
+                        "error": "#ba1a1a",
+                        "error-ink": "#B42332",
+                        "error-wash": "#FFF0F1",
+                        "error_container": "#ffdad6",
+                        "green-ink": "#28651D",
+                        "green-wash": "#EDF8E5",
+                        "ink": "#173248",
+                        "inverse_on_surface": "#eef1f4",
+                        "inverse_primary": "#82d0fa",
+                        "inverse_surface": "#2d3134",
+                        "nxp-blue": "#00A9E0",
+                        "nxp-green": "#69CA00",
+                        "nxp-orange": "#FCA600",
+                        "on_background": "#181c1f",
+                        "on_error": "#ffffff",
+                        "on_error_container": "#93000a",
+                        "on_primary": "#ffffff",
+                        "on_primary_container": "#ccebff",
+                        "on_primary_fixed": "#001e2c",
+                        "on_primary_fixed_variant": "#004c68",
+                        "on_secondary": "#ffffff",
+                        "on_secondary_container": "#004f6b",
+                        "on_secondary_fixed": "#001e2c",
+                        "on_secondary_fixed_variant": "#004d68",
+                        "on_surface": "#181c1f",
+                        "on_surface_variant": "#3f484e",
+                        "on_tertiary": "#ffffff",
+                        "on_tertiary_container": "#ffe1c9",
+                        "on_tertiary_fixed": "#2d1600",
+                        "on_tertiary_fixed_variant": "#6a3b00",
+                        "orange-ink": "#8A4700",
+                        "orange-wash": "#FFF3DA",
+                        "outline": "#6f787f",
+                        "outline_variant": "#bfc8cf",
+                        "paper": "#FFFFFF",
+                        "primary": "#005574",
+                        "primary_container": "#006f95",
+                        "primary_fixed": "#c3e8ff",
+                        "primary_fixed_dim": "#82d0fa",
+                        "quiet-outline": "#DCE5EB",
+                        "secondary": "#006688",
+                        "secondary-ink": "#526575",
+                        "secondary_container": "#43c5fd",
+                        "secondary_fixed": "#c2e8ff",
+                        "secondary_fixed_dim": "#77d1ff",
+                        "surface": "#f7f9fd",
+                        "surface_bright": "#f7f9fd",
+                        "surface_container": "#ebeef1",
+                        "surface_container_high": "#e6e8ec",
+                        "surface_container_highest": "#e0e3e6",
+                        "surface_container_low": "#f1f4f7",
+                        "surface_container_lowest": "#ffffff",
+                        "surface_dim": "#d7dade",
+                        "surface_tint": "#006689",
+                        "surface_variant": "#e0e3e6",
+                        "tertiary": "#764300",
+                        "tertiary_container": "#955913",
+                        "tertiary_fixed": "#ffdcbf",
+                        "tertiary_fixed_dim": "#ffb873"
+                      },
+                      "overridePrimaryColor": "#006f95",
+                      "overrideSecondaryColor": "#00a9e0",
+                      "roundness": "ROUND_FOUR",
+                      "spacing": {
+                        "gutter": "1rem",
+                        "margin": "1.5rem",
+                        "space-lg": "1.5rem",
+                        "space-md": "1rem",
+                        "space-sm": "0.5rem",
+                        "space-xl": "2rem",
+                        "space-xs": "0.25rem"
+                      },
+                      "spacingScale": 2,
+                      "typography": {
+                        "body": {
+                          "fontFamily": "Inter",
+                          "fontSize": "14px",
+                          "fontWeight": "400",
+                          "lineHeight": "22px"
+                        },
+                        "body-medium": {
+                          "fontFamily": "Inter",
+                          "fontSize": "14px",
+                          "fontWeight": "500",
+                          "lineHeight": "22px"
+                        },
+                        "code-tabular": {
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": "13px",
+                          "fontWeight": "400",
+                          "lineHeight": "20px"
+                        },
+                        "page-title": {
+                          "fontFamily": "Inter",
+                          "fontSize": "28px",
+                          "fontWeight": "600",
+                          "lineHeight": "36px"
+                        },
+                        "request-title": {
+                          "fontFamily": "Inter",
+                          "fontSize": "14px",
+                          "fontWeight": "600",
+                          "lineHeight": "22px"
+                        },
+                        "section-heading": {
+                          "fontFamily": "Inter",
+                          "fontSize": "18px",
+                          "fontWeight": "600",
+                          "lineHeight": "26px"
+                        },
+                        "summary-count": {
+                          "fontFamily": "Inter",
+                          "fontSize": "28px",
+                          "fontWeight": "600",
+                          "lineHeight": "36px"
+                        },
+                        "supporting-label": {
+                          "fontFamily": "Inter",
+                          "fontSize": "12px",
+                          "fontWeight": "400",
+                          "lineHeight": "18px"
+                        },
+                        "supporting-label-medium": {
+                          "fontFamily": "Inter",
+                          "fontSize": "12px",
+                          "fontWeight": "500",
+                          "lineHeight": "18px"
+                        }
+                      }
+                    }
+                  },
+                  "name": "assets/34612c3d3bac4e1fa391e91794cff9b4",
+                  "version": "1"
+                },
+                "deviceType": "MOBILE",
+                "generatedBy": "HatterAgent",
+                "height": "2712",
+                "htmlCode": {
+                  "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sXzZmMjFmZjIxNTBlZTRiZWY5M2ZhMTgyOGY5NDg3MmYxEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+                  "mimeType": "text/html",
+                  "name": "projects/15540984743145901568/files/c3b28ddcd32c490ab8d04a752e14b33c"
+                },
+                "id": "95c5c8b8dcd646878d41a11356e048d5",
+                "name": "projects/15540984743145901568/screens/95c5c8b8dcd646878d41a11356e048d5",
+                "prompt": "Update this Mobile Dashboard screen (390px) to represent the Setup Owner role state:\n1. User Account & Identity:\n   - In the top bar, update the avatar circle initials from 'ST' to 'AM'.\n   - Inside the navigation drawer, update the user account info to 'Alex Morgan', role 'Setup Owner · GNTC', avatar 'AM'.\n2. Navigation Drawer:\n   - Remove 'Export' from the mobile drawer navigation. Keep only 'Dashboard' (active), 'Requests', and 'My Drafts'. Global History and Admin tools remain strictly absent.\n3. Subtitle:\n   - Change 'Your requests, at a glance.' to 'Your related work, at a glance.'\n4. Work Scope Control & Indicators:\n   - Near the queue heading 'Related requests', make the selected scope clear (e.g. badge or scope subtitle indicating 'Scope: Related work' or 'Related work · 19 total').\n   - Inside the collapsible Filters disclosure panel, add the accessibly labeled 'Work scope' select control alongside the Status filter:\n     - Accessible label: aria-label=\"Work scope\" (or label \"Work scope\")\n     - Exact options: \"Related work\" (selected), \"Created by me\", \"PSF department work\". Do NOT invent \"Assigned to me\".\n     - Keep the filter disclosure button showing the active scope and status summary (or clean indicator).\n5. All other elements remain intact:\n   - Summary filter buttons in one row: Open work 19 (aria-pressed=\"true\"), Overdue 10 (aria-pressed=\"false\"), Completed 0 (aria-pressed=\"false\") with aria-pressed, keyboard focus, and colored washes.\n   - Request list items: exact fictional sample data, same status badges, 01 Oct 2026 Overdue warning.\n   - Footer: '19 related requests · 25 per page', Page 1 of 1, disabled Previous/Next.\n   - 390px viewport, 16px gutters, zero horizontal overflow.\n   - Do NOT add assignment actions, role switches, or owner export.",
+                "screenMetadata": {
+                  "agentType": "PRO_AGENT",
+                  "status": "COMPLETE"
+                },
+                "screenType": "DESIGN",
+                "screenshot": {
+                  "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WiYCca7wocyrFUX9WyTex6YQkANPHen0_juZyLsmBSYw6-IVn8x8zisO-kDjipLx7HPNhlw8tFDo74PtpkIg6Px1r8GRU1yWI7U3PrVZBo3updD6KYvcEIyEGb84NP_zY4yHgUCurYO_Q4xFoJJEptrElTU0rtecfwye2rAZLPQHBDg3pksoSY7fXYHahD2qeLqRN0JeJg4VGxWzoNh0g0q-ErY6QjV-k_iLA1tnvXRBmOJqU1s_-vMetE",
+                  "name": "projects/15540984743145901568/files/2d291c5e94c34c42a03ce871d5b6a2b2"
+                },
+                "theme": {
+                  "bodyFont": "INTER",
+                  "bodyFontFamily": "Inter",
+                  "colorMode": "LIGHT",
+                  "colorVariant": "FIDELITY",
+                  "customColor": "#006f95",
+                  "font": "INTER",
+                  "headlineFont": "INTER",
+                  "headlineFontFamily": "Inter",
+                  "labelFont": "INTER",
+                  "labelFontFamily": "Inter",
+                  "namedColors": {
+                    "accessible-blue": "#006F95",
+                    "background": "#f7f9fd",
+                    "blue-wash": "#E8F6FC",
+                    "cool-canvas": "#F4F7FA",
+                    "error": "#ba1a1a",
+                    "error-ink": "#B42332",
+                    "error-wash": "#FFF0F1",
+                    "error_container": "#ffdad6",
+                    "green-ink": "#28651D",
+                    "green-wash": "#EDF8E5",
+                    "ink": "#173248",
+                    "inverse_on_surface": "#eef1f4",
+                    "inverse_primary": "#82d0fa",
+                    "inverse_surface": "#2d3134",
+                    "nxp-blue": "#00A9E0",
+                    "nxp-green": "#69CA00",
+                    "nxp-orange": "#FCA600",
+                    "on_background": "#181c1f",
+                    "on_error": "#ffffff",
+                    "on_error_container": "#93000a",
+                    "on_primary": "#ffffff",
+                    "on_primary_container": "#ccebff",
+                    "on_primary_fixed": "#001e2c",
+                    "on_primary_fixed_variant": "#004c68",
+                    "on_secondary": "#ffffff",
+                    "on_secondary_container": "#004f6b",
+                    "on_secondary_fixed": "#001e2c",
+                    "on_secondary_fixed_variant": "#004d68",
+                    "on_surface": "#181c1f",
+                    "on_surface_variant": "#3f484e",
+                    "on_tertiary": "#ffffff",
+                    "on_tertiary_container": "#ffe1c9",
+                    "on_tertiary_fixed": "#2d1600",
+                    "on_tertiary_fixed_variant": "#6a3b00",
+                    "orange-ink": "#8A4700",
+                    "orange-wash": "#FFF3DA",
+                    "outline": "#6f787f",
+                    "outline_variant": "#bfc8cf",
+                    "paper": "#FFFFFF",
+                    "primary": "#005574",
+                    "primary_container": "#006f95",
+                    "primary_fixed": "#c3e8ff",
+                    "primary_fixed_dim": "#82d0fa",
+                    "quiet-outline": "#DCE5EB",
+                    "secondary": "#006688",
+                    "secondary-ink": "#526575",
+                    "secondary_container": "#43c5fd",
+                    "secondary_fixed": "#c2e8ff",
+                    "secondary_fixed_dim": "#77d1ff",
+                    "surface": "#f7f9fd",
+                    "surface_bright": "#f7f9fd",
+                    "surface_container": "#ebeef1",
+                    "surface_container_high": "#e6e8ec",
+                    "surface_container_highest": "#e0e3e6",
+                    "surface_container_low": "#f1f4f7",
+                    "surface_container_lowest": "#ffffff",
+                    "surface_dim": "#d7dade",
+                    "surface_tint": "#006689",
+                    "surface_variant": "#e0e3e6",
+                    "tertiary": "#764300",
+                    "tertiary_container": "#955913",
+                    "tertiary_fixed": "#ffdcbf",
+                    "tertiary_fixed_dim": "#ffb873"
+                  },
+                  "overridePrimaryColor": "#006f95",
+                  "overrideSecondaryColor": "#00a9e0",
+                  "roundness": "ROUND_FOUR",
+                  "spacing": {
+                    "gutter": "1rem",
+                    "margin": "1.5rem",
+                    "space-lg": "1.5rem",
+                    "space-md": "1rem",
+                    "space-sm": "0.5rem",
+                    "space-xl": "2rem",
+                    "space-xs": "0.25rem"
+                  },
+                  "spacingScale": 2,
+                  "typography": {
+                    "body": {
+                      "fontFamily": "Inter",
+                      "fontSize": "14px",
+                      "fontWeight": "400",
+                      "lineHeight": "22px"
+                    },
+                    "body-medium": {
+                      "fontFamily": "Inter",
+                      "fontSize": "14px",
+                      "fontWeight": "500",
+                      "lineHeight": "22px"
+                    },
+                    "code-tabular": {
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": "13px",
+                      "fontWeight": "400",
+                      "lineHeight": "20px"
+                    },
+                    "page-title": {
+                      "fontFamily": "Inter",
+                      "fontSize": "28px",
+                      "fontWeight": "600",
+                      "lineHeight": "36px"
+                    },
+                    "request-title": {
+                      "fontFamily": "Inter",
+                      "fontSize": "14px",
+                      "fontWeight": "600",
+                      "lineHeight": "22px"
+                    },
+                    "section-heading": {
+                      "fontFamily": "Inter",
+                      "fontSize": "18px",
+                      "fontWeight": "600",
+                      "lineHeight": "26px"
+                    },
+                    "summary-count": {
+                      "fontFamily": "Inter",
+                      "fontSize": "28px",
+                      "fontWeight": "600",
+                      "lineHeight": "36px"
+                    },
+                    "supporting-label": {
+                      "fontFamily": "Inter",
+                      "fontSize": "12px",
+                      "fontWeight": "400",
+                      "lineHeight": "18px"
+                    },
+                    "supporting-label-medium": {
+                      "fontFamily": "Inter",
+                      "fontSize": "12px",
+                      "fontWeight": "500",
+                      "lineHeight": "18px"
+                    }
+                  }
+                },
+                "title": "PSF Request Portal — Mobile Dashboard (Setup Owner)",
+                "width": "780"
+              },
+              {
+                "designSystem": {
+                  "designSystem": {
+                    "displayName": "NXP-Inspired Operational Workspace",
+                    "styleGuidelines": "## Brand & Style\nThis design system establishes a welcoming, precise engineering workspace tailored for operations, requesters, and setup owners. The atmosphere is defined by bright surfaces, high-clarity data presentation, and a calm, functional aesthetic that prioritizes operational efficiency over decorative flair. \n\nThe visual style merges principles of **Corporate / Modern** design with utilitarian clarity:\n- **Purposeful Color:** Restrained use of blue, orange, and green accents to guide user attention to statuses and primary actions without visual noise.\n- **Data-First Layout:** Information density is carefully calibrated. Decorative charts, large welcome banners, and unrelated activity feeds are intentionally omitted to keep focus entirely on the work queue.\n- **Ergonomic Precision:** Generous spacing around primary actions combined with strict typographic hierarchies ensure operational data is read effortlessly.\n\n## Layout & Spacing\nThe layout system implements a structured **fluid grid** built on an 8px rhythm, prioritizing the work queue as the dominant canvas area.\n\n- **Desktop Layout:** A 1280px canvas featuring a fixed 200–216px navigation sidebar, 24–32px main padding, and 24px major-section gaps. The three summary controls sit prominently above a full-width request table.\n- **Mobile Layout:** A 390px canvas wrapping the desktop sidebar into an accessible slide-out drawer, replacing the horizontal table with vertical list items, and utilizing 16px horizontal gutters with zero horizontal overflow.\n\n## Elevation & Depth\nDepth is handled with extreme restraint, relying on low-contrast outlines and flat tonal layering rather than heavy drop shadows.\n\n- **Surface Tiers:** Surfaces are distinguished using precise background color shifts (e.g., pure white cards on a cool canvas background) bounded by quiet outline borders (`#DCE5EB`).\n- **Focus States:** Interactive elements utilize accessible blue focus rings and clear outline/check treatments to indicate selection without relying on disruptive elevation shifts.\n\n## Components\nComponents are built for operational clarity, speed, and high information density.\n\n- **Buttons:** Primary actions utilize solid accessible blue (`#006F95`) with white text, maintaining a 40–44px height and visible focus rings. Secondary controls feature clean outlines.\n- **Navigation:** Compact NXP wordmark paired with clear icon-and-label pairs. Active states feature a blue wash (`#E8F6FC`) and a colored leading indicator.\n- **Summary Controls:** Side-by-side interactive filter tiles (Open work, Overdue, Completed) featuring tinted surfaces and restrained icons. They act as real queue filters rather than decorative statistics.\n- **Queue / Tables:** A dominant full-width surface featuring keyword search, Status selectors, and Clear filters. Rows contain request titles/numbers, current statuses, due dates, and owners, with urgent/high priority indicated via small readable badges.\n- **Inputs & Cards:** Clean, bordered input fields paired with subtly padded panels (16–24px padding) that avoid unnecessary card nesting.",
+                    "theme": {
+                      "bodyFont": "INTER",
+                      "bodyFontFamily": "Inter",
+                      "colorMode": "LIGHT",
+                      "colorVariant": "FIDELITY",
+                      "customColor": "#006f95",
+                      "designMd": "---\nname: NXP-Inspired Operational Workspace\ncolors:\n  surface: '#f7f9fd'\n  surface-dim: '#d7dade'\n  surface-bright: '#f7f9fd'\n  surface-container-lowest: '#ffffff'\n  surface-container-low: '#f1f4f7'\n  surface-container: '#ebeef1'\n  surface-container-high: '#e6e8ec'\n  surface-container-highest: '#e0e3e6'\n  on-surface: '#181c1f'\n  on-surface-variant: '#3f484e'\n  inverse-surface: '#2d3134'\n  inverse-on-surface: '#eef1f4'\n  outline: '#6f787f'\n  outline-variant: '#bfc8cf'\n  surface-tint: '#006689'\n  primary: '#005574'\n  on-primary: '#ffffff'\n  primary-container: '#006f95'\n  on-primary-container: '#ccebff'\n  inverse-primary: '#82d0fa'\n  secondary: '#006688'\n  on-secondary: '#ffffff'\n  secondary-container: '#43c5fd'\n  on-secondary-container: '#004f6b'\n  tertiary: '#764300'\n  on-tertiary: '#ffffff'\n  tertiary-container: '#955913'\n  on-tertiary-container: '#ffe1c9'\n  error: '#ba1a1a'\n  on-error: '#ffffff'\n  error-container: '#ffdad6'\n  on-error-container: '#93000a'\n  primary-fixed: '#c3e8ff'\n  primary-fixed-dim: '#82d0fa'\n  on-primary-fixed: '#001e2c'\n  on-primary-fixed-variant: '#004c68'\n  secondary-fixed: '#c2e8ff'\n  secondary-fixed-dim: '#77d1ff'\n  on-secondary-fixed: '#001e2c'\n  on-secondary-fixed-variant: '#004d68'\n  tertiary-fixed: '#ffdcbf'\n  tertiary-fixed-dim: '#ffb873'\n  on-tertiary-fixed: '#2d1600'\n  on-tertiary-fixed-variant: '#6a3b00'\n  background: '#f7f9fd'\n  on-background: '#181c1f'\n  surface-variant: '#e0e3e6'\n  paper: '#FFFFFF'\n  cool-canvas: '#F4F7FA'\n  quiet-outline: '#DCE5EB'\n  ink: '#173248'\n  secondary-ink: '#526575'\n  nxp-blue: '#00A9E0'\n  accessible-blue: '#006F95'\n  blue-wash: '#E8F6FC'\n  nxp-orange: '#FCA600'\n  orange-ink: '#8A4700'\n  orange-wash: '#FFF3DA'\n  nxp-green: '#69CA00'\n  green-ink: '#28651D'\n  green-wash: '#EDF8E5'\n  error-ink: '#B42332'\n  error-wash: '#FFF0F1'\ntypography:\n  page-title:\n    fontFamily: Inter\n    fontSize: 28px\n    fontWeight: '600'\n    lineHeight: 36px\n  section-heading:\n    fontFamily: Inter\n    fontSize: 18px\n    fontWeight: '600'\n    lineHeight: 26px\n  summary-count:\n    fontFamily: Inter\n    fontSize: 28px\n    fontWeight: '600'\n    lineHeight: 36px\n  body:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '400'\n    lineHeight: 22px\n  body-medium:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '500'\n    lineHeight: 22px\n  request-title:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '600'\n    lineHeight: 22px\n  supporting-label:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '400'\n    lineHeight: 18px\n  supporting-label-medium:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '500'\n    lineHeight: 18px\n  code-tabular:\n    fontFamily: JetBrains Mono\n    fontSize: 13px\n    fontWeight: '400'\n    lineHeight: 20px\nrounded:\n  sm: 0.125rem\n  DEFAULT: 0.25rem\n  md: 0.375rem\n  lg: 0.5rem\n  xl: 0.75rem\n  full: 9999px\nspacing:\n  gutter: 1rem\n  margin: 1.5rem\n  space-xs: 0.25rem\n  space-sm: 0.5rem\n  space-md: 1rem\n  space-lg: 1.5rem\n  space-xl: 2rem\n---\n\n# PSF Request Portal — NXP-inspired redesign\n\n## 1. Visual theme and atmosphere\n\nApproved brief, 4 October 2026: design in Stitch only, one page at a time. Serve Requesters and Setup Owners, English interface, desktop with mobile layouts, light mode first. Reduce information displayed simultaneously and add purposeful color. Complete and review Dashboard before designing another route. Admin screens and dark mode are deferred.\n\nUse a welcoming, precise engineering workspace: bright surfaces, clear hierarchy, restrained blue/orange/green accents, generous spacing around primary actions, and readable operational data. No decorative charts, large welcome banner, unrelated activity feed, or additional KPI tiles. Display work first.\n\nSource baseline: React/TanStack Router, custom CSS, Inter and JetBrains Mono; current primary #245BBD, sidebar #14263E, background #EEF2F7. The imported Dashboard image is the recorded top-panel layout in output/playwright/top-panels/after/dashboard-desktop.png. Its DEMO requests and Development identities are documented test data, not production business records. This document specifies the proposed redesign, not an extraction claiming these proposed tokens already exist in the application.\n\n## 2. Color palette and roles\n\nThese are NXP-inspired interface colors, not a claim of strict official CI compliance.\n\n| Token | Color | Role |\n| --- | --- | --- |\n| Paper | #FFFFFF | Navigation, table, inputs |\n| Cool canvas | #F4F7FA | Page background |\n| Quiet outline | #DCE5EB | Dividers and panel borders |\n| Ink | #173248 | Main text |\n| Secondary ink | #526575 | Supporting text |\n| NXP-inspired blue | #00A9E0 | Brand accents and open-work icon/background accent |\n| Accessible action blue | #006F95 | Primary actions, links and focused controls with white text |\n| Blue wash | #E8F6FC | Active navigation and open-work summary |\n| NXP-inspired orange | #FCA600 | Warm accent and overdue-summary decoration |\n| Orange ink | #8A4700 | Readable warning text |\n| Orange wash | #FFF3DA | Overdue summary surface |\n| NXP-inspired green | #69CA00 | Brand accent and completed-summary decoration |\n| Green ink | #28651D | Readable success text |\n| Green wash | #EDF8E5 | Completed summary surface |\n| Error ink | #B42332 | Errors and overdue record labels |\n| Error wash | #FFF0F1 | Error surfaces |\n\nUse darker ink on bright accents; do not put small white text on bright orange, lime green, or cyan. Every status has a text label and icon. Selection uses an outline/check treatment as well as color. Distinguish Overdue from merely Urgent priority.\n\n## 3. Typography rules\n\nInter for English UI. Use JetBrains Mono sparingly for request numbers, with tabular numerals for counts/dates.\n\n| Style | Size / line height | Weight |\n| --- | --- | --- |\n| Page title | 28 / 36 px | 600 |\n| Section heading | 18 / 26 px | 600 |\n| Summary count | 28 / 36 px | 600 |\n| Body and controls | 14 / 22 px | 400–500 |\n| Request title | 14 / 22 px | 600 |\n| Supporting label | 12 / 18 px | 400–500 |\n\nUse ordinary title/sentence case. Limit competing headings. Full custom status names must remain available when their compact display is truncated. Avoid tiny uppercase labels repeated in every row.\n\n## 4. Component stylings\n\nButtons: 40–44 px desktop height, 44 px minimum touch area; solid accessible blue for the primary New Request action, simple outlined secondary controls, 8 px radius and visible focus state.\n\nNavigation: approximately 200–216 px wide, light background, compact NXP wordmark/PSF identity, icon plus visible English label; active Dashboard uses blue wash and a colored leading indicator. Requester links: Dashboard, Requests, My Drafts, Export, History. Setup Owner omits Export and adds the existing department scope control inside Dashboard. Do not expose Admin tools to these roles. Do not invent a role-switching control.\n\nSummary controls: exactly Open work, Overdue, Completed, side by side above the work queue, with blue/orange/green tinted surfaces and restrained icons. These are real queue filter controls in the proposed interaction, not decorative statistics. An empty completed count is valid.\n\nQueue: one dominant full-width surface with a short heading, keyword search, Status selector and Clear filters. No secondary rail consuming table width. A row contains only request title/number, current status, due date and owner/department; urgent/high priority can be a small readable indicator near the date. Product type and extra metadata move into request detail. Show around five representative rows in the design, with the existing 25-item pagination contract retained and scroll available. Long titles and configurable status names need bounded wrapping plus access to their full value.\n\nUse a restrained 8–12 px panel radius, fine borders, little or no shadow, 16–24 px panel padding. Do not place every value in a separate card.\n\n## 5. Layout principles\n\nDesktop design canvas 1280 px wide, with 24–32 px main padding and 24 px major-section gaps on an 8 px rhythm. Keep the three summaries above the table, preserving the current top-panel structure. Keep greeting/description to one short line; make the table the dominant area.\n\nMobile design canvas 390 px wide: hide desktop rail behind a menu; preserve labeled navigation in the drawer; compact top bar; three compact summary controls; persistent keyword search and a Filters button opening secondary filters; request rows become compact vertical list items rather than a horizontally overflowing table. Each item shows title/number, status, due date and owner with an accessible open action. Use 16 px horizontal gutters and no horizontal page overflow. Preserve role and scope rules.\n\n## 6. Stitch generation notes and constraints\n\nCurrent page only: /dashboard. Import the existing UI reference, then edit the uploaded screen. Do not generate or upload other routes until this page is reviewed.\n\nRequester and Setup Owner share the same layout. Owner-specific scope values must remain exactly Related work, Created by me and PSF department work; do not replace this with Assigned to me because assignment is not the current query contract. Requester sees related work under their existing permissions. Treat owner scope as a documented responsive state of this Dashboard, not another route.\n\nKeep the current workflow rules: statuses are admin-configurable and are not a mandatory linear sequence. No percent-complete chart, stepper, invented approvals, assignee write action, file generation, notifications count, or unsupported bulk action. No per-row export action for Owner. New Request opens the existing private-draft creation flow; do not imply it submits immediately. Only show explicitly fictional sample content in newly designed views.\n\nPrompt direction: \"Rework the imported Dashboard into a light NXP-inspired work queue with three compact, colored summary filter tiles above a calm full-width request list. Show the existing work controls clearly and place secondary information in the detail view. Keep all text in English and preserve Requester/Setup Owner permissions.\"",
+                      "font": "INTER",
+                      "headlineFont": "INTER",
+                      "headlineFontFamily": "Inter",
+                      "labelFont": "INTER",
+                      "labelFontFamily": "Inter",
+                      "namedColors": {
+                        "accessible-blue": "#006F95",
+                        "background": "#f7f9fd",
+                        "blue-wash": "#E8F6FC",
+                        "cool-canvas": "#F4F7FA",
+                        "error": "#ba1a1a",
+                        "error-ink": "#B42332",
+                        "error-wash": "#FFF0F1",
+                        "error_container": "#ffdad6",
+                        "green-ink": "#28651D",
+                        "green-wash": "#EDF8E5",
+                        "ink": "#173248",
+                        "inverse_on_surface": "#eef1f4",
+                        "inverse_primary": "#82d0fa",
+                        "inverse_surface": "#2d3134",
+                        "nxp-blue": "#00A9E0",
+                        "nxp-green": "#69CA00",
+                        "nxp-orange": "#FCA600",
+                        "on_background": "#181c1f",
+                        "on_error": "#ffffff",
+                        "on_error_container": "#93000a",
+                        "on_primary": "#ffffff",
+                        "on_primary_container": "#ccebff",
+                        "on_primary_fixed": "#001e2c",
+                        "on_primary_fixed_variant": "#004c68",
+                        "on_secondary": "#ffffff",
+                        "on_secondary_container": "#004f6b",
+                        "on_secondary_fixed": "#001e2c",
+                        "on_secondary_fixed_variant": "#004d68",
+                        "on_surface": "#181c1f",
+                        "on_surface_variant": "#3f484e",
+                        "on_tertiary": "#ffffff",
+                        "on_tertiary_container": "#ffe1c9",
+                        "on_tertiary_fixed": "#2d1600",
+                        "on_tertiary_fixed_variant": "#6a3b00",
+                        "orange-ink": "#8A4700",
+                        "orange-wash": "#FFF3DA",
+                        "outline": "#6f787f",
+                        "outline_variant": "#bfc8cf",
+                        "paper": "#FFFFFF",
+                        "primary": "#005574",
+                        "primary_container": "#006f95",
+                        "primary_fixed": "#c3e8ff",
+                        "primary_fixed_dim": "#82d0fa",
+                        "quiet-outline": "#DCE5EB",
+                        "secondary": "#006688",
+                        "secondary-ink": "#526575",
+                        "secondary_container": "#43c5fd",
+                        "secondary_fixed": "#c2e8ff",
+                        "secondary_fixed_dim": "#77d1ff",
+                        "surface": "#f7f9fd",
+                        "surface_bright": "#f7f9fd",
+                        "surface_container": "#ebeef1",
+                        "surface_container_high": "#e6e8ec",
+                        "surface_container_highest": "#e0e3e6",
+                        "surface_container_low": "#f1f4f7",
+                        "surface_container_lowest": "#ffffff",
+                        "surface_dim": "#d7dade",
+                        "surface_tint": "#006689",
+                        "surface_variant": "#e0e3e6",
+                        "tertiary": "#764300",
+                        "tertiary_container": "#955913",
+                        "tertiary_fixed": "#ffdcbf",
+                        "tertiary_fixed_dim": "#ffb873"
+                      },
+                      "overridePrimaryColor": "#006f95",
+                      "overrideSecondaryColor": "#00a9e0",
+                      "roundness": "ROUND_FOUR",
+                      "spacing": {
+                        "gutter": "1rem",
+                        "margin": "1.5rem",
+                        "space-lg": "1.5rem",
+                        "space-md": "1rem",
+                        "space-sm": "0.5rem",
+                        "space-xl": "2rem",
+                        "space-xs": "0.25rem"
+                      },
+                      "spacingScale": 2,
+                      "typography": {
+                        "body": {
+                          "fontFamily": "Inter",
+                          "fontSize": "14px",
+                          "fontWeight": "400",
+                          "lineHeight": "22px"
+                        },
+                        "body-medium": {
+                          "fontFamily": "Inter",
+                          "fontSize": "14px",
+                          "fontWeight": "500",
+                          "lineHeight": "22px"
+                        },
+                        "code-tabular": {
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": "13px",
+                          "fontWeight": "400",
+                          "lineHeight": "20px"
+                        },
+                        "page-title": {
+                          "fontFamily": "Inter",
+                          "fontSize": "28px",
+                          "fontWeight": "600",
+                          "lineHeight": "36px"
+                        },
+                        "request-title": {
+                          "fontFamily": "Inter",
+                          "fontSize": "14px",
+                          "fontWeight": "600",
+                          "lineHeight": "22px"
+                        },
+                        "section-heading": {
+                          "fontFamily": "Inter",
+                          "fontSize": "18px",
+                          "fontWeight": "600",
+                          "lineHeight": "26px"
+                        },
+                        "summary-count": {
+                          "fontFamily": "Inter",
+                          "fontSize": "28px",
+                          "fontWeight": "600",
+                          "lineHeight": "36px"
+                        },
+                        "supporting-label": {
+                          "fontFamily": "Inter",
+                          "fontSize": "12px",
+                          "fontWeight": "400",
+                          "lineHeight": "18px"
+                        },
+                        "supporting-label-medium": {
+                          "fontFamily": "Inter",
+                          "fontSize": "12px",
+                          "fontWeight": "500",
+                          "lineHeight": "18px"
+                        }
+                      }
+                    }
+                  },
+                  "name": "assets/34612c3d3bac4e1fa391e91794cff9b4",
+                  "version": "1"
+                },
+                "deviceType": "DESKTOP",
+                "generatedBy": "HatterAgent",
+                "height": "2048",
+                "htmlCode": {
+                  "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2U3N2I2NzJhN2UzNDRmN2RiNTRkY2U2YzdhNTk5ZmI2EgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+                  "mimeType": "text/html",
+                  "name": "projects/15540984743145901568/files/5842dbd8c76a4102a9d2e88fe1051f8c"
+                },
+                "id": "0205a53f942346788e469a166ae51513",
+                "name": "projects/15540984743145901568/screens/0205a53f942346788e469a166ae51513",
+                "prompt": "Update this Desktop Dashboard screen to represent the Setup Owner role state:\n1. User Account & Identity: In the top right header, update user name to 'Alex Morgan', role line to 'Setup Owner · GNTC', and avatar text to 'AM'.\n2. Navigation: Remove 'Export' from the desktop sidebar navigation. Keep only 'Dashboard' (active), 'Requests', and 'My Drafts'. Global History and Admin tools remain strictly absent.\n3. Subtitle: Replace the subtitle 'Your requests, at a glance.' below the Dashboard heading with 'Your related work, at a glance.'\n4. Work Scope Control: Add a small, cleanly styled, accessibly labeled 'Work scope' select element into the queue controls toolbar alongside the search input and Status select:\n   - Accessible label: aria-label=\"Work scope\" (or associated label element \"Scope:\" / \"Work scope:\")\n   - Values: exactly \"Related work\" (selected / default), \"Created by me\", and \"PSF department work\". Do NOT invent \"Assigned to me\".\n   - Keep the toolbar balanced: place Work scope alongside Status and Clear filters while keeping the search input comfortably wide, without introducing any left panel, secondary sidebar, or broken wrapping.\n5. All other elements remain intact:\n   - Summary filter buttons: Open work 19 (aria-pressed=\"true\"), Overdue 10 (aria-pressed=\"false\"), Completed 0 (aria-pressed=\"false\") with exact same styling, colors, and focus states.\n   - Work queue table: 4 columns (Request, Status, Due date, Owner / Dept), exact fictional sample rows, same status badges, same overdue highlight on 01 Oct 2026.\n   - Footer: '19 related requests · 25 per page', Page 1 of 1 with disabled Previous / Next.\n   - Brand: 'PSF Request Portal'.\n   - Do NOT add assignment actions, status mutations, role switches, or owner export.",
+                "screenMetadata": {
+                  "agentType": "PRO_AGENT",
+                  "status": "COMPLETE"
+                },
+                "screenType": "DESIGN",
+                "screenshot": {
+                  "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1UmeFw78sUZWuTo0iIDgaHUSZs8JNzEp3CR-DWsPCnZddVyUhlNh1UDQlnTYDM7VVjR1yyIX2tzpg3_7HjaU_ZCXbzW2rnS3BKc2bgAq-ahMPVP-MyPvo0B8wCzA0xvD2wgoHIMPUC5qW2UfJWSkaS69MvZnGLuuTSGppG49mI2tUWATQtlz-3ozutk9bBg8K_8-NDTg5fDbaHoUA5UrxSvDeLI3xDDqVV_zAKGHantCiXFWVp9aKzCzz2q",
+                  "name": "projects/15540984743145901568/files/80ca31e3d262458db7dd04f985e8058e"
+                },
+                "theme": {
+                  "bodyFont": "INTER",
+                  "bodyFontFamily": "Inter",
+                  "colorMode": "LIGHT",
+                  "colorVariant": "FIDELITY",
+                  "customColor": "#006f95",
+                  "font": "INTER",
+                  "headlineFont": "INTER",
+                  "headlineFontFamily": "Inter",
+                  "labelFont": "INTER",
+                  "labelFontFamily": "Inter",
+                  "namedColors": {
+                    "accessible-blue": "#006F95",
+                    "background": "#f7f9fd",
+                    "blue-wash": "#E8F6FC",
+                    "cool-canvas": "#F4F7FA",
+                    "error": "#ba1a1a",
+                    "error-ink": "#B42332",
+                    "error-wash": "#FFF0F1",
+                    "error_container": "#ffdad6",
+                    "green-ink": "#28651D",
+                    "green-wash": "#EDF8E5",
+                    "ink": "#173248",
+                    "inverse_on_surface": "#eef1f4",
+                    "inverse_primary": "#82d0fa",
+                    "inverse_surface": "#2d3134",
+                    "nxp-blue": "#00A9E0",
+                    "nxp-green": "#69CA00",
+                    "nxp-orange": "#FCA600",
+                    "on_background": "#181c1f",
+                    "on_error": "#ffffff",
+                    "on_error_container": "#93000a",
+                    "on_primary": "#ffffff",
+                    "on_primary_container": "#ccebff",
+                    "on_primary_fixed": "#001e2c",
+                    "on_primary_fixed_variant": "#004c68",
+                    "on_secondary": "#ffffff",
+                    "on_secondary_container": "#004f6b",
+                    "on_secondary_fixed": "#001e2c",
+                    "on_secondary_fixed_variant": "#004d68",
+                    "on_surface": "#181c1f",
+                    "on_surface_variant": "#3f484e",
+                    "on_tertiary": "#ffffff",
+                    "on_tertiary_container": "#ffe1c9",
+                    "on_tertiary_fixed": "#2d1600",
+                    "on_tertiary_fixed_variant": "#6a3b00",
+                    "orange-ink": "#8A4700",
+                    "orange-wash": "#FFF3DA",
+                    "outline": "#6f787f",
+                    "outline_variant": "#bfc8cf",
+                    "paper": "#FFFFFF",
+                    "primary": "#005574",
+                    "primary_container": "#006f95",
+                    "primary_fixed": "#c3e8ff",
+                    "primary_fixed_dim": "#82d0fa",
+                    "quiet-outline": "#DCE5EB",
+                    "secondary": "#006688",
+                    "secondary-ink": "#526575",
+                    "secondary_container": "#43c5fd",
+                    "secondary_fixed": "#c2e8ff",
+                    "secondary_fixed_dim": "#77d1ff",
+                    "surface": "#f7f9fd",
+                    "surface_bright": "#f7f9fd",
+                    "surface_container": "#ebeef1",
+                    "surface_container_high": "#e6e8ec",
+                    "surface_container_highest": "#e0e3e6",
+                    "surface_container_low": "#f1f4f7",
+                    "surface_container_lowest": "#ffffff",
+                    "surface_dim": "#d7dade",
+                    "surface_tint": "#006689",
+                    "surface_variant": "#e0e3e6",
+                    "tertiary": "#764300",
+                    "tertiary_container": "#955913",
+                    "tertiary_fixed": "#ffdcbf",
+                    "tertiary_fixed_dim": "#ffb873"
+                  },
+                  "overridePrimaryColor": "#006f95",
+                  "overrideSecondaryColor": "#00a9e0",
+                  "roundness": "ROUND_FOUR",
+                  "spacing": {
+                    "gutter": "1rem",
+                    "margin": "1.5rem",
+                    "space-lg": "1.5rem",
+                    "space-md": "1rem",
+                    "space-sm": "0.5rem",
+                    "space-xl": "2rem",
+                    "space-xs": "0.25rem"
+                  },
+                  "spacingScale": 2,
+                  "typography": {
+                    "body": {
+                      "fontFamily": "Inter",
+                      "fontSize": "14px",
+                      "fontWeight": "400",
+                      "lineHeight": "22px"
+                    },
+                    "body-medium": {
+                      "fontFamily": "Inter",
+                      "fontSize": "14px",
+                      "fontWeight": "500",
+                      "lineHeight": "22px"
+                    },
+                    "code-tabular": {
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": "13px",
+                      "fontWeight": "400",
+                      "lineHeight": "20px"
+                    },
+                    "page-title": {
+                      "fontFamily": "Inter",
+                      "fontSize": "28px",
+                      "fontWeight": "600",
+                      "lineHeight": "36px"
+                    },
+                    "request-title": {
+                      "fontFamily": "Inter",
+                      "fontSize": "14px",
+                      "fontWeight": "600",
+                      "lineHeight": "22px"
+                    },
+                    "section-heading": {
+                      "fontFamily": "Inter",
+                      "fontSize": "18px",
+                      "fontWeight": "600",
+                      "lineHeight": "26px"
+                    },
+                    "summary-count": {
+                      "fontFamily": "Inter",
+                      "fontSize": "28px",
+                      "fontWeight": "600",
+                      "lineHeight": "36px"
+                    },
+                    "supporting-label": {
+                      "fontFamily": "Inter",
+                      "fontSize": "12px",
+                      "fontWeight": "400",
+                      "lineHeight": "18px"
+                    },
+                    "supporting-label-medium": {
+                      "fontFamily": "Inter",
+                      "fontSize": "12px",
+                      "fontWeight": "500",
+                      "lineHeight": "18px"
+                    }
+                  }
+                },
+                "title": "PSF Request Portal — Desktop Dashboard (Setup Owner)",
+                "width": "2560"
+              }
+            ],
+            "theme": {}
+          }
+        },
+        {
+          "text": "I have created the Setup Owner role states for both the Desktop and Mobile Dashboard screens, strictly adhering to the DESIGN.md specifications, role contracts, and design tokens:\n\n### What Was Created & Updated\n\n1. **User Identity & Context (Setup Owner)**\n   - **Desktop**: Top-right identity updated to **Alex Morgan** (`Setup Owner · GNTC`) with avatar initials **AM**.\n   - **Mobile**: Top bar avatar updated to **AM**; off-canvas drawer header updated with Alex Morgan's credentials.\n   - **Subtitle**: Adjusted on both screens to read *\"Your related work, at a glance.\"*\n\n2. **Navigation Cleanup (Role Permissions)**\n   - Removed **Export** from both the desktop sidebar navigation and the mobile slide-out drawer.\n   - Preserved only **Dashboard** (active), **Requests**, and **My Drafts**. Global History and Admin tools remain completely absent.\n\n3. **Work Scope Control & Hierarchy**\n   - **Desktop Toolbar**: Added the accessibly labeled **Work scope** select control directly into the queue controls bar alongside Search and Status without disrupting layout or column balance. It contains exactly the three specified options:\n     - `Related work` *(selected by default)*\n     - `Created by me`\n     - `PSF department work`\n   - **Mobile Viewport**: Integrated the **Work scope** selector alongside Status within the collapsible Filters disclosure, with an explicit badge indicator (`Scope: Related work`) positioned alongside the queue title for immediate visibility without cluttering the screen.\n\n4. **Preserved Operational Data & Accessibility Contracts**\n   - **Summary Tiles**: All three tiles (**Open work: 19**, **Overdue: 10**, **Completed: 0**) retained as keyboard-focusable interactive buttons with accurate `aria-pressed` states (`true` on Open work, `false` on Overdue and Completed).\n   - **Work Queue**: Kept the exact 4-column layout on desktop, compact vertical list cards on mobile, same fictional rows, independent priority badges, and distinct red alert on overdue item `PSF-2026-1040` (01 Oct 2026).\n   - **Pagination**: Maintained the single-page contract footer (`19 related requests · 25 per page`) with disabled previous/next controls. No assignment actions, role switches, or mutations were introduced."
+        },
+        {
+          "suggestion": "Show the expanded Filters disclosure panel on mobile with the Work scope selector active"
+        },
+        {
+          "suggestion": "Explore the 'Created by me' or 'PSF department work' filtered view state"
+        },
+        {
+          "suggestion": "Design the Request Detail view for PSF-2026-1040 (Overdue Need More Information)"
+        }
+      ],
+      "projectId": "15540984743145901568",
+      "sessionId": "2289353914206487405",
+      "designSystem": {
+        "designSystem": {
+          "displayName": "NXP-Inspired Operational Workspace",
+          "styleGuidelines": "## Brand & Style\nThis design system establishes a welcoming, precise engineering workspace tailored for operations, requesters, and setup owners. The atmosphere is defined by bright surfaces, high-clarity data presentation, and a calm, functional aesthetic that prioritizes operational efficiency over decorative flair. \n\nThe visual style merges principles of **Corporate / Modern** design with utilitarian clarity:\n- **Purposeful Color:** Restrained use of blue, orange, and green accents to guide user attention to statuses and primary actions without visual noise.\n- **Data-First Layout:** Information density is carefully calibrated. Decorative charts, large welcome banners, and unrelated activity feeds are intentionally omitted to keep focus entirely on the work queue.\n- **Ergonomic Precision:** Generous spacing around primary actions combined with strict typographic hierarchies ensure operational data is read effortlessly.\n\n## Layout & Spacing\nThe layout system implements a structured **fluid grid** built on an 8px rhythm, prioritizing the work queue as the dominant canvas area.\n\n- **Desktop Layout:** A 1280px canvas featuring a fixed 200–216px navigation sidebar, 24–32px main padding, and 24px major-section gaps. The three summary controls sit prominently above a full-width request table.\n- **Mobile Layout:** A 390px canvas wrapping the desktop sidebar into an accessible slide-out drawer, replacing the horizontal table with vertical list items, and utilizing 16px horizontal gutters with zero horizontal overflow.\n\n## Elevation & Depth\nDepth is handled with extreme restraint, relying on low-contrast outlines and flat tonal layering rather than heavy drop shadows.\n\n- **Surface Tiers:** Surfaces are distinguished using precise background color shifts (e.g., pure white cards on a cool canvas background) bounded by quiet outline borders (`#DCE5EB`).\n- **Focus States:** Interactive elements utilize accessible blue focus rings and clear outline/check treatments to indicate selection without relying on disruptive elevation shifts.\n\n## Components\nComponents are built for operational clarity, speed, and high information density.\n\n- **Buttons:** Primary actions utilize solid accessible blue (`#006F95`) with white text, maintaining a 40–44px height and visible focus rings. Secondary controls feature clean outlines.\n- **Navigation:** Compact NXP wordmark paired with clear icon-and-label pairs. Active states feature a blue wash (`#E8F6FC`) and a colored leading indicator.\n- **Summary Controls:** Side-by-side interactive filter tiles (Open work, Overdue, Completed) featuring tinted surfaces and restrained icons. They act as real queue filters rather than decorative statistics.\n- **Queue / Tables:** A dominant full-width surface featuring keyword search, Status selectors, and Clear filters. Rows contain request titles/numbers, current statuses, due dates, and owners, with urgent/high priority indicated via small readable badges.\n- **Inputs & Cards:** Clean, bordered input fields paired with subtly padded panels (16–24px padding) that avoid unnecessary card nesting.",
+          "theme": {
+            "bodyFont": "INTER",
+            "bodyFontFamily": "Inter",
+            "colorMode": "LIGHT",
+            "colorVariant": "FIDELITY",
+            "customColor": "#006f95",
+            "designMd": "---\nname: NXP-Inspired Operational Workspace\ncolors:\n  surface: '#f7f9fd'\n  surface-dim: '#d7dade'\n  surface-bright: '#f7f9fd'\n  surface-container-lowest: '#ffffff'\n  surface-container-low: '#f1f4f7'\n  surface-container: '#ebeef1'\n  surface-container-high: '#e6e8ec'\n  surface-container-highest: '#e0e3e6'\n  on-surface: '#181c1f'\n  on-surface-variant: '#3f484e'\n  inverse-surface: '#2d3134'\n  inverse-on-surface: '#eef1f4'\n  outline: '#6f787f'\n  outline-variant: '#bfc8cf'\n  surface-tint: '#006689'\n  primary: '#005574'\n  on-primary: '#ffffff'\n  primary-container: '#006f95'\n  on-primary-container: '#ccebff'\n  inverse-primary: '#82d0fa'\n  secondary: '#006688'\n  on-secondary: '#ffffff'\n  secondary-container: '#43c5fd'\n  on-secondary-container: '#004f6b'\n  tertiary: '#764300'\n  on-tertiary: '#ffffff'\n  tertiary-container: '#955913'\n  on-tertiary-container: '#ffe1c9'\n  error: '#ba1a1a'\n  on-error: '#ffffff'\n  error-container: '#ffdad6'\n  on-error-container: '#93000a'\n  primary-fixed: '#c3e8ff'\n  primary-fixed-dim: '#82d0fa'\n  on-primary-fixed: '#001e2c'\n  on-primary-fixed-variant: '#004c68'\n  secondary-fixed: '#c2e8ff'\n  secondary-fixed-dim: '#77d1ff'\n  on-secondary-fixed: '#001e2c'\n  on-secondary-fixed-variant: '#004d68'\n  tertiary-fixed: '#ffdcbf'\n  tertiary-fixed-dim: '#ffb873'\n  on-tertiary-fixed: '#2d1600'\n  on-tertiary-fixed-variant: '#6a3b00'\n  background: '#f7f9fd'\n  on-background: '#181c1f'\n  surface-variant: '#e0e3e6'\n  paper: '#FFFFFF'\n  cool-canvas: '#F4F7FA'\n  quiet-outline: '#DCE5EB'\n  ink: '#173248'\n  secondary-ink: '#526575'\n  nxp-blue: '#00A9E0'\n  accessible-blue: '#006F95'\n  blue-wash: '#E8F6FC'\n  nxp-orange: '#FCA600'\n  orange-ink: '#8A4700'\n  orange-wash: '#FFF3DA'\n  nxp-green: '#69CA00'\n  green-ink: '#28651D'\n  green-wash: '#EDF8E5'\n  error-ink: '#B42332'\n  error-wash: '#FFF0F1'\ntypography:\n  page-title:\n    fontFamily: Inter\n    fontSize: 28px\n    fontWeight: '600'\n    lineHeight: 36px\n  section-heading:\n    fontFamily: Inter\n    fontSize: 18px\n    fontWeight: '600'\n    lineHeight: 26px\n  summary-count:\n    fontFamily: Inter\n    fontSize: 28px\n    fontWeight: '600'\n    lineHeight: 36px\n  body:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '400'\n    lineHeight: 22px\n  body-medium:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '500'\n    lineHeight: 22px\n  request-title:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '600'\n    lineHeight: 22px\n  supporting-label:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '400'\n    lineHeight: 18px\n  supporting-label-medium:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '500'\n    lineHeight: 18px\n  code-tabular:\n    fontFamily: JetBrains Mono\n    fontSize: 13px\n    fontWeight: '400'\n    lineHeight: 20px\nrounded:\n  sm: 0.125rem\n  DEFAULT: 0.25rem\n  md: 0.375rem\n  lg: 0.5rem\n  xl: 0.75rem\n  full: 9999px\nspacing:\n  gutter: 1rem\n  margin: 1.5rem\n  space-xs: 0.25rem\n  space-sm: 0.5rem\n  space-md: 1rem\n  space-lg: 1.5rem\n  space-xl: 2rem\n---\n\n# PSF Request Portal — NXP-inspired redesign\n\n## 1. Visual theme and atmosphere\n\nApproved brief, 4 October 2026: design in Stitch only, one page at a time. Serve Requesters and Setup Owners, English interface, desktop with mobile layouts, light mode first. Reduce information displayed simultaneously and add purposeful color. Complete and review Dashboard before designing another route. Admin screens and dark mode are deferred.\n\nUse a welcoming, precise engineering workspace: bright surfaces, clear hierarchy, restrained blue/orange/green accents, generous spacing around primary actions, and readable operational data. No decorative charts, large welcome banner, unrelated activity feed, or additional KPI tiles. Display work first.\n\nSource baseline: React/TanStack Router, custom CSS, Inter and JetBrains Mono; current primary #245BBD, sidebar #14263E, background #EEF2F7. The imported Dashboard image is the recorded top-panel layout in output/playwright/top-panels/after/dashboard-desktop.png. Its DEMO requests and Development identities are documented test data, not production business records. This document specifies the proposed redesign, not an extraction claiming these proposed tokens already exist in the application.\n\n## 2. Color palette and roles\n\nThese are NXP-inspired interface colors, not a claim of strict official CI compliance.\n\n| Token | Color | Role |\n| --- | --- | --- |\n| Paper | #FFFFFF | Navigation, table, inputs |\n| Cool canvas | #F4F7FA | Page background |\n| Quiet outline | #DCE5EB | Dividers and panel borders |\n| Ink | #173248 | Main text |\n| Secondary ink | #526575 | Supporting text |\n| NXP-inspired blue | #00A9E0 | Brand accents and open-work icon/background accent |\n| Accessible action blue | #006F95 | Primary actions, links and focused controls with white text |\n| Blue wash | #E8F6FC | Active navigation and open-work summary |\n| NXP-inspired orange | #FCA600 | Warm accent and overdue-summary decoration |\n| Orange ink | #8A4700 | Readable warning text |\n| Orange wash | #FFF3DA | Overdue summary surface |\n| NXP-inspired green | #69CA00 | Brand accent and completed-summary decoration |\n| Green ink | #28651D | Readable success text |\n| Green wash | #EDF8E5 | Completed summary surface |\n| Error ink | #B42332 | Errors and overdue record labels |\n| Error wash | #FFF0F1 | Error surfaces |\n\nUse darker ink on bright accents; do not put small white text on bright orange, lime green, or cyan. Every status has a text label and icon. Selection uses an outline/check treatment as well as color. Distinguish Overdue from merely Urgent priority.\n\n## 3. Typography rules\n\nInter for English UI. Use JetBrains Mono sparingly for request numbers, with tabular numerals for counts/dates.\n\n| Style | Size / line height | Weight |\n| --- | --- | --- |\n| Page title | 28 / 36 px | 600 |\n| Section heading | 18 / 26 px | 600 |\n| Summary count | 28 / 36 px | 600 |\n| Body and controls | 14 / 22 px | 400–500 |\n| Request title | 14 / 22 px | 600 |\n| Supporting label | 12 / 18 px | 400–500 |\n\nUse ordinary title/sentence case. Limit competing headings. Full custom status names must remain available when their compact display is truncated. Avoid tiny uppercase labels repeated in every row.\n\n## 4. Component stylings\n\nButtons: 40–44 px desktop height, 44 px minimum touch area; solid accessible blue for the primary New Request action, simple outlined secondary controls, 8 px radius and visible focus state.\n\nNavigation: approximately 200–216 px wide, light background, compact NXP wordmark/PSF identity, icon plus visible English label; active Dashboard uses blue wash and a colored leading indicator. Requester links: Dashboard, Requests, My Drafts, Export, History. Setup Owner omits Export and adds the existing department scope control inside Dashboard. Do not expose Admin tools to these roles. Do not invent a role-switching control.\n\nSummary controls: exactly Open work, Overdue, Completed, side by side above the work queue, with blue/orange/green tinted surfaces and restrained icons. These are real queue filter controls in the proposed interaction, not decorative statistics. An empty completed count is valid.\n\nQueue: one dominant full-width surface with a short heading, keyword search, Status selector and Clear filters. No secondary rail consuming table width. A row contains only request title/number, current status, due date and owner/department; urgent/high priority can be a small readable indicator near the date. Product type and extra metadata move into request detail. Show around five representative rows in the design, with the existing 25-item pagination contract retained and scroll available. Long titles and configurable status names need bounded wrapping plus access to their full value.\n\nUse a restrained 8–12 px panel radius, fine borders, little or no shadow, 16–24 px panel padding. Do not place every value in a separate card.\n\n## 5. Layout principles\n\nDesktop design canvas 1280 px wide, with 24–32 px main padding and 24 px major-section gaps on an 8 px rhythm. Keep the three summaries above the table, preserving the current top-panel structure. Keep greeting/description to one short line; make the table the dominant area.\n\nMobile design canvas 390 px wide: hide desktop rail behind a menu; preserve labeled navigation in the drawer; compact top bar; three compact summary controls; persistent keyword search and a Filters button opening secondary filters; request rows become compact vertical list items rather than a horizontally overflowing table. Each item shows title/number, status, due date and owner with an accessible open action. Use 16 px horizontal gutters and no horizontal page overflow. Preserve role and scope rules.\n\n## 6. Stitch generation notes and constraints\n\nCurrent page only: /dashboard. Import the existing UI reference, then edit the uploaded screen. Do not generate or upload other routes until this page is reviewed.\n\nRequester and Setup Owner share the same layout. Owner-specific scope values must remain exactly Related work, Created by me and PSF department work; do not replace this with Assigned to me because assignment is not the current query contract. Requester sees related work under their existing permissions. Treat owner scope as a documented responsive state of this Dashboard, not another route.\n\nKeep the current workflow rules: statuses are admin-configurable and are not a mandatory linear sequence. No percent-complete chart, stepper, invented approvals, assignee write action, file generation, notifications count, or unsupported bulk action. No per-row export action for Owner. New Request opens the existing private-draft creation flow; do not imply it submits immediately. Only show explicitly fictional sample content in newly designed views.\n\nPrompt direction: \"Rework the imported Dashboard into a light NXP-inspired work queue with three compact, colored summary filter tiles above a calm full-width request list. Show the existing work controls clearly and place secondary information in the detail view. Keep all text in English and preserve Requester/Setup Owner permissions.\"",
+            "font": "INTER",
+            "headlineFont": "INTER",
+            "headlineFontFamily": "Inter",
+            "labelFont": "INTER",
+            "labelFontFamily": "Inter",
+            "namedColors": {
+              "accessible-blue": "#006F95",
+              "background": "#f7f9fd",
+              "blue-wash": "#E8F6FC",
+              "cool-canvas": "#F4F7FA",
+              "error": "#ba1a1a",
+              "error-ink": "#B42332",
+              "error-wash": "#FFF0F1",
+              "error_container": "#ffdad6",
+              "green-ink": "#28651D",
+              "green-wash": "#EDF8E5",
+              "ink": "#173248",
+              "inverse_on_surface": "#eef1f4",
+              "inverse_primary": "#82d0fa",
+              "inverse_surface": "#2d3134",
+              "nxp-blue": "#00A9E0",
+              "nxp-green": "#69CA00",
+              "nxp-orange": "#FCA600",
+              "on_background": "#181c1f",
+              "on_error": "#ffffff",
+              "on_error_container": "#93000a",
+              "on_primary": "#ffffff",
+              "on_primary_container": "#ccebff",
+              "on_primary_fixed": "#001e2c",
+              "on_primary_fixed_variant": "#004c68",
+              "on_secondary": "#ffffff",
+              "on_secondary_container": "#004f6b",
+              "on_secondary_fixed": "#001e2c",
+              "on_secondary_fixed_variant": "#004d68",
+              "on_surface": "#181c1f",
+              "on_surface_variant": "#3f484e",
+              "on_tertiary": "#ffffff",
+              "on_tertiary_container": "#ffe1c9",
+              "on_tertiary_fixed": "#2d1600",
+              "on_tertiary_fixed_variant": "#6a3b00",
+              "orange-ink": "#8A4700",
+              "orange-wash": "#FFF3DA",
+              "outline": "#6f787f",
+              "outline_variant": "#bfc8cf",
+              "paper": "#FFFFFF",
+              "primary": "#005574",
+              "primary_container": "#006f95",
+              "primary_fixed": "#c3e8ff",
+              "primary_fixed_dim": "#82d0fa",
+              "quiet-outline": "#DCE5EB",
+              "secondary": "#006688",
+              "secondary-ink": "#526575",
+              "secondary_container": "#43c5fd",
+              "secondary_fixed": "#c2e8ff",
+              "secondary_fixed_dim": "#77d1ff",
+              "surface": "#f7f9fd",
+              "surface_bright": "#f7f9fd",
+              "surface_container": "#ebeef1",
+              "surface_container_high": "#e6e8ec",
+              "surface_container_highest": "#e0e3e6",
+              "surface_container_low": "#f1f4f7",
+              "surface_container_lowest": "#ffffff",
+              "surface_dim": "#d7dade",
+              "surface_tint": "#006689",
+              "surface_variant": "#e0e3e6",
+              "tertiary": "#764300",
+              "tertiary_container": "#955913",
+              "tertiary_fixed": "#ffdcbf",
+              "tertiary_fixed_dim": "#ffb873"
+            },
+            "overridePrimaryColor": "#006f95",
+            "overrideSecondaryColor": "#00a9e0",
+            "roundness": "ROUND_FOUR",
+            "spacing": {
+              "gutter": "1rem",
+              "margin": "1.5rem",
+              "space-lg": "1.5rem",
+              "space-md": "1rem",
+              "space-sm": "0.5rem",
+              "space-xl": "2rem",
+              "space-xs": "0.25rem"
+            },
+            "spacingScale": 2,
+            "typography": {
+              "body": {
+                "fontFamily": "Inter",
+                "fontSize": "14px",
+                "fontWeight": "400",
+                "lineHeight": "22px"
+              },
+              "body-medium": {
+                "fontFamily": "Inter",
+                "fontSize": "14px",
+                "fontWeight": "500",
+                "lineHeight": "22px"
+              },
+              "code-tabular": {
+                "fontFamily": "JetBrains Mono",
+                "fontSize": "13px",
+                "fontWeight": "400",
+                "lineHeight": "20px"
+              },
+              "page-title": {
+                "fontFamily": "Inter",
+                "fontSize": "28px",
+                "fontWeight": "600",
+                "lineHeight": "36px"
+              },
+              "request-title": {
+                "fontFamily": "Inter",
+                "fontSize": "14px",
+                "fontWeight": "600",
+                "lineHeight": "22px"
+              },
+              "section-heading": {
+                "fontFamily": "Inter",
+                "fontSize": "18px",
+                "fontWeight": "600",
+                "lineHeight": "26px"
+              },
+              "summary-count": {
+                "fontFamily": "Inter",
+                "fontSize": "28px",
+                "fontWeight": "600",
+                "lineHeight": "36px"
+              },
+              "supporting-label": {
+                "fontFamily": "Inter",
+                "fontSize": "12px",
+                "fontWeight": "400",
+                "lineHeight": "18px"
+              },
+              "supporting-label-medium": {
+                "fontFamily": "Inter",
+                "fontSize": "12px",
+                "fontWeight": "500",
+                "lineHeight": "18px"
+              }
+            }
+          }
+        },
+        "name": "assets/34612c3d3bac4e1fa391e91794cff9b4",
+        "version": "1"
+      },
+      "deviceType": "MOBILE",
+      "generatedBy": "HatterAgent",
+      "height": "2712",
+      "htmlCode": {
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sXzZmMjFmZjIxNTBlZTRiZWY5M2ZhMTgyOGY5NDg3MmYxEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+        "mimeType": "text/html",
+        "name": "projects/15540984743145901568/files/c3b28ddcd32c490ab8d04a752e14b33c"
+      },
+      "id": "95c5c8b8dcd646878d41a11356e048d5",
+      "name": "projects/15540984743145901568/screens/95c5c8b8dcd646878d41a11356e048d5",
+      "prompt": "Update this Mobile Dashboard screen (390px) to represent the Setup Owner role state:\n1. User Account & Identity:\n   - In the top bar, update the avatar circle initials from 'ST' to 'AM'.\n   - Inside the navigation drawer, update the user account info to 'Alex Morgan', role 'Setup Owner · GNTC', avatar 'AM'.\n2. Navigation Drawer:\n   - Remove 'Export' from the mobile drawer navigation. Keep only 'Dashboard' (active), 'Requests', and 'My Drafts'. Global History and Admin tools remain strictly absent.\n3. Subtitle:\n   - Change 'Your requests, at a glance.' to 'Your related work, at a glance.'\n4. Work Scope Control & Indicators:\n   - Near the queue heading 'Related requests', make the selected scope clear (e.g. badge or scope subtitle indicating 'Scope: Related work' or 'Related work · 19 total').\n   - Inside the collapsible Filters disclosure panel, add the accessibly labeled 'Work scope' select control alongside the Status filter:\n     - Accessible label: aria-label=\"Work scope\" (or label \"Work scope\")\n     - Exact options: \"Related work\" (selected), \"Created by me\", \"PSF department work\". Do NOT invent \"Assigned to me\".\n     - Keep the filter disclosure button showing the active scope and status summary (or clean indicator).\n5. All other elements remain intact:\n   - Summary filter buttons in one row: Open work 19 (aria-pressed=\"true\"), Overdue 10 (aria-pressed=\"false\"), Completed 0 (aria-pressed=\"false\") with aria-pressed, keyboard focus, and colored washes.\n   - Request list items: exact fictional sample data, same status badges, 01 Oct 2026 Overdue warning.\n   - Footer: '19 related requests · 25 per page', Page 1 of 1, disabled Previous/Next.\n   - 390px viewport, 16px gutters, zero horizontal overflow.\n   - Do NOT add assignment actions, role switches, or owner export.",
+      "screenMetadata": {
+        "agentType": "PRO_AGENT",
+        "status": "COMPLETE"
+      },
+      "screenType": "DESIGN",
+      "screenshot": {
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WiYCca7wocyrFUX9WyTex6YQkANPHen0_juZyLsmBSYw6-IVn8x8zisO-kDjipLx7HPNhlw8tFDo74PtpkIg6Px1r8GRU1yWI7U3PrVZBo3updD6KYvcEIyEGb84NP_zY4yHgUCurYO_Q4xFoJJEptrElTU0rtecfwye2rAZLPQHBDg3pksoSY7fXYHahD2qeLqRN0JeJg4VGxWzoNh0g0q-ErY6QjV-k_iLA1tnvXRBmOJqU1s_-vMetE",
+        "name": "projects/15540984743145901568/files/2d291c5e94c34c42a03ce871d5b6a2b2"
+      },
+      "theme": {
+        "bodyFont": "INTER",
+        "bodyFontFamily": "Inter",
+        "colorMode": "LIGHT",
+        "colorVariant": "FIDELITY",
+        "customColor": "#006f95",
+        "font": "INTER",
+        "headlineFont": "INTER",
+        "headlineFontFamily": "Inter",
+        "labelFont": "INTER",
+        "labelFontFamily": "Inter",
+        "namedColors": {
+          "accessible-blue": "#006F95",
+          "background": "#f7f9fd",
+          "blue-wash": "#E8F6FC",
+          "cool-canvas": "#F4F7FA",
+          "error": "#ba1a1a",
+          "error-ink": "#B42332",
+          "error-wash": "#FFF0F1",
+          "error_container": "#ffdad6",
+          "green-ink": "#28651D",
+          "green-wash": "#EDF8E5",
+          "ink": "#173248",
+          "inverse_on_surface": "#eef1f4",
+          "inverse_primary": "#82d0fa",
+          "inverse_surface": "#2d3134",
+          "nxp-blue": "#00A9E0",
+          "nxp-green": "#69CA00",
+          "nxp-orange": "#FCA600",
+          "on_background": "#181c1f",
+          "on_error": "#ffffff",
+          "on_error_container": "#93000a",
+          "on_primary": "#ffffff",
+          "on_primary_container": "#ccebff",
+          "on_primary_fixed": "#001e2c",
+          "on_primary_fixed_variant": "#004c68",
+          "on_secondary": "#ffffff",
+          "on_secondary_container": "#004f6b",
+          "on_secondary_fixed": "#001e2c",
+          "on_secondary_fixed_variant": "#004d68",
+          "on_surface": "#181c1f",
+          "on_surface_variant": "#3f484e",
+          "on_tertiary": "#ffffff",
+          "on_tertiary_container": "#ffe1c9",
+          "on_tertiary_fixed": "#2d1600",
+          "on_tertiary_fixed_variant": "#6a3b00",
+          "orange-ink": "#8A4700",
+          "orange-wash": "#FFF3DA",
+          "outline": "#6f787f",
+          "outline_variant": "#bfc8cf",
+          "paper": "#FFFFFF",
+          "primary": "#005574",
+          "primary_container": "#006f95",
+          "primary_fixed": "#c3e8ff",
+          "primary_fixed_dim": "#82d0fa",
+          "quiet-outline": "#DCE5EB",
+          "secondary": "#006688",
+          "secondary-ink": "#526575",
+          "secondary_container": "#43c5fd",
+          "secondary_fixed": "#c2e8ff",
+          "secondary_fixed_dim": "#77d1ff",
+          "surface": "#f7f9fd",
+          "surface_bright": "#f7f9fd",
+          "surface_container": "#ebeef1",
+          "surface_container_high": "#e6e8ec",
+          "surface_container_highest": "#e0e3e6",
+          "surface_container_low": "#f1f4f7",
+          "surface_container_lowest": "#ffffff",
+          "surface_dim": "#d7dade",
+          "surface_tint": "#006689",
+          "surface_variant": "#e0e3e6",
+          "tertiary": "#764300",
+          "tertiary_container": "#955913",
+          "tertiary_fixed": "#ffdcbf",
+          "tertiary_fixed_dim": "#ffb873"
+        },
+        "overridePrimaryColor": "#006f95",
+        "overrideSecondaryColor": "#00a9e0",
+        "roundness": "ROUND_FOUR",
+        "spacing": {
+          "gutter": "1rem",
+          "margin": "1.5rem",
+          "space-lg": "1.5rem",
+          "space-md": "1rem",
+          "space-sm": "0.5rem",
+          "space-xl": "2rem",
+          "space-xs": "0.25rem"
+        },
+        "spacingScale": 2,
+        "typography": {
+          "body": {
+            "fontFamily": "Inter",
+            "fontSize": "14px",
+            "fontWeight": "400",
+            "lineHeight": "22px"
+          },
+          "body-medium": {
+            "fontFamily": "Inter",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "lineHeight": "22px"
+          },
+          "code-tabular": {
+            "fontFamily": "JetBrains Mono",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "lineHeight": "20px"
+          },
+          "page-title": {
+            "fontFamily": "Inter",
+            "fontSize": "28px",
+            "fontWeight": "600",
+            "lineHeight": "36px"
+          },
+          "request-title": {
+            "fontFamily": "Inter",
+            "fontSize": "14px",
+            "fontWeight": "600",
+            "lineHeight": "22px"
+          },
+          "section-heading": {
+            "fontFamily": "Inter",
+            "fontSize": "18px",
+            "fontWeight": "600",
+            "lineHeight": "26px"
+          },
+          "summary-count": {
+            "fontFamily": "Inter",
+            "fontSize": "28px",
+            "fontWeight": "600",
+            "lineHeight": "36px"
+          },
+          "supporting-label": {
+            "fontFamily": "Inter",
+            "fontSize": "12px",
+            "fontWeight": "400",
+            "lineHeight": "18px"
+          },
+          "supporting-label-medium": {
+            "fontFamily": "Inter",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "lineHeight": "18px"
+          }
+        }
+      },
+      "title": "PSF Request Portal — Mobile Dashboard (Setup Owner)",
+      "width": "780",
+      "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WiYCca7wocyrFUX9WyTex6YQkANPHen0_juZyLsmBSYw6-IVn8x8zisO-kDjipLx7HPNhlw8tFDo74PtpkIg6Px1r8GRU1yWI7U3PrVZBo3updD6KYvcEIyEGb84NP_zY4yHgUCurYO_Q4xFoJJEptrElTU0rtecfwye2rAZLPQHBDg3pksoSY7fXYHahD2qeLqRN0JeJg4VGxWzoNh0g0q-ErY6QjV-k_iLA1tnvXRBmOJqU1s_-vMetE",
+      "agentText": "I have created the Setup Owner role states for both the Desktop and Mobile Dashboard screens, strictly adhering to the DESIGN.md specifications, role contracts, and design tokens:\n\n### What Was Created & Updated\n\n1. **User Identity & Context (Setup Owner)**\n   - **Desktop**: Top-right identity updated to **Alex Morgan** (`Setup Owner · GNTC`) with avatar initials **AM**.\n   - **Mobile**: Top bar avatar updated to **AM**; off-canvas drawer header updated with Alex Morgan's credentials.\n   - **Subtitle**: Adjusted on both screens to read *\"Your related work, at a glance.\"*\n\n2. **Navigation Cleanup (Role Permissions)**\n   - Removed **Export** from both the desktop sidebar navigation and the mobile slide-out drawer.\n   - Preserved only **Dashboard** (active), **Requests**, and **My Drafts**. Global History and Admin tools remain completely absent.\n\n3. **Work Scope Control & Hierarchy**\n   - **Desktop Toolbar**: Added the accessibly labeled **Work scope** select control directly into the queue controls bar alongside Search and Status without disrupting layout or column balance. It contains exactly the three specified options:\n     - `Related work` *(selected by default)*\n     - `Created by me`\n     - `PSF department work`\n   - **Mobile Viewport**: Integrated the **Work scope** selector alongside Status within the collapsible Filters disclosure, with an explicit badge indicator (`Scope: Related work`) positioned alongside the queue title for immediate visibility without cluttering the screen.\n\n4. **Preserved Operational Data & Accessibility Contracts**\n   - **Summary Tiles**: All three tiles (**Open work: 19**, **Overdue: 10**, **Completed: 0**) retained as keyboard-focusable interactive buttons with accurate `aria-pressed` states (`true` on Open work, `false` on Overdue and Completed).\n   - **Work Queue**: Kept the exact 4-column layout on desktop, compact vertical list cards on mobile, same fictional rows, independent priority badges, and distinct red alert on overdue item `PSF-2026-1040` (01 Oct 2026).\n   - **Pagination**: Maintained the single-page contract footer (`19 related requests · 25 per page`) with disabled previous/next controls. No assignment actions, role switches, or mutations were introduced.",
+      "suggestions": [
+        "Show the expanded Filters disclosure panel on mobile with the Work scope selector active",
+        "Explore the 'Created by me' or 'PSF department work' filtered view state",
+        "Design the Request Detail view for PSF-2026-1040 (Overdue Need More Information)"
+      ]
+    },
+    "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WiYCca7wocyrFUX9WyTex6YQkANPHen0_juZyLsmBSYw6-IVn8x8zisO-kDjipLx7HPNhlw8tFDo74PtpkIg6Px1r8GRU1yWI7U3PrVZBo3updD6KYvcEIyEGb84NP_zY4yHgUCurYO_Q4xFoJJEptrElTU0rtecfwye2rAZLPQHBDg3pksoSY7fXYHahD2qeLqRN0JeJg4VGxWzoNh0g0q-ErY6QjV-k_iLA1tnvXRBmOJqU1s_-vMetE",
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=95c5c8b8dcd646878d41a11356e048d5"
+  }
+}

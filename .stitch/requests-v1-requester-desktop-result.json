@@ -1,0 +1,96 @@
+{
+  "success": true,
+  "data": {
+    "resource": "screen",
+    "id": "4a4b356629524e3ea2d4d88e66585335",
+    "project": "15540984743145901568",
+    "title": "PSF Request Portal — Requests",
+    "device": "DESKTOP",
+    "screenType": "DESIGN",
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=4a4b356629524e3ea2d4d88e66585335",
+    "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Xia4QfXt6L2Sp23aqKDIuAxkyEyT8mqkpQt8eiZ_geAsjIlRIBstraEl_ZaqZkIvmfzgVSuwTI5mjCfI1oJwFiR30pQl89-9u1q1FxGj4zYYxsSF_Sd_t-oaddDoab_uYzElJFBEils7y2KrdmBfhLf8UO5bTE3VKa0dOM1IRHEH9raUQqzpy9poik3LQJPVY7zg55Ya3adhz80zVVY9jbGKRW_T8SoIsDbsWWG1waxEoea7a6sHDDfOyq",
+    "htmlCode": {
+      "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sXzE4ZDFkMWIxNDJkNjRlNjNiNjdiYzM2NTExMzJjMjViEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+      "mimeType": "text/html",
+      "name": "projects/15540984743145901568/files/a36ad7d69c8e4565b844542985f3c1e6"
+    },
+    "rawScreen": {
+      "outputComponents": [
+        {
+          "design": {
+            "screens": [
+              {
+                "deviceType": "DESKTOP",
+                "generatedBy": "create_datastore_entry",
+                "height": "2048",
+                "htmlCode": {
+                  "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sXzE4ZDFkMWIxNDJkNjRlNjNiNjdiYzM2NTExMzJjMjViEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+                  "mimeType": "text/html",
+                  "name": "projects/15540984743145901568/files/a36ad7d69c8e4565b844542985f3c1e6"
+                },
+                "id": "4a4b356629524e3ea2d4d88e66585335",
+                "name": "projects/15540984743145901568/screens/4a4b356629524e3ea2d4d88e66585335",
+                "screenMetadata": {
+                  "agentType": "PRO_AGENT",
+                  "status": "COMPLETE"
+                },
+                "screenType": "DESIGN",
+                "screenshot": {
+                  "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Xia4QfXt6L2Sp23aqKDIuAxkyEyT8mqkpQt8eiZ_geAsjIlRIBstraEl_ZaqZkIvmfzgVSuwTI5mjCfI1oJwFiR30pQl89-9u1q1FxGj4zYYxsSF_Sd_t-oaddDoab_uYzElJFBEils7y2KrdmBfhLf8UO5bTE3VKa0dOM1IRHEH9raUQqzpy9poik3LQJPVY7zg55Ya3adhz80zVVY9jbGKRW_T8SoIsDbsWWG1waxEoea7a6sHDDfOyq",
+                  "name": "projects/15540984743145901568/files/154b2d9fcd0841db99aa66f77fa7cd4e"
+                },
+                "theme": {},
+                "title": "PSF Request Portal — Requests",
+                "width": "2560"
+              }
+            ],
+            "theme": {}
+          }
+        },
+        {
+          "text": "I have designed and delivered the new **/requests** page for the PSF Request Portal redesign project, adhering strictly to the approved **DESIGN.md** guidelines, component proportions, role specifications, and the exact PostgreSQL catalog snapshot.\n\n### What Was Built:\n\n1. **Purpose & Information Architecture (/requests):**\n   - **Page Title & Subtitle**: Set to **\"Requests\"** with supporting copy *\"Browse shared PSF requests.\"* and the explicit scope note *\"• Private drafts are in My Drafts\"*.\n   - **No Dashboard Count Tiles or Role Scopes**: Completely omitted the Open/Overdue/Completed metric cards and the Owner department work scope toggle. The Requests view is a clean catalog of all submitted shared requests across GNTC and MFG.\n   - **Navigation & User Context**:\n     - Desktop sidebar rail with links to **Dashboard** (`/dashboard`), **Requests** (`/requests`, active), **My Drafts** (`/my-drafts`), **Audit History** (`/history`), and **Export** (`/admin/export-profile`).\n     - Account header configured as fictional Requester **Sam Taylor** (`Requester · Systems Eng`) with avatar `ST`.\n     - **New Request** CTA pointing to `/requests/new` for initial private draft creation.\n\n2. **Clean Queue & Filtering Toolbar:**\n   - Single horizontal bar on desktop with no KPI tiles, charts, or secondary rails:\n     - **Search**: Labeled keyword search with placeholder `\"Search request no., title, PSF or probecard\"`.\n     - **Status Selector**: Read-only filter containing `\"All statuses\"` and **all 16 non-draft catalog options** with exact punctuation, spacing, percentages, and literal backslashes preserved (including the full 71-character `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`).\n     - **Product Type Input**: Dedicated text input for filtering by product classification (`New Product`, `Transfer Product`, `Existing Product`).\n     - **Clear Filters**: One-click filter reset returning to the full list.\n   - Includes real local filtering logic on the 5 illustrative rows without mutating any underlying database records, complete with a helpful zero-state view when filters match none.\n\n3. **Four-Column Queue Table & Five Verified Sample Rows:**\n   - Four desktop columns: **Request**, **Status**, **Schedule**, and **Responsibility**.\n   - Exactly the 5 requested illustrative records in specified sequence:\n     1. **S32K3 probe layout update** (`PSF-2026-0042`, New Product) — `20% -- PSF File Creating` | High | Due 01 Oct 2026 (**Overdue**) | Alex Morgan | Mei Tan / MFG\n     2. **ST Fab template map review** (`PSF-2026-0039`, Transfer Product) — `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)` | Normal | Due 06 Oct 2026 | Priya Rao | Rowan Miller / GNTC\n     3. **Wafer map site verification** (`PSF-2026-0035`, Existing Product) — `99% -- Wait requestor Buyoff site location and wafer map` | Normal | Due 08 Oct 2026 | Alex Morgan | Mei Tan / MFG\n     4. **Probe pattern release** (`PSF-2026-0028`, New Product) — `100% -- Completed` | Normal | Due 02 Oct 2026 | Jordan Lee | Rowan Miller / GNTC\n     5. **Cancelled layout request** (`PSF-2026-0019`, Existing Product) — `0% -- Rejected (Cancel Request)` | Normal | Due 09 Oct 2026 | Priya Rao | Mei Tan / MFG\n   - Status badges wrap cleanly across 2–3 lines, with category-based styling (open-work blue, completed green, cancelled muted gray).\n   - Footer reflects the single-page contract: **\"Showing 1–5 of 5 requests\"** with disabled pagination buttons.\n\n4. **Dual Light & Dark Theme Support (In-Screen Toggle):**\n   - Implemented via semantic CSS variables adhering to the NXP-inspired palette (`#F4F7FA` light canvas / `#101B24` dark canvas; `#173248` ink / `#EDF4F8` dark text; `#006F95` primary action blue).\n   - Working local vanilla JavaScript toggle button with accessible label (*\"Switch to dark mode\"* / *\"Switch to light mode\"*) located in the desktop sidebar footer and mobile header.\n\n5. **Responsive Mobile Experience:**\n   - Full collapsible drawer navigation for viewports under 900px, responsive card list view with identical 4 metadata groupings, and collapsible **Filter Options** disclosure."
+        },
+        {
+          "suggestion": "Create the Setup Owner variant of this /requests page"
+        },
+        {
+          "suggestion": "Create the mobile-specific view (390px) snapshot for /requests"
+        },
+        {
+          "suggestion": "Proceed to designing the /my-drafts route"
+        }
+      ],
+      "projectId": "15540984743145901568",
+      "sessionId": "15192302991787707482",
+      "deviceType": "DESKTOP",
+      "generatedBy": "create_datastore_entry",
+      "height": "2048",
+      "htmlCode": {
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sXzE4ZDFkMWIxNDJkNjRlNjNiNjdiYzM2NTExMzJjMjViEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+        "mimeType": "text/html",
+        "name": "projects/15540984743145901568/files/a36ad7d69c8e4565b844542985f3c1e6"
+      },
+      "id": "4a4b356629524e3ea2d4d88e66585335",
+      "name": "projects/15540984743145901568/screens/4a4b356629524e3ea2d4d88e66585335",
+      "screenMetadata": {
+        "agentType": "PRO_AGENT",
+        "status": "COMPLETE"
+      },
+      "screenType": "DESIGN",
+      "screenshot": {
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Xia4QfXt6L2Sp23aqKDIuAxkyEyT8mqkpQt8eiZ_geAsjIlRIBstraEl_ZaqZkIvmfzgVSuwTI5mjCfI1oJwFiR30pQl89-9u1q1FxGj4zYYxsSF_Sd_t-oaddDoab_uYzElJFBEils7y2KrdmBfhLf8UO5bTE3VKa0dOM1IRHEH9raUQqzpy9poik3LQJPVY7zg55Ya3adhz80zVVY9jbGKRW_T8SoIsDbsWWG1waxEoea7a6sHDDfOyq",
+        "name": "projects/15540984743145901568/files/154b2d9fcd0841db99aa66f77fa7cd4e"
+      },
+      "theme": {},
+      "title": "PSF Request Portal — Requests",
+      "width": "2560",
+      "agentText": "I have designed and delivered the new **/requests** page for the PSF Request Portal redesign project, adhering strictly to the approved **DESIGN.md** guidelines, component proportions, role specifications, and the exact PostgreSQL catalog snapshot.\n\n### What Was Built:\n\n1. **Purpose & Information Architecture (/requests):**\n   - **Page Title & Subtitle**: Set to **\"Requests\"** with supporting copy *\"Browse shared PSF requests.\"* and the explicit scope note *\"• Private drafts are in My Drafts\"*.\n   - **No Dashboard Count Tiles or Role Scopes**: Completely omitted the Open/Overdue/Completed metric cards and the Owner department work scope toggle. The Requests view is a clean catalog of all submitted shared requests across GNTC and MFG.\n   - **Navigation & User Context**:\n     - Desktop sidebar rail with links to **Dashboard** (`/dashboard`), **Requests** (`/requests`, active), **My Drafts** (`/my-drafts`), **Audit History** (`/history`), and **Export** (`/admin/export-profile`).\n     - Account header configured as fictional Requester **Sam Taylor** (`Requester · Systems Eng`) with avatar `ST`.\n     - **New Request** CTA pointing to `/requests/new` for initial private draft creation.\n\n2. **Clean Queue & Filtering Toolbar:**\n   - Single horizontal bar on desktop with no KPI tiles, charts, or secondary rails:\n     - **Search**: Labeled keyword search with placeholder `\"Search request no., title, PSF or probecard\"`.\n     - **Status Selector**: Read-only filter containing `\"All statuses\"` and **all 16 non-draft catalog options** with exact punctuation, spacing, percentages, and literal backslashes preserved (including the full 71-character `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`).\n     - **Product Type Input**: Dedicated text input for filtering by product classification (`New Product`, `Transfer Product`, `Existing Product`).\n     - **Clear Filters**: One-click filter reset returning to the full list.\n   - Includes real local filtering logic on the 5 illustrative rows without mutating any underlying database records, complete with a helpful zero-state view when filters match none.\n\n3. **Four-Column Queue Table & Five Verified Sample Rows:**\n   - Four desktop columns: **Request**, **Status**, **Schedule**, and **Responsibility**.\n   - Exactly the 5 requested illustrative records in specified sequence:\n     1. **S32K3 probe layout update** (`PSF-2026-0042`, New Product) — `20% -- PSF File Creating` | High | Due 01 Oct 2026 (**Overdue**) | Alex Morgan | Mei Tan / MFG\n     2. **ST Fab template map review** (`PSF-2026-0039`, Transfer Product) — `93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)` | Normal | Due 06 Oct 2026 | Priya Rao | Rowan Miller / GNTC\n     3. **Wafer map site verification** (`PSF-2026-0035`, Existing Product) — `99% -- Wait requestor Buyoff site location and wafer map` | Normal | Due 08 Oct 2026 | Alex Morgan | Mei Tan / MFG\n     4. **Probe pattern release** (`PSF-2026-0028`, New Product) — `100% -- Completed` | Normal | Due 02 Oct 2026 | Jordan Lee | Rowan Miller / GNTC\n     5. **Cancelled layout request** (`PSF-2026-0019`, Existing Product) — `0% -- Rejected (Cancel Request)` | Normal | Due 09 Oct 2026 | Priya Rao | Mei Tan / MFG\n   - Status badges wrap cleanly across 2–3 lines, with category-based styling (open-work blue, completed green, cancelled muted gray).\n   - Footer reflects the single-page contract: **\"Showing 1–5 of 5 requests\"** with disabled pagination buttons.\n\n4. **Dual Light & Dark Theme Support (In-Screen Toggle):**\n   - Implemented via semantic CSS variables adhering to the NXP-inspired palette (`#F4F7FA` light canvas / `#101B24` dark canvas; `#173248` ink / `#EDF4F8` dark text; `#006F95` primary action blue).\n   - Working local vanilla JavaScript toggle button with accessible label (*\"Switch to dark mode\"* / *\"Switch to light mode\"*) located in the desktop sidebar footer and mobile header.\n\n5. **Responsive Mobile Experience:**\n   - Full collapsible drawer navigation for viewports under 900px, responsive card list view with identical 4 metadata groupings, and collapsible **Filter Options** disclosure.",
+      "suggestions": [
+        "Create the Setup Owner variant of this /requests page",
+        "Create the mobile-specific view (390px) snapshot for /requests",
+        "Proceed to designing the /my-drafts route"
+      ],
+      "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1Xia4QfXt6L2Sp23aqKDIuAxkyEyT8mqkpQt8eiZ_geAsjIlRIBstraEl_ZaqZkIvmfzgVSuwTI5mjCfI1oJwFiR30pQl89-9u1q1FxGj4zYYxsSF_Sd_t-oaddDoab_uYzElJFBEils7y2KrdmBfhLf8UO5bTE3VKa0dOM1IRHEH9raUQqzpy9poik3LQJPVY7zg55Ya3adhz80zVVY9jbGKRW_T8SoIsDbsWWG1waxEoea7a6sHDDfOyq"
+    }
+  }
+}

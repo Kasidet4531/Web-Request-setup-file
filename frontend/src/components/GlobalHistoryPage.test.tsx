@@ -11,6 +11,8 @@ import {
   buildGlobalAuditLogQuery,
 } from './global-history'
 import { Route as HistoryRoute } from '../routes/history'
+import { formatHistoryDateTime } from './ui/historyDateTime'
+import { HistoryChanges } from './ui/HistoryChanges'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -23,6 +25,34 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 describe('History route', () => {
+  it('uses Asia/Bangkok independently of the host timezone and preserves invalid timestamp fallback', () => {
+    vi.stubEnv('TZ', 'UTC')
+    try {
+      expect(formatHistoryDateTime('2026-10-04T23:30:00Z')).toBe('05 Oct 2026, 06:30:00')
+      expect(formatHistoryDateTime('invalid timestamp')).toBe('invalid timestamp')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('does not invent diffs from malformed or missing old/new field values', () => {
+    const html = renderToStaticMarkup(<HistoryChanges metadata={{ fieldChanges: [null, { fieldLabel: 'Unknown', after: 'New only' }] }} />)
+    expect(html).toBe('—')
+  })
+
+  it('names catalog values and release settings without exposing internal configuration identifiers', () => {
+    const html = renderToStaticMarkup(<HistoryChanges metadata={{
+      operation: { action: 'rename', name: 'New exact status' },
+      before: { entries: [{ id: 'internal-catalog-id', name: 'Old exact status', kind: 'open' }], psfVisibilityTriggerId: 'internal-catalog-id' },
+      after: { entries: [{ id: 'internal-catalog-id', name: 'New exact status', kind: 'open' }], psfVisibilityTriggerId: null },
+    }} />)
+    expect(html).toContain('Old exact status')
+    expect(html).toContain('New exact status')
+    expect(html).toContain('PSF visibility trigger: Old exact status')
+    expect(html).toContain('PSF visibility trigger: None')
+    expect(html).not.toContain('internal-catalog-id')
+  })
+
   it('replaces the placeholder with the global history page', () => {
     const options = Reflect.get(HistoryRoute, 'options') as { component?: unknown }
 
@@ -101,6 +131,38 @@ describe('GlobalAuditLogFilters', () => {
 })
 
 describe('GlobalAuditLogTable', () => {
+  it('displays Bangkok time and readable server-provided field changes without inventing missing history', () => {
+    const html = renderToStaticMarkup(GlobalAuditLogTable({
+      entries: [{
+        requestId: 'request-1', requestNo: 'PSF-0001',
+        actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester',
+        createdAt: '2026-10-04T23:30:00Z', metadata: {
+          fieldChanges: [{ fieldKey: 'priority', fieldLabel: 'Priority', before: 'Normal', after: 'Urgent' }],
+        },
+      }], error: null, loading: false,
+    }))
+    expect(html).toContain('05 Oct 2026, 06:30:00')
+    expect(html).toContain('<summary>View changes</summary>')
+    expect(html).toContain('Priority')
+    expect(html).toContain('Normal')
+    expect(html).toContain('Urgent')
+    expect(html).toContain('Before')
+    expect(html).toContain('After')
+  })
+
+  it('renders factual catalog metadata and escapes untrusted values', () => {
+    const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
+      requestId: null, requestNo: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
+      actorDisplayName: 'Admin', actorRole: 'admin', createdAt: 'invalid-date',
+      metadata: { operation: { action: 'rename', name: '<script>new status</script>' } },
+    }], error: null, loading: false }))
+    expect(html).toContain('rename')
+    expect(html).toContain('&lt;script&gt;new status&lt;/script&gt;')
+    expect(html).not.toContain('<script>')
+    expect(html).toContain('invalid-date')
+    expect(html).not.toContain('Before')
+  })
+
   it('renders accessible loading, empty, and error states', () => {
     expect(renderToStaticMarkup(
       GlobalAuditLogTable({ entries: [], error: null, loading: true }),

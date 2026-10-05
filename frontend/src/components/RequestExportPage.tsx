@@ -362,10 +362,11 @@ export function RequestExportPage() {
     <article className="page-card workflow-page">
       <PageHeader title="Export to Excel" description="Filter requests and download an XLSX workbook. Larger exports are prepared in the background." />
       <div className="page-card__body request-export">
-        <section className="page-card__section">
+        <section className="page-card__section request-export__filter-panel">
           <h2>Export filters</h2>
           {catalog.loading ? <AsyncNotice kind="loading" title="Loading workflow statuses…" /> : null}
           {catalog.error ? <AsyncNotice kind="error" title={`Unable to load workflow statuses: ${catalog.error}`} /> : null}
+          <div className="request-export__filter-layout">
           <RequestExportFiltersForm
             downloading={downloading}
             filters={filters}
@@ -373,7 +374,6 @@ export function RequestExportPage() {
             statuses={catalog.statuses}
             statusDisabled={catalog.loading || Boolean(catalog.error)}
           />
-        </section>
         <div className="request-export__action">
           <button className="primary-button" disabled={downloading} onClick={exportRequests} type="button">
             {downloading ? "Preparing…" : "Export XLSX"}
@@ -384,6 +384,8 @@ export function RequestExportPage() {
             jobStatus={pendingJob?.status ?? null}
           />
         </div>
+          </div>
+        </section>
         <RequestExportPreview {...preview} statusKinds={catalog.kinds} />
       </div>
     </article>
