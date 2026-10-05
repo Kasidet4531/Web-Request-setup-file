@@ -101,6 +101,35 @@ Real SOAP/relay acceptance of `noreply-psf@nxp.com` and inbox delivery remain a 
 
 Source: [status policies](../backend/src/admin/workflow_transition.service.ts), [request hooks](../backend/src/requests/requests.service.ts), [notification module](../backend/src/notifications/notifications.module.ts), [Status Management](../frontend/src/components/AdminWorkflowTransitionPage.tsx).
 
+## Email system E2E — 2026-10-06
+
+`backend/test/email-system.e2e.mjs` exercises the built frontend in a real browser, the normal backend `main.js` entry point, cookie login, a fresh real PostgreSQL database, and the actual notification worker. Application API responses are not mocked. LDAP and SOAP are local HTTP substitutes; the SOAP substitute captures and parses the actual outbound XML and can return an HTTP-200 SOAP fault.
+
+Five flows cover destination-status delivery, disabled policy with retained recipients, SOAP failure followed by successful retry, bulk replacement with one delivery per request, and Draft submission with exactly one notification. Policy editing, status changes, submission and bulk deletion use browser controls. Request/status fixtures are prepared through authenticated real APIs. Tests verify committed request state, intended To/CC snapshots, fixed From, and redirected SOAP payloads. The disabled-policy flow also runs at 390×844; other flows use 1440×1000.
+
+Install both projects' dependencies with `npm ci`. From `backend`, install a Playwright browser once and run:
+
+```sh
+npx playwright install chromium
+npm run test:email:system
+```
+
+Alternatively, point `EMAIL_E2E_CHROME` to an installed Chrome/Chromium executable. Example for this Linux workspace:
+
+```sh
+EMAIL_E2E_CHROME=/usr/bin/google-chrome \
+EMAIL_E2E_ARTIFACTS_DIR=/tmp/psf-email-system-evidence \
+npm run test:email:system
+```
+
+The command builds both applications and runs five system flows plus one fixture regression for failed PostgreSQL startup cleanup. It requires loopback listeners, supported native PostgreSQL binaries, browser system dependencies and a non-root user (or an existing PostgreSQL user supported by embedded-postgres). It does not create operating-system users. If dependencies were installed with lifecycle scripts disabled, the embedded PostgreSQL package's native symlinks must be hydrated before use.
+
+The harness uses a temporary database and an explicit backend environment with loopback DB/LDAP/SOAP settings. It starts the backend from an empty temporary directory so the developer's `.env` is not loaded. Browser requests outside the local app are blocked; the Google Fonts stylesheet is supplied empty. All services, browser contexts and database files are cleaned up after tests. Screenshots and backend logs are retained only when `EMAIL_E2E_ARTIFACTS_DIR` is set; otherwise temporary evidence is removed too.
+
+Retry verification first checks that the worker scheduled the job within one minute, with a 15-second observation allowance, then moves only that disposable job's `next_attempt_at` to now so the next real worker poll can deliver it without waiting a minute. Production retry configuration is unchanged.
+
+On 2026-10-06, all five flows and the startup-cleanup regression passed. A deliberate mutation in ignored build output that bypassed enqueue made the destination flow fail with no outbox job; restoring the build returned the test to green. Backend 682 tests, frontend 415 tests and API integration 20 tests also passed; both builds and lint passed. No company database or services were used. The existing 18-test SQL/concurrency evidence below is from the prior verification.
+
 ## Local verification — 2026-10-05
 
 | Check | Result |

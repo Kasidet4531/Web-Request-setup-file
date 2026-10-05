@@ -32,4 +32,13 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  {
+    files: ['test/email-system*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      sourceType: 'module',
+      parserOptions: { projectService: false },
+      globals: { document: 'readonly', window: 'readonly' },
+    },
+  },
 );
