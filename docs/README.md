@@ -1,8 +1,9 @@
 # Documentation index
 
-Scope: `unified-local-auth`, reviewed on 2026-10-02. Current development and
-this documentation change stay in this checkout. The other branches are not
-modified; future merges can still require normal conflict resolution.
+Scope: `main` at commit `745ae99`, aligned on 2026-10-06 after the
+`feat/email-notification` merge. This index distinguishes maintained guides from
+dated specs, plans, decisions and verification records. The original documentation
+audit was 2026-10-02; those historical records keep their original scope.
 
 Read [current implementation](current-implementation.md) and the package READMEs
 for present behavior. Source code is authoritative. Product specs, ADRs and plans
@@ -18,9 +19,9 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
-| [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and offline/LAN verification scope on feat/email-notification |
+| [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and dated offline/LAN verification scope; merged into main |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
-| [docs/audit-history-access.md](audit-history-access.md) | Product-owner clarification: every authenticated role can view Audit History; supersedes older Admin-only requirements and records the implementation gap |
+| [docs/audit-history-access.md](audit-history-access.md) | Implemented Audit History access for every authenticated role, superseding older Admin-only requirements; dated verification scope |
 | [CONTEXT.md](../CONTEXT.md) | Current domain glossary |
 | [README.md](../README.md) | Project entry point and development scope |
 | [backend/README.md](../backend/README.md) | Backend environment, startup writes and commands |
@@ -66,10 +67,13 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
+| [docs/superpowers/specs/2026-10-06-form-management-and-request-assignment-design.md](superpowers/specs/2026-10-06-form-management-and-request-assignment-design.md) | Approved feature design incorporated into the main baseline; current behavior is described in the implementation guide |
+| [docs/superpowers/plans/2026-10-06-form-management-and-request-assignment.md](superpowers/plans/2026-10-06-form-management-and-request-assignment.md) | Original feature execution and verification procedure; not a current execution instruction or proof of a passing run |
 | [docs/plans/2026-10-01-status-management-and-request-editing.md](plans/2026-10-01-status-management-and-request-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/production-ui-integration-execution-plan.md](plans/production-ui-integration-execution-plan.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/psf-created-information-editing.md](plans/psf-created-information-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/superpowers/plans/2026-09-01-ldap-api-login.md](superpowers/plans/2026-09-01-ldap-api-login.md) | Original scoped plan; not a current execution instruction |
+| [docs/verification/2026-10-06-main-documentation-alignment.md](verification/2026-10-06-main-documentation-alignment.md) | Main documentation baseline, assignment semantics, link checks and original Task 4 evidence availability |
 | [docs/verification/2026-10-02-documentation-alignment.md](verification/2026-10-02-documentation-alignment.md) | Dated documentation audit and validation boundaries |
 | [docs/verification/2026-10-02-status-management.md](verification/2026-10-02-status-management.md) | Dated evidence with its original test/runtime scope; not current deployment acceptance |
 | [docs/verification/2026-10-02-status-type-and-demo-requests.md](verification/2026-10-02-status-type-and-demo-requests.md) | Dated evidence with its original test/runtime scope; not current deployment acceptance |

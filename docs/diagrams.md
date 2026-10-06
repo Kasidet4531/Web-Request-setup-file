@@ -1,6 +1,7 @@
 # Current system diagrams
 
-Scope: checked-in `unified-local-auth` behavior audited on 2026-10-02. These
+Scope: logical flows for `main` at `745ae99`. The original diagrams were
+audited on 2026-10-02; the assignment overview was added on 2026-10-06. These
 show local development and logical flows, not a verified production deployment
 or database foreign-key model. See [current implementation](current-implementation.md)
 for route, policy and persistence source references. The original target diagrams
@@ -72,6 +73,28 @@ This is a logical overview, not a stage sequence or automatic workflow. Opening 
 Catalog kinds are draft/open/completed/cancelled; percentage labels do not impose
 progression. The initial release trigger is unconfigured. Once released,
 requester PSF visibility persists through later status changes.
+
+## Request assignment and Dashboard relationships
+
+```mermaid
+flowchart TD
+  Draft[Creator edits private Draft] --> Select[Select eligible owner by UUID or Unassigned]
+  Shared[Authenticated actor accesses shared request] --> Select
+  Select --> Save[Revision-checked save of assignment snapshots]
+  Save --> Privacy[Draft remains creator-private]
+  Save --> Related[Shared Related work: creator UUID OR owner UUID]
+  Related --> Dedup[One request counted once]
+  Save --> Department[Separate Department work: saved owner department]
+```
+
+Sources: [assignment and PSF saves](../backend/src/requests/requests.service.ts),
+[relationship predicates](../backend/src/requests/search-index.service.ts),
+[assignment dialog](../frontend/src/components/RequestAssignmentDialog.tsx).
+PSF saves preserve assignment. Assignment changes neither Status, PSF release
+nor edit rights, and queues no email. Shared lists and dashboard totals exclude
+Drafts. Requester/Admin dashboards remain creator-scoped. Legacy name/department
+snapshots can appear in Department work without being inferred as a personal
+UUID assignment.
 
 ## Persistence and mutation flow
 

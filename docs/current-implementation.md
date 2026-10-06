@@ -1,6 +1,11 @@
-# Current implementation — unified-local-auth
+# Current implementation — main
 
-> **Forms and assignment update, 6 October 2026:** The feature branch implements
+Documentation baseline: `main` at commit `745ae99`, merged on 6 October 2026.
+The dated updates below describe the changes incorporated into that baseline.
+See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
+for the scope of this review.
+
+> **Forms and assignment update, 6 October 2026:** The feature update, now merged into `main`, implements
 > [the approved form management and request assignment design](superpowers/specs/2026-10-06-form-management-and-request-assignment-design.md).
 > Form previews use temporary interactive values and assignment uses a setup
 > owner's UUID. The sections below describe the resulting behavior; disposable
@@ -17,9 +22,11 @@
 
 > **Implementation update, 5 October 2026:** Authorized working-tree changes implement [authenticated all-role Audit History](audit-history-access.md), explicit manual Save Status and the approved Desktop shell and request tabs. Light/Dark and sidebar collapse preferences are remembered per browser. Local unit, HTTP, SQL and browser checks passed; see [implementation verification](superpowers/plans/2026-10-05-stitch-desktop-implementation.md). The configured PostgreSQL and LDAP services have not been exercised or mutated by this implementation work. This is not deployment evidence.
 
-Original source audit date: 2026-10-02, with the 5 October working-tree updates noted here. Original scope: this branch after application commit
-`01eab7b`, based on `rapid-frontend-rewrite` at `8c11bb4`. This guide describes
-source behavior, including the working-tree updates above, not a production deployment. Source code takes precedence over prose.
+Original source audit date: 2026-10-02. That audit covered `unified-local-auth`
+after application commit `01eab7b`, based on `rapid-frontend-rewrite` at `8c11bb4`.
+The 5 and 6 October feature updates above are incorporated into the current
+`main` baseline. This guide describes source behavior, not a production deployment.
+Source code takes precedence over prose.
 Historical specs, ADRs, plans and verification records are indexed in
 [the documentation index](README.md).
 
@@ -304,6 +311,12 @@ Sources: [theme and preferences](../frontend/src/components/theme.ts),
 
 ## Known limits and evidence boundaries
 
+The following 6 October application test and screenshot results are retained
+from the feature implementation notes. The original Task 4 report and its local
+artifacts are absent from this clone; this documentation review did not reproduce
+those results. See [evidence availability](verification/2026-10-06-main-documentation-alignment.md#earlier-task-4-results)
+for the retained claims and tracked verification procedure.
+
 Local verification on 6 October 2026 passed the new `test:forms:system` (9 tests),
 existing `test:email:system` (9 tests), and `test:ui:system` (1 test). These used
 real compiled frontend/backend, disposable PostgreSQL, real authentication and
@@ -320,8 +333,10 @@ Preview, New Request, Detail labels, assignment dialog and Dashboard. Detail
 labels/separators and Owner / Dept remained visible; dialogs fit the viewport
 and mobile validation actions were reachable by keyboard. Background admin
 breadcrumbs overlap at mobile width in Preview frames; this shell limitation
-remains visible outside the modal. See the [Task 4 evidence report](../.superpowers/sdd/2026-10-06-form-management-and-request-assignment/task-4-report.md)
-for commands, RED/GREEN results and local artifact paths.
+remains visible outside the modal. The tracked [Task 4 verification plan](superpowers/plans/2026-10-06-form-management-and-request-assignment.md#task-4-real-system-flows-visual-checks-and-final-review)
+and the [form-management](../backend/test/form-management-system.e2e.mjs) /
+[request-assignment](../backend/test/request-assignment-system.e2e.mjs) test sources
+are available for reproduction; they do not replace the missing original run report.
 
 - No attachment runtime, export-profile CRUD, tracked Nginx deployment configuration,
   or advanced third-party schema editor is implemented in this checkout.

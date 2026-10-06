@@ -4,7 +4,8 @@
 
 This context manages the request lifecycle for creating and updating PSF Setup Files, enforcing role-based visibility and dynamic form configurations.
 
-Scope: `unified-local-auth`, source-audited on 2026-10-02. Use this glossary with
+Scope: `main` at `745ae99`. Assignment and relationship definitions were aligned
+with source on 2026-10-06; the original glossary audit was 2026-10-02. Use this glossary with
 [current implementation](docs/current-implementation.md); historical specifications
 and ADR bodies do not override the current source.
 
@@ -25,8 +26,17 @@ A user role providing request information. Every authenticated role may create a
 _Avoid_: Requester Role, Applicant
 
 **Setup File Owner**:
-An engineer or user role responsible for shared PSF work and setup details, belonging to **GNTC** or **MFG**. This role and Admin may edit PSF information in every work status, including Completed, and their own Drafts; foreign Drafts remain inaccessible. An initial PSF save may associate unassigned work, but ordinary status changes and later editors do not replace an existing association. Related work is actor-created work OR department-associated work, deduplicated by request ID. Stored associations appear on the dashboard and Excel reports.
+An engineer or user role responsible for shared PSF work and setup details, belonging to **GNTC** or **MFG**. This role and Admin may edit PSF information in every work status, including Completed, and their own Drafts; foreign Drafts remain inaccessible. Assignment identifies a responsible person and does not change these edit rights. Saving PSF information preserves the existing assignment; an unassigned request remains unassigned.
 _Avoid_: Engineer, Owner, Setup Owner
+
+**Request Assignment**:
+An explicit selection of an eligible Setup File Owner by UUID, or Unassigned. The saved name and department are snapshots of that selection. Assignment is optional and changes neither Work Status, PSF Visibility Release nor editing rights. A creator may select an owner for a private Draft; after submission, any authenticated actor with access may assign, change or clear its owner. Assignment does not grant access to a foreign Draft. Legacy name/department-only assignments retain their display values until explicitly replaced or cleared; names are not used to infer a person's UUID. See [current assignment behavior](docs/current-implementation.md#requests-forms-and-workflow).
+
+**Related Work**:
+For a Setup File Owner, shared PSF Requests created by that person OR assigned to that person's UUID, counting each request once. Requester and Admin dashboards remain creator-scoped. Drafts are excluded from shared work and dashboard totals.
+
+**Department Work**:
+Shared PSF Requests whose saved owner department matches the Setup File Owner's department. This separate Dashboard relationship includes legacy name/department-only assignments; it does not define personal Related Work.
 
 **Product Type**:
 The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in the request table's title/product-type column. XLSX places metadata columns before requester-form fields; Product Type is not its first column.
@@ -46,7 +56,7 @@ _Avoid_: In-progress request, unsaved request
 An Admin-configured catalog entry with immutable identity, verbatim name and explicit open/completed/cancelled classification. The configured database was verified to contain 17 entries on 4 October 2026; use the [complete exact strings](docs/status-catalog-and-manual-updates.md), not old short labels. Percentages are display text, not progression or automation. All authenticated actors may change shared work status through the single Action center. Catalog/request writes preserve opaque microsecond revisions, transactional projections and audit.
 
 **PSF Visibility Release**:
-A one-time stored release set on successful entry into the explicitly configured trigger, initially unconfigured. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.
+A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.
 
 **Auto-fill Rule**:
 A configuration defining a trigger field and its target fields to automatically populate data from historical records.

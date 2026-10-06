@@ -19,7 +19,7 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
 Open `http://127.0.0.1:5173/login`. Run the backend from this same
-`unified-local-auth` checkout. Vite forwards `/api` to `http://127.0.0.1:3000`
+`main` checkout. Vite forwards `/api` to `http://127.0.0.1:3000`
 ([configuration](vite.config.ts)). The API client defaults to `/api` and includes
 cookies ([source](src/services/api.ts)).
 

@@ -2,7 +2,8 @@
 
 This project is a Web Application to manage PSF Setup File Requests.
 
-Current development scope is `unified-local-auth`. See
+Current documentation baseline is `main` at `745ae99` (6 October 2026).
+For behavior changes, read
 [current implementation](docs/current-implementation.md), [documentation index](docs/README.md)
 and [domain glossary](CONTEXT.md) before relying on historical specs/ADRs/plans.
 Source is authoritative; documentation statements about deployment or live

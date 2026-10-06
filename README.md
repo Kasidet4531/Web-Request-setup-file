@@ -3,9 +3,11 @@
 > **Status clarification, 4 October 2026:** [Database Status names and interaction rules](docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
 
 This application tracks requests to create or update PSF Setup Files. It does
-not generate the physical PSF Setup Files. Current development takes place in
-`unified-local-auth`, based on `rapid-frontend-rewrite` with removable local
-authentication. The original branches remain unchanged by this documentation update.
+not generate the physical PSF Setup Files. The documentation baseline is `main`
+at commit `745ae99`, which merged `feat/email-notification` on 6 October 2026.
+It includes removable local development authentication, status notifications,
+interactive form previews and explicit request assignment. Use
+[current implementation](docs/current-implementation.md) for the resulting behavior.
 
 ## Start here
 
@@ -47,6 +49,10 @@ backend XLSX export. See the current implementation guide for authorization,
 snapshot/release rules, endpoints and limitations.
 
 ## Verification scope
+
+The [6 October documentation alignment record](docs/verification/2026-10-06-main-documentation-alignment.md)
+records this baseline review and the availability of earlier verification evidence.
+Application test results below retain their original dates and scope.
 
 The [unified-auth verification record](docs/verification/2026-10-02-unified-local-auth.md)
 records 594 backend tests, 18 mocked-database HTTP integration tests, 237 frontend

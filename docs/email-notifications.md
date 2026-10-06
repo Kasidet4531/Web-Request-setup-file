@@ -1,6 +1,6 @@
 # Email notifications
 
-Implemented in `feat/email-notification`, based on the reviewed destination-status design. This guide describes local source behavior, not a company deployment or evidence of delivery to a real inbox.
+Included in `main` at baseline `745ae99` through the 6 October 2026 merge of `feat/email-notification`, based on the reviewed destination-status design. This guide describes local source behavior, not a company deployment or evidence of delivery to a real inbox.
 
 ## Status Management
 
