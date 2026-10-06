@@ -44,7 +44,7 @@ Draft submission remains a separate existing lifecycle; this submitted-request D
 
 Preserve creator-private Draft access and the dedicated initial-submission lifecycle. The selected initial work Status must come from the catalog; do not hardcode `Submitted`. Shared work cannot return to Draft. Preserve the server's request access, validation, revision checks and transactional audit. This clarification does not create new role restrictions or grant PSF editing to Requesters.
 
-Requester visibility of PSF values is controlled by persistent release state and the configured release trigger, not the old short Status `PSF Created`. Release may follow a valid explicit Status save; release does not choose or advance a Status. Status Management manages catalog entries and release settings, not allowed paths between stages.
+Requester visibility of PSF values is controlled by persistent release state and the configured PSF access triggers, not the old short Status `PSF Created`. Each non-Draft status can be a trigger, selected in its Edit modal and shown in the catalog table. Release follows valid entry into any trigger, or an administrator saving its checked trigger to release existing requests at that status. All candidates must have valid required PSF information; otherwise that combined save rolls back. Access already released is retained. Deleting a trigger does not automatically make its replacement a trigger. Release does not choose or advance a Status. Status Management manages catalog entries and release settings, not allowed paths between stages.
 
 ## Documentation and design boundary
 

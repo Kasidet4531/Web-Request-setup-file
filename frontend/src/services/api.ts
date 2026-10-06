@@ -109,19 +109,22 @@ export interface StatusCatalogEntry {
   kind: WorkflowStatusKind
   requestCount: number | null
   emailPolicy?: StatusEmailPolicy
+  psfAccessTrigger?: boolean
 }
 
 export interface WorkflowConfiguration {
   statuses: string[]
   entries: StatusCatalogEntry[]
+  psfVisibilityTriggerIds?: string[]
+  /** Deprecated: the sole trigger id, or null when zero or multiple triggers exist. */
   psfVisibilityTriggerId: string | null
   updatedAt: string
 }
 
 export type WorkflowConfigurationOperation =
   | { action: 'create'; name: string; kind: Exclude<WorkflowStatusKind, 'draft'>; expectedUpdatedAt: string }
-  | { action: 'rename'; id: string; name: string; emailPolicy?: StatusEmailPolicy; expectedUpdatedAt: string }
-  | { action: 'delete'; id: string; replacementId?: string; replacementTriggerId?: string | null; expectedUpdatedAt: string }
+  | { action: 'rename'; id: string; name: string; emailPolicy?: StatusEmailPolicy; psfAccessTrigger?: boolean; expectedUpdatedAt: string }
+  | { action: 'delete'; id: string; replacementId?: string; expectedUpdatedAt: string }
   | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
   | { action: 'email-policy'; id: string; emailPolicy: StatusEmailPolicy; expectedUpdatedAt: string }
 
@@ -206,6 +209,8 @@ export type AdminWorkflowTransitionConfiguration = WorkflowConfiguration
 export interface WorkflowStatusesResponse {
   statuses: string[]
   entries: Array<Omit<StatusCatalogEntry, 'requestCount' | 'emailPolicy'>>
+  psfVisibilityTriggerIds?: string[]
+  /** Deprecated: the sole trigger id, or null when zero or multiple triggers exist. */
   psfVisibilityTriggerId: string | null
   updatedAt: string
 }

@@ -89,7 +89,7 @@ describe('Status Management interactions', () => {
     ;(button('Add CC').props.onClick as () => void)()
     ;(button('Save changes').props.onClick as () => void)(); await flush()
     expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({
-      action: 'rename', id: 'open-id', name: 'Renamed work', emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt,
+      action: 'rename', id: 'open-id', name: 'Renamed work', psfAccessTrigger: false, emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt,
     })
   })
   it.each([false, true])('deletes the last unused work entry without a request replacement (trigger=%s)', async (trigger) => {
@@ -107,7 +107,7 @@ describe('Status Management interactions', () => {
     expect(confirmation.props.children).toBe('Delete status')
     ;(confirmation.props.onClick as () => void)()
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'delete', id: 'open-id', expectedUpdatedAt: config.updatedAt, ...(trigger ? { replacementTriggerId: null } : {}) })
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'delete', id: 'open-id', expectedUpdatedAt: config.updatedAt })
   })
 
   it('requires an explicit surviving nonDraft replacement for used deletion and resets selection after 409', async () => {
@@ -124,13 +124,11 @@ describe('Status Management interactions', () => {
     expect(confirm().props.disabled).toBe(true)
     ;(replacement.props.onChange as (event: unknown) => void)({ target: { value: 'other-id' } })
     expect(confirm().props.disabled).toBe(false)
-    const trigger = find(render(), (element) => element.type === 'label' && find(element.props.children, (child) => child.type === 'span' && child.props.children === 'Replace visibility trigger') !== null)!
-    const triggerSelect = find(trigger, (element) => element.type === 'select')!
-    ;(triggerSelect.props.onChange as (event: unknown) => void)({ target: { value: 'other-id' } })
+    expect(find(render(), (element) => element.type === 'label' && find(element.props.children, (child) => child.type === 'span' && child.props.children === 'Replace visibility trigger') !== null)).toBeNull()
     workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Stale catalog', 409, 'Conflict', null))
     ;(confirm().props.onClick as () => void)()
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'delete', id: 'open-id', replacementId: 'other-id', replacementTriggerId: 'other-id', expectedUpdatedAt: config.updatedAt })
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'delete', id: 'open-id', replacementId: 'other-id', expectedUpdatedAt: config.updatedAt })
     expect(find(render(), (element) => element.props['aria-labelledby'] === 'delete-status-heading')).toBeNull()
     expect(workflowApi.fetchAdminWorkflowTransitionConfiguration).toHaveBeenCalledTimes(2)
   })
@@ -174,7 +172,7 @@ function button(label: string) {
 function change(label: string, value: string) {
   ;(control(label).props.onChange as (event: unknown) => void)({ target: { value } })
 }
-async function openEmailEditor(configuration = config) {
+async function openEmailEditor(configuration: Omit<typeof config, 'psfVisibilityTriggerId'> & { psfVisibilityTriggerId: string | null } = config) {
   workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(configuration)
   render(); hookState.effect?.(); await flush()
   const edit = find(render(), (element) => element.type === 'button' && element.props['aria-label'] === `Edit ${config.entries[1].name}`)
@@ -198,6 +196,50 @@ describe('Status email policy interactions', () => {
     workflowApi.fetchAdminUsers.mockReset().mockResolvedValue([{ id: 'alex', username: 'alex', displayName: 'Alex', role: 'requester', setupOwnerDepartment: null, email: 'Alex@example.com' }, { id: 'sam', username: 'sam', displayName: 'Sam', role: 'requester', setupOwnerDepartment: null, email: null }])
   })
 
+
+  it.each([
+    ['entry flag', { psfVisibilityTriggerIds: ['open-id'], entries: config.entries.map((entry) => ({ ...entry, psfAccessTrigger: false })) }, false],
+    ['multiple trigger ids', { psfVisibilityTriggerIds: ['open-id', 'other-id'] }, true],
+    ['empty trigger ids over legacy scalar', { psfVisibilityTriggerIds: [], psfVisibilityTriggerId: 'open-id' }, false],
+    ['legacy scalar', { psfVisibilityTriggerId: 'open-id' }, true],
+  ])('initializes the PSF access checkbox from %s', async (_label, fields, checked) => {
+    await openEmailEditor({ ...config, ...fields })
+    expect(control('Allow requesters to view PSF Created Information').props.checked).toBe(checked)
+  })
+
+  it('saves PSF access together with name and recipients without changing another trigger', async () => {
+    const multiple = { ...enabledConfig, psfVisibilityTriggerIds: ['other-id'], entries: [...enabledConfig.entries, { id: 'other-id', name: 'Other work', kind: 'open', requestCount: 0, psfAccessTrigger: true }] }
+    await openEmailEditor(multiple)
+    change('Status name', 'New name')
+    ;(control('Allow requesters to view PSF Created Information').props.onChange as (event: unknown) => void)({ target: { checked: true } })
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'rename', id: 'open-id', name: 'New name', psfAccessTrigger: true, emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+  })
+
+  it('cancels an unsaved trigger change and reloads its persisted value', async () => {
+    await openEmailEditor()
+    ;(control('Allow requesters to view PSF Created Information').props.onChange as (event: unknown) => void)({ target: { checked: true } })
+    ;(button('Cancel').props.onClick as () => void)()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
+    ;(control(`Edit ${config.entries[1].name}`).props.onClick as () => void)(); await flush()
+    expect(control('Allow requesters to view PSF Created Information').props.checked).toBe(false)
+  })
+
+  it('keeps the combined edits open when required PSF data blocks release', async () => {
+    await openEmailEditor(enabledConfig)
+    change('Status name', 'Pending name')
+    add('To', 'added@example.com')
+    ;(control('Allow requesters to view PSF Created Information').props.onChange as (event: unknown) => void)({ target: { checked: true } })
+    workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Required PSF fields are incomplete.', 400, 'Bad Request', null))
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(control('Status name').props.value).toBe('Pending name')
+    expect(control('Allow requesters to view PSF Created Information').props.checked).toBe(true)
+    expect(control('Remove added@example.com from To')).not.toBeNull()
+    expect(find(render(), (element) => element.props.title === 'Required PSF fields are incomplete.')).not.toBeNull()
+    expect(button('Save changes').props.disabled).toBe(false)
+  })
+
   it('defaults legacy policies to off and keeps Draft protected', async () => {
     await openEmailEditor()
     expect(control('Do not send email on entry').props.checked).toBe(true)
@@ -219,7 +261,7 @@ describe('Status email policy interactions', () => {
     expect(missingUser).not.toBeNull()
     expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
     ;(button('Save changes').props.onClick as () => void)(); await flush()
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, emailPolicy: { enabled: true, to: ['team@example.com', 'other@example.com', 'alex@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, psfAccessTrigger: false, emailPolicy: { enabled: true, to: ['team@example.com', 'other@example.com', 'alex@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
     expect(find(render(), (element) => element.props['aria-labelledby'] === 'edit-status-heading')).toBeNull()
   })
 
@@ -233,7 +275,7 @@ describe('Status email policy interactions', () => {
     expect(control('To addresses').props.disabled).toBe(false)
     suppress(true)
     ;(button('Save changes').props.onClick as () => void)(); await flush()
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, emailPolicy: { enabled: false, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, psfAccessTrigger: false, emailPolicy: { enabled: false, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
   })
 
   it.each([['', 'At least one To address is required'], ['not-an-email', 'Enter valid email addresses'], ['valid@example.com', 'Enter valid email addresses']])('rejects empty or invalid enabled recipients (%s)', async (to, message) => {
@@ -291,6 +333,7 @@ describe('Status email policy interactions', () => {
     ;(button('Save changes').props.onClick as () => void)()
     expect(button('Saving…').props.disabled).toBe(true)
     expect(control('To addresses').props.disabled).toBe(true)
+    expect(control('Allow requesters to view PSF Created Information').props.disabled).toBe(true)
     expect(button('Cancel').props.disabled).toBe(true)
     reject(new Error('Unable to save')); await flush()
     expect(control('Remove changed@example.com from To')).not.toBeNull()
@@ -349,7 +392,7 @@ describe('Status email policy interactions', () => {
     expect(control('Remove team@example.com from To')).not.toBeNull()
     expect(control('Remove lead@example.com from CC')).not.toBeNull()
     ;(button('Save changes').props.onClick as () => void)(); await flush()
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, psfAccessTrigger: false, emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
   })
 
   it.each(['cancel', 'save', 'conflict'])('restores focus to the originating status after %s closes the editor', async (action) => {

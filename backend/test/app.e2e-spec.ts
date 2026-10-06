@@ -765,8 +765,10 @@ describe('AppController (e2e)', () => {
             ...entry,
             requestCount: entry.kind === 'draft' ? null : 0,
             emailPolicy: { enabled: false, to: [], cc: [] },
+            psfAccessTrigger: false,
           })),
           psfVisibilityTriggerId: null,
+          psfVisibilityTriggerIds: [],
           updatedAt: WORKFLOW_REVISION,
         });
       });
@@ -806,6 +808,7 @@ describe('AppController (e2e)', () => {
             kind: 'open',
             requestCount: 0,
             emailPolicy: { enabled: false, to: [], cc: [] },
+            psfAccessTrigger: false,
           });
           expect(body.updatedAt).toBe(NEXT_WORKFLOW_REVISION);
         },
@@ -923,6 +926,7 @@ describe('AppController (e2e)', () => {
             statuses: DEFAULT_STATUS_NAMES.slice(1),
             entries: DEFAULT_STATUS_ENTRIES,
             psfVisibilityTriggerId: null,
+            psfVisibilityTriggerIds: [],
             updatedAt: WORKFLOW_REVISION,
           });
           expect(JSON.stringify(body)).not.toContain('requestCount');

@@ -528,6 +528,7 @@ test(
           id: source.id,
           name: 'E2E combined renamed',
           emailPolicy: policy,
+          psfAccessTrigger: false,
           expectedUpdatedAt: current.updatedAt,
         }),
       });
@@ -581,6 +582,7 @@ test(
       id: source.id,
       name: 'E2E combined renamed',
       emailPolicy: policy,
+      psfAccessTrigger: false,
       expectedUpdatedAt: current.updatedAt,
     });
     const stored = (await api(page, 'GET', '/admin/workflow')).entries.find(

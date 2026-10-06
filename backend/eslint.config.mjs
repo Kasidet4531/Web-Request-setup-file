@@ -33,7 +33,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['test/email-system*.mjs', 'test/loading-system.e2e.mjs'],
+    files: ['test/email-system*.mjs', 'test/loading-system.e2e.mjs', 'test/psf-trigger-system.e2e.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       sourceType: 'module',

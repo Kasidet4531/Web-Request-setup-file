@@ -34,6 +34,7 @@ describe('workflow destination email policies', () => {
   let client: { query: jest.Mock; release: jest.Mock };
   let connect: jest.Mock;
   let service: WorkflowTransitionService;
+  let unreleased: Array<Record<string, unknown>>;
   beforeEach(() => {
     stored = {
       entries: [
@@ -43,7 +44,12 @@ describe('workflow destination email policies', () => {
       ],
       psfVisibilityTriggerId: null,
     };
+    unreleased = [];
     query = jest.fn((sql: string, values: unknown[] = []) => {
+      if (sql.includes('SELECT') && sql.includes('psf_released_at IS NULL'))
+        return {
+          rows: unreleased.filter((request) => request.status === values[0]),
+        };
       if (sql.includes('SELECT config_json'))
         return {
           rows: [{ config_json: stored, updated_at_version: REVISION }],
@@ -65,6 +71,163 @@ describe('workflow destination email policies', () => {
     id = WORK,
     expectedUpdatedAt = REVISION,
   ) => ({ action: 'email-policy', id, emailPolicy, expectedUpdatedAt });
+
+  it('preserves a legacy trigger and exposes it as one of the supported triggers', async () => {
+    stored.psfVisibilityTriggerId = WORK;
+    const config = await service.getConfiguration();
+    expect(config).toHaveProperty('psfVisibilityTriggerIds', [WORK]);
+    expect(config.entries.find((entry) => entry.id === WORK)).toHaveProperty(
+      'psfAccessTrigger',
+      true,
+    );
+  });
+
+  it('enables multiple triggers without replacing the previous one', async () => {
+    stored.psfVisibilityTriggerId = WORK;
+    const result = await service.applyOperation(
+      {
+        action: 'rename',
+        id: OTHER,
+        name: 'Other',
+        psfAccessTrigger: true,
+        expectedUpdatedAt: REVISION,
+      },
+      ACTOR,
+    );
+    expect(result).toHaveProperty('psfVisibilityTriggerIds', [WORK, OTHER]);
+    expect(result.psfVisibilityTriggerId).toBeNull();
+  });
+
+  it('releases current requests only after every required PSF value validates', async () => {
+    unreleased = [
+      {
+        id: WORK,
+        request_no: 'PSF-0001',
+        status: 'Work',
+        psf_created_data_json: {},
+        psf_created_schema_snapshot_json: null,
+      },
+    ];
+    await service.applyOperation(
+      {
+        action: 'rename',
+        id: WORK,
+        name: 'Renamed',
+        emailPolicy: ON,
+        psfAccessTrigger: true,
+        expectedUpdatedAt: REVISION,
+      },
+      ACTOR,
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('SET psf_released_at ='),
+      [[WORK]],
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      matching({
+        metadata: matching({
+          releasedRequestCount: 1,
+          releasedRequestIds: [WORK],
+        }),
+      }),
+      client,
+    );
+  });
+
+  it('rejects the whole combined save and names incomplete requests before any release write', async () => {
+    const schema = {
+      formKey: 'psf-created-information',
+      version: 1,
+      title: 'PSF',
+      sections: [
+        {
+          sectionKey: 'psf',
+          title: 'PSF',
+          fields: [
+            {
+              fieldKey: 'setup',
+              canonicalKey: 'setup',
+              label: 'Setup',
+              type: 'text',
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    unreleased = [
+      {
+        id: WORK,
+        request_no: 'PSF-0001',
+        status: 'Work',
+        psf_created_data_json: { setup: 'Complete' },
+        psf_created_schema_snapshot_json: schema,
+      },
+      {
+        id: OTHER,
+        request_no: 'PSF-0002',
+        status: 'Work',
+        psf_created_data_json: {},
+        psf_created_schema_snapshot_json: schema,
+      },
+    ];
+    await expect(
+      service.applyOperation(
+        {
+          action: 'rename',
+          id: WORK,
+          name: 'Renamed',
+          emailPolicy: ON,
+          psfAccessTrigger: true,
+          expectedUpdatedAt: REVISION,
+        },
+        ACTOR,
+      ),
+    ).rejects.toThrow('PSF-0002');
+    expect(
+      query.mock.calls.some(
+        ([sql]: [string]) =>
+          sql.startsWith('UPDATE') || sql.includes('UPDATE psf_requests'),
+      ),
+    ).toBe(false);
+    expect(query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('unchecks one trigger without removing the others or revoking released requests', async () => {
+    stored.psfVisibilityTriggerIds = [WORK, OTHER];
+    await service.applyOperation(
+      {
+        action: 'rename',
+        id: WORK,
+        name: 'Work',
+        psfAccessTrigger: false,
+        expectedUpdatedAt: REVISION,
+      },
+      ACTOR,
+    );
+    expect(await service.getConfiguration()).toHaveProperty(
+      'psfVisibilityTriggerIds',
+      [OTHER],
+    );
+    expect(
+      query.mock.calls.some(([sql]: [string]) =>
+        sql.includes('SET psf_released_at ='),
+      ),
+    ).toBe(false);
+  });
+
+  it('deletes a trigger without making the replacement a trigger or clearing other triggers', async () => {
+    stored.psfVisibilityTriggerIds = [WORK, OTHER];
+    await service.applyOperation(
+      { action: 'delete', id: WORK, expectedUpdatedAt: REVISION },
+      ACTOR,
+    );
+    expect(await service.getConfiguration()).toHaveProperty(
+      'psfVisibilityTriggerIds',
+      [OTHER],
+    );
+  });
 
   it('saves a status name and normalized recipients together with one catalog audit', async () => {
     const result = await service.applyOperation(

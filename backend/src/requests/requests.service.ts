@@ -806,7 +806,11 @@ export class RequestsService implements OnModuleInit {
       if (target.name === currentRequest.status) {
         return this.mapRequestRow(currentRequest, dto.actor);
       }
-      const entersTrigger = configuration.psfVisibilityTriggerId === target.id;
+      const entersTrigger = (
+        configuration.psfVisibilityTriggerIds ?? [
+          configuration.psfVisibilityTriggerId,
+        ]
+      ).includes(target.id);
       if (entersTrigger) {
         assertValidRequiredFormData(
           resolvePsfCreatedInformationSchema(
@@ -969,10 +973,11 @@ export class RequestsService implements OnModuleInit {
         ),
         requesterIdentity.displayName,
       );
-      const triggerEntry = configuration.entries.find(
-        (entry) => entry.id === configuration.psfVisibilityTriggerId,
-      );
-      const entersTrigger = triggerEntry?.id === target.id;
+      const entersTrigger = (
+        configuration.psfVisibilityTriggerIds ?? [
+          configuration.psfVisibilityTriggerId,
+        ]
+      ).includes(target.id);
       if (entersTrigger) {
         assertValidRequiredFormData(
           resolvePsfCreatedInformationSchema(

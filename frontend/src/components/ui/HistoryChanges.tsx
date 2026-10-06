@@ -14,6 +14,10 @@ function displayCatalog(value: unknown): string {
     isRecord(entry) && typeof entry.name === 'string')
   const kinds: Record<string, string> = { draft: 'Draft', open: 'Open work', completed: 'Completed', cancelled: 'Cancelled' }
   const names = entries.map((entry) => `${entry.name as string}${typeof entry.kind === 'string' && Object.hasOwn(kinds, entry.kind) ? ` (${kinds[entry.kind]})` : ''}`)
+  if (Array.isArray(value.psfVisibilityTriggerIds)) {
+    const triggers = value.psfVisibilityTriggerIds.map((id) => entries.find((entry) => entry.id === id)?.name ?? 'Unavailable')
+    return [...names, `PSF visibility triggers: ${triggers.length ? triggers.join(', ') : 'None'}`].join('\n')
+  }
   const trigger = value.psfVisibilityTriggerId === null ? 'None'
     : entries.find((entry) => entry.id === value.psfVisibilityTriggerId)?.name ?? 'Unavailable'
   return [...names, `PSF visibility trigger: ${String(trigger)}`].join('\n')
@@ -36,6 +40,7 @@ export function HistoryChanges({ metadata }: { metadata: Record<string, unknown>
       <summary>View changes</summary>
       {statusChange ? <p>{`Status: ${metadata.fromStatus as string} → ${metadata.toStatus as string}`}</p> : null}
       {catalogOperation ? <p>Catalog operation: {displayValue(catalogOperation.action)}{typeof catalogOperation.name === 'string' ? ` — ${catalogOperation.name}` : ''}</p> : null}
+      {typeof metadata.releasedRequestCount === 'number' && metadata.releasedRequestCount > 0 ? <p>{`Requester PSF access released for ${metadata.releasedRequestCount} request(s).`}</p> : null}
       {changes.length || catalogChange ? (
         <table className="history-changes__table">
           <caption>Recorded changes</caption>

@@ -389,7 +389,7 @@ describe('WorkflowTransitionService status catalog', () => {
     expect(client.query).toHaveBeenLastCalledWith('COMMIT');
   });
 
-  it('requires explicit trigger resolution when deleting the configured trigger', async () => {
+  it('removes a deleted trigger without requiring or assigning a replacement trigger', async () => {
     await service.onModuleInit();
     const config = stored as {
       entries: Array<{ id: string; name: string; kind: string }>;
@@ -405,7 +405,10 @@ describe('WorkflowTransitionService status catalog', () => {
         },
         ADMIN,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toMatchObject({
+      psfVisibilityTriggerIds: [],
+      psfVisibilityTriggerId: null,
+    });
     expect(
       client.query.mock.calls.some(([sql]) =>
         String(sql).includes('UPDATE psf_requests'),

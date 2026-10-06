@@ -38,6 +38,13 @@ function statusEmailPolicy(entry: StatusCatalogEntry): StatusEmailPolicy {
     : entry.emailPolicy
 }
 
+function statusPsfAccessTrigger(entry: StatusCatalogEntry, configuration: WorkflowConfiguration | null): boolean {
+  if (entry.kind === 'draft') return false
+  return entry.psfAccessTrigger ?? (configuration?.psfVisibilityTriggerIds
+    ? configuration.psfVisibilityTriggerIds.includes(entry.id)
+    : configuration?.psfVisibilityTriggerId === entry.id)
+}
+
 export function AdminWorkflowTransitionPage() {
   const [configuration, setConfiguration] = useState<WorkflowConfiguration | null>(null)
   const [loading, setLoading] = useState(true)
@@ -48,7 +55,7 @@ export function AdminWorkflowTransitionPage() {
   const [editName, setEditName] = useState('')
   const [deleting, setDeleting] = useState<StatusCatalogEntry | null>(null)
   const [replacementId, setReplacementId] = useState('')
-  const [replacementTriggerId, setReplacementTriggerId] = useState<string | null>(null)
+  const [psfAccessTrigger, setPsfAccessTrigger] = useState(false)
   const [emailEditing, setEmailEditing] = useState<StatusCatalogEntry | null>(null)
   const [emailEnabled, setEmailEnabled] = useState(false)
   const [emailTo, setEmailTo] = useState<string[]>([])
@@ -109,7 +116,6 @@ export function AdminWorkflowTransitionPage() {
           setDeleting(null)
           setEmailEditing(null)
           setReplacementId('')
-          setReplacementTriggerId(null)
         } catch { /* Keep the user's conflict context visible. */ }
       }
     } finally { setBusy(false) }
@@ -121,6 +127,7 @@ export function AdminWorkflowTransitionPage() {
     emailFocusTarget.current = `edit:${entry.id}`
     setEmailEditing(entry)
     setEditName(entry.name)
+    setPsfAccessTrigger(statusPsfAccessTrigger(entry, configuration))
     setEmailEnabled(policy.enabled)
     setEmailTo([...policy.to])
     setEmailCc([...policy.cc])
@@ -174,7 +181,7 @@ export function AdminWorkflowTransitionPage() {
       return
     }
     setEmailError(null)
-    void mutate({ action: 'rename', id: emailEditing.id, name: editName.trim(), emailPolicy: { enabled: emailEnabled, to, cc } })
+    void mutate({ action: 'rename', id: emailEditing.id, name: editName.trim(), psfAccessTrigger, emailPolicy: { enabled: emailEnabled, to, cc } })
   }
 
   function closeDialog() {
@@ -189,10 +196,8 @@ export function AdminWorkflowTransitionPage() {
   const validReplacement = businessEntries.some((entry) => entry.id === replacementId && entry.id !== deleting?.id)
   const destination = businessEntries.find((entry) => entry.id === replacementId)
   const destinationPolicy = destination ? statusEmailPolicy(destination) : null
-  const deletingTrigger = Boolean(deleting && configuration?.psfVisibilityTriggerId === deleting.id)
   const canDelete = Boolean(deleting && deleting.kind !== 'draft' &&
-    (deleting.requestCount === 0 ? !replacementId || validReplacement : validReplacement) &&
-    (!deletingTrigger || replacementTriggerId === null || businessEntries.some((entry) => entry.id === replacementTriggerId && entry.id !== deleting.id)))
+    (deleting.requestCount === 0 ? !replacementId || validReplacement : validReplacement))
 
   return (
     <article className="page-card admin-workflow-transition">
@@ -206,33 +211,31 @@ export function AdminWorkflowTransitionPage() {
             <label className="ui-field"><span className="ui-label">Status type</span><select disabled={catalogBusy} value={newKind} onChange={(event) => setNewKind(event.target.value as Exclude<WorkflowStatusKind, 'draft'>)}><option value="open">Open work</option><option value="completed">Completed</option><option value="cancelled">Cancel</option></select></label>
             <button className="primary-button" disabled={catalogBusy || !newName.trim()} type="submit">Add status</button>
           </form>
-          <section className="page-card__section admin-workflow-transition__visibility" aria-labelledby="visibility-trigger-heading">
-            <h2 id="visibility-trigger-heading">Requester PSF visibility trigger</h2>
-            <p className="page-card__description">{configuration.psfVisibilityTriggerId ? 'Requesters gain access on first entry and keep it afterward.' : 'Not configured; requester access is not released by status changes.'}</p>
-            <label className="ui-field"><span className="ui-label">Trigger status</span><select disabled={catalogBusy} value={configuration.psfVisibilityTriggerId ?? ''} onChange={(event) => void mutate({ action: 'settings', psfVisibilityTriggerId: event.target.value || null })}>
-              <option value="">Not configured</option>{businessEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-            </select></label>
-          </section>
           <div className="admin-workflow-transition__catalog">
           <p className="table-scroll__hint">Scroll horizontally to see request counts and status actions.</p>
           <div className="data-table admin-workflow-transition__table" ref={catalogRegion} role="region" aria-label="Status catalog" tabIndex={0}><table>
-            <thead><tr><th scope="col">Status</th><th scope="col">Status type</th><th scope="col">Requests</th><th scope="col">Email on entry</th><th scope="col">Actions</th></tr></thead>
+            <thead><tr><th scope="col">Status</th><th scope="col">Status type</th><th scope="col">Requests</th><th scope="col">Email on entry</th><th scope="col">PSF access trigger</th><th scope="col">Actions</th></tr></thead>
             <tbody>{configuration.entries.map((entry) => <tr key={entry.id}>
               <td><StatusLabel status={entry.name} kind={entry.kind} /></td>
               <td>{entry.kind === 'cancelled' ? 'Cancel' : entry.kind === 'open' ? 'Open work' : entry.kind === 'completed' ? 'Completed' : 'Draft'}</td><td>{entry.requestCount ?? '—'}</td>
               <td><div className="admin-workflow-transition__email-summary"><span>{statusEmailPolicy(entry).enabled ? 'Enabled' : 'Do not send'}</span>{statusEmailPolicy(entry).enabled ? <span className="ui-help">{statusEmailPolicy(entry).to.length} To · {statusEmailPolicy(entry).cc.length} CC</span> : null}</div></td>
+              <td>{statusPsfAccessTrigger(entry, configuration) ? 'Trigger' : '—'}</td>
               <td><div className="admin-workflow-transition__row-actions">{entry.kind === 'draft' ? <span className="ui-help">Protected</span> : <>
                 <button className="ui-button ui-button--secondary" disabled={catalogBusy} aria-label={`Edit ${entry.name}`} ref={(node) => { if (node) emailButtons.current.set(`edit:${entry.id}`, node); else emailButtons.current.delete(`edit:${entry.id}`) }} onClick={() => void editEmailPolicy(entry)} type="button">Edit</button>
-                <button className="ui-button ui-button--danger" disabled={catalogBusy} ref={(node) => { if (node) emailButtons.current.set(`delete:${entry.id}`, node); else emailButtons.current.delete(`delete:${entry.id}`) }} onClick={() => { emailFocusTarget.current = `delete:${entry.id}`; setFeedback(null); setDeleting(entry); setReplacementId(''); setReplacementTriggerId(null) }} type="button">Delete</button>
+                <button className="ui-button ui-button--danger" disabled={catalogBusy} ref={(node) => { if (node) emailButtons.current.set(`delete:${entry.id}`, node); else emailButtons.current.delete(`delete:${entry.id}`) }} onClick={() => { emailFocusTarget.current = `delete:${entry.id}`; setFeedback(null); setDeleting(entry); setReplacementId('') }} type="button">Delete</button>
               </>}</div></td>
             </tr>)}</tbody>
           </table></div></div>
           {dialogMode ? <dialog ref={dialogRef} className="ui-dialog admin-status-dialog" aria-labelledby={dialogMode === 'edit' ? 'edit-status-heading' : 'delete-status-heading'} aria-busy={busy}
             onCancel={(event) => { event.preventDefault(); closeDialog() }} onClick={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
           {emailEditing ? <form className="ui-dialog__body" onSubmit={(event) => { event.preventDefault(); if (editName.trim()) saveEmailPolicy() }}>
-            <div className="admin-status-dialog__header"><div><h2 id="edit-status-heading">Edit status</h2><p className="ui-help">Update the name and email recipients together.</p></div><button className="icon-button" type="button" aria-label="Close status editor" disabled={busy} onClick={closeDialog}><X size={18} aria-hidden="true" /></button></div>
+            <div className="admin-status-dialog__header"><div><h2 id="edit-status-heading">Edit status</h2><p className="ui-help">Update the name, requester PSF access, and email recipients together.</p></div><button className="icon-button" type="button" aria-label="Close status editor" disabled={busy} onClick={closeDialog}><X size={18} aria-hidden="true" /></button></div>
             <div className="admin-status-dialog__content">
             <label className="ui-field"><span className="ui-label">Status name</span><input data-initial-focus aria-label="Status name" disabled={busy} value={editName} onChange={(event) => setEditName(event.target.value)} required /></label>
+            <div className="admin-status-dialog__psf-access">
+              <label className="admin-workflow-transition__checkbox"><input type="checkbox" aria-label="Allow requesters to view PSF Created Information" aria-describedby="psf-access-help" checked={psfAccessTrigger} disabled={busy} onChange={(event) => setPsfAccessTrigger(event.target.checked)} />Allow requesters to view PSF Created Information</label>
+              <p className="ui-help" id="psf-access-help">Saving with this checked releases requester access for existing requests currently at this status. All required PSF fields must be complete, or none of your changes will be saved. Requesters keep access once released. Editing this configuration does not send email.</p>
+            </div>
             <p className="ui-help">These recipients apply when a request enters this status, including submission and bulk replacement. Changes take effect after saving.</p>
             <label className="admin-workflow-transition__checkbox"><input type="checkbox" aria-label="Do not send email on entry" checked={!emailEnabled} disabled={busy} onChange={(event) => { setEmailEnabled(!event.target.checked); setEmailError(null) }} />Do not send email on entry</label>
             <p className="ui-help" id="email-recipients-help">Enter an individual or group address, then choose Add. You can paste several addresses separated by commas or semicolons. To takes precedence over CC.</p>
@@ -264,11 +267,10 @@ export function AdminWorkflowTransitionPage() {
               <p>{destinationPolicy.enabled ? `One email will be queued for each of the ${deleting.requestCount ?? 0} affected requests.` : 'Email is disabled for this destination. No notification emails will be queued.'}</p>
               {destinationPolicy.enabled ? <><p>{`To: ${destinationPolicy.to.join(', ')}`}</p><p>{`CC: ${destinationPolicy.cc.length ? destinationPolicy.cc.join(', ') : 'None'}`}</p></> : null}
             </div> : null}
-            {configuration.psfVisibilityTriggerId === deleting.id ? <label className="ui-field"><span className="ui-label">Replace visibility trigger</span><select disabled={busy} value={replacementTriggerId ?? ''} onChange={(event) => setReplacementTriggerId(event.target.value || null)}><option value="">No trigger</option>{businessEntries.filter((entry) => entry.id !== deleting.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label> : null}
             {feedback?.kind === 'error' ? <AsyncNotice kind="error" title={feedback.message} /> : null}
             </div><div className="ui-dialog__actions">
             <button className="ui-button ui-button--secondary" data-dialog-cancel disabled={busy} onClick={closeDialog} type="button">Cancel</button>
-            <button className="ui-button ui-button--danger" disabled={busy || !canDelete} onClick={() => { if (canDelete) void mutate({ action: 'delete', id: deleting.id, ...(replacementId ? { replacementId } : {}), ...(deletingTrigger ? { replacementTriggerId } : {}) }) }} type="button">{deleting.requestCount === 0 ? 'Delete status' : 'Replace and delete'}</button>
+            <button className="ui-button ui-button--danger" disabled={busy || !canDelete} onClick={() => { if (canDelete) void mutate({ action: 'delete', id: deleting.id, ...(replacementId ? { replacementId } : {}) }) }} type="button">{deleting.requestCount === 0 ? 'Delete status' : 'Replace and delete'}</button>
             </div>
           </div> : null}
           </dialog> : null}

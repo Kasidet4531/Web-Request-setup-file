@@ -28,12 +28,14 @@ export interface StatusCatalogEntry {
   kind: StatusKind;
   requestCount: number | null;
   emailPolicy: StatusEmailPolicy;
+  psfAccessTrigger?: boolean;
 }
 
 export interface WorkflowConfiguration {
   statuses: string[];
   entries: StatusCatalogEntry[];
   psfVisibilityTriggerId: string | null;
+  psfVisibilityTriggerIds?: string[];
   updatedAt: string;
 }
 
@@ -55,6 +57,7 @@ export type WorkflowConfigurationOperation =
       id: string;
       name: string;
       emailPolicy?: StatusEmailPolicy;
+      psfAccessTrigger?: boolean;
       expectedUpdatedAt: string;
     }
   | {
@@ -91,7 +94,7 @@ interface StoredStatus {
 
 interface StoredWorkflowConfiguration {
   entries: StoredStatus[];
-  psfVisibilityTriggerId: string | null;
+  psfVisibilityTriggerIds: string[];
 }
 
 interface StatusCountRow {
@@ -292,7 +295,8 @@ export class WorkflowTransitionService implements OnModuleInit {
         kind,
         emailPolicy,
       }));
-      let triggerId = before.psfVisibilityTriggerId;
+      let triggerIds = [...(before.psfVisibilityTriggerIds ?? [])];
+      const releasedRequestIds: string[] = [];
       let requestChanges: Array<{
         id: string;
         fromStatus: string;
@@ -327,6 +331,15 @@ export class WorkflowTransitionService implements OnModuleInit {
           }
           this.assertAvailableName(operation.name, entries, target.id);
           if (operation.emailPolicy) target.emailPolicy = operation.emailPolicy;
+          if (operation.psfAccessTrigger !== undefined) {
+            triggerIds = triggerIds.filter((id) => id !== target.id);
+            if (operation.psfAccessTrigger) {
+              triggerIds.push(target.id);
+              releasedRequestIds.push(
+                ...(await this.releaseExistingRequests(client, target.name)),
+              );
+            }
+          }
           const previousName = target.name;
           target.name = operation.name;
           if (previousName === operation.name) break;
@@ -352,7 +365,19 @@ export class WorkflowTransitionService implements OnModuleInit {
               );
             }
           }
-          triggerId = operation.psfVisibilityTriggerId;
+          triggerIds =
+            operation.psfVisibilityTriggerId === null
+              ? []
+              : [operation.psfVisibilityTriggerId];
+          if (operation.psfVisibilityTriggerId !== null) {
+            const trigger = this.requireEntry(
+              entries,
+              operation.psfVisibilityTriggerId,
+            );
+            releasedRequestIds.push(
+              ...(await this.releaseExistingRequests(client, trigger.name)),
+            );
+          }
           break;
         }
         case 'delete': {
@@ -369,16 +394,15 @@ export class WorkflowTransitionService implements OnModuleInit {
               'A different non-Draft replacement status is required.',
             );
           }
-          if (triggerId === target.id) {
-            if (!Object.hasOwn(operation, 'replacementTriggerId')) {
-              throw new BadRequestException(
-                'Deleting the configured trigger requires an explicit replacementTriggerId.',
-              );
-            }
-            if (operation.replacementTriggerId !== null) {
+          if (triggerIds.includes(target.id)) {
+            triggerIds = triggerIds.filter((id) => id !== target.id);
+            if (
+              operation.replacementTriggerId !== undefined &&
+              operation.replacementTriggerId !== null
+            ) {
               const replacementTrigger = this.requireEntry(
                 entries,
-                operation.replacementTriggerId as string,
+                operation.replacementTriggerId,
               );
               if (
                 replacementTrigger.kind === 'draft' ||
@@ -388,8 +412,15 @@ export class WorkflowTransitionService implements OnModuleInit {
                   'The replacement trigger must be a surviving work status or null.',
                 );
               }
+              if (!triggerIds.includes(replacementTrigger.id))
+                triggerIds.push(replacementTrigger.id);
+              releasedRequestIds.push(
+                ...(await this.releaseExistingRequests(
+                  client,
+                  replacementTrigger.name,
+                )),
+              );
             }
-            triggerId = operation.replacementTriggerId as string | null;
           } else if (Object.hasOwn(operation, 'replacementTriggerId')) {
             throw new BadRequestException(
               'replacementTriggerId is only valid when deleting the configured trigger.',
@@ -413,7 +444,7 @@ export class WorkflowTransitionService implements OnModuleInit {
             );
           }
           if (replacement && usedRequests.rows.length > 0) {
-            const entersTrigger = replacement.id === triggerId;
+            const entersTrigger = triggerIds.includes(replacement.id);
             if (entersTrigger) {
               usedRequests.rows.forEach((request) =>
                 assertValidRequiredFormData(
@@ -501,7 +532,9 @@ export class WorkflowTransitionService implements OnModuleInit {
 
       const after: StoredWorkflowConfiguration = {
         entries,
-        psfVisibilityTriggerId: triggerId,
+        psfVisibilityTriggerIds: entries
+          .filter((entry) => triggerIds.includes(entry.id))
+          .map((entry) => entry.id),
       };
       await this.persistConfiguration(
         client,
@@ -518,12 +551,72 @@ export class WorkflowTransitionService implements OnModuleInit {
             before: this.toAuditConfiguration(before),
             after: this.toAuditConfiguration(after),
             affectedRequestCount: requestChanges.length,
+            ...(releasedRequestIds.length
+              ? {
+                  releasedRequestCount: releasedRequestIds.length,
+                  releasedRequestIds,
+                }
+              : {}),
           },
         },
         client,
       );
       return this.readConfiguration(client, true);
     });
+  }
+
+  private async releaseExistingRequests(
+    client: PoolClient,
+    status: string,
+  ): Promise<string[]> {
+    const requests = await client.query<ReplacementRequestRow>(
+      `
+      SELECT id, request_no, status, psf_created_data_json, psf_created_schema_snapshot_json
+      FROM psf_requests
+      WHERE status = $1 AND psf_released_at IS NULL
+      ORDER BY id
+      FOR UPDATE
+    `,
+      [status],
+    );
+    const invalid: string[] = [];
+    for (const request of requests.rows) {
+      try {
+        assertValidRequiredFormData(
+          resolvePsfCreatedInformationSchema(
+            request.psf_created_schema_snapshot_json,
+          ),
+          request.psf_created_data_json ?? {},
+          'PSF Created Information',
+        );
+      } catch (error) {
+        invalid.push(
+          `${request.request_no}: ${error instanceof Error ? error.message : 'Invalid PSF Created Information'}`,
+        );
+      }
+    }
+    if (invalid.length)
+      throw new BadRequestException(
+        `Cannot release PSF access. Fix these requests: ${invalid.join('; ')}`,
+      );
+    const ids = requests.rows.map((request) => request.id);
+    if (ids.length === 0) return [];
+    await client.query(
+      `
+      UPDATE psf_requests SET psf_released_at = NOW(), updated_at = NOW()
+      WHERE id = ANY($1::uuid[]) AND psf_released_at IS NULL
+    `,
+      [ids],
+    );
+    await client.query(
+      `
+      UPDATE psf_request_search_index AS search_entry SET updated_at = request.updated_at
+      FROM psf_requests AS request
+      WHERE search_entry.request_id = request.id AND request.id = ANY($1::uuid[])
+    `,
+      [ids],
+    );
+    return ids;
   }
 
   private async readConfiguration(
@@ -562,12 +655,17 @@ export class WorkflowTransitionService implements OnModuleInit {
         .map((entry) => entry.name),
       entries: stored.entries.map((entry) => ({
         ...entry,
+        psfAccessTrigger: stored.psfVisibilityTriggerIds.includes(entry.id),
         requestCount:
           entry.kind === 'draft' || !includeCounts
             ? null
             : (counts.get(entry.name) ?? 0),
       })),
-      psfVisibilityTriggerId: stored.psfVisibilityTriggerId,
+      psfVisibilityTriggerIds: stored.psfVisibilityTriggerIds,
+      psfVisibilityTriggerId:
+        stored.psfVisibilityTriggerIds.length === 1
+          ? stored.psfVisibilityTriggerIds[0]
+          : null,
       updatedAt: row.updated_at_version,
     };
   }
@@ -607,19 +705,29 @@ export class WorkflowTransitionService implements OnModuleInit {
       return { id: entry.id, name: entry.name, kind: entry.kind, emailPolicy };
     });
     this.assertCatalogInvariants(entries);
-    const triggerId = input.psfVisibilityTriggerId;
+    const triggerIds = Object.hasOwn(input, 'psfVisibilityTriggerIds')
+      ? input.psfVisibilityTriggerIds
+      : input.psfVisibilityTriggerId === null
+        ? []
+        : [input.psfVisibilityTriggerId];
     if (
-      triggerId !== null &&
-      (typeof triggerId !== 'string' ||
-        !entries.some(
-          (entry) => entry.id === triggerId && entry.kind !== 'draft',
-        ))
+      !Array.isArray(triggerIds) ||
+      triggerIds.some(
+        (id: unknown) =>
+          typeof id !== 'string' ||
+          !entries.some((entry) => entry.id === id && entry.kind !== 'draft'),
+      )
     ) {
       throw new ConflictException(
         'The stored PSF visibility trigger is invalid.',
       );
     }
-    return { entries, psfVisibilityTriggerId: triggerId };
+    return {
+      entries,
+      psfVisibilityTriggerIds: entries
+        .filter((entry) => triggerIds.includes(entry.id))
+        .map((entry) => entry.id),
+    };
   }
 
   private parseOperation(input: unknown): WorkflowConfigurationOperation {
@@ -683,6 +791,7 @@ export class WorkflowTransitionService implements OnModuleInit {
           'id',
           'name',
           'emailPolicy',
+          'psfAccessTrigger',
           'expectedUpdatedAt',
         ]);
         if (
@@ -695,6 +804,12 @@ export class WorkflowTransitionService implements OnModuleInit {
           );
         }
         this.assertValidName(input.name);
+        if (
+          Object.hasOwn(input, 'psfAccessTrigger') &&
+          typeof input.psfAccessTrigger !== 'boolean'
+        ) {
+          throw new BadRequestException('psfAccessTrigger must be a boolean.');
+        }
         return {
           action,
           id: input.id,
@@ -702,6 +817,9 @@ export class WorkflowTransitionService implements OnModuleInit {
           expectedUpdatedAt,
           ...(Object.hasOwn(input, 'emailPolicy')
             ? { emailPolicy: this.normalizeEmailPolicy(input.emailPolicy) }
+            : {}),
+          ...(Object.hasOwn(input, 'psfAccessTrigger')
+            ? { psfAccessTrigger: input.psfAccessTrigger as boolean }
             : {}),
         };
       case 'delete':
@@ -1017,6 +1135,9 @@ export class WorkflowTransitionService implements OnModuleInit {
           ...(operation.emailPolicy
             ? { emailPolicy: operation.emailPolicy }
             : {}),
+          ...(operation.psfAccessTrigger !== undefined
+            ? { psfAccessTrigger: operation.psfAccessTrigger }
+            : {}),
         };
       case 'delete':
         return {
@@ -1047,7 +1168,7 @@ export class WorkflowTransitionService implements OnModuleInit {
         kind,
         emailPolicy,
       })),
-      psfVisibilityTriggerId: value.psfVisibilityTriggerId,
+      psfVisibilityTriggerIds: value.psfVisibilityTriggerIds ?? [],
     };
   }
 }

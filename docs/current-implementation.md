@@ -94,7 +94,7 @@ Sources: [schema constants](../backend/src/admin/form_schema.constants.ts),
 Status Management uses immutable catalog identities, verbatim names and
 `draft`/`open`/`completed`/`cancelled` kinds. The seed has 17 entries, including
 Draft; actual configured entries are database state and may differ. The 4 October read-only inspection confirmed 17 configured entries, all stored request Status values in that catalog, and a maximum label length of 71 characters; see [the exact snapshot and current interaction constraints](status-catalog-and-manual-updates.md). Admin can
-create, rename, delete with replacement and configure the PSF release trigger.
+create, edit names/email/PSF access in one modal, delete with replacement and configure multiple PSF access triggers.
 Percentages in labels are display text. There is no directed transition matrix:
 the configured non-Draft statuses other than the current status are offered.
 Form saves and autofill do not advance Status automatically. There are no preset named-stage action requirements. Draft submission selects a work status explicitly; normal status updates cannot
@@ -105,9 +105,9 @@ Sources: [catalog](../backend/src/admin/workflow_transition.service.ts),
 [request mutations](../backend/src/requests/requests.service.ts).
 
 Requester visibility of PSF data depends on persistent `psf_released_at`, not
-hardcoded `PSF Created`/`Completed` labels. The initial release trigger is null.
-Successful entry into the configured trigger validates PSF requirements and sets
-release once. Backtracking or changing the trigger does not revoke release.
+hardcoded `PSF Created`/`Completed` labels. Initially no statuses are triggers.
+Successful entry into any configured trigger validates PSF requirements and sets
+release once. Saving a checked trigger in Edit status also releases unreleased requests already at that status, after validating every candidate against its captured PSF schema. One invalid request rejects the whole combined save; catalog, request and search changes roll back together. Released requests are skipped and retain their timestamp. Backtracking, unchecking or deleting a trigger does not revoke release; a replacement status uses its own trigger flag. Legacy single-trigger configuration is preserved when read and converted to a trigger-ID list on writes.
 Setup File Owners/Admin bypass this release check on requests they can access.
 Unreleased requester PSF values are masked in detail/export and PSF update events
 are omitted from their per-request history.

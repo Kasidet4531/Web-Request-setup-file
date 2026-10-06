@@ -21,6 +21,26 @@ describe('Status Management page', () => {
     expect(html).toContain('<h1>Status Management</h1>')
   })
 
+  it('shows multiple PSF triggers in the catalog and protects Draft', () => {
+    hookState.configuration = {
+      statuses: ['First work', 'Second work', 'Other work'],
+      entries: [
+        { id: 'draft', name: 'Draft', kind: 'draft', requestCount: null },
+        { id: 'first', name: 'First work', kind: 'open', requestCount: 2 },
+        { id: 'second', name: 'Second work', kind: 'completed', requestCount: 1 },
+        { id: 'other', name: 'Other work', kind: 'open', requestCount: 0 },
+      ],
+      psfVisibilityTriggerIds: ['draft', 'first', 'second'],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-02T00:00:00.123456Z',
+    }
+    const html = renderToStaticMarkup(createElement(AdminWorkflowTransitionPage))
+    expect(html).toContain('<th scope="col">PSF access trigger</th>')
+    expect(html.match(/<td>Trigger<\/td>/g)).toHaveLength(2)
+    expect(html).not.toContain('Requester PSF visibility trigger')
+    expect(html).not.toContain('Trigger status')
+  })
+
   it('labels the status type and displays Cancel without changing its API value', () => {
     hookState.configuration = {
       statuses: ['Draft', 'Canceled request'],

@@ -25,6 +25,15 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 })
 
 describe('History route', () => {
+  it('shows multiple PSF trigger names and the retrospective release count', () => {
+    const html = renderToStaticMarkup(<HistoryChanges metadata={{
+      operation: { action: 'rename', name: 'Work' }, releasedRequestCount: 2,
+      before: { entries: [{ id: 'first', name: 'Work', kind: 'open' }, { id: 'second', name: 'Review', kind: 'open' }], psfVisibilityTriggerIds: ['first'] },
+      after: { entries: [{ id: 'first', name: 'Work', kind: 'open' }, { id: 'second', name: 'Review', kind: 'open' }], psfVisibilityTriggerIds: ['first', 'second'] },
+    }} />)
+    expect(html).toContain('PSF visibility triggers: Work, Review')
+    expect(html).toContain('Requester PSF access released for 2 request(s).')
+  })
   it('uses Asia/Bangkok independently of the host timezone and preserves invalid timestamp fallback', () => {
     vi.stubEnv('TZ', 'UTC')
     try {

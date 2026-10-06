@@ -341,7 +341,7 @@ export async function startEmailSystem() {
   }
 }
 
-export async function loginPage(system, t) {
+export async function loginPage(system, t, expectedHttpErrors = []) {
   const context = await system.browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
@@ -356,7 +356,13 @@ export async function loginPage(system, t) {
       !authenticated &&
       message.location().url === `${system.origin}/api/me` &&
       message.text().includes('401');
-    if (!expectedAnonymousCheck) errors.push(message.text());
+    const expectedIndex = expectedHttpErrors.findIndex(
+      (error) =>
+        message.location().url === `${system.origin}/api${error.path}` &&
+        new RegExp(`\\b${error.status}\\b`).test(message.text()),
+    );
+    if (expectedIndex >= 0) expectedHttpErrors.splice(expectedIndex, 1);
+    else if (!expectedAnonymousCheck) errors.push(message.text());
   });
   t.after(() => {
     assert.deepEqual(errors, [], 'Browser has no app runtime errors');
