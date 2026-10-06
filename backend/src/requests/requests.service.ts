@@ -399,8 +399,11 @@ export class RequestsService implements OnModuleInit {
     before: AssignmentSnapshot,
     after: AssignmentSnapshot,
   ): boolean {
+    if (before.setupOwnerUserId !== after.setupOwnerUserId) return false;
+    // The person identifies an assignment; profile changes never refresh its snapshots.
+    if (before.setupOwnerUserId !== null) return true;
+    // Legacy null-UUID ownership must still clear its stored name and department.
     return (
-      before.setupOwnerUserId === after.setupOwnerUserId &&
       before.setupOwner === after.setupOwner &&
       before.setupOwnerRole === after.setupOwnerRole
     );
@@ -642,10 +645,16 @@ export class RequestsService implements OnModuleInit {
         );
       }
       const beforeAssignment = this.assignmentSnapshot(request);
-      const assignment =
+      const candidateAssignment =
         dto.setupOwnerUserId === undefined
           ? beforeAssignment
           : await this.resolveAssignment(dto.setupOwnerUserId, client);
+      const assignment = this.sameAssignment(
+        beforeAssignment,
+        candidateAssignment,
+      )
+        ? beforeAssignment
+        : candidateAssignment;
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
       const requesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(

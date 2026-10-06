@@ -210,6 +210,115 @@ void describe('atomic assignment on disposable loopback PostgreSQL', () => {
     assert.equal(edited.setupOwnerRole, 'GNTC');
   });
 
+  // Catches a validated same UUID refreshing historical display snapshots and writing projections/history.
+  void it('same owner UUID after profile rename and department change is an exact persisted no-op', async () => {
+    const before = await fixture.submit(await fixture.draft(ownerA.id));
+    const index = (
+      await pool.query(
+        'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+        [before.id],
+      )
+    ).rows;
+    const history = await fixture.service.getRequestHistory(
+      before.id,
+      requester,
+    );
+    await pool.query(
+      "UPDATE app_users SET display_name='Renamed Owner',setup_owner_department='MFG' WHERE id=$1",
+      [ownerA.id],
+    );
+    const after = await fixture.service.updateAssignment(
+      before.id,
+      { setupOwnerUserId: ownerA.id, expectedUpdatedAt: before.updatedAt },
+      requester,
+    );
+    assert.deepEqual(after, before);
+    assert.deepEqual(
+      await fixture.service.getRequest(before.id, requester),
+      before,
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+          [before.id],
+        )
+      ).rows,
+      index,
+    );
+    assert.deepEqual(
+      await fixture.service.getRequestHistory(before.id, requester),
+      history,
+    );
+  });
+
+  void it('legacy null UUID ownership is cleared explicitly and repeated Unassigned is an exact no-op', async () => {
+    const submitted = await fixture.submit(await fixture.draft());
+    await pool.query(
+      "UPDATE psf_requests SET setup_owner='Legacy owner',setup_owner_role='GNTC' WHERE id=$1",
+      [submitted.id],
+    );
+    await pool.query(
+      "UPDATE psf_request_search_index SET setup_owner='Legacy owner',setup_owner_role='GNTC' WHERE request_id=$1",
+      [submitted.id],
+    );
+    const before = await fixture.service.getRequest(submitted.id, requester);
+    const after = await fixture.service.updateAssignment(
+      before.id,
+      { setupOwnerUserId: null, expectedUpdatedAt: before.updatedAt },
+      requester,
+    );
+    assert.equal(after.setupOwnerUserId, null);
+    assert.equal(after.setupOwner, null);
+    assert.equal(after.setupOwnerRole, null);
+    assert.notEqual(after.updatedAt, before.updatedAt);
+    const history = await fixture.service.getRequestHistory(
+      before.id,
+      requester,
+    );
+    const changes = history.filter(
+      (entry) => entry.actionType === 'REQUEST_ASSIGNEE_CHANGED',
+    );
+    assert.equal(changes.length, 1);
+    assert.deepEqual(changes[0].metadata, {
+      before: {
+        setupOwnerUserId: null,
+        setupOwner: 'Legacy owner',
+        setupOwnerRole: 'GNTC',
+      },
+      after: { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null },
+    });
+    const index = (
+      await pool.query<{
+        setup_owner: string | null;
+        setup_owner_role: string | null;
+      }>('SELECT * FROM psf_request_search_index WHERE request_id=$1', [
+        before.id,
+      ])
+    ).rows;
+    assert.equal(index[0].setup_owner, null);
+    assert.equal(index[0].setup_owner_role, null);
+    const repeated = await fixture.service.updateAssignment(
+      before.id,
+      { setupOwnerUserId: null, expectedUpdatedAt: after.updatedAt },
+      requester,
+    );
+    assert.deepEqual(repeated, after);
+    assert.deepEqual(
+      await fixture.service.getRequestHistory(before.id, requester),
+      history,
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+          [before.id],
+        )
+      ).rows,
+      index,
+    );
+  });
+
   // Catches missing serialization/revision recheck after acquiring the request lock.
   void it('concurrent assignments with one revision produce one winner and one conflict', async () => {
     const row = await fixture.submit(await fixture.draft());

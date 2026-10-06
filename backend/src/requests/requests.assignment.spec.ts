@@ -284,6 +284,159 @@ describe('explicit request assignment', () => {
       ).rows,
     ).toEqual(indexBefore);
   });
+  // Catches turning a same-person selection into a historical snapshot refresh.
+  it.each(['Draft', 'Submitted'])(
+    'same UUID preserves snapshots, revision, index and history after profile changes: %s',
+    async (status) => {
+      const draft = await fixture.draft(ownerA.id);
+      const before = status === 'Draft' ? draft : await fixture.submit(draft);
+      const history = await fixture.service.getRequestHistory(
+        before.id,
+        requester,
+      );
+      const index = (
+        await fixture.pool.query(
+          'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+          [before.id],
+        )
+      ).rows;
+      await fixture.pool.query(
+        "UPDATE app_users SET display_name='Renamed Owner',setup_owner_department='MFG' WHERE id=$1",
+        [ownerA.id],
+      );
+      const after = await fixture.service.updateAssignment(
+        before.id,
+        { setupOwnerUserId: ownerA.id, expectedUpdatedAt: before.updatedAt },
+        requester,
+      );
+      expect(after).toMatchObject({
+        setupOwnerUserId: ownerA.id,
+        setupOwner: 'Same Name',
+        setupOwnerRole: 'GNTC',
+        updatedAt: before.updatedAt,
+      });
+      expect(await fixture.service.getRequest(before.id, requester)).toEqual(
+        before,
+      );
+      expect(
+        await fixture.service.getRequestHistory(before.id, requester),
+      ).toEqual(history);
+      expect(
+        (
+          await fixture.pool.query(
+            'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+            [before.id],
+          )
+        ).rows,
+      ).toEqual(index);
+    },
+  );
+
+  it('Draft data saves with the same UUID preserve historical ownership snapshots', async () => {
+    const before = await fixture.draft(ownerA.id);
+    await fixture.pool.query(
+      "UPDATE app_users SET display_name='Renamed Owner',setup_owner_department='MFG' WHERE id=$1",
+      [ownerA.id],
+    );
+    const after = await fixture.service.updateDraftRequesterData(
+      before.id,
+      {
+        formVersion: 1,
+        setupOwnerUserId: ownerA.id,
+        expectedUpdatedAt: before.updatedAt,
+        requesterData: { title: 'Updated title' },
+      },
+      requester,
+    );
+    expect(after).toMatchObject({
+      setupOwnerUserId: ownerA.id,
+      setupOwner: 'Same Name',
+      setupOwnerRole: 'GNTC',
+      requesterData: { title: 'Updated title' },
+    });
+    expect(
+      (await fixture.service.getRequestHistory(before.id, requester)).filter(
+        (entry) => entry.actionType === 'REQUEST_ASSIGNEE_CHANGED',
+      ),
+    ).toEqual([]);
+  });
+
+  it('explicit null clears legacy name and department even when the owner UUID is already null', async () => {
+    const submitted = await fixture.submit(await fixture.draft());
+    await fixture.pool.query(
+      "UPDATE psf_requests SET setup_owner='Legacy owner',setup_owner_role='GNTC' WHERE id=$1",
+      [submitted.id],
+    );
+    await fixture.pool.query(
+      "UPDATE psf_request_search_index SET setup_owner='Legacy owner',setup_owner_role='GNTC' WHERE request_id=$1",
+      [submitted.id],
+    );
+    const before = await fixture.service.getRequest(submitted.id, requester);
+    const after = await fixture.service.updateAssignment(
+      before.id,
+      { setupOwnerUserId: null, expectedUpdatedAt: before.updatedAt },
+      requester,
+    );
+    expect(after).toMatchObject({
+      setupOwnerUserId: null,
+      setupOwner: null,
+      setupOwnerRole: null,
+    });
+    expect(after.updatedAt).not.toBe(before.updatedAt);
+    const history = await fixture.service.getRequestHistory(
+      before.id,
+      requester,
+    );
+    expect(
+      history.filter(
+        (entry) => entry.actionType === 'REQUEST_ASSIGNEE_CHANGED',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        metadata: {
+          before: {
+            setupOwnerUserId: null,
+            setupOwner: 'Legacy owner',
+            setupOwnerRole: 'GNTC',
+          },
+          after: {
+            setupOwnerUserId: null,
+            setupOwner: null,
+            setupOwnerRole: null,
+          },
+        },
+      }),
+    ]);
+    const index = (
+      await fixture.pool.query(
+        'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+        [before.id],
+      )
+    ).rows;
+    expect(index[0]).toMatchObject({
+      setup_owner_user_id: null,
+      setup_owner: null,
+      setup_owner_role: null,
+    });
+    const repeated = await fixture.service.updateAssignment(
+      before.id,
+      { setupOwnerUserId: null, expectedUpdatedAt: after.updatedAt },
+      requester,
+    );
+    expect(repeated).toEqual(after);
+    expect(
+      await fixture.service.getRequestHistory(before.id, requester),
+    ).toEqual(history);
+    expect(
+      (
+        await fixture.pool.query(
+          'SELECT * FROM psf_request_search_index WHERE request_id=$1',
+          [before.id],
+        )
+      ).rows,
+    ).toEqual(index);
+  });
+
   // Catches trusting UUID strings or any user instead of stored eligible profiles.
   it.each([
     'bad-uuid',
