@@ -16,12 +16,20 @@ export function AdminFormConfigPreview({ schema }: { schema: FormSchema | null }
   if (preview.key !== schemaKey) setPreview(current)
   if (!schema) return null
 
+  const fields = schema.sections.flatMap((section) => section.fields)
   const identityKeys = schema.formKey === 'psf-request'
-    ? schema.sections.flatMap((section) => section.fields)
+    ? fields
       .filter((field) => field.canonicalKey === 'requester' || field.canonicalKey === 'requester_name')
       .map((field) => field.fieldKey)
     : []
   const values = { ...current.values }
+  const removedChoices = fields.filter((field) =>
+    (field.type === 'select' || field.type === 'radio') &&
+    !identityKeys.includes(field.fieldKey) && values[field.fieldKey] &&
+    !field.options?.includes(values[field.fieldKey]),
+  )
+  for (const field of removedChoices) values[field.fieldKey] = ''
+  if (removedChoices.length > 0) setPreview({ ...current, values: { ...values } })
   for (const fieldKey of identityKeys) values[fieldKey] = 'Sample requester (preview only)'
   const errors = current.checked ? validateRequiredFields(schema, values) : {}
   const familyLabel = schema.formKey === 'psf-request' ? 'Requester Information' : 'PSF Created Information'

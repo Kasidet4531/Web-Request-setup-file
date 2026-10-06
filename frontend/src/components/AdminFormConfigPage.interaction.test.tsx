@@ -1109,6 +1109,61 @@ describe('interactive admin form preview', () => {
     expect(preview.values?.product).toBe('Trial product')
     expect(preview.readOnlyFieldKeys).toEqual(['identity', 'option'])
   })
+  it.each(['select', 'radio'] as const)('clears removed %s choices so required validation matches the visible control', (type) => {
+    const schema: FormSchema = { formKey: 'psf-created-information', version: 7, title: 'Trial choices', sections: [{
+      sectionKey: 'inputs', title: 'Inputs', fields: [
+        { fieldKey: 'product', canonicalKey: 'product', label: 'Product', type: 'text', required: true },
+        { fieldKey: 'choice', canonicalKey: 'choice', label: 'Choice', type, required: true, options: ['A', 'B'] },
+      ],
+    }] }
+    let preview = renderTrial(schema)
+    preview.onChange?.('product', 'Keep this text')
+    preview.onChange?.('choice', 'B')
+    preview = renderTrial(schema)
+    preview.onSubmit?.(preview.values ?? {})
+    expect(renderTrial(schema).errors).toEqual({})
+
+    const edited: FormSchema = { ...schema, sections: [{ ...schema.sections[0], fields: [
+      schema.sections[0].fields[0], { ...schema.sections[0].fields[1], label: 'Edited choice', options: ['A'] },
+    ] }] }
+    preview = renderTrial(edited)
+    expect(preview.values?.choice).toBe('')
+    expect(preview.values?.product).toBe('Keep this text')
+    preview.onSubmit?.(preview.values ?? {})
+    preview = renderTrial(edited)
+    expect(preview.errors).toEqual({ choice: 'Edited choice is required.' })
+    const html = trialMarkup(preview)
+    expect(html).toContain('aria-invalid="true"')
+    expect(html).not.toContain('checked=""')
+    if (type === 'select') expect(html).toContain('<option value="" selected="">')
+    formConfigHookHarness.beginRender()
+    const page = AdminFormConfigPreview({ schema: edited })
+    expect(findRenderedElement(page, (element) => element.props.role === 'status' && element.props.children === 'All required fields are complete.')).toBeNull()
+    // Restoring an option must not resurrect an invalidated trial selection.
+    expect(renderTrial(schema).values?.choice).toBe('')
+  })
+
+  it.each(['select', 'radio'] as const)('retains compatible %s selection when labels change and options are added', (type) => {
+    const schema: FormSchema = { formKey: 'psf-created-information', version: 7, title: 'Trial choices', sections: [{
+      sectionKey: 'inputs', title: 'Inputs', fields: [
+        { fieldKey: 'choice', canonicalKey: 'choice', label: 'Choice', type, required: true, options: ['A', 'B'] },
+      ],
+    }] }
+    renderTrial(schema).onChange?.('choice', 'B')
+    const edited: FormSchema = { ...schema, sections: [{ ...schema.sections[0], fields: [
+      { ...schema.sections[0].fields[0], label: 'Edited choice', options: ['A', 'B', 'C'] },
+    ] }] }
+    let preview = renderTrial(edited)
+    expect(preview.values?.choice).toBe('B')
+    preview.onSubmit?.(preview.values ?? {})
+    preview = renderTrial(edited)
+    expect(preview.errors).toEqual({})
+    const html = trialMarkup(preview)
+    expect(html).toContain('Edited choice')
+    expect(html).toContain(type === 'select' ? '<option value="B" selected="">B</option>' : 'checked="" value="B"')
+    expect(html).not.toContain('aria-invalid="true"')
+  })
+
   it('preserves trial values during unsaved label and options edits but resets on version or family change', () => {
     renderTrial().onChange?.('product', 'Entered locally')
     const edited = { ...trialSchema, sections: [{ ...trialSchema.sections[0], fields: trialSchema.sections[0].fields.map((field) => field.fieldKey === 'product' ? { ...field, label: 'Unsaved product' } : field.fieldKey === 'option' ? { ...field, options: ['Unsaved option'] } : field) }] }
