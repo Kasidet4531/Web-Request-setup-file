@@ -9,11 +9,21 @@ export function StatusLabel({ status, kind = 'neutral', compact = false }: { sta
   const id = useId()
   const trigger = useRef<HTMLButtonElement>(null)
   const disclosure = useRef<HTMLSpanElement>(null)
+  const textRef = useRef<HTMLSpanElement>(null)
   const pinned = useRef(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cancelHide = () => { if (hideTimer.current) clearTimeout(hideTimer.current) }
+  const isTruncated = () => {
+    const text = textRef.current
+    if (!text) return false
+    return text.scrollWidth > text.clientWidth
+  }
   const show = () => {
     cancelHide()
+    if (!isTruncated()) {
+      pinned.current = false
+      return
+    }
     const button = trigger.current
     const panel = disclosure.current
     if (!button || !panel) return
@@ -35,7 +45,7 @@ export function StatusLabel({ status, kind = 'neutral', compact = false }: { sta
       className="ui-status__trigger" onMouseEnter={show} onMouseLeave={scheduleHide} onFocus={show}
       onBlur={() => { if (!pinned.current) disclosure.current?.hidePopover() }}
       onClick={(event) => { event.stopPropagation(); pinned.current = true; show() }}>
-      <Icon aria-hidden="true" size={14} strokeWidth={1.75} /><span className="ui-status__text">{status}</span>
+      <Icon aria-hidden="true" size={14} strokeWidth={1.75} /><span ref={textRef} className="ui-status__text">{status}</span>
     </button>
     <span ref={disclosure} id={id} popover="auto" role="tooltip" className="ui-status__disclosure"
       onMouseEnter={cancelHide} onMouseLeave={scheduleHide} onClick={(event) => event.stopPropagation()}
