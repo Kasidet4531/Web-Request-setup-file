@@ -969,4 +969,13 @@ describe('createApiClient', () => {
       method: 'POST',
     }))
   })
+  it('fetches the safe assignee directory and updates assignment with an encoded id and revision', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+    const client = createApiClient()
+    await expect(client.fetchRequestAssignees()).resolves.toEqual({ items: [] })
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/assignees', expect.objectContaining({ method: 'GET', credentials: 'include' }))
+    await client.updatePsfRequestAssignment('request /1', { setupOwnerUserId: null, expectedUpdatedAt: 'r2' })
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/request%20%2F1/assignment', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ setupOwnerUserId: null, expectedUpdatedAt: 'r2' }) }))
+  })
+
 })

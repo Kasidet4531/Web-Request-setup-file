@@ -41,6 +41,7 @@ describe('Request list rows', () => {
       status: 'Submitted',
       priority: 'High',
       requester: 'Requester',
+      setupOwnerUserId: null,
       setupOwner: 'Owner',
       setupOwnerRole: 'GNTC',
       productType: 'Existing Product',

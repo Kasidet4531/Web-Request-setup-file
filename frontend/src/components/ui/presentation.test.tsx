@@ -1,3 +1,4 @@
+import { HistoryChanges } from './HistoryChanges'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { AsyncNotice } from './AsyncNotice'
@@ -22,4 +23,13 @@ describe('accessible presentation boundaries', () => {
     expect(markup).toContain('aria-labelledby=')
     expect(markup).toContain('Discard draft?')
   })
+})
+
+
+it('renders assignment before/after snapshots as Owner / Dept without exposing raw UUID metadata', () => {
+  const markup = renderToStaticMarkup(<HistoryChanges metadata={{ before: { setupOwnerUserId: 'owner-1', setupOwner: 'Same name', setupOwnerRole: 'GNTC' }, after: { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null } }} />)
+  expect(markup).toContain('Owner / Dept')
+  expect(markup).toContain('Same name / GNTC')
+  expect(markup).toContain('Unassigned')
+  expect(markup).not.toContain('owner-1')
 })

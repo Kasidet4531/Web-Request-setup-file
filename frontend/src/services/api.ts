@@ -85,7 +85,19 @@ function adminFormConfigPath(path: string, formKey?: FormKey): string {
   return formKey === 'psf-created-information' ? buildQueryPath(path, { formKey }) : path
 }
 
+export interface AssignableSetupOwner {
+  id: string
+  displayName: string
+  setupOwnerDepartment: SetupOwnerDepartment
+}
+
+export interface UpdateRequestAssignmentPayload {
+  setupOwnerUserId: string | null
+  expectedUpdatedAt: string
+}
+
 export interface PsfRequestPayload {
+  setupOwnerUserId?: string | null
   requester?: string
   requesterData: DynamicFormValues
 }
@@ -130,7 +142,7 @@ export type WorkflowConfigurationOperation =
 
 export interface PsfRequestQuery {
   scope?: 'all' | 'related' | 'my-drafts'
-  relation?: 'all' | 'created' | 'department'
+  relation?: 'all' | 'created' | 'assigned' | 'department'
   workState?: 'all' | 'open' | 'overdue' | 'completed'
   keyword?: string
   status?: string
@@ -157,6 +169,7 @@ export interface PsfRequestListItem {
   status: string
   priority: string | null
   requester: string | null
+  setupOwnerUserId: string | null
   setupOwner: string | null
   setupOwnerRole: string | null
   productType: string | null
@@ -265,6 +278,7 @@ export interface PsfRequestResponse {
   formVersion: number
   status: string
   requester: string | null
+  setupOwnerUserId: string | null
   setupOwner: string | null
   setupOwnerRole: string | null
   productType: string | null
@@ -290,6 +304,7 @@ export type PsfRequestHistoryAction =
   | 'DRAFT_REQUESTER_DATA_UPDATED'
   | 'REQUEST_SUBMITTED'
   | 'REQUEST_STATUS_CHANGED'
+  | 'REQUEST_ASSIGNEE_CHANGED'
   | 'REQUESTER_INFORMATION_UPDATED'
   | 'PSF_CREATED_INFORMATION_UPDATED'
   | 'WORKFLOW_CATALOG_UPDATED'
@@ -461,6 +476,9 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',
       }),
+    fetchRequestAssignees: () => request<{ items: AssignableSetupOwner[] }>('/requests/assignees', { method: 'GET' }),
+    updatePsfRequestAssignment: (requestId: string, payload: UpdateRequestAssignmentPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/assignment`, { method: 'PUT', body: payload }),
     createDraftRequest: (payload: PsfRequestPayload) =>
       request<PsfRequestResponse>('/requests', {
         body: payload,

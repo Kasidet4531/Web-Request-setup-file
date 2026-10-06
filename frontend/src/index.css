@@ -714,3 +714,9 @@ dialog::backdrop { background: #10182066; }
 .detail-editors .active-schema-form__identity h2,
 .detail-editors .psf-created-panel__header h2 { font-size: 16px; }
 .detail-editors .dynamic-form__readonly { font-weight: 400; }
+
+.request-assignee-picker { display: grid; gap: var(--space-2, 0.5rem); max-width: 32rem; margin-block: 1rem; }
+.request-assignee-picker label { font-weight: 600; }
+.request-assignee-picker input, .request-assignee-picker select { width: 100%; min-width: 0; }
+.request-assignment-dialog { width: min(32rem, calc(100vw - 2rem)); }
+.detail-assignment-action { display: flex; justify-content: flex-end; margin-block: 0.5rem 1rem; }

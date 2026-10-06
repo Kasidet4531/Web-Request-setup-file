@@ -245,3 +245,13 @@ describe('GlobalAuditLogTable', () => {
     expect(html.indexOf('PSF-0002')).toBeLessThan(html.indexOf('PSF-0001'))
   })
 })
+
+
+it('shows assignment history in the global table and exposes it as an action filter', () => {
+  const table = renderToStaticMarkup(<GlobalAuditLogTable loading={false} error={null} entries={[{ requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUEST_ASSIGNEE_CHANGED', actorDisplayName: 'Requester', actorRole: 'requester', createdAt: '2026-10-06T00:00:00Z', metadata: { before: { setupOwnerUserId: null, setupOwner: 'Legacy owner', setupOwnerRole: 'MFG' }, after: { setupOwnerUserId: 'owner-2', setupOwner: 'Current owner', setupOwnerRole: 'GNTC' } } }]} />)
+  expect(table).toContain('Request assignee changed')
+  expect(table).toContain('Legacy owner / MFG')
+  expect(table).toContain('Current owner / GNTC')
+  const filters = renderToStaticMarkup(<GlobalAuditLogFilters filters={EMPTY_GLOBAL_AUDIT_LOG_FILTERS} onApply={vi.fn()} onChange={vi.fn()} onClear={vi.fn()} />)
+  expect(filters).toContain('value="REQUEST_ASSIGNEE_CHANGED"')
+})

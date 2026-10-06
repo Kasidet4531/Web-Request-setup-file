@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Search,
 } from 'lucide-react'
+import { RequestAssignmentDialog } from './RequestAssignmentDialog'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
@@ -64,6 +65,8 @@ function historyActionSummary(entry: PsfRequestHistoryEntry): string {
       return 'Draft requester information updated'
     case 'REQUEST_SUBMITTED':
       return 'Request submitted'
+    case 'REQUEST_ASSIGNEE_CHANGED':
+      return 'Request assignee changed'
     case 'REQUEST_STATUS_CHANGED': {
       const fromStatus = entry.metadata.fromStatus
       const toStatus = entry.metadata.toStatus
@@ -483,7 +486,7 @@ function useDebouncedQueueText(value: string, resetOffset: () => void): string {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const [relation, setRelation] = useState<'all' | 'created' | 'department'>('all')
+  const [relation, setRelation] = useState<'all' | 'created' | 'assigned' | 'department'>('all')
   const [workState, setWorkState] = useState<'all' | 'open' | 'overdue' | 'completed'>('open')
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('')
@@ -491,6 +494,7 @@ export function DashboardPage() {
   const resetOffset = useCallback(() => setOffset(0), [])
   const debouncedKeyword = useDebouncedQueueText(keyword.trim(), resetOffset)
   const requestGeneration = useRef(0)
+  const dashboardIdentity = useRef<string | null>(null)
   const queryKey = JSON.stringify([debouncedKeyword, offset, relation, status, workState])
   const [catalog, setCatalog] = useState<AsyncState<string[]>>({ loading: true, error: null, data: [] })
   const [catalogRetry, setCatalogRetry] = useState(0)
@@ -528,17 +532,28 @@ export function DashboardPage() {
         setState((current) => current.data.user && (current.data.user.id !== user.id || current.data.user.role !== user.role || current.data.user.setupOwnerDepartment !== user.setupOwnerDepartment)
           ? { ...current, data: { ...current.data, user: null, items: [], total: 0, summary: null, queryKey: null } }
           : current)
+        const identity = JSON.stringify([user.id, user.role, user.setupOwnerDepartment])
+        const identityChanged = dashboardIdentity.current !== null && dashboardIdentity.current !== identity
+        dashboardIdentity.current = identity
+        if (identityChanged) {
+          setRelation('all')
+          setKeyword('')
+          setStatus('')
+          setWorkState('open')
+          setOffset(0)
+        }
+        const nextQueryKey = identityChanged ? JSON.stringify(['', 0, 'all', '', 'open']) : queryKey
         const response = await api.queryPsfRequests({
           scope: 'related',
-          relation: user?.role === 'setup_owner' ? relation : 'all',
-          workState,
-          keyword: debouncedKeyword || undefined,
-          status: status || undefined,
+          relation: user.role === 'setup_owner' && !identityChanged ? relation : 'all',
+          workState: identityChanged ? 'open' : workState,
+          keyword: identityChanged ? undefined : debouncedKeyword || undefined,
+          status: identityChanged ? undefined : status || undefined,
           limit: 25,
-          offset,
+          offset: identityChanged ? 0 : offset,
         })
         const summaryAvailable = response.summary && ['open', 'overdue', 'completed'].every((key) => Number.isFinite(response.summary[key as keyof typeof response.summary]))
-        if (isCurrent()) setState({ loading: false, error: null, data: { user, items: response.items, total: response.total, summary: summaryAvailable ? response.summary : null, summaryError: summaryAvailable ? null : 'Dashboard totals are unavailable from the server.', limit: response.limit, offset: response.offset, queryKey } })
+        if (isCurrent()) setState({ loading: false, error: null, data: { user, items: response.items, total: response.total, summary: summaryAvailable ? response.summary : null, summaryError: summaryAvailable ? null : 'Dashboard totals are unavailable from the server.', limit: response.limit, offset: response.offset, queryKey: nextQueryKey } })
       } catch (error) {
         if (isCurrent()) setState((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : 'Unable to load dashboard requests', errorStatus: error instanceof ApiError ? error.status : undefined, data: { ...current.data, user: null, items: [], total: 0, summary: null, queryKey: null } }))
       }
@@ -568,9 +583,9 @@ export function DashboardPage() {
       <div className="dashboard-workspace">
       <aside className="dashboard-overview" aria-label="Work overview">
         <div className="workspace-section-heading"><h2>Your related work</h2></div>
-      {state.data.user?.role === 'setup_owner' ? <label>Work scope
-        <select aria-label="Work scope" value={relation} onChange={(event) => { setRelation(event.target.value as typeof relation); setOffset(0) }}>
-          <option value="all">Related work</option><option value="created">Created by me</option><option value="department">PSF department work</option>
+      {state.data.user?.role === 'setup_owner' ? <label>Relationship
+        <select aria-label="Relationship" value={relation} onChange={(event) => { setRelation(event.target.value as typeof relation); setOffset(0) }}>
+          <option value="all">Related to me</option><option value="created">Created by me</option><option value="assigned">Assigned to me</option><option value="department">Department work</option>
         </select>
       </label> : null}
       {summary ? <div className="summary-grid dashboard-summary-grid" aria-busy={pending}>
@@ -824,6 +839,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     error: null,
     data: [],
   })
+  const [assignmentOpen, setAssignmentOpen] = useState(false)
+  const [savingAssignment, setSavingAssignment] = useState(false)
   const [requesterDirty, setRequesterDirty] = useState(false)
   const [draftSchemaSubmitAllowed, setDraftSchemaSubmitAllowed] = useState(false)
   const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
@@ -940,7 +957,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       psfCreatedDirty ||
       savingStatus ||
       savingPsfCreatedData ||
-      savingRequesterData
+      savingRequesterData ||
+      savingAssignment
     ) {
       return
     }
@@ -1028,7 +1046,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       !request.canEditPsfCreatedData ||
       savingStatus ||
       savingPsfCreatedData ||
-      savingRequesterData
+      savingRequesterData ||
+      savingAssignment
     ) {
       return
     }
@@ -1068,7 +1087,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     }
   }
 
-  const mutationPending = savingStatus || savingPsfCreatedData || savingRequesterData
+  const mutationPending = savingStatus || savingPsfCreatedData || savingRequesterData || savingAssignment
   const disabledReason = requesterDirty || psfCreatedDirty
     ? `Save ${requesterDirty ? 'requester information' : 'PSF Created Information'} before changing status or submitting.`
     : request?.status === 'Draft' && (!request.canSubmitDraft || !draftSchemaSubmitAllowed)
@@ -1089,6 +1108,11 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       {request ? (
         <>
         <RequestHeaderSummary request={request} kind={statusKinds[request.status]} />
+        <div className="detail-assignment-action"><button type="button" className="btn-secondary" disabled={mutationPending} onClick={() => setAssignmentOpen(true)}>{request.setupOwner ? 'Change owner' : 'Assign owner'}</button></div>
+        {assignmentOpen ? <RequestAssignmentDialog key={request.id} request={request} open={assignmentOpen} disabled={requesterDirty || psfCreatedDirty || savingStatus || savingPsfCreatedData || savingRequesterData} onSavingChange={setSavingAssignment} onClose={() => setAssignmentOpen(false)} onSaved={snapshot => {
+          acceptRequesterSnapshot(snapshot)
+          setHistoryRetry(value => value + 1)
+        }} /> : null}
         <div className="detail-layout">
           <aside className="detail-layout__actions" aria-label="Request actions">
             <section className="workflow-section">

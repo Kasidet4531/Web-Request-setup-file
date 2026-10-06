@@ -79,6 +79,7 @@ function buildRequest(overrides: Partial<PsfRequestResponse> = {}): PsfRequestRe
     formVersion: 1,
     status: 'Draft',
     requester: 'requester@example.com',
+    setupOwnerUserId: null,
     setupOwner: null,
     setupOwnerRole: null,
     productType: null,
