@@ -16,6 +16,7 @@ export interface RequestSearchIndexSource {
   status: string;
   requester: string | null;
   requesterUserId: string | null;
+  setupOwnerUserId?: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -51,6 +52,7 @@ export interface RequestSearchIndexItem {
   priority: string | null;
   requester: string | null;
   requesterUserId?: string | null;
+  setupOwnerUserId?: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -69,7 +71,7 @@ export interface RequestSearchResult {
 
 export interface RequestScopeFilters {
   scope: 'all' | 'related';
-  relation: 'all' | 'created' | 'department';
+  relation: 'all' | 'created' | 'assigned' | 'department';
   workState: 'all' | 'open' | 'overdue' | 'completed';
   actorId: string;
   actorRole: AuthenticatedUserProfile['role'];
@@ -114,6 +116,7 @@ interface RequestSearchIndexRow {
   priority: string | null;
   requester: string | null;
   requester_user_id: string | null;
+  setup_owner_user_id?: string | null;
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
@@ -131,6 +134,7 @@ interface DraftSearchRow {
   request_no: string | null;
   requester: string | null;
   requester_user_id: string | null;
+  setup_owner_user_id?: string | null;
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
@@ -226,11 +230,12 @@ export class SearchIndexService implements OnModuleInit {
           product_type,
           request_date,
           due_date,
-          updated_at
+          updated_at,
+          setup_owner_user_id
         )
         VALUES (
           $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid,
-          $11, $12, $13, $14::timestamp, $15::timestamp, $16::timestamp
+          $11, $12, $13, $14::timestamp, $15::timestamp, ($16::timestamptz AT TIME ZONE current_setting('TIMEZONE')), $17::uuid
         )
         ON CONFLICT (request_id)
         DO UPDATE SET
@@ -243,6 +248,7 @@ export class SearchIndexService implements OnModuleInit {
           priority = EXCLUDED.priority,
           requester = EXCLUDED.requester,
           requester_user_id = EXCLUDED.requester_user_id,
+          setup_owner_user_id = EXCLUDED.setup_owner_user_id,
           setup_owner = EXCLUDED.setup_owner,
           setup_owner_role = EXCLUDED.setup_owner_role,
           product_type = EXCLUDED.product_type,
@@ -270,6 +276,7 @@ export class SearchIndexService implements OnModuleInit {
           ? dueDate
           : null,
         this.serializeDateForQuery(source.updatedAt),
+        source.setupOwnerUserId ?? null,
       ],
     );
   }
@@ -363,13 +370,17 @@ export class SearchIndexService implements OnModuleInit {
     if (scope.scope === 'related') {
       if (scope.relation === 'created') {
         where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
+      } else if (
+        scope.relation === 'assigned' &&
+        scope.actorRole === 'setup_owner'
+      ) {
+        where.push(`setup_owner_user_id = ${add(scope.actorId)}::uuid`);
       } else if (scope.relation === 'department') {
         where.push(`setup_owner_role = ${add(scope.department)}`);
       } else if (scope.actorRole === 'setup_owner') {
         const actorId = add(scope.actorId);
-        const department = add(scope.department);
         where.push(
-          `(requester_user_id = ${actorId}::uuid OR setup_owner_role = ${department})`,
+          `(requester_user_id = ${actorId}::uuid OR setup_owner_user_id = ${actorId}::uuid)`,
         );
       } else {
         where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
@@ -516,7 +527,7 @@ export class SearchIndexService implements OnModuleInit {
           SELECT * FROM psf_requests WHERE ${where.join(' AND ')}
         ), totals AS (SELECT COUNT(*)::int AS total_count FROM filtered),
         page AS (
-          SELECT id, request_no, requester, requester_user_id, setup_owner,
+          SELECT id, request_no, requester, requester_user_id, setup_owner_user_id, setup_owner,
                  setup_owner_role, product_type, requester_data_json,
                  schema_snapshot_json, created_at, updated_at,
                  ${`TO_CHAR(updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`} AS updated_at_version
@@ -549,6 +560,7 @@ export class SearchIndexService implements OnModuleInit {
           priority: this.stringFromCanonical(canonical.priority),
           requester: row.requester,
           requesterUserId: row.requester_user_id,
+          setupOwnerUserId: row.setup_owner_user_id ?? null,
           setupOwner: row.setup_owner,
           setupOwnerRole: row.setup_owner_role,
           productType: row.product_type,
@@ -698,6 +710,7 @@ export class SearchIndexService implements OnModuleInit {
         priority TEXT,
         requester TEXT,
         requester_user_id UUID,
+        setup_owner_user_id UUID NULL,
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
@@ -706,6 +719,13 @@ export class SearchIndexService implements OnModuleInit {
         updated_at TIMESTAMP NOT NULL
       )
     `);
+
+    await queryRunner.query(
+      `ALTER TABLE psf_request_search_index ADD COLUMN IF NOT EXISTS setup_owner_user_id UUID NULL`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_setup_owner_user_id ON psf_request_search_index (setup_owner_user_id)`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE psf_request_search_index
@@ -723,6 +743,27 @@ export class SearchIndexService implements OnModuleInit {
             WHERE search_entry.request_id = request.id
               AND search_entry.requester_user_id IS NULL
           $backfill_search_requester_owners$;
+        END IF;
+      END
+      $$;
+    `);
+
+    // Upgrade older projections from stored UUIDs only; never infer an assignee from names.
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'psf_requests' AND column_name = 'setup_owner_user_id'
+        ) THEN
+          EXECUTE $backfill_search_assignees$
+            UPDATE psf_request_search_index AS search_entry
+            SET setup_owner_user_id = request.setup_owner_user_id
+            FROM psf_requests AS request
+            WHERE search_entry.request_id = request.id
+              AND search_entry.setup_owner_user_id IS NULL
+              AND request.setup_owner_user_id IS NOT NULL
+          $backfill_search_assignees$;
         END IF;
       END
       $$;
@@ -977,6 +1018,7 @@ export class SearchIndexService implements OnModuleInit {
       priority: row.priority,
       requester: row.requester,
       requesterUserId: row.requester_user_id,
+      setupOwnerUserId: row.setup_owner_user_id ?? null,
       setupOwner: row.setup_owner,
       setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,

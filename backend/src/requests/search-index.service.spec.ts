@@ -197,6 +197,7 @@ describe('SearchIndexService canonical extraction', () => {
         '2026-06-18T01:02:03.000Z',
         '2026-07-01',
         '2026-06-18T01:05:03.000Z',
+        null,
       ],
     );
   });
@@ -254,6 +255,7 @@ describe('SearchIndexService canonical extraction', () => {
           priority: 'High',
           requester: 'Fook',
           requesterUserId: 'requester-1',
+          setupOwnerUserId: null,
           setupOwner: null,
           setupOwnerRole: 'GNTC',
           productType: 'New Product',
@@ -553,7 +555,7 @@ describe('SearchIndexService canonical extraction', () => {
       const [sql, params] = pool.query.mock.calls[0] as [string, unknown[]];
       const identity =
         relation === 'all'
-          ? ['immutable-creator', 'GNTC']
+          ? ['immutable-creator']
           : relation === 'created'
             ? ['immutable-creator']
             : ['GNTC'];
@@ -572,7 +574,7 @@ describe('SearchIndexService canonical extraction', () => {
       expect(sql).toContain('LOWER(requester) = LOWER($2)');
       expect(sql).toContain(
         relation === 'all'
-          ? '(requester_user_id = $3::uuid OR setup_owner_role = $4)'
+          ? '(requester_user_id = $3::uuid OR setup_owner_user_id = $3::uuid)'
           : relation === 'created'
             ? 'requester_user_id = $3::uuid'
             : 'setup_owner_role = $3',

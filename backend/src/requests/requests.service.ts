@@ -72,10 +72,28 @@ export type RequesterData = Record<string, unknown>;
 export interface CreateDraftRequestDto {
   requester?: string;
   requesterData: RequesterData;
+  setupOwnerUserId?: string | null;
 }
+
+export interface AssignableSetupOwner {
+  id: string;
+  displayName: string;
+  setupOwnerDepartment: 'GNTC' | 'MFG';
+}
+
+export interface UpdateRequestAssignmentDto {
+  setupOwnerUserId: string | null;
+  expectedUpdatedAt: string;
+}
+
+type AssignmentSnapshot = Pick<
+  PsfRequestResponse,
+  'setupOwnerUserId' | 'setupOwner' | 'setupOwnerRole'
+>;
 
 export interface UpdateDraftRequesterDataDto {
   formVersion: number;
+  setupOwnerUserId?: string | null;
   requesterData: RequesterData;
   expectedUpdatedAt: unknown;
 }
@@ -116,7 +134,7 @@ export interface RequestStatusOptionsResponse {
 
 export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'> & {
   scope?: 'all' | 'related' | 'my-drafts';
-  relation?: 'all' | 'created' | 'department';
+  relation?: 'all' | 'created' | 'assigned' | 'department';
   workState?: 'all' | 'open' | 'overdue' | 'completed';
 };
 
@@ -127,6 +145,7 @@ export interface PsfRequestResponse {
   formVersion: number;
   status: string;
   requester: string | null;
+  setupOwnerUserId: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -155,6 +174,7 @@ interface PsfRequestRow {
   status: string;
   requester: string | null;
   requester_user_id: string | null;
+  setup_owner_user_id?: string | null;
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
@@ -209,6 +229,10 @@ export class RequestsService implements OnModuleInit {
           PSF_CREATED_INFORMATION_FORM_KEY,
           client,
         );
+      const assignment =
+        dto.setupOwnerUserId === undefined
+          ? this.emptyAssignment()
+          : await this.resolveAssignment(dto.setupOwnerUserId, client);
       const requestNo = await this.nextDraftRequestNo(client);
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -226,10 +250,11 @@ export class RequestsService implements OnModuleInit {
             psf_created_data_json,
             schema_snapshot_json,
             psf_created_schema_snapshot_json,
+            setup_owner_user_id, setup_owner, setup_owner_role,
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, $12::uuid, $13, $14, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -244,6 +269,9 @@ export class RequestsService implements OnModuleInit {
           requesterData,
           activeSchema.schema,
           psfCreatedSchema.schema,
+          assignment.setupOwnerUserId,
+          assignment.setupOwner,
+          assignment.setupOwnerRole,
         ],
       );
 
@@ -260,6 +288,181 @@ export class RequestsService implements OnModuleInit {
 
       return this.mapRequestRow(createdRow, actor);
     });
+  }
+
+  async listAssignableSetupOwners(): Promise<{
+    items: AssignableSetupOwner[];
+  }> {
+    const result = await this.pool.query<{
+      id: string;
+      display_name: string;
+      setup_owner_department: 'GNTC' | 'MFG';
+    }>(
+      `SELECT id, display_name, setup_owner_department FROM app_users
+       WHERE role = 'setup_owner' AND setup_owner_department IN ('GNTC', 'MFG')
+       ORDER BY display_name, id`,
+    );
+    return {
+      items: result.rows.map((row) => ({
+        id: row.id,
+        displayName: row.display_name,
+        setupOwnerDepartment: row.setup_owner_department,
+      })),
+    };
+  }
+
+  async updateAssignment(
+    id: string,
+    dto: UpdateRequestAssignmentDto,
+    actor: AuthenticatedUserProfile,
+  ): Promise<PsfRequestResponse> {
+    this.assertExpectedUpdatedAt(dto?.expectedUpdatedAt);
+    if (!dto || !Object.hasOwn(dto, 'setupOwnerUserId')) {
+      throw new BadRequestException('setupOwnerUserId is required.');
+    }
+    return this.withTransaction(async (client) => {
+      const current = await client.query<PsfRequestRow>(
+        `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const request = current.rows[0];
+      if (!request)
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      this.assertCanAccessRequest(request, actor);
+      if (request.updated_at_version !== dto.expectedUpdatedAt) {
+        throw new ConflictException(
+          'The request changed before assignment. Reload and try again.',
+        );
+      }
+      const before = this.assignmentSnapshot(request);
+      const after = await this.resolveAssignment(dto.setupOwnerUserId, client);
+      if (this.sameAssignment(before, after))
+        return this.mapRequestRow(request, actor);
+      const result = await client.query<PsfRequestRow>(
+        `UPDATE psf_requests SET setup_owner_user_id = $2::uuid, setup_owner = $3, setup_owner_role = $4,
+          updated_at = GREATEST(clock_timestamp() AT TIME ZONE current_setting('TIMEZONE'), updated_at + INTERVAL '1 microsecond')
+         WHERE id = $1 AND updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+         RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version`,
+        [
+          id,
+          after.setupOwnerUserId,
+          after.setupOwner,
+          after.setupOwnerRole,
+          dto.expectedUpdatedAt,
+        ],
+      );
+      const updated = result.rows[0];
+      if (!updated)
+        throw new ConflictException(
+          'The request changed during assignment. Reload and try again.',
+        );
+      if (updated.status !== DRAFT_STATUS) {
+        await this.searchIndexService.upsertRequestSearchIndex(
+          {
+            requestId: updated.id,
+            requestNo: updated.request_no,
+            status: updated.status,
+            requester: updated.requester,
+            requesterUserId: updated.requester_user_id,
+            setupOwnerUserId: updated.setup_owner_user_id ?? null,
+            setupOwner: updated.setup_owner,
+            setupOwnerRole: updated.setup_owner_role,
+            productType: updated.product_type,
+            requestDate: updated.created_at,
+            updatedAt: updated.updated_at_version ?? updated.updated_at,
+          },
+          this.searchIndexService.extractCanonicalValues(
+            updated.schema_snapshot_json,
+            updated.requester_data_json ?? {},
+          ),
+          client,
+        );
+      }
+      await this.recordAssignmentChange(id, before, after, actor, client);
+      return this.mapRequestRow(updated, actor);
+    });
+  }
+
+  private emptyAssignment(): AssignmentSnapshot {
+    return { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null };
+  }
+
+  private assignmentSnapshot(row: PsfRequestRow): AssignmentSnapshot {
+    return {
+      setupOwnerUserId: row.setup_owner_user_id ?? null,
+      setupOwner: row.setup_owner,
+      setupOwnerRole: row.setup_owner_role,
+    };
+  }
+
+  private sameAssignment(
+    before: AssignmentSnapshot,
+    after: AssignmentSnapshot,
+  ): boolean {
+    return (
+      before.setupOwnerUserId === after.setupOwnerUserId &&
+      before.setupOwner === after.setupOwner &&
+      before.setupOwnerRole === after.setupOwnerRole
+    );
+  }
+
+  private async resolveAssignment(
+    value: unknown,
+    client: QueryRunner,
+  ): Promise<AssignmentSnapshot> {
+    if (value === null) return this.emptyAssignment();
+    if (
+      typeof value !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      )
+    ) {
+      throw new BadRequestException('setupOwnerUserId must be a UUID or null.');
+    }
+    // FOR SHARE blocks role/department updates until this request mutation commits.
+    const result = await client.query<{
+      id: string;
+      display_name: string;
+      role: string;
+      setup_owner_department: string | null;
+    }>(
+      `SELECT id, display_name, role, setup_owner_department FROM app_users WHERE id = $1::uuid FOR SHARE`,
+      [value],
+    );
+    const user = result.rows[0];
+    if (
+      !user ||
+      user.role !== 'setup_owner' ||
+      (user.setup_owner_department !== 'GNTC' &&
+        user.setup_owner_department !== 'MFG')
+    ) {
+      throw new BadRequestException(
+        'The assignee must be an eligible Setup File Owner. Select another user or clear the assignment.',
+      );
+    }
+    return {
+      setupOwnerUserId: user.id,
+      setupOwner: user.display_name,
+      setupOwnerRole: user.setup_owner_department,
+    };
+  }
+
+  private async recordAssignmentChange(
+    id: string,
+    before: AssignmentSnapshot,
+    after: AssignmentSnapshot,
+    actor: AuthenticatedUserProfile,
+    client: QueryRunner,
+  ): Promise<void> {
+    await this.auditLogService.record(
+      {
+        requestId: id,
+        actionType: REQUEST_AUDIT_ACTION.REQUEST_ASSIGNEE_CHANGED,
+        actor,
+        metadata: { before, after },
+      },
+      client,
+    );
   }
 
   async queryRequests(
@@ -430,6 +633,19 @@ export class RequestsService implements OnModuleInit {
         );
       }
 
+      if (
+        request.status !== DRAFT_STATUS &&
+        dto.setupOwnerUserId !== undefined
+      ) {
+        throw new BadRequestException(
+          'Use the assignment endpoint for submitted requests.',
+        );
+      }
+      const beforeAssignment = this.assignmentSnapshot(request);
+      const assignment =
+        dto.setupOwnerUserId === undefined
+          ? beforeAssignment
+          : await this.resolveAssignment(dto.setupOwnerUserId, client);
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
       const requesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(
@@ -447,6 +663,7 @@ export class RequestsService implements OnModuleInit {
           UPDATE psf_requests
           SET product_type = $2,
               requester_data_json = $3::jsonb,
+              ${dto.setupOwnerUserId === undefined ? '' : 'setup_owner_user_id = $6::uuid, setup_owner = $7, setup_owner_role = $8,'}
               updated_at = NOW()
           WHERE id = $1
             AND form_version = $4
@@ -459,6 +676,13 @@ export class RequestsService implements OnModuleInit {
           requesterData,
           dto.formVersion,
           dto.expectedUpdatedAt,
+          ...(dto.setupOwnerUserId === undefined
+            ? []
+            : [
+                assignment.setupOwnerUserId,
+                assignment.setupOwner,
+                assignment.setupOwnerRole,
+              ]),
         ],
       );
 
@@ -483,6 +707,7 @@ export class RequestsService implements OnModuleInit {
             status: updatedRow.status,
             requester: updatedRow.requester,
             requesterUserId: updatedRow.requester_user_id,
+            setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
             setupOwner: updatedRow.setup_owner,
             setupOwnerRole: updatedRow.setup_owner_role,
             productType: updatedRow.product_type,
@@ -512,6 +737,15 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
+      if (!this.sameAssignment(beforeAssignment, assignment)) {
+        await this.recordAssignmentChange(
+          updatedRow.id,
+          beforeAssignment,
+          assignment,
+          actor,
+          client,
+        );
+      }
       return this.mapRequestRow(updatedRow, actor);
     });
   }
@@ -696,24 +930,13 @@ export class RequestsService implements OnModuleInit {
         `
           UPDATE psf_requests
           SET psf_created_data_json = $2::jsonb,
-              setup_owner = CASE WHEN setup_owner IS NULL AND setup_owner_role IS NULL THEN $3 ELSE setup_owner END,
-              setup_owner_role = CASE WHEN setup_owner IS NULL AND setup_owner_role IS NULL THEN $4 ELSE setup_owner_role END,
-              psf_created_at = CASE WHEN $5::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
+              psf_created_at = CASE WHEN $3::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
               updated_at = NOW()
           WHERE id = $1
-            AND updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+            AND updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-        [
-          id,
-          psfCreatedData,
-          dto.actor.role === 'setup_owner' ? dto.actor.displayName : null,
-          dto.actor.role === 'setup_owner'
-            ? dto.actor.setupOwnerDepartment
-            : null,
-          hasPsfData,
-          dto.expectedUpdatedAt,
-        ],
+        [id, psfCreatedData, hasPsfData, dto.expectedUpdatedAt],
       );
       const updatedRow = result.rows[0];
       if (!updatedRow) {
@@ -729,6 +952,7 @@ export class RequestsService implements OnModuleInit {
             status: updatedRow.status,
             requester: updatedRow.requester,
             requesterUserId: updatedRow.requester_user_id,
+            setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
             setupOwner: updatedRow.setup_owner,
             setupOwnerRole: updatedRow.setup_owner_role,
             productType: updatedRow.product_type,
@@ -857,6 +1081,7 @@ export class RequestsService implements OnModuleInit {
           status: updatedRow.status,
           requester: updatedRow.requester,
           requesterUserId: updatedRow.requester_user_id,
+          setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
           setupOwner: updatedRow.setup_owner,
           setupOwnerRole: updatedRow.setup_owner_role,
           productType: updatedRow.product_type,
@@ -939,6 +1164,10 @@ export class RequestsService implements OnModuleInit {
         throw new ConflictException(
           'The request changed before submission. Reload and try again.',
         );
+      }
+
+      if (request.setup_owner_user_id) {
+        await this.resolveAssignment(request.setup_owner_user_id, client);
       }
 
       if (!this.requestSchemaSnapshotMatchesVersion(request)) {
@@ -1038,6 +1267,7 @@ export class RequestsService implements OnModuleInit {
           status: submittedRow.status,
           requester: submittedRow.requester,
           requesterUserId: submittedRow.requester_user_id,
+          setupOwnerUserId: submittedRow.setup_owner_user_id ?? null,
           setupOwner: submittedRow.setup_owner,
           setupOwnerRole: submittedRow.setup_owner_role,
           productType: submittedRow.product_type,
@@ -1190,6 +1420,7 @@ export class RequestsService implements OnModuleInit {
         status TEXT NOT NULL,
         requester TEXT,
         requester_user_id UUID,
+        setup_owner_user_id UUID NULL,
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
@@ -1205,6 +1436,13 @@ export class RequestsService implements OnModuleInit {
         completed_at TIMESTAMP
       )
     `);
+
+    await queryRunner.query(
+      `ALTER TABLE psf_requests ADD COLUMN IF NOT EXISTS setup_owner_user_id UUID NULL`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_psf_requests_setup_owner_user_id ON psf_requests (setup_owner_user_id)`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE psf_requests
@@ -1468,6 +1706,7 @@ export class RequestsService implements OnModuleInit {
       formVersion: row.form_version,
       status: row.status,
       requester: row.requester,
+      setupOwnerUserId: row.setup_owner_user_id ?? null,
       setupOwner: row.setup_owner,
       setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,

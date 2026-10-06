@@ -490,6 +490,9 @@ describe('RequestsService draft flow', () => {
         },
         activeSchema.schema,
         requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
+        null,
+        null,
+        null,
       ],
     );
     expect(draft).toMatchObject({
@@ -894,6 +897,7 @@ describe('RequestsService draft flow', () => {
     expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
       expect.objectContaining({
         requesterUserId: requesterActor.id,
+        setupOwnerUserId: null,
         setupOwner: null,
         setupOwnerRole: null,
       }),
@@ -1394,14 +1398,7 @@ describe('RequestsService draft flow', () => {
     ).resolves.toMatchObject({ psfCreatedData: savedData });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
-      [
-        'request-1',
-        savedData,
-        actor.displayName,
-        'GNTC',
-        true,
-        updatedAt.toISOString(),
-      ],
+      ['request-1', savedData, true, updatedAt.toISOString()],
     );
   });
 
@@ -2199,8 +2196,6 @@ describe('RequestsService draft flow', () => {
           psf_setup_file_name: 'final-setup.psf',
           attachment_reference: 'https://files.example/final-layout.pdf',
         },
-        'Setup Owner GNTC Demo',
-        'GNTC',
         true,
         currentUpdatedAt.toISOString(),
       ],
@@ -2338,13 +2333,11 @@ describe('RequestsService draft flow', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining(
-        "updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))",
+        "updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))",
       ),
       [
         'request-1',
         { psf_setup_file_name: 'stale-setup.psf' },
-        'Setup Owner GNTC Demo',
-        'GNTC',
         true,
         currentUpdatedAt.toISOString(),
       ],
@@ -2458,10 +2451,8 @@ describe('RequestsService draft flow', () => {
       setupOwnerRole: 'MFG',
     });
     expect(pool.query).toHaveBeenLastCalledWith(
-      expect.stringContaining(
-        'WHEN setup_owner IS NULL AND setup_owner_role IS NULL',
-      ),
-      ['request-1', data, actor.displayName, 'GNTC', true, revision],
+      expect.stringContaining('SET psf_created_data_json = $2::jsonb'),
+      ['request-1', data, true, revision],
     );
     expect(auditLogService.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2555,8 +2546,6 @@ describe('RequestsService draft flow', () => {
       [
         'request-1',
         { psf_setup_file_name: 'admin-corrected.psf' },
-        null,
-        null,
         true,
         currentUpdatedAt.toISOString(),
       ],
@@ -2772,6 +2761,7 @@ describe('RequestsService draft flow', () => {
         status: 'Submitted',
         requester: 'Fook',
         requesterUserId: requesterActor.id,
+        setupOwnerUserId: null,
         setupOwner: null,
         setupOwnerRole: null,
         productType: 'Existing Product',
@@ -3280,14 +3270,7 @@ describe('RequestsService draft flow', () => {
       ).not.toHaveBeenCalled();
       expect(pool.query).toHaveBeenLastCalledWith(
         expect.stringContaining('psf_created_at = CASE'),
-        [
-          'request-1',
-          {},
-          role === 'setup_owner' ? actor.displayName : null,
-          actor.setupOwnerDepartment,
-          false,
-          revision,
-        ],
+        ['request-1', {}, false, revision],
       );
     },
   );

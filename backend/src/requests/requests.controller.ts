@@ -18,6 +18,8 @@ import type {
 } from '../auth/session.types';
 import { RequestsService } from './requests.service';
 import type {
+  AssignableSetupOwner,
+  UpdateRequestAssignmentDto,
   CreateDraftRequestDto,
   PsfRequestResponse,
   RequestQueryDto,
@@ -56,6 +58,24 @@ export class RequestsController {
     const actor = await this.getAuthenticatedActor(request);
 
     return this.requestsService.queryRequests(parsedQuery, actor);
+  }
+
+  @Get('assignees')
+  async listAssignableSetupOwners(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ items: AssignableSetupOwner[] }> {
+    await this.getAuthenticatedActor(request);
+    return this.requestsService.listAssignableSetupOwners();
+  }
+
+  @Put(':requestId/assignment')
+  async updateAssignment(
+    @Param('requestId') requestId: string,
+    @Body() body: UpdateRequestAssignmentDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PsfRequestResponse> {
+    const actor = await this.getAuthenticatedActor(request);
+    return this.requestsService.updateAssignment(requestId, body, actor);
   }
 
   @Get(':requestId/status-options')
@@ -254,6 +274,7 @@ export class RequestsController {
       relation: this.parseOptionalEnum(rawQuery.relation, 'relation', [
         'all',
         'created',
+        'assigned',
         'department',
       ] as const),
       workState: this.parseOptionalEnum(rawQuery.workState, 'workState', [
