@@ -851,6 +851,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   useEffect(() => { psfDraft.current = { values: psfCreatedValues, dirty: psfCreatedDirty } }, [psfCreatedValues, psfCreatedDirty])
   const [allowedNextStatuses, setAllowedNextStatuses] = useState<string[]>([])
   const [status, setStatus] = useState('')
+  const workflowContext = useRef({ requestId, status: '' })
+  const statusOptionsGeneration = useRef(0)
   const [submissionConflict, setSubmissionConflict] = useState(0)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -877,6 +879,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   useEffect(() => {
     let mounted = true
 
+    const generation = ++statusOptionsGeneration.current
     async function loadRequest() {
       setLoading(true)
       setError(null)
@@ -893,7 +896,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           }
         }
 
-        if (mounted) {
+        if (mounted && generation === statusOptionsGeneration.current) {
+          workflowContext.current = { requestId, status: response.status }
           setRequest(response)
           setPsfEditing(false)
           setActiveTab(null)
@@ -913,7 +917,10 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     }
 
     void loadRequest()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+      statusOptionsGeneration.current += 1
+    }
   }, [requestId, loadAttempt])
 
   useEffect(() => {
@@ -988,23 +995,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       setMessage(request.status === 'Draft'
         ? `Request ${updatedRequest.requestNo} submitted to ${updatedRequest.status}.`
         : `Request ${updatedRequest.requestNo} moved to ${updatedRequest.status}.`)
-      setStatus(updatedRequest.status)
-
-      try {
-        const statusOptions = await api.fetchPsfRequestStatusOptions(request.id)
-        setAllowedNextStatuses(statusOptions.allowedNextStatuses)
-        setStatus(updatedRequest.status)
-      } catch (statusOptionsError) {
-        setAllowedNextStatuses([])
-        setStatus(updatedRequest.status)
-        setError(
-          `Request status was updated, but workflow options could not be refreshed: ${
-            statusOptionsError instanceof Error
-              ? statusOptionsError.message
-              : 'Unable to refresh workflow status options'
-          }`,
-        )
-      }
+      await refreshWorkflowOptions(updatedRequest)
     } catch (statusError) {
       if (request.status === 'Draft' && statusError instanceof ApiError && statusError.status === 409) {
         conflictReconciliationPending = true
@@ -1018,6 +1009,20 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     }
   }
 
+  async function refreshWorkflowOptions(snapshot: PsfRequestResponse) {
+    const generation = ++statusOptionsGeneration.current
+    workflowContext.current = { requestId: snapshot.id, status: snapshot.status }
+    setStatus(snapshot.status)
+    setAllowedNextStatuses([])
+    const isCurrent = () => currentRequestId.current === snapshot.id && statusOptionsGeneration.current === generation
+    try {
+      const options = await api.fetchPsfRequestStatusOptions(snapshot.id)
+      if (isCurrent()) setAllowedNextStatuses(options.allowedNextStatuses)
+    } catch (optionsError) {
+      if (isCurrent()) setError(`Workflow options could not be refreshed: ${optionsError instanceof Error ? optionsError.message : 'Unable to refresh workflow status options'}`)
+    }
+  }
+
   function acceptRequesterSnapshot(snapshot: PsfRequestResponse) {
     if (snapshot.id !== requestId || currentRequestId.current !== requestId) return
     const baseline = buildPsfCreatedInformationValues(snapshot)
@@ -1025,6 +1030,9 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     const nextDirty = JSON.stringify(nextValues) !== JSON.stringify(baseline)
     psfDraft.current = { values: nextValues, dirty: nextDirty }
     setRequest(snapshot)
+    if (workflowContext.current.requestId !== snapshot.id || workflowContext.current.status !== snapshot.status) {
+      void refreshWorkflowOptions(snapshot)
+    }
     setPsfCreatedValues(nextValues)
     setPsfCreatedDirty(nextDirty)
   }

@@ -255,8 +255,22 @@ test(
       .getByRole('searchbox', { name: 'Search setup owners', exact: true })
       .fill('No matching name');
     await expect(ownerPicker).toHaveValue(firstProfile.id);
+    const nextWorkflow = await api(
+      admin,
+      'GET',
+      `/requests/${request.id}/status-options`,
+    );
+    assert.ok(
+      nextWorkflow.allowedNextStatuses.length,
+      'Submitted request has a real next workflow status',
+    );
+    const moved = await api(admin, 'PUT', `/requests/${request.id}/status`, {
+      status: nextWorkflow.allowedNextStatuses[0],
+      expectedUpdatedAt: request.updatedAt,
+    });
+    assert.notEqual(moved.status, request.status);
+    const winner = await assignment(admin, moved, secondProfile.id);
     const beforeJobs = await outboxCount(request.id);
-    const winner = await assignment(admin, request, secondProfile.id);
     expectedCreatorErrors.push({
       path: `/requests/${request.id}/assignment`,
       status: 409,
@@ -274,6 +288,25 @@ test(
       'Your selected owner is preserved',
     );
     await expect(ownerPicker).toHaveValue(firstProfile.id);
+    const latestWorkflow = await api(
+      admin,
+      'GET',
+      `/requests/${request.id}/status-options`,
+    );
+    const statusPicker = creator.getByRole('combobox', {
+      name: 'Status',
+      exact: true,
+    });
+    await expect(
+      creator.getByRole('region', { name: 'Request header' }),
+    ).toContainText(winner.status);
+    await expect(statusPicker).toHaveValue(winner.status);
+    await expect(statusPicker.locator('option')).toHaveText([
+      winner.status,
+      ...latestWorkflow.allowedNextStatuses.filter(
+        (status) => status !== winner.status,
+      ),
+    ]);
     assert.equal(
       (await stored(request.id)).setup_owner_user_id,
       secondProfile.id,
@@ -294,6 +327,13 @@ test(
     const final = await retry.json();
     assert.equal(final.setupOwnerUserId, firstProfile.id);
     assert.equal(final.status, winner.status);
+    await expect(statusPicker).toHaveValue(winner.status);
+    await expect(statusPicker.locator('option')).toHaveText([
+      winner.status,
+      ...latestWorkflow.allowedNextStatuses.filter(
+        (status) => status !== winner.status,
+      ),
+    ]);
     assert.equal(final.psfReleasedAt, winner.psfReleasedAt);
     assert.equal(
       (await index(request.id))[0].setup_owner_user_id,
@@ -418,6 +458,21 @@ async function ownerDashboard(page, requestNo, count) {
   ).toHaveCount(count ? 1 : 0);
 }
 
+async function selectOwnerByLabel(picker, userId) {
+  if (userId === null) {
+    await picker.selectOption({ label: 'Unassigned' });
+    return;
+  }
+  const option = picker.getByRole('option', {
+    name: new RegExp(`^Account ID ${userId.slice(0, 8)}`),
+  });
+  await expect(option).toHaveCount(1);
+  const label = await option.textContent();
+  assert.match(label, /^Account ID [a-z0-9-]+ — Same Name Owner \/ GNTC$/);
+  await picker.selectOption({ label });
+  await expect(picker).toHaveValue(userId);
+}
+
 async function changeInBrowser(page, request, userId) {
   await page.goto(`${system.origin}/requests/${request.id}`);
   const trigger = page.getByRole('button', {
@@ -440,9 +495,10 @@ async function changeInBrowser(page, request, userId) {
   await dialog
     .getByRole('searchbox', { name: 'Search setup owners', exact: true })
     .fill('Same Name');
-  await dialog
-    .getByRole('combobox', { name: 'Setup owner', exact: true })
-    .selectOption(userId ?? '');
+  await selectOwnerByLabel(
+    dialog.getByRole('combobox', { name: 'Setup owner', exact: true }),
+    userId,
+  );
   const response = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/requests/${request.id}/assignment`) &&
@@ -555,9 +611,27 @@ test(
     await creator
       .getByRole('combobox', { name: 'Priority', exact: true })
       .selectOption('High');
+    await creator.setViewportSize({ width: 390, height: 844 });
+    const draftPicker = creator.getByRole('combobox', {
+      name: 'Setup owner',
+      exact: true,
+    });
+    const ownerLabels = await draftPicker.getByRole('option').allTextContents();
+    assert.equal(
+      new Set(ownerLabels).size,
+      ownerLabels.length,
+      'Identical name/Dept accounts have distinct visible and accessible labels',
+    );
+    await selectOwnerByLabel(draftPicker, firstProfile.id);
     await creator
-      .getByRole('combobox', { name: 'Setup owner', exact: true })
-      .selectOption(firstProfile.id);
+      .getByRole('searchbox', { name: 'Search setup owners', exact: true })
+      .fill(firstProfile.id.slice(0, 8));
+    await expect(draftPicker.getByRole('option')).toHaveCount(2);
+    await screenshot(creator, 'assignment-distinct-label-mobile.png');
+    await creator
+      .getByRole('searchbox', { name: 'Search setup owners', exact: true })
+      .fill('');
+    await creator.setViewportSize({ width: 1440, height: 1000 });
     const creation = creator.waitForResponse(
       (response) =>
         response.url().endsWith('/api/requests') &&

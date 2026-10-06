@@ -1,3 +1,5 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactElement } from 'react'
 import { requireRenderedElement, type RenderedElement } from '../test-utils/componentHarness'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestAssigneePicker } from './RequestAssigneePicker'
@@ -28,6 +30,36 @@ describe('RequestAssigneePicker', () => {
     expect(change).toHaveBeenLastCalledWith('owner-2')
     ;(select.props.onChange as (e: { target: { value: string } }) => void)({ target: { value: '' } })
     expect(change).toHaveBeenLastCalledWith(null)
+  })
+  it('distinguishes same-name same-Dept accounts by searchable stable labels, including colliding ID prefixes', async () => {
+    const owners = [
+      { id: '12345678-0000-4000-8000-000000000001', displayName: 'Same name with a very long display name', setupOwnerDepartment: 'GNTC' },
+      { id: '12345678-1000-4000-8000-000000000002', displayName: 'Same name with a very long display name', setupOwnerDepartment: 'GNTC' },
+      { id: '87654321-0000-4000-8000-000000000003', displayName: 'Different name', setupOwnerDepartment: 'MFG' },
+    ]
+    requestApi.fetchRequestAssignees.mockResolvedValue({ items: owners })
+    const change = vi.fn()
+    render(null, change); hookHarness.runEffects(); await flush()
+    let page = render(null, change)
+    const options = (tree: unknown) => (find(tree, 'Setup owner').props.children as RenderedElement[]).flat(Infinity).filter(e => e?.type === 'option')
+    const label = (option: RenderedElement) => renderToStaticMarkup(<select>{option as unknown as ReactElement}</select>).replace(/<[^>]+>/g, '')
+    const original = options(page).filter(option => option.props.value !== '')
+    const labels = original.map(label)
+    expect(new Set(labels).size).toBe(3)
+    expect(labels[0]).toMatch(/^Account ID \S+ .*Same name with a very long display name.*GNTC$/)
+    expect(labels[1]).toMatch(/^Account ID \S+ .*Same name with a very long display name.*GNTC$/)
+    expect(labels[2]).toBe('Different name / MFG')
+    const qualifier = labels[1].split(' ')[2]
+    ;(find(page, 'Search setup owners').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: qualifier } })
+    page = render(null, change)
+    const match = options(page).filter(option => option.props.value !== '')
+    expect(match.map(label)).toEqual([labels[1]])
+    ;(find(page, 'Setup owner').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: String(match[0].props.value) } })
+    expect(change).toHaveBeenLastCalledWith(owners[1].id)
+    ;(find(page, 'Search setup owners').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'No matching name' } })
+    page = render(owners[1].id, change)
+    expect(options(page).filter(option => option.props.value !== '').map(label)).toEqual([labels[1]])
+    expect(find(page, 'Setup owner').props.value).toBe(owners[1].id)
   })
   it.each([new Error('Directory offline'), { items: [{ id: 'wrong', displayName: 'Invalid', setupOwnerDepartment: 'Other' }] }])('retains selection when directory fails or is invalid and retries', async result => {
     if (result instanceof Error) requestApi.fetchRequestAssignees.mockRejectedValueOnce(result)

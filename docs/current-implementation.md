@@ -92,12 +92,18 @@ and queues no notification job. Server-owned profile data supplies the owner
 name/department snapshot, and assignment, revision, search index and history
 commit in one transaction. Detail assignment uses `expectedUpdatedAt`; a stale
 revision conflicts and the dialog preserves the chosen owner for review.
+If the latest snapshot changes workflow status, Detail rebases the selected
+status and refreshes allowed transitions without discarding pending form edits;
+obsolete option responses cannot overwrite a newer request context.
 Unrelated requester/PSF saves preserve the assignment. Pending form edits block
 assignment saving. Selecting the existing UUID is a no-op, including after the
 user's profile changes.
 
 The authenticated assignee directory exposes only ID, display name and GNTC/MFG
-department for eligible setup owners. Submit revalidates a saved nonempty
+department for eligible setup owners. When names and departments collide, the
+picker prefixes a labeled Account ID derived from the existing UUID, extending
+its prefix until it distinguishes the returned accounts. Labels stay stable
+while searching, and the ID qualifier is searchable. Submit revalidates a saved nonempty
 assignee; a user who lost eligibility must be replaced or explicitly cleared.
 Profile name/department/role changes leave existing request snapshots intact.
 Legacy name/department-only records retain their display values with a null
