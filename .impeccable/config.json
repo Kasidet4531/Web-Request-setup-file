@@ -16,7 +16,7 @@
           "frontend/src/index.css"
         ],
         "createdAt": "2026-10-05T05:29:54.279Z",
-        "reason": "Agent: retain the orange and green summary-card edges shown in the approved Stitch Dashboard; .stitch/DESIGN.md section 4 explicitly permits semantic category edges. Product owner approved the complete suite before implementation."
+        "reason": "Agent: .stitch/DESIGN.md sections 2 and 4 explicitly prescribe semantic summary-card edges; this incumbent styling predates the loading fix in commits f7759dd and 5453c0a."
       },
       {
         "rule": "overused-font",
@@ -25,7 +25,7 @@
           "frontend/src/index.css"
         ],
         "createdAt": "2026-10-05T05:29:54.360Z",
-        "reason": "Agent: retain Inter specified in .stitch/DESIGN.md section 3 and used in the Stitch suite approved by the product owner before implementation; preserve the operational interface typography."
+        "reason": "Agent: .stitch/DESIGN.md section 3 specifies Inter for English UI; preserve the approved existing typography while fixing loading behavior."
       }
     ]
   }
