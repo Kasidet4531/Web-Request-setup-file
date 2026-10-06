@@ -2,7 +2,7 @@
 
 - วันที่: 2026-10-06
 - Branch: `feat/email-notification`
-- สถานะ: รอ review spec ก่อนเขียน implementation plan และโค้ด
+- สถานะ: ผู้ใช้อนุมัติแล้ว — ใช้เป็นข้อกำหนดสำหรับ implementation และการทดสอบ
 - ที่มา: ข้อเสนอและคำตอบ Q1–Q12 ในการ review กับผู้ใช้
 
 ## เป้าหมาย
@@ -116,4 +116,4 @@
 
 ## ขั้นตอนถัดไป
 
-Review spec นี้ก่อน จากนั้นเขียน implementation plan ระบุลำดับ storage/API/UI/test และเลือกวิธี execute ตามขั้นตอน brainstorming
+แผนที่ใช้: `docs/superpowers/plans/2026-10-06-form-management-and-request-assignment.md` ผู้ใช้อนุมัติให้ parent ประสานงานและใช้ subagent สำหรับ implementation, test และ review

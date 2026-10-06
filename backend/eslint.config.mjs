@@ -29,16 +29,28 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
   {
-    files: ['test/email-system*.mjs', 'test/loading-system.e2e.mjs', 'test/psf-trigger-system.e2e.mjs', 'test/request-assignment.cluster.mjs'],
+    files: [
+      'test/email-system*.mjs',
+      'test/loading-system.e2e.mjs',
+      'test/psf-trigger-system.e2e.mjs',
+      'test/request-assignment.cluster.mjs',
+      'test/form-management-system.e2e.mjs',
+      'test/request-assignment-system.e2e.mjs',
+    ],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       sourceType: 'module',
       parserOptions: { projectService: false },
-      globals: { document: 'readonly', window: 'readonly', innerWidth: 'readonly', getComputedStyle: 'readonly' },
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        innerWidth: 'readonly',
+        getComputedStyle: 'readonly',
+      },
     },
   },
 );

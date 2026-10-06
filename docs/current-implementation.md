@@ -1,5 +1,11 @@
 # Current implementation — unified-local-auth
 
+> **Forms and assignment update, 6 October 2026:** The feature branch implements
+> [the approved form management and request assignment design](superpowers/specs/2026-10-06-form-management-and-request-assignment-design.md).
+> Form previews use temporary interactive values and assignment uses a setup
+> owner's UUID. The sections below describe the resulting behavior; disposable
+> local system verification is recorded separately from corporate deployment.
+
 > **Email branch addition, 5 October 2026:** `feat/email-notification` adds status
 > recipient policies, submission/transition/bulk outbox hooks, SOAP dispatch,
 > background retry and admin notification APIs. Shared audit hides recipient
@@ -69,16 +75,60 @@ Sources: [guards](../backend/src/auth/local-auth.guard.ts),
 
 Every authenticated role can create a PSF Request as a creator-private Draft.
 Foreign Drafts remain inaccessible even to Admin. Shared work is available
-through all/related views; related combines actor-created and owner-department
-associated work. My draft is creator-only. All authenticated actors may edit
+through all/related views; a Setup File Owner's default related view combines
+actor-created requests and requests assigned to that exact user UUID, counting
+overlap once. My draft is creator-only. All authenticated actors may edit
 shared requester data; the original creator remains the requester. Setup File
 Owners/Admin may edit PSF data on accessible work, including their own Drafts
-and completed work. Initial PSF owner association fills an unassigned request;
-later editors and status changes do not replace it.
+and completed work. PSF saves do not claim or replace the setup owner.
 Source: [request service](../backend/src/requests/requests.service.ts).
+
+Assignment is optional: a request can be saved and submitted as Unassigned.
+The creator can choose a setup owner while creating/editing a private Draft;
+assignment never makes that Draft accessible to another user. After Submit,
+every authenticated role able to access the request can assign, change or clear
+its owner. Assignment changes no workflow status, PSF release or edit rights
+and queues no notification job. Server-owned profile data supplies the owner
+name/department snapshot, and assignment, revision, search index and history
+commit in one transaction. Detail assignment uses `expectedUpdatedAt`; a stale
+revision conflicts and the dialog preserves the chosen owner for review.
+Unrelated requester/PSF saves preserve the assignment. Pending form edits block
+assignment saving. Selecting the existing UUID is a no-op, including after the
+user's profile changes.
+
+The authenticated assignee directory exposes only ID, display name and GNTC/MFG
+department for eligible setup owners. Submit revalidates a saved nonempty
+assignee; a user who lost eligibility must be replaced or explicitly cleared.
+Profile name/department/role changes leave existing request snapshots intact.
+Legacy name/department-only records retain their display values with a null
+owner UUID; no name matching or PSF save backfills their identity. Department
+work includes those records. A new explicit assignment replaces the snapshot;
+Unassigned clears ID, name and department together.
+
+Only Setup File Owners see the Dashboard Relationship dropdown: Related to me,
+Created by me, Assigned to me and Department work. Personal assignment uses
+UUIDs, including when owners have identical names/departments. Summary cards
+and the request table apply the same committed filter. Requester/Admin dashboards
+remain creator-scoped. Assigned Drafts are excluded from shared listings/indexes
+and owner dashboard totals until Submit succeeds.
+Sources: [assignment picker](../frontend/src/components/RequestAssigneePicker.tsx),
+[assignment dialog](../frontend/src/components/RequestAssignmentDialog.tsx),
+[dashboard/query scope](../backend/src/requests/search-index.service.ts).
 
 Form Management supports separate versioned `psf-request` and
 `psf-created-information` families, with draft/save/duplicate/discard/publish.
+All versions expose View; only Draft exposes Edit. Active/old versions are
+read-only and Duplicate as draft preserves the one-Draft-per-family rule.
+The editor hides internal family/seed description text while retaining stored
+descriptions and showing admin-authored descriptions. Both family previews
+render real controls using unsaved config and configured section/field order,
+including optional fields in their original positions. Trial values are local,
+reset when changing version/family, do not dirty the config, and invoke neither
+request writes nor runtime autofill/mail. Required-field checking is local;
+requester identity uses clearly marked locked sample data. New Request and
+Detail editors use the same configured order without automatic Additional
+details grouping. Detail alone uses bold 14px field labels, thin read-mode
+separators and 16px section headings; Owner / Dept remains visible.
 New requests capture both active schemas. Requester Draft schema upgrades are
 explicit and do not upgrade the captured PSF schema. Legacy PSF records resolve
 through the fixed original descriptor. Required fields may be incomplete on
@@ -167,24 +217,25 @@ All paths below include the prefix from `main.ts`. Request IDs and form keys
 are path parameters; form-config GET additionally accepts its controller's
 query parameters. This table lists routes, not full payload schemas.
 
-| Area | Methods and paths | Source |
-| --- | --- | --- |
-| Health | `GET /api/health` | [AppController](../backend/src/app.controller.ts) |
-| Auth | `POST /api/login`, `POST /api/logout`, `GET /api/me` | [AuthController](../backend/src/auth/auth.controller.ts) |
-| Development auth | `POST /api/dev/login` | [DevelopmentAuthController](../backend/src/auth/development-auth.controller.ts) |
-| Active schema | `GET /api/forms/:formKey/schema` | [FormsController](../backend/src/forms/forms.controller.ts) |
-| Requests | `POST/GET /api/requests`, `GET /api/requests/:requestId` | [RequestsController](../backend/src/requests/requests.controller.ts) |
-| Request reads | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/status-options` | [RequestsController](../backend/src/requests/requests.controller.ts) |
-| Request edits | `PUT /api/requests/:requestId/requester-data`, `PUT /api/requests/:requestId/psf-created-data`, `PUT /api/requests/:requestId/status` | [RequestsController](../backend/src/requests/requests.controller.ts) |
-| Submission/upgrade | `POST /api/requests/:requestId/submit`, `POST /api/requests/:requestId/upgrade-schema` | [RequestsController](../backend/src/requests/requests.controller.ts) |
-| Status reads | `GET /api/workflow/statuses` | [WorkflowStatusController](../backend/src/admin/workflow_transition.controller.ts) |
-| Admin catalog | `GET/PUT /api/admin/workflow` | [WorkflowTransitionController](../backend/src/admin/workflow_transition.controller.ts) |
-| Admin users | `GET /api/admin/users`, `PUT /api/admin/users/:userId` | [UserManagementController](../backend/src/admin/user_management.controller.ts) |
-| Admin forms | `GET/PUT /api/admin/form-config`, `POST /api/admin/form-config/publish`, `POST /api/admin/form-config/duplicate`, `DELETE /api/admin/form-config/draft/:version` | [FormSchemaController](../backend/src/admin/form_schema.controller.ts) |
-| Admin autofill | `GET/POST /api/admin/autofill`, `PUT /api/admin/autofill/:ruleId` | [AutofillRuleController](../backend/src/admin/autofill_rule.controller.ts) |
-| Autofill lookup | `GET /api/autofill` | [AutofillController](../backend/src/requests/autofill.controller.ts) |
-| Global audit | `GET /api/audit-logs` | [AuditLogController](../backend/src/audit/audit_log.controller.ts) |
-| XLSX/jobs | `GET /api/requests/export.xlsx`, `GET /api/requests/export-jobs/:jobId`, `GET /api/requests/export-jobs/:jobId/download` | [ExportController](../backend/src/export/export.controller.ts) |
+| Area               | Methods and paths                                                                                                                                                | Source                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Health             | `GET /api/health`                                                                                                                                                | [AppController](../backend/src/app.controller.ts)                                      |
+| Auth               | `POST /api/login`, `POST /api/logout`, `GET /api/me`                                                                                                             | [AuthController](../backend/src/auth/auth.controller.ts)                               |
+| Development auth   | `POST /api/dev/login`                                                                                                                                            | [DevelopmentAuthController](../backend/src/auth/development-auth.controller.ts)        |
+| Active schema      | `GET /api/forms/:formKey/schema`                                                                                                                                 | [FormsController](../backend/src/forms/forms.controller.ts)                            |
+| Requests           | `POST/GET /api/requests`, `GET /api/requests/:requestId`                                                                                                         | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Assignment         | `GET /api/requests/assignees`, `PUT /api/requests/:requestId/assignment`                                                                                         | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Request reads      | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/status-options`                                                                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Request edits      | `PUT /api/requests/:requestId/requester-data`, `PUT /api/requests/:requestId/psf-created-data`, `PUT /api/requests/:requestId/status`                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Submission/upgrade | `POST /api/requests/:requestId/submit`, `POST /api/requests/:requestId/upgrade-schema`                                                                           | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Status reads       | `GET /api/workflow/statuses`                                                                                                                                     | [WorkflowStatusController](../backend/src/admin/workflow_transition.controller.ts)     |
+| Admin catalog      | `GET/PUT /api/admin/workflow`                                                                                                                                    | [WorkflowTransitionController](../backend/src/admin/workflow_transition.controller.ts) |
+| Admin users        | `GET /api/admin/users`, `PUT /api/admin/users/:userId`                                                                                                           | [UserManagementController](../backend/src/admin/user_management.controller.ts)         |
+| Admin forms        | `GET/PUT /api/admin/form-config`, `POST /api/admin/form-config/publish`, `POST /api/admin/form-config/duplicate`, `DELETE /api/admin/form-config/draft/:version` | [FormSchemaController](../backend/src/admin/form_schema.controller.ts)                 |
+| Admin autofill     | `GET/POST /api/admin/autofill`, `PUT /api/admin/autofill/:ruleId`                                                                                                | [AutofillRuleController](../backend/src/admin/autofill_rule.controller.ts)             |
+| Autofill lookup    | `GET /api/autofill`                                                                                                                                              | [AutofillController](../backend/src/requests/autofill.controller.ts)                   |
+| Global audit       | `GET /api/audit-logs`                                                                                                                                            | [AuditLogController](../backend/src/audit/audit_log.controller.ts)                     |
+| XLSX/jobs          | `GET /api/requests/export.xlsx`, `GET /api/requests/export-jobs/:jobId`, `GET /api/requests/export-jobs/:jobId/download`                                         | [ExportController](../backend/src/export/export.controller.ts)                         |
 
 ## Persistence and startup
 
@@ -192,16 +243,16 @@ Runtime initializers check connectivity and create/alter storage or seed missing
 defaults. Starting the app can write to the configured database. There is no
 standalone migration command in the backend package scripts.
 
-| Tables | Initializer/source |
-| --- | --- |
-| `app_users` | [AuthService](../backend/src/auth/auth.service.ts) |
-| `psf_requests` | [RequestsService](../backend/src/requests/requests.service.ts) |
-| `form_definitions` | [FormSchemaService](../backend/src/admin/form_schema.service.ts) |
-| `workflow_transition_config` | [WorkflowTransitionService](../backend/src/admin/workflow_transition.service.ts) |
-| `autofill_rules` | [AutofillRuleService](../backend/src/admin/autofill_rule.service.ts) |
-| `canonical_submission_values`, `psf_request_search_index` | [SearchIndexService](../backend/src/requests/search-index.service.ts) |
-| `psf_request_audit_logs` | [AuditLogService](../backend/src/audit/audit_log.service.ts) |
-| `psf_export_jobs` | [ExportJobRepository](../backend/src/export/export-job.repository.ts) |
+| Tables                                                    | Initializer/source                                                               |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `app_users`                                               | [AuthService](../backend/src/auth/auth.service.ts)                               |
+| `psf_requests`                                            | [RequestsService](../backend/src/requests/requests.service.ts)                   |
+| `form_definitions`                                        | [FormSchemaService](../backend/src/admin/form_schema.service.ts)                 |
+| `workflow_transition_config`                              | [WorkflowTransitionService](../backend/src/admin/workflow_transition.service.ts) |
+| `autofill_rules`                                          | [AutofillRuleService](../backend/src/admin/autofill_rule.service.ts)             |
+| `canonical_submission_values`, `psf_request_search_index` | [SearchIndexService](../backend/src/requests/search-index.service.ts)            |
+| `psf_request_audit_logs`                                  | [AuditLogService](../backend/src/audit/audit_log.service.ts)                     |
+| `psf_export_jobs`                                         | [ExportJobRepository](../backend/src/export/export-job.repository.ts)            |
 
 Requests hold requester/PSF data and independent schema snapshots in JSONB,
 creator and owner association, release and other timestamps. The deployed
@@ -212,19 +263,19 @@ Credentials belong in ignored local configuration.
 
 ## Frontend routes and session state
 
-| Paths | Current component |
-| --- | --- |
-| `/login` | LoginPage; local chooser is development-only |
-| `/dashboard`, `/requests`, `/my-drafts`, `/requests/new`, `/requests/$requestId` | RequestsWorkspace components |
-| `/history` | GlobalHistoryPage |
-| `/admin/users` | AdminUserManagementPage |
-| `/admin/form-config`, `/admin/form-config/$version`, `/admin/form-config/$formKey/$version` | Form list/version components for both families |
-| `/admin/workflow` | AdminWorkflowTransitionPage (status catalog UI) |
-| `/admin/autofill` | AdminAutofillRulesPage |
-| `/admin/export-profile` | RequestExportPage; no export-profile CRUD |
-| `/admin/` | Administration directory |
-| `/requests/$requestId/history` | RequestHistoryPage |
-| `/admin/master-data` | Placeholder page |
+| Paths                                                                                       | Current component                               |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `/login`                                                                                    | LoginPage; local chooser is development-only    |
+| `/dashboard`, `/requests`, `/my-drafts`, `/requests/new`, `/requests/$requestId`            | RequestsWorkspace components                    |
+| `/history`                                                                                  | GlobalHistoryPage                               |
+| `/admin/users`                                                                              | AdminUserManagementPage                         |
+| `/admin/form-config`, `/admin/form-config/$version`, `/admin/form-config/$formKey/$version` | Form list/version components for both families  |
+| `/admin/workflow`                                                                           | AdminWorkflowTransitionPage (status catalog UI) |
+| `/admin/autofill`                                                                           | AdminAutofillRulesPage                          |
+| `/admin/export-profile`                                                                     | RequestExportPage; no export-profile CRUD       |
+| `/admin/`                                                                                   | Administration directory                        |
+| `/requests/$requestId/history`                                                              | RequestHistoryPage                              |
+| `/admin/master-data`                                                                        | Placeholder page                                |
 
 Source: [file routes](../frontend/src/routes),
 [navigation permissions](../frontend/src/components/navigationState.ts).
@@ -246,6 +297,25 @@ Sources: [theme and preferences](../frontend/src/components/theme.ts),
 [breadcrumb resolution](../frontend/src/components/requestBreadcrumb.ts).
 
 ## Known limits and evidence boundaries
+
+Local verification on 6 October 2026 passed the new `test:forms:system` (9 tests),
+existing `test:email:system` (9 tests), and `test:ui:system` (1 test). These used
+real compiled frontend/backend, disposable PostgreSQL, real authentication and
+independent Chrome sessions with local LDAP/SOAP boundaries. No application API
+responses were mocked. The new tests verify UUID ownership/index persistence,
+Draft privacy, personal Dashboard numbers/totals, history, assignment conflicts,
+no assignment email jobs, both Preview controls and local required validation.
+The removed-option Preview validation defect was reproduced and fixed before
+the final passing run. A subsequent 9-test run also passed mobile validation
+action focus/keyboard activation, scrolling and modal focus return.
+
+Desktop/mobile × light/dark screenshots were inspected for requester/PSF
+Preview, New Request, Detail labels, assignment dialog and Dashboard. Detail
+labels/separators and Owner / Dept remained visible; dialogs fit the viewport
+and mobile validation actions were reachable by keyboard. Background admin
+breadcrumbs overlap at mobile width in Preview frames; this shell limitation
+remains visible outside the modal. See the [Task 4 evidence report](../.superpowers/sdd/2026-10-06-form-management-and-request-assignment/task-4-report.md)
+for commands, RED/GREEN results and local artifact paths.
 
 - No attachment runtime, export-profile CRUD, tracked Nginx deployment configuration,
   or advanced third-party schema editor is implemented in this checkout.

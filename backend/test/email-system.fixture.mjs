@@ -64,7 +64,28 @@ export async function stopPostgres(postgres) {
 
 // Real app entry point, real PostgreSQL, real browser. Only company boundaries
 // (LDAP and SOAP) are substituted; application API responses are never mocked.
-export async function startEmailSystem() {
+export async function startEmailSystem({ users = [] } = {}) {
+  const identities = new Map([
+    [
+      'email.e2e.admin',
+      {
+        password: 'offline-only',
+        profile: {
+          name: 'Email E2E Admin',
+          email: 'admin@nxp.com',
+          employeeId: 'offline-001',
+          title: 'Engineer',
+        },
+      },
+    ],
+  ]);
+  for (const user of users) {
+    assert.ok(
+      !identities.has(user.username),
+      'Opt-in identities cannot replace default admin or duplicate another account',
+    );
+    identities.set(user.username, user);
+  }
   const directory = await mkdtemp(join(tmpdir(), 'psf-email-system-'));
   const mail = [];
   const failOnce = new Set();
@@ -134,18 +155,18 @@ export async function startEmailSystem() {
         for await (const chunk of req) body += chunk;
         if (req.url === '/ldap' && req.method === 'POST') {
           const credentials = JSON.parse(body);
-          assert.equal(credentials.username, 'email.e2e.admin');
-          assert.equal(credentials.password, 'offline-only');
+          const identity = identities.get(credentials.username);
           res.setHeader('Content-Type', 'application/json');
+          if (!identity || credentials.password !== identity.password) {
+            res.end(JSON.stringify({ status: '401' }));
+            return;
+          }
           res.end(
             JSON.stringify({
               status: '200',
               data: {
-                user: 'email.e2e.admin',
-                name: 'Email E2E Admin',
-                email: 'admin@nxp.com',
-                employeeId: 'offline-001',
-                title: 'Engineer',
+                user: credentials.username,
+                ...identity.profile,
               },
             }),
           );
@@ -341,7 +362,15 @@ export async function startEmailSystem() {
   }
 }
 
-export async function loginPage(system, t, expectedHttpErrors = []) {
+export async function loginPage(
+  system,
+  t,
+  expectedHttpErrors = [],
+  credentials = {
+    username: 'email.e2e.admin',
+    password: 'offline-only',
+  },
+) {
   const context = await system.browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
@@ -376,8 +405,8 @@ export async function loginPage(system, t, expectedHttpErrors = []) {
     return route.abort();
   });
   await page.goto(`${system.origin}/login`);
-  await page.getByLabel('Username', { exact: true }).fill('email.e2e.admin');
-  await page.getByLabel('Password', { exact: true }).fill('offline-only');
+  await page.getByLabel('Username', { exact: true }).fill(credentials.username);
+  await page.getByLabel('Password', { exact: true }).fill(credentials.password);
   await page
     .getByRole('button', { name: 'Sign in to Portal', exact: true })
     .click();
