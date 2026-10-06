@@ -543,12 +543,6 @@ dialog::backdrop { background: #10182066; }
 .request-history-page .request-history { padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
 .dynamic-form__section:first-child { border: 0; padding-top: 0; }
 .dynamic-form__grid { gap: 20px 24px; }
-.dynamic-form__additional { border-top: 1px solid var(--border); padding-top: 16px; }
-.dynamic-form__additional-summary { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; cursor: pointer; list-style: none; }
-.dynamic-form__additional-summary::before { content: '›'; font-size: 20px; transition: transform .15s; }
-.dynamic-form__additional[open] > summary::before { transform: rotate(90deg); }
-.dynamic-form__additional > .dynamic-form__grid { margin-top: 20px; }
-.dynamic-form__additional-count { color: var(--muted-foreground); font-size: 12px; font-weight: 400; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 12px; }
 .dynamic-form__radio-option { border: 1px solid var(--input-border); border-radius: 6px; padding: 8px 12px; min-height: 38px; }
 .dynamic-form__radio-option--selected { border-color: var(--primary); background: var(--accent-light); }
@@ -711,3 +705,12 @@ dialog::backdrop { background: #10182066; }
 .summary-card--overdue .summary-card__selected { color: var(--warning); }
 .summary-card--completed .summary-card__selected { color: var(--success); }
 .active-schema-form__identity h2 { color: var(--foreground); }
+
+/* Readable field labels and section hierarchy are confined to request Detail. */
+.detail-editors .dynamic-form__label { font-size: 14px; font-weight: 700; color: var(--foreground); }
+.detail-editors .dynamic-form--readonly .dynamic-form__label { display: block; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.detail-editors .dynamic-form__section-title,
+.detail-editors .section-heading,
+.detail-editors .active-schema-form__identity h2,
+.detail-editors .psf-created-panel__header h2 { font-size: 16px; }
+.detail-editors .dynamic-form__readonly { font-weight: 400; }

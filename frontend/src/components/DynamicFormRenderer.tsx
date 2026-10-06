@@ -24,7 +24,6 @@ export interface DynamicFormRendererProps {
   errors?: DynamicFormErrors
   readOnly?: boolean
   readOnlyFieldKeys?: readonly string[]
-  collapseOptionalFields?: boolean
   showSchemaHeader?: boolean
   submitLabel?: string
   onChange?: (fieldKey: string, value: string) => void
@@ -42,7 +41,6 @@ export function DynamicFormRenderer({
   onSubmit,
   readOnly = false,
   readOnlyFieldKeys = [],
-  collapseOptionalFields = false,
   schema,
   showSchemaHeader = true,
   submitLabel = 'Submit request',
@@ -103,8 +101,6 @@ export function DynamicFormRenderer({
       ) : null}
       <div className="dynamic-form__sections">
         {schema.sections.map((section, sectionIndex) => {
-          const optionalFields = collapseOptionalFields ? section.fields.filter((field) => !field.required) : []
-          const mainFields = collapseOptionalFields ? section.fields.filter((field) => field.required) : section.fields
           return (
           <section aria-label={section.title} className="dynamic-form__section" key={section.sectionKey}>
             {schema.sections.length === 1 && section.title === headerTitle ? null : <div className="dynamic-form__section-header">
@@ -112,17 +108,9 @@ export function DynamicFormRenderer({
               <h3 className="dynamic-form__section-title">{section.title}</h3>
             </div>}
             <div className="dynamic-form__grid">
-              {mainFields.map(renderField)}
+              {section.fields.map(renderField)}
             </div>
-            {optionalFields.length > 0 ? (
-              <details className="dynamic-form__additional" open={optionalFields.some((field) => Boolean(errors[field.fieldKey])) || undefined}>
-                <summary className="dynamic-form__additional-summary">
-                  <span>Additional details</span>
-                  <span className="dynamic-form__additional-count">{optionalFields.length} optional {optionalFields.length === 1 ? 'field' : 'fields'}</span>
-                </summary>
-                <div className="dynamic-form__grid">{optionalFields.map(renderField)}</div>
-              </details>
-            ) : null}
+
           </section>
           )
         })}

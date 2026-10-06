@@ -5,7 +5,8 @@ import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { StatusLabel } from './ui/StatusLabel'
 import { ConfirmDialog } from './ui/ConfirmDialog'
-import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { AdminFormConfigPreview } from './AdminFormConfigPreview'
+export { AdminFormConfigPreview } from './AdminFormConfigPreview'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import { FormVersionBreadcrumbContext } from './formVersionBreadcrumb'
 import {
@@ -22,7 +23,7 @@ import {
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
 import { api } from '../services/api'
-import { isFormKey, type FormKey, type FormSchema, type FormSchemaField, type FormSchemaVersionResponse } from '../types/forms'
+import { isFormKey, type FormKey, type FormSchemaField, type FormSchemaVersionResponse } from '../types/forms'
 
 type AdminFormConfigFeedbackValue = {
   kind: 'success' | 'error'
@@ -40,6 +41,13 @@ export interface AdminFormConfigVersionSelectorProps {
   onDiscard: (version: number) => void
   onPublish: (version: number) => void
   versions: FormSchemaVersionResponse[]
+}
+
+function visibleDescription(description: string | null) {
+  return description && ![
+    'Default requester-facing MVP schema for local PSF request creation.',
+    'Initial PSF Created Information schema.',
+  ].includes(description.trim()) ? description : null
 }
 
 export function AdminFormConfigVersionSelector({
@@ -61,11 +69,17 @@ export function AdminFormConfigVersionSelector({
               <td><div className="admin-form-config__version-stamp">{disabled ? `v${version.version}` : formKey === 'psf-request'
                 ? <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ version: String(version.version) }} to="/admin/form-config/$version">v{version.version}</Link>
                 : <Link aria-label={`Open form version ${version.version}`} className="admin-form-config__version-link" params={{ formKey, version: String(version.version) }} to="/admin/form-config/$formKey/$version">v{version.version}</Link>}</div></td>
-              <td><div className="admin-form-config__version-content"><strong>{version.title}</strong>{version.description ? <p className="page-card__description">{version.description}</p> : null}</div></td>
+              <td><div className="admin-form-config__version-content"><strong>{version.title}</strong>{visibleDescription(version.description) ? <p className="page-card__description">{version.description}</p> : null}</div></td>
               <td><StatusLabel status={version.status === 'published' ? 'Inactive' : version.status === 'active' ? 'Active' : 'Draft'} kind={version.status === 'active' ? 'completed' : version.status === 'draft' ? 'draft' : 'neutral'} /></td>
               <td><time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleDateString()}</time></td>
               <td>{version.publishedAt ? <time dateTime={version.publishedAt}>{new Date(version.publishedAt).toLocaleDateString()}</time> : '—'}</td>
               <td><div className="admin-form-config__controls">
+                {disabled ? <button className="secondary-button" disabled type="button">View</button> : formKey === 'psf-request'
+                  ? <Link aria-label={`View form version ${version.version}`} className="secondary-button" params={{ version: String(version.version) }} to="/admin/form-config/$version">View</Link>
+                  : <Link aria-label={`View form version ${version.version}`} className="secondary-button" params={{ formKey, version: String(version.version) }} to="/admin/form-config/$formKey/$version">View</Link>}
+                {version.status === 'draft' ? disabled ? <button className="secondary-button" disabled type="button">Edit</button> : formKey === 'psf-request'
+                  ? <Link aria-label={`Edit form version ${version.version}`} className="secondary-button" params={{ version: String(version.version) }} to="/admin/form-config/$version">Edit</Link>
+                  : <Link aria-label={`Edit form version ${version.version}`} className="secondary-button" params={{ formKey, version: String(version.version) }} to="/admin/form-config/$formKey/$version">Edit</Link> : null}
                 {version.status === 'draft' ? <>
                   <button aria-label={`Publish version ${version.version}`} className="primary-button" disabled={disabled} onClick={() => onPublish(version.version)} type="button">Publish</button>
                   <button aria-label={`Discard draft version ${version.version}`} className="secondary-button admin-form-config__danger" disabled={disabled} onClick={() => onDiscard(version.version)} type="button">Discard</button>
@@ -78,10 +92,6 @@ export function AdminFormConfigVersionSelector({
       {hasDraft ? <p className="page-card__description">A draft already exists. Open or discard it before duplicating another version.</p> : <p className="page-card__description">To make an older form active, duplicate it as a draft and publish the new version.</p>}
     </section>
   )
-}
-
-export function AdminFormConfigPreview({ schema }: { schema: FormSchema | null }) {
-  return schema ? <DynamicFormRenderer readOnly schema={schema} /> : null
 }
 
 export function AdminFormConfigFeedback({
@@ -381,10 +391,6 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
     }
   }
 
-  function switchFormFamily(nextFormKey: string) {
-    if (!isFormKey(nextFormKey) || nextFormKey === formKey || busy) return
-    void navigate({ to: '/admin/form-config', search: { formKey: nextFormKey } })
-  }
 
   function requestConfirmation(action: 'publish' | 'discard', number: number) {
     if (busy || requestInFlight.current || !versions.some((item) => item.version === number && item.status === 'draft')) return
@@ -405,21 +411,12 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
 
       <div className="page-card__body admin-form-config__body">
         <div className={`admin-form-config__workspace${isEditor ? ' admin-form-config__workspace--editor' : ''}`}>
-        <aside aria-label="Form family selection" className={`admin-form-config__family-panel${isEditor ? ' admin-form-config__family-panel--editor' : ' admin-form-config__family-panel--tabs'}`}>
-        {isEditor ? <p className="page-card__eyebrow">Form families</p> : null}
-        {!isEditor ? <nav aria-label="Form families" className="admin-form-config__family-nav">
-          <Link aria-current={formKey === 'psf-request' ? 'page' : undefined} className="admin-form-config__family-link" search={{ formKey: 'psf-request' }} to="/admin/form-config"><span>Requester Information</span><small>Fields completed by the requester</small></Link>
-          <Link aria-current={formKey === 'psf-created-information' ? 'page' : undefined} className="admin-form-config__family-link" search={{ formKey: 'psf-created-information' }} to="/admin/form-config"><span>PSF Created Information</span><small>Fields maintained by the setup team</small></Link>
-        </nav> : <label className="admin-form-config__field" htmlFor="admin-form-config-family">
-          <span>Form to manage</span>
-          <select aria-label="Form to manage" disabled={busy} id="admin-form-config-family" onChange={(event) => switchFormFamily(event.target.value)} value={formKey}>
-            <option value="psf-request">Requester Information</option>
-            <option value="psf-created-information">PSF Created Information</option>
-          </select>
-        </label>}
-        {isEditor ? <div><Link className="secondary-button" search={{ formKey }} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link></div> : null}
-        {isEditor ? <p className="admin-form-config__family-note">Each family has its own versions and one draft at a time.</p> : null}
-        </aside>
+        {!isEditor ? <aside aria-label="Form family selection" className="admin-form-config__family-panel admin-form-config__family-panel--tabs">
+          <nav aria-label="Form families" className="admin-form-config__family-nav">
+            <Link aria-current={formKey === 'psf-request' ? 'page' : undefined} className="admin-form-config__family-link" search={{ formKey: 'psf-request' }} to="/admin/form-config"><span>Requester Information</span><small>Fields completed by the requester</small></Link>
+            <Link aria-current={formKey === 'psf-created-information' ? 'page' : undefined} className="admin-form-config__family-link" search={{ formKey: 'psf-created-information' }} to="/admin/form-config"><span>PSF Created Information</span><small>Fields maintained by the setup team</small></Link>
+          </nav>
+        </aside> : null}
         <div className={isEditor ? 'admin-form-config__editor-surface' : 'admin-form-config__catalog'}>
         {!isEditor ? <header className="admin-form-config__family-context"><p className="page-card__eyebrow">Version catalog</p><h2>{familyLabel}</h2><p className="page-card__description">Active versions are used for new requests. Existing requests retain their captured form versions.</p></header> : null}
         <AdminFormConfigFeedback feedback={feedback} loading={loading} />
@@ -435,13 +432,13 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
         {!loading && isEditor && selectedVersion ? (
           <>
             <div className="admin-form-config__section-header">
+              <Link className="secondary-button" search={{ formKey }} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link>
               <div className="admin-form-config__version-heading"><span className="admin-form-config__version-stamp">v{selectedVersion.version}</span><div><p className="page-card__eyebrow">{familyLabel}</p><h1 id="form-config-editor-heading">{selectedVersion.title}</h1></div></div>
             </div>
             <div className="admin-form-config__identity">
               <StatusLabel status={selectedVersion.status === 'active' ? 'Active' : selectedVersion.status === 'draft' ? 'Draft' : 'Inactive'} kind={selectedVersion.status === 'active' ? 'completed' : selectedVersion.status === 'draft' ? 'draft' : 'neutral'} />
-              <span className="admin-form-config__key">Family: {formKey}</span>
               <span>Created by {selectedVersion.createdBy} · <time dateTime={selectedVersion.createdAt}>{new Date(selectedVersion.createdAt).toLocaleDateString()}</time></span>
-              {selectedVersion.description ? <span>{selectedVersion.description}</span> : null}
+              {visibleDescription(selectedVersion.description) ? <span>{selectedVersion.description}</span> : null}
             </div>
             <div className="admin-form-config__editor-layout">
             <div className="admin-form-config__editor" aria-labelledby="form-config-editor-heading">

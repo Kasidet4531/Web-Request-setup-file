@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { DynamicFormRenderer } from './DynamicFormRenderer'
+import type { DynamicFormRendererProps } from './DynamicFormRenderer'
+import type { FormSchema } from '../types/forms'
 import { ApiError } from '../services/api'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
 import { ConfirmDialog } from './ui/ConfirmDialog'
@@ -334,9 +338,6 @@ function getVersionSelector(page: unknown): RenderedElement {
   return requireRenderedElement(page, (element) => element.type === AdminFormConfigVersionSelector)
 }
 
-function getFormKeySelector(page: unknown): RenderedElement {
-  return requireRenderedElement(page, (element) => element.type === 'select' && element.props['aria-label'] === 'Form to manage')
-}
 
 type BlockerArgs = {
   action: 'PUSH' | 'REPLACE' | 'BACK' | 'FORWARD' | 'GO'
@@ -592,6 +593,33 @@ describe('AdminFormConfigPage interactions', () => {
     page = renderAdminFormConfigPage()
     expect((getVisualEditor(page).props.schema as FormSchemaDraft).title).toBe('Renamed form')
     expect(getButton(page, 'Save draft').props.disabled).toBe(false)
+  })
+
+  it('keeps preview typing out of config dirty state and retains trial values after config label edits', async () => {
+    const draft = buildVersion({ schema: trialSchema })
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([draft]))
+    await loadAdminFormConfigPage()
+    const renderEditorAndTrial = () => {
+      const page = renderAdminFormConfigPage()
+      const preview = AdminFormConfigPreview({ schema: getPreview(page).props.schema as FormSchema })
+      const renderer = requireRenderedElement(preview, (element) => element.type === DynamicFormRenderer)
+      return { page, trial: renderer.props as unknown as DynamicFormRendererProps }
+    }
+    let view = renderEditorAndTrial()
+    view.trial.onChange?.('product', 'Trial input')
+    view = renderEditorAndTrial()
+    expect(view.trial.values?.product).toBe('Trial input')
+    expect(getButton(view.page, 'Save draft').props.disabled).toBe(true)
+    expect(getButton(view.page, 'Publish').props.disabled).toBe(false)
+    expect(JSON.parse(getEditor(view.page).props.value as string).sections[0].fields[1].label).toBe('Product')
+    const changed = { ...trialSchema, sections: [{ ...trialSchema.sections[0], fields: trialSchema.sections[0].fields.map((field) => field.fieldKey === 'product' ? { ...field, label: 'Edited product' } : field) }] }
+    ;(getVisualEditor(view.page).props.onChange as (schema: FormSchemaDraft) => void)(changed)
+    view = renderEditorAndTrial()
+    expect(view.trial.values?.product).toBe('Trial input')
+    expect(trialMarkup(view.trial)).toContain('Edited product')
+    expect(getButton(view.page, 'Save draft').props.disabled).toBe(false)
+    expect(getButton(view.page, 'Publish').props.disabled).toBe(true)
+    expect(formConfigApi.saveAdminFormConfigDraft).not.toHaveBeenCalled()
   })
 
   it('opens preview from the toolbar and uses the unsaved draft', async () => {
@@ -872,25 +900,31 @@ describe('AdminFormConfigPage interactions', () => {
     expect(findRenderedElement(page, (element) => element.type === 'h1' && element.props.children === 'v2 · PSF Request Form')).toBeNull()
   })
 
-  it('routes a dirty form-family switch through the custom blocker while Stay preserves the selected family and edits', async () => {
+  it.each([
+    'Default requester-facing MVP schema for local PSF request creation.',
+    'Initial PSF Created Information schema.',
+  ])('hides stored seed description in a duplicated editor: %s', async (description) => {
+    formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildVersion({ description, version: 8 })]))
+    const page = await loadAdminFormConfigPage('8')
+    expect(findRenderedElement(page, (element) => element.type === 'span' && element.props.children === description)).toBeNull()
+    expect(findRenderedElement(page, (element) => element.type === 'span' && Array.isArray(element.props.children) && element.props.children[0] === 'Family: ')).toBeNull()
+  })
+
+  it('removes editor family selection and keeps Back protected by the dirty blocker', async () => {
     const formKey = 'psf-created-information'
     formConfigApi.fetchAdminFormConfig.mockResolvedValueOnce(buildList([buildPsfCreatedVersion()], formKey))
     let page = await loadAdminFormConfigPage('7', formKey)
+    expect(findRenderedElement(page, (element) => element.type === 'aside' && element.props['aria-label'] === 'Form family selection')).toBeNull()
     const editedText = JSON.stringify({ ...buildPsfCreatedVersion().schema, title: 'Unsaved PSF schema' })
     ;(getEditor(page).props.onChange as (event: { target: { value: string } }) => void)({ target: { value: editedText } })
+    renderAdminFormConfigPage('7', formKey)
+    expect(await attemptEditorNavigation('/admin/form-config', 'PUSH', '/admin/form-config/psf-created-information/7')).toBe('/admin/form-config/psf-created-information/7')
     page = renderAdminFormConfigPage('7', formKey)
-    ;(getFormKeySelector(page).props.onChange as (event: { target: { value: FormKey } }) => void)({ target: { value: 'psf-request' } })
-    expect(navigate).toHaveBeenCalledWith({ to: '/admin/form-config', search: { formKey: 'psf-request' } })
-    expect(await attemptEditorNavigation('/admin/form-config', 'PUSH', '/admin/form-config/psf-created-information/7'))
-      .toBe('/admin/form-config/psf-created-information/7')
-    page = renderAdminFormConfigPage('7', formKey)
-    expect(getLeaveConfirmation(page).props.open).toBe(true)
     ;(getLeaveConfirmation(page).props.onCancel as () => void)()
     page = renderAdminFormConfigPage('7', formKey)
-    expect(getFormKeySelector(page).props.value).toBe(formKey)
     expect(getEditor(page).props.value).toBe(editedText)
+    expect(findRenderedElement(page, (element) => element.props.to === '/admin/form-config' && element.props.className === 'secondary-button')).not.toBeNull()
     expect(blockerHarness.committedPath).toBeNull()
-    expect(window.confirm).not.toHaveBeenCalled()
   })
 
   it('duplicates a PSF version and opens its explicit form-key editor URL', async () => {
@@ -1007,5 +1041,86 @@ describe('AdminFormConfigPage interactions', () => {
     expect(formConfigApi.discardAdminFormConfigDraft).toHaveBeenCalledWith(7, formKey)
     expect(formConfigApi.fetchAdminFormConfig).toHaveBeenCalledTimes(2)
     expect(getVersionSelector(renderAdminFormConfigPage(null, formKey)).props.versions).toEqual([active])
+  })
+})
+
+const trialSchema: FormSchema = {
+  formKey: 'psf-request', version: 2, title: 'Requester inputs', sections: [{
+    sectionKey: 'inputs', title: 'Inputs', fields: [
+      { fieldKey: 'identity', canonicalKey: 'requester', label: 'Requester', type: 'text', required: true },
+      { fieldKey: 'product', canonicalKey: 'product', label: 'Product', type: 'text', required: true, autofillTrigger: true },
+      { fieldKey: 'option', canonicalKey: 'option', label: 'Option', type: 'select', required: false, options: ['One', 'Two'] },
+      { fieldKey: 'route', canonicalKey: 'route', label: 'Route', type: 'radio', required: true, options: ['A', 'B'] },
+    ],
+  }],
+}
+function renderTrial(schema: FormSchema | null = trialSchema) {
+  formConfigHookHarness.beginRender()
+  const page = AdminFormConfigPreview({ schema })
+  const renderer = requireRenderedElement(page, (element) => element.type === DynamicFormRenderer)
+  return renderer.props as unknown as DynamicFormRendererProps
+}
+function trialMarkup(props: DynamicFormRendererProps) {
+  return renderToStaticMarkup(<DynamicFormRenderer {...props} />)
+}
+
+describe('interactive admin form preview', () => {
+  beforeEach(() => {
+    formConfigHookHarness.reset()
+    vi.clearAllMocks()
+  })
+  it.each(['psf-request', 'psf-created-information'] as const)('validates %s trial controls locally and preserves configured order', (formKey) => {
+    const schema = { ...trialSchema, formKey }
+    let preview = renderTrial(schema)
+    expect(preview.readOnly).not.toBe(true)
+    expect(preview.onChange).toBeTypeOf('function')
+    preview.onSubmit?.({})
+    preview = renderTrial(schema)
+    const html = trialMarkup(preview)
+    expect(html).toMatch(/<input[^>]*aria-invalid="true"[^>]*type="text"/)
+    expect(html).toContain('<select')
+    expect(html).toContain('type="radio"')
+    expect(html.indexOf('Product')).toBeLessThan(html.indexOf('Option'))
+    expect(html.indexOf('Option')).toBeLessThan(html.indexOf('Route'))
+    expect(html).not.toContain('Additional details')
+    preview.onChange?.('product', 'Local product')
+    preview.onChange?.('route', 'A')
+    preview = renderTrial(schema)
+    preview.onSubmit?.(preview.values ?? {})
+    preview = renderTrial(schema)
+    expect(preview.errors?.product).toBeUndefined()
+    expect(preview.errors?.route).toBeUndefined()
+    expect(Object.values(formConfigApi).every((operation) => operation.mock.calls.length === 0)).toBe(true)
+  })
+  it('uses a locked sample identity with no API initialization', () => {
+    const preview = renderTrial()
+    expect(preview.values?.identity).toBe('Sample requester (preview only)')
+    expect(preview.readOnlyFieldKeys).toEqual(['identity'])
+    const html = trialMarkup(preview)
+    expect(html).toMatch(/<output[^>]*>Sample requester \(preview only\)<\/output>/)
+    preview.onChange?.('identity', 'Attempted identity edit')
+    expect(renderTrial().values?.identity).toBe('Sample requester (preview only)')
+  })
+  it('immediately samples a newly configured identity field without discarding other trial input', () => {
+    renderTrial().onChange?.('product', 'Trial product')
+    const schema = { ...trialSchema, sections: [{ ...trialSchema.sections[0], fields: trialSchema.sections[0].fields.map((field) => field.fieldKey === 'option' ? { ...field, canonicalKey: 'requester_name', required: true } : field) }] }
+    const preview = renderTrial(schema)
+    expect(preview.values?.option).toBe('Sample requester (preview only)')
+    expect(preview.values?.product).toBe('Trial product')
+    expect(preview.readOnlyFieldKeys).toEqual(['identity', 'option'])
+  })
+  it('preserves trial values during unsaved label and options edits but resets on version or family change', () => {
+    renderTrial().onChange?.('product', 'Entered locally')
+    const edited = { ...trialSchema, sections: [{ ...trialSchema.sections[0], fields: trialSchema.sections[0].fields.map((field) => field.fieldKey === 'product' ? { ...field, label: 'Unsaved product' } : field.fieldKey === 'option' ? { ...field, options: ['Unsaved option'] } : field) }] }
+    let preview = renderTrial(edited)
+    expect(preview.values?.product).toBe('Entered locally')
+    expect(trialMarkup(preview)).toContain('Unsaved product')
+    expect(trialMarkup(preview)).toContain('Unsaved option')
+    preview = renderTrial({ ...edited, version: 3 })
+    expect(preview.values?.product ?? '').toBe('')
+    preview.onChange?.('product', 'Version 3 trial')
+    preview = renderTrial({ ...edited, version: 3, formKey: 'psf-created-information' })
+    expect(preview.values?.product ?? '').toBe('')
+    expect(preview.values?.identity ?? '').toBe('')
   })
 })

@@ -262,26 +262,18 @@ describe('DynamicFormRenderer field policy', () => {
     expect(html).toContain('type="submit"')
   })
 
-  it('groups only optional fields, preserving sections and making future required fields visible', () => {
-    const configured: FormSchema = { ...schema, sections: [...schema.sections, { sectionKey: 'engineering', title: 'Engineering checks', fields: [
-      { fieldKey: 'new_required', canonicalKey: 'new_required', label: 'Future Required', type: 'text', required: true },
-      { fieldKey: 'new_optional', canonicalKey: 'new_optional', label: 'Future Optional', type: 'text', required: false },
+  it('keeps interleaved optional controls between required fields in configured order', () => {
+    const configured: FormSchema = { ...schema, sections: [{ ...schema.sections[0], fields: [
+      schema.sections[0].fields[1],
+      { ...schema.sections[0].fields[2], required: false },
+      schema.sections[0].fields[0],
     ] }] }
-    const html = renderToStaticMarkup(<DynamicFormRenderer schema={configured} collapseOptionalFields />)
-    const groups = [...html.matchAll(/<details[^>]*>([\s\S]*?)<\/details>/g)]
-    expect(groups).toHaveLength(2)
-    expect(groups[0][1]).toContain('Additional details')
-    expect(groups[0][1]).toContain('Request Note')
-    expect(groups[0][1]).not.toContain('Priority')
-    expect(groups[1][1]).toContain('Future Optional')
-    expect(groups[1][1]).not.toContain('Future Required')
-    expect(html).toContain('Future Required')
-    expect(html.indexOf('Requester Information')).toBeLessThan(html.indexOf('Engineering checks'))
-    expect(html).not.toContain('<details open')
-  })
-
-  it('opens optional details when a field inside has an error', () => {
-    const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} collapseOptionalFields errors={{ request_note: 'Too long' }} />)
-    expect(html).toMatch(/<details[^>]*open=""[^>]*>[\s\S]*Too long/)
+    // The legacy flag must no longer move any configured field.
+    const html = renderToStaticMarkup(<DynamicFormRenderer {...{ collapseOptionalFields: true }} schema={configured} />)
+    expect(html.indexOf('Title')).toBeLessThan(html.indexOf('Priority'))
+    expect(html.indexOf('Priority')).toBeLessThan(html.indexOf('Product Type'))
+    expect(html).toContain('<select')
+    expect(html).not.toContain('Additional details')
+    expect(html).not.toContain('<details')
   })
 })

@@ -925,7 +925,6 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         ) : null}
       </div>
       <DynamicFormRenderer
-        collapseOptionalFields={mode === 'request' && (!currentRequest || currentRequest.status === DRAFT_STATUS || usesExplicitEdit)}
         errors={errors}
         footerActions={!formReadOnly && (usesExplicitEdit || currentRequest) ? <>
           {usesExplicitEdit ? <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button> : null}

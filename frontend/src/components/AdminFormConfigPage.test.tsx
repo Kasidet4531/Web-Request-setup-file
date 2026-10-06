@@ -203,11 +203,12 @@ describe('AdminFormConfigPage helpers', () => {
     const validHtml = renderToStaticMarkup(<AdminFormConfigPreview schema={previewSchema} />)
     const invalidHtml = renderToStaticMarkup(<AdminFormConfigPreview schema={null} />)
 
-    expect(validHtml).toContain('Schema preview')
-    expect(validHtml).toContain('PSF Request Form')
-    expect(validHtml).toContain('version 2')
-    expect(validHtml).toContain('<output')
-    expect(validHtml).not.toMatch(/<input|<select|<textarea/)
+    expect(validHtml).toContain('Preview only')
+    expect(validHtml).not.toContain('Schema preview')
+    expect(validHtml).not.toContain('psf-request')
+    expect(validHtml).toContain('type="radio"')
+    expect(validHtml).toContain('<textarea')
+    expect(validHtml).toContain('Check required fields')
     expect(invalidHtml).toBe('')
   })
 
@@ -272,15 +273,30 @@ describe('AdminFormConfigPage helpers', () => {
     expect(pending).toContain('>Discard</button>')
   })
 
-  it('opens versions from the catalog instead of View or Edit actions', () => {
+  it('offers View for every version and Edit only for Draft', () => {
     const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
     const html = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[
       buildVersion({ status: 'active', version: 2 }),
       buildVersion({ status: 'draft', version: 3 }),
+      buildVersion({ status: 'published', version: 1 }),
     ]} />)
     expect(html).toContain('href="/admin/form-config/2"')
     expect(html).toContain('href="/admin/form-config/3"')
-    expect(html).not.toMatch(/>(View|Edit)<\/button>/)
+    expect(html.match(/>View<\/a>/g)).toHaveLength(3)
+    expect(html.match(/>Edit<\/a>/g)).toHaveLength(1)
+    expect(html).toMatch(/aria-label="Edit form version 3"[^>]*href="\/admin\/form-config\/3"/)
+  })
+
+  it('hides stored seed descriptions for copies while retaining custom descriptions', () => {
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const html = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[
+      buildVersion({ description: 'Default requester-facing MVP schema for local PSF request creation.', version: 8 }),
+      buildVersion({ description: 'Initial PSF Created Information schema.', version: 9 }),
+      buildVersion({ description: 'Engineering review fields', version: 10 }),
+    ]} />)
+    expect(html).not.toContain('Default requester-facing')
+    expect(html).not.toContain('Initial PSF Created')
+    expect(html).toContain('Engineering review fields')
   })
 
   it('uses explicit shareable PSF form-key version links without changing requester links', () => {

@@ -1281,16 +1281,16 @@ describe('ActiveSchemaForm explicit submitted editing', () => {
     expect(getFormRenderer(page).props.fieldStatuses).toEqual({ legacy_note: 'auto-filled' })
   })
 
-  it('keeps New and Draft flows immediately editable with optional fields grouped', async () => {
+  it('keeps New and Draft flows immediately editable without regrouping optional fields', async () => {
     requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft())
     const page = await loadSubmittedForm()
     expect(getFormRenderer(page).props.readOnly).toBe(false)
-    expect(getFormRenderer(page).props.collapseOptionalFields).toBe(true)
+    expect(getFormRenderer(page).props.collapseOptionalFields).toBeUndefined()
     expect(findRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Edit information')).toBeNull()
     hookHarness.reset()
     const newPage = await loadNewDraftForm()
     expect(getFormRenderer(newPage).props.readOnly).toBe(false)
-    expect(getFormRenderer(newPage).props.collapseOptionalFields).toBe(true)
+    expect(getFormRenderer(newPage).props.collapseOptionalFields).toBeUndefined()
   })
 
   it.each(['requester', 'requester_name'])('fills signed-in %s identity after other New Request edits without making initialization dirty', async (canonicalKey) => {
