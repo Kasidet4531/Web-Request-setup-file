@@ -1,145 +1,16 @@
+import { requireRenderedElement } from '../test-utils/componentHarness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type PsfRequestResponse } from '../services/api'
 import { RequestAssignmentDialog } from './RequestAssignmentDialog'
 import { RequestAssigneePicker } from './RequestAssigneePicker'
 const requestApi = vi.hoisted(() => ({ updatePsfRequestAssignment: vi.fn(), fetchPsfRequest: vi.fn() }))
-const hookHarness = vi.hoisted(() => {
-  let effectDependencies: Array<readonly unknown[] | undefined> = []
-  let effectIndex = 0
-  let effects: Array<() => void | (() => void)> = []
-  let refIndex = 0
-  let refs: Array<{ current: unknown }> = []
-  let state: unknown[] = []
-  let stateIndex = 0
-
-  function dependenciesChanged(
-    previous: readonly unknown[] | undefined,
-    next: readonly unknown[] | undefined,
-  ): boolean {
-    if (!previous || !next || previous.length !== next.length) {
-      return true
-    }
-
-    return previous.some((value, index) => !Object.is(value, next[index]))
-  }
-
-  return {
-    beginRender() {
-      effectIndex = 0
-      refIndex = 0
-      stateIndex = 0
-    },
-    reset() {
-      effectDependencies = []
-      effectIndex = 0
-      effects = []
-      refIndex = 0
-      refs = []
-      state = []
-      stateIndex = 0
-    },
-    runEffects() {
-      const pendingEffects = effects
-      effects = []
-      return pendingEffects.map((effect) => effect())
-    },
-    useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {
-      if (dependenciesChanged(effectDependencies[effectIndex], dependencies)) {
-        effects.push(effect)
-        effectDependencies[effectIndex] = dependencies ? [...dependencies] : undefined
-      }
-      effectIndex += 1
-    },
-    useMemo<T>(factory: () => T) {
-      return factory()
-    },
-    useRef<T>(initialValue: T) {
-      const index = refIndex
-      refIndex += 1
-
-      if (index === refs.length) {
-        refs.push({ current: initialValue })
-      }
-
-      return refs[index] as { current: T }
-    },
-    useState(initialState: unknown) {
-      const index = stateIndex
-      stateIndex += 1
-
-      if (index === state.length) {
-        state.push(
-          typeof initialState === 'function'
-            ? (initialState as () => unknown)()
-            : initialState,
-        )
-      }
-
-      return [state[index], (nextState: unknown) => {
-        state[index] =
-          typeof nextState === 'function'
-            ? (nextState as (currentState: unknown) => unknown)(state[index])
-            : nextState
-      }]
-    },
-  }
+const hookHarness = await vi.hoisted(async () => {
+  const { createHookHarness } = await import('../test-utils/componentHarness')
+  return createHookHarness()
 })
 
 vi.mock('../services/api', async load => ({ ...await load<typeof import('../services/api')>(), api: requestApi }))
 vi.mock('react', async load => ({ ...await load<typeof import('react')>(), useEffect: hookHarness.useEffect, useMemo: hookHarness.useMemo, useRef: hookHarness.useRef, useState: hookHarness.useState, useId: () => 'test-id' }))
-interface RenderedElement { props: Record<string, unknown>; type: unknown }
-function findRenderedElement(
-  node: unknown,
-  matches: (element: RenderedElement) => boolean,
-): RenderedElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findRenderedElement(child, matches)
-      if (match) {
-        return match
-      }
-    }
-
-    return null
-  }
-
-  if (
-    !node ||
-    typeof node !== 'object' ||
-    !('props' in node) ||
-    !('type' in node) ||
-    typeof node.props !== 'object' ||
-    node.props === null
-  ) {
-    return null
-  }
-
-  const element: RenderedElement = {
-    props: node.props as Record<string, unknown>,
-    type: node.type,
-  }
-  if (matches(element)) {
-    return element
-  }
-
-  return findRenderedElement(element.props.children, matches)
-}
-
-function requireRenderedElement(
-  node: unknown,
-  matches: (element: RenderedElement) => boolean,
-): RenderedElement {
-  const element = findRenderedElement(node, matches)
-
-  if (!element) {
-    throw new Error('Expected rendered element was not found')
-  }
-
-  return element
-}
-
-
-
 const schema = { formKey: 'psf-request' as const, version: 1, title: 'Request', sections: [] }
 const request: PsfRequestResponse = {
   id: 'request-1', requestNo: 'PSF-0001', formKey: 'psf-request', formVersion: 1, status: 'Submitted', requester: 'Requester', requesterUserId: 'requester-1',
@@ -152,6 +23,24 @@ const render = (snapshot = request, disabled = false) => { hookHarness.beginRend
 const picker = (page: unknown) => requireRenderedElement(page, e => e.type === RequestAssigneePicker)
 const button = (page: unknown, label: string) => requireRenderedElement(page, e => e.type === 'button' && e.props.children === label)
 const ready = (page: unknown) => (picker(page).props.onAvailabilityChange as (ready: boolean) => void)(true)
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(settle => { resolve = settle })
+  return { promise, resolve }
+}
+
+async function failedRecovery() {
+  let page = render()
+  hookHarness.runEffects()
+  ready(page)
+  ;(picker(page).props.onChange as (id: string | null) => void)('owner-2')
+  page = render()
+  requestApi.updatePsfRequestAssignment.mockRejectedValueOnce(new ApiError('Conflict', 409, 'Conflict', null))
+  requestApi.fetchPsfRequest.mockRejectedValueOnce(new Error('Offline'))
+  await (button(page, 'Save assignment').props.onClick as () => Promise<void>)()
+  return { page: render() }
+}
+
 describe('RequestAssignmentDialog', () => {
   afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => { hookHarness.reset(); Object.values(requestApi).forEach(method => method.mockReset()); saved.mockReset(); close.mockReset() })
@@ -236,6 +125,45 @@ describe('RequestAssignmentDialog', () => {
     cleanups.forEach(cleanup => { if (typeof cleanup === 'function') cleanup() })
     expect(modal.close).toHaveBeenCalledOnce()
     expect(trigger.focus).toHaveBeenCalledOnce()
+  })
+
+  it('serializes rapid revision retries before rerender and saves the preserved selection with the recovered revision', async () => {
+    const { page } = await failedRecovery()
+    const recovery = deferred<PsfRequestResponse>()
+    requestApi.fetchPsfRequest.mockReturnValue(recovery.promise)
+    const retry = button(page, 'Retry revision').props.onClick as () => void
+    retry(); retry()
+    expect(requestApi.fetchPsfRequest).toHaveBeenCalledTimes(2) // Initial failed recovery plus one retry.
+    const pending = render()
+    expect(button(pending, 'Retry revision').props.disabled).toBe(true)
+    expect(button(pending, 'Save assignment').props.disabled).toBe(true)
+    await (button(pending, 'Save assignment').props.onClick as () => Promise<void>)()
+    expect(requestApi.updatePsfRequestAssignment).toHaveBeenCalledTimes(1)
+    const latest = { ...request, setupOwnerUserId: 'owner-3', updatedAt: 'r3' }
+    recovery.resolve(latest)
+    await recovery.promise
+    const recovered = render(latest)
+    expect(picker(recovered).props.value).toBe('owner-2')
+    expect(saved).toHaveBeenCalledExactlyOnceWith(latest)
+    requestApi.updatePsfRequestAssignment.mockResolvedValueOnce({ ...latest, setupOwnerUserId: 'owner-2', updatedAt: 'r4' })
+    await (button(recovered, 'Save assignment').props.onClick as () => Promise<void>)()
+    expect(requestApi.updatePsfRequestAssignment).toHaveBeenLastCalledWith('request-1', { setupOwnerUserId: 'owner-2', expectedUpdatedAt: 'r3' })
+    expect(saved).toHaveBeenLastCalledWith(expect.objectContaining({ setupOwnerUserId: 'owner-2', updatedAt: 'r4' }))
+    retry() // A queued handler from the old dialog must not start recovery after successful close.
+    expect(requestApi.fetchPsfRequest).toHaveBeenCalledTimes(2)
+  })
+  it.each(['cancel', 'escape', 'unmount'])('ignores revision recovery completion after %s', async leave => {
+    const { page } = await failedRecovery()
+    const recovery = deferred<PsfRequestResponse>()
+    requestApi.fetchPsfRequest.mockReturnValue(recovery.promise)
+    ;(button(page, 'Retry revision').props.onClick as () => void)()
+    if (leave === 'cancel') (button(render(), 'Cancel').props.onClick as () => void)()
+    else if (leave === 'escape') (requireRenderedElement(render(), e => e.type === 'dialog').props.onCancel as (e: { preventDefault: () => void }) => void)({ preventDefault: vi.fn() })
+    else hookHarness.unmount()
+    recovery.resolve({ ...request, updatedAt: 'obsolete-revision' })
+    await recovery.promise
+    expect(saved).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(leave === 'unmount' ? 0 : 1)
   })
 
 })

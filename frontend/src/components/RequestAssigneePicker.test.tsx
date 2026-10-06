@@ -1,142 +1,14 @@
+import { requireRenderedElement, type RenderedElement } from '../test-utils/componentHarness'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestAssigneePicker } from './RequestAssigneePicker'
 const requestApi = vi.hoisted(() => ({ fetchRequestAssignees: vi.fn() }))
-const hookHarness = vi.hoisted(() => {
-  let effectDependencies: Array<readonly unknown[] | undefined> = []
-  let effectIndex = 0
-  let effects: Array<() => void | (() => void)> = []
-  let refIndex = 0
-  let refs: Array<{ current: unknown }> = []
-  let state: unknown[] = []
-  let stateIndex = 0
-
-  function dependenciesChanged(
-    previous: readonly unknown[] | undefined,
-    next: readonly unknown[] | undefined,
-  ): boolean {
-    if (!previous || !next || previous.length !== next.length) {
-      return true
-    }
-
-    return previous.some((value, index) => !Object.is(value, next[index]))
-  }
-
-  return {
-    beginRender() {
-      effectIndex = 0
-      refIndex = 0
-      stateIndex = 0
-    },
-    reset() {
-      effectDependencies = []
-      effectIndex = 0
-      effects = []
-      refIndex = 0
-      refs = []
-      state = []
-      stateIndex = 0
-    },
-    runEffects() {
-      const pendingEffects = effects
-      effects = []
-      pendingEffects.forEach((effect) => effect())
-    },
-    useEffect(effect: () => void | (() => void), dependencies?: readonly unknown[]) {
-      if (dependenciesChanged(effectDependencies[effectIndex], dependencies)) {
-        effects.push(effect)
-        effectDependencies[effectIndex] = dependencies ? [...dependencies] : undefined
-      }
-      effectIndex += 1
-    },
-    useMemo<T>(factory: () => T) {
-      return factory()
-    },
-    useRef<T>(initialValue: T) {
-      const index = refIndex
-      refIndex += 1
-
-      if (index === refs.length) {
-        refs.push({ current: initialValue })
-      }
-
-      return refs[index] as { current: T }
-    },
-    useState(initialState: unknown) {
-      const index = stateIndex
-      stateIndex += 1
-
-      if (index === state.length) {
-        state.push(
-          typeof initialState === 'function'
-            ? (initialState as () => unknown)()
-            : initialState,
-        )
-      }
-
-      return [state[index], (nextState: unknown) => {
-        state[index] =
-          typeof nextState === 'function'
-            ? (nextState as (currentState: unknown) => unknown)(state[index])
-            : nextState
-      }]
-    },
-  }
+const hookHarness = await vi.hoisted(async () => {
+  const { createHookHarness } = await import('../test-utils/componentHarness')
+  return createHookHarness()
 })
 
 vi.mock('../services/api', async load => ({ ...await load<typeof import('../services/api')>(), api: requestApi }))
 vi.mock('react', async load => ({ ...await load<typeof import('react')>(), useEffect: hookHarness.useEffect, useMemo: hookHarness.useMemo, useRef: hookHarness.useRef, useState: hookHarness.useState, useId: () => 'test-id' }))
-interface RenderedElement { props: Record<string, unknown>; type: unknown }
-function findRenderedElement(
-  node: unknown,
-  matches: (element: RenderedElement) => boolean,
-): RenderedElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findRenderedElement(child, matches)
-      if (match) {
-        return match
-      }
-    }
-
-    return null
-  }
-
-  if (
-    !node ||
-    typeof node !== 'object' ||
-    !('props' in node) ||
-    !('type' in node) ||
-    typeof node.props !== 'object' ||
-    node.props === null
-  ) {
-    return null
-  }
-
-  const element: RenderedElement = {
-    props: node.props as Record<string, unknown>,
-    type: node.type,
-  }
-  if (matches(element)) {
-    return element
-  }
-
-  return findRenderedElement(element.props.children, matches)
-}
-
-function requireRenderedElement(
-  node: unknown,
-  matches: (element: RenderedElement) => boolean,
-): RenderedElement {
-  const element = findRenderedElement(node, matches)
-
-  if (!element) {
-    throw new Error('Expected rendered element was not found')
-  }
-
-  return element
-}
-
-
 const render = (value: string | null | undefined = 'owner-1', onChange = vi.fn()) => { hookHarness.beginRender(); return RequestAssigneePicker({ value, onChange, recordedOwner: 'Saved owner / GNTC' }) }
 const find = (page: unknown, label: string) => requireRenderedElement(page, e => e.props['aria-label'] === label)
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
