@@ -6,7 +6,9 @@ Implemented in `feat/email-notification`, based on the reviewed destination-stat
 
 Each work status has `emailPolicy = { enabled, to, cc }`. Existing statuses without a policy and newly created statuses default to off; Draft always stays off.
 
-Admins open **Email policy** for a status, enter individual/group addresses and/or add existing users from the directory, then choose **Save email policy**. **Do not send email on entry** disables recipient controls while retaining saved values. To is required when enabled; CC is optional. Invalid directory addresses cannot be selected. Addresses are normalized and deduplicated, including removing To duplicates from CC.
+Admins choose **Edit** on a status row to open one modal containing its name and To/CC policy. Enter an individual/group address and choose **Add To** or **Add CC** (Enter also adds); each added address has an X button to remove it. Selecting a system user adds their current address directly. **Save changes** persists the name and policy together in one revision-checked transaction. A rejected database write rolls back the catalog, affected request names and search index together. Recipient-only edits do not rewrite request statuses, and catalog editing never sends a request notification.
+
+**Do not send email on entry** disables recipient controls while retaining added addresses. To is required when enabled; CC is optional. Invalid directory addresses cannot be selected. Addresses are normalized and deduplicated, with To taking precedence over CC. Typed addresses must be added or cleared before saving an enabled policy. Cancel, X or Escape discards local edits and returns focus to the row; closing is blocked during saving. The modal scrolls its body when needed and keeps its action footer visible.
 
 Selecting a user stores their current email address. It is an address picker, not a dynamic role subscription: changing a user's email later does not rewrite status policies or queued jobs. Update the policy when recipients change.
 
@@ -22,7 +24,7 @@ Policy settings are admin-only. Public status responses omit recipient settings,
 | Enter a status that has email off | No job and no fallback email |
 | Save Draft, edit request data, rename a status, or choose the current status again | No notification |
 
-Bulk replacement confirmation displays the destination's recipients and affected request count. Policy changes affect future events; existing jobs keep their original recipient, subject, body, request number and source/destination status snapshots. Turning a policy off does not cancel already-pending jobs.
+Bulk replacement uses a separate **Replace and delete status** modal displaying the destination's recipients, affected request count and any visibility-trigger replacement. It does not change requests until explicitly confirmed. Policy changes affect future events; existing jobs keep their original recipient, subject, body, request number and source/destination status snapshots. Turning a policy off does not cancel already-pending jobs.
 
 From is always **`noreply-psf@nxp.com`**. Emails show safe requester metadata, captured canonical Title/Priority/Due Date fields, previous/new status and the actor's name/role. They never include PSF Created Information. The View Request link uses `APP_BASE_URL`; the existing frontend login redirect preserves the destination URL.
 
@@ -105,7 +107,7 @@ Source: [status policies](../backend/src/admin/workflow_transition.service.ts), 
 
 `backend/test/email-system.e2e.mjs` exercises the built frontend in a real browser, the normal backend `main.js` entry point, cookie login, a fresh real PostgreSQL database, and the actual notification worker. Application API responses are not mocked. LDAP and SOAP are local HTTP substitutes; the SOAP substitute captures and parses the actual outbound XML and can return an HTTP-200 SOAP fault.
 
-Five flows cover destination-status delivery, disabled policy with retained recipients, SOAP failure followed by successful retry, bulk replacement with one delivery per request, and Draft submission with exactly one notification. Policy editing, status changes, submission and bulk deletion use browser controls. Request/status fixtures are prepared through authenticated real APIs. Tests verify committed request state, intended To/CC snapshots, fixed From, and redirected SOAP payloads. The disabled-policy flow also runs at 390×844; other flows use 1440×1000.
+Six flows cover destination-status delivery, disabled policy with retained recipients, SOAP fault/retry, per-request bulk delivery, submission exactly once, and combined name/policy modal editing. The combined flow checks Add/Enter/remove, deduplication, Escape/focus, native modal isolation, no page scroll on opening, clickable Save at 320/768/1024/1440px, and real PostgreSQL rollback of catalog/request/search changes. Its deliberate failed write calls the authenticated backend route from Node to avoid expected HTTP-500 browser console noise. User actions use browser controls; request/status fixtures use real authenticated APIs. The disabled delivery flow also runs at 390×844; other delivery flows use 1440×1000.
 
 Install both projects' dependencies with `npm ci`. From `backend`, install a Playwright browser once and run:
 
@@ -122,13 +124,13 @@ EMAIL_E2E_ARTIFACTS_DIR=/tmp/psf-email-system-evidence \
 npm run test:email:system
 ```
 
-The command builds both applications and runs five system flows plus one fixture regression for failed PostgreSQL startup cleanup. It requires loopback listeners, supported native PostgreSQL binaries, browser system dependencies and a non-root user (or an existing PostgreSQL user supported by embedded-postgres). It does not create operating-system users. If dependencies were installed with lifecycle scripts disabled, the embedded PostgreSQL package's native symlinks must be hydrated before use.
+The command builds both applications and runs six system flows plus one fixture regression for failed PostgreSQL startup cleanup. It requires loopback listeners, supported native PostgreSQL binaries, browser system dependencies and a non-root user (or an existing PostgreSQL user supported by embedded-postgres). It does not create operating-system users. If dependencies were installed with lifecycle scripts disabled, the embedded PostgreSQL package's native symlinks must be hydrated before use.
 
 The harness uses a temporary database and an explicit backend environment with loopback DB/LDAP/SOAP settings. It starts the backend from an empty temporary directory so the developer's `.env` is not loaded. Browser requests outside the local app are blocked; the Google Fonts stylesheet is supplied empty. All services, browser contexts and database files are cleaned up after tests. Screenshots and backend logs are retained only when `EMAIL_E2E_ARTIFACTS_DIR` is set; otherwise temporary evidence is removed too.
 
 Retry verification first checks that the worker scheduled the job within one minute, with a 15-second observation allowance, then moves only that disposable job's `next_attempt_at` to now so the next real worker poll can deliver it without waiting a minute. Production retry configuration is unchanged.
 
-On 2026-10-06, all five flows and the startup-cleanup regression passed. A deliberate mutation in ignored build output that bypassed enqueue made the destination flow fail with no outbox job; restoring the build returned the test to green. Backend 682 tests, frontend 415 tests and API integration 20 tests also passed; both builds and lint passed. No company database or services were used. The existing 18-test SQL/concurrency evidence below is from the prior verification.
+On 2026-10-06, all six flows and the startup-cleanup regression passed on the combined-modal implementation. Backend 685 tests, frontend 422 tests and API integration 20 tests also passed; both builds and lint passed. The earlier deliberate mutation in ignored build output that bypassed enqueue made the destination flow fail with no outbox job; restoring the build returned that test to green. No company database or services were used. The existing 18-test SQL/concurrency evidence below is from the prior verification.
 
 ## Loading-state regression — 2026-10-06
 

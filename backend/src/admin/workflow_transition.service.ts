@@ -50,7 +50,13 @@ export type WorkflowConfigurationOperation =
       emailPolicy: StatusEmailPolicy;
       expectedUpdatedAt: string;
     }
-  | { action: 'rename'; id: string; name: string; expectedUpdatedAt: string }
+  | {
+      action: 'rename';
+      id: string;
+      name: string;
+      emailPolicy?: StatusEmailPolicy;
+      expectedUpdatedAt: string;
+    }
   | {
       action: 'delete';
       id: string;
@@ -320,8 +326,10 @@ export class WorkflowTransitionService implements OnModuleInit {
             throw new BadRequestException('Draft cannot be renamed.');
           }
           this.assertAvailableName(operation.name, entries, target.id);
+          if (operation.emailPolicy) target.emailPolicy = operation.emailPolicy;
           const previousName = target.name;
           target.name = operation.name;
+          if (previousName === operation.name) break;
           await client.query(
             'UPDATE psf_requests SET status = $2 WHERE status = $1',
             [previousName, operation.name],
@@ -674,6 +682,7 @@ export class WorkflowTransitionService implements OnModuleInit {
           'action',
           'id',
           'name',
+          'emailPolicy',
           'expectedUpdatedAt',
         ]);
         if (
@@ -686,7 +695,15 @@ export class WorkflowTransitionService implements OnModuleInit {
           );
         }
         this.assertValidName(input.name);
-        return { action, id: input.id, name: input.name, expectedUpdatedAt };
+        return {
+          action,
+          id: input.id,
+          name: input.name,
+          expectedUpdatedAt,
+          ...(Object.hasOwn(input, 'emailPolicy')
+            ? { emailPolicy: this.normalizeEmailPolicy(input.emailPolicy) }
+            : {}),
+        };
       case 'delete':
         this.assertOnlyKeys(input, [
           'action',
@@ -997,6 +1014,9 @@ export class WorkflowTransitionService implements OnModuleInit {
           action: operation.action,
           id: operation.id,
           name: operation.name,
+          ...(operation.emailPolicy
+            ? { emailPolicy: operation.emailPolicy }
+            : {}),
         };
       case 'delete':
         return {

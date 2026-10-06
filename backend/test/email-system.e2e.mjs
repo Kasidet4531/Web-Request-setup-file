@@ -33,16 +33,20 @@ async function setPolicy(page, status, enabled) {
   ).toBeVisible();
   await page
     .getByRole('button', {
-      name: `Edit email policy for ${status.name}`,
+      name: `Edit ${status.name}`,
       exact: true,
     })
     .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Edit status', exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('checkbox', { name: 'Do not send email on entry' })
     .uncheck();
   await page
     .getByRole('textbox', { name: 'To addresses', exact: true })
     .fill('GROUP@nxp.com; group@nxp.com');
+  await page.getByRole('button', { name: 'Add To', exact: true }).click();
   await expect(
     page
       .getByRole('combobox', { name: 'Add system user to To' })
@@ -54,6 +58,7 @@ async function setPolicy(page, status, enabled) {
   await page
     .getByRole('textbox', { name: 'CC addresses', exact: true })
     .fill('group@nxp.com, copy@nxp.com');
+  await page.getByRole('button', { name: 'Add CC', exact: true }).click();
   if (!enabled)
     await page
       .getByRole('checkbox', { name: 'Do not send email on entry' })
@@ -63,13 +68,11 @@ async function setPolicy(page, status, enabled) {
       response.url().endsWith('/api/admin/workflow') &&
       response.request().method() === 'PUT',
   );
-  await page
-    .getByRole('button', { name: 'Save email policy', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   assert.equal((await saved).status(), 200);
   await expect(
     page.getByRole('button', {
-      name: `Edit email policy for ${status.name}`,
+      name: `Edit ${status.name}`,
       exact: true,
     }),
   ).toBeEnabled();
@@ -304,6 +307,12 @@ test(
       .filter({ has: page.getByText(source.name, { exact: true }) })
       .getByRole('button', { name: 'Delete', exact: true })
       .click();
+    await expect(
+      page.getByRole('dialog', {
+        name: 'Replace and delete status',
+        exact: true,
+      }),
+    ).toBeVisible();
     await page
       .getByRole('combobox', { name: 'Replacement status', exact: true })
       .selectOption(target.id);
@@ -353,5 +362,282 @@ test(
     assert.deepEqual(await jobs(request.id), []);
     await applyStatus(page, request, target, true);
     await assertDelivered(request, target, 'REQUEST_SUBMITTED');
+  },
+);
+
+// Break caught: split name/policy writes, discarded recipient chips, or dialogs
+// that move the page, lose focus, overflow mobile, or hide their action footer.
+test(
+  'combined status editor preserves recipients and rolls back name and policy together',
+  { timeout: 60_000 },
+  async (t) => {
+    const page = await loginPage(system, t);
+    const source = await createStatus(page, 'E2E combined original');
+    const replacement = await createStatus(page, 'E2E combined replacement');
+    const request = await seedSubmitted(page, 'Combined edit request', source);
+    await page.goto(`${system.origin}/admin/workflow`);
+    const edit = page.getByRole('button', {
+      name: `Edit ${source.name}`,
+      exact: true,
+    });
+    await edit.scrollIntoViewIfNeeded();
+    const scroll = await page.evaluate(() => window.scrollY);
+    await edit.click();
+    const editor = page.getByRole('dialog', {
+      name: 'Edit status',
+      exact: true,
+    });
+    await expect(editor).toBeVisible();
+    await expect(
+      editor.getByRole('textbox', { name: 'Status name', exact: true }),
+    ).toBeFocused();
+    assert.equal(await page.evaluate(() => window.scrollY), scroll);
+    await editor
+      .getByRole('textbox', { name: 'Status name', exact: true })
+      .fill('Unsaved name');
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(edit).toBeFocused();
+    assert.equal(
+      (await api(page, 'GET', '/admin/workflow')).entries.find(
+        (entry) => entry.id === source.id,
+      ).name,
+      source.name,
+    );
+
+    await edit.click();
+    await editor
+      .getByRole('textbox', { name: 'Status name', exact: true })
+      .fill('E2E combined renamed');
+    await editor
+      .getByRole('checkbox', { name: 'Do not send email on entry' })
+      .uncheck();
+    const to = editor.getByRole('textbox', {
+      name: 'To addresses',
+      exact: true,
+    });
+    await to.fill('GROUP@nxp.com');
+    await to.press('Enter');
+    await expect(to).toHaveValue('');
+    await to.fill('temporary@nxp.com');
+    await editor.getByRole('button', { name: 'Add To', exact: true }).click();
+    await editor
+      .getByRole('button', {
+        name: 'Remove temporary@nxp.com from To',
+        exact: true,
+      })
+      .click();
+    await editor
+      .getByRole('combobox', { name: 'Add system user to To' })
+      .selectOption('admin@nxp.com');
+    await to.fill('group@nxp.com');
+    await editor.getByRole('button', { name: 'Add To', exact: true }).click();
+    await expect(
+      editor.getByRole('list', { name: 'To recipients' }).locator('li'),
+    ).toHaveCount(2);
+    const copy = 'long.group.address.for.status.management.review@nxp.com';
+    await editor
+      .getByRole('textbox', { name: 'CC addresses', exact: true })
+      .fill(copy);
+    await editor.getByRole('button', { name: 'Add CC', exact: true }).click();
+    const save = editor.getByRole('button', {
+      name: 'Save changes',
+      exact: true,
+    });
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const bounds = await editor.boundingBox();
+      assert.ok(
+        bounds.x >= 0 && bounds.x + bounds.width <= width,
+        `Dialog fits ${width}px`,
+      );
+      const footer = await save.boundingBox();
+      assert.ok(
+        footer.y >= 0 && footer.y + footer.height <= 900,
+        'Save stays in the viewport',
+      );
+      assert.ok(
+        await save.evaluate((button) => {
+          const rect = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2,
+          );
+          return hit === button || button.contains(hit);
+        }),
+        'Save is not clipped or covered by dialog content',
+      );
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      );
+      if (width === 320 || width === 1440)
+        await page.screenshot({
+          path: join(system.evidence, `status-editor-${width}.png`),
+          fullPage: false,
+        });
+    }
+
+    const policy = {
+      enabled: true,
+      to: ['group@nxp.com', 'admin@nxp.com'],
+      cc: [copy],
+    };
+    const focusableCount = await editor
+      .locator(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled])',
+      )
+      .count();
+    for (let index = 0; index <= focusableCount; index += 1) {
+      await page.keyboard.press('Tab');
+      const focus = await editor.evaluate((dialog) => ({
+        modal: dialog.matches(':modal'),
+        inside: dialog.contains(document.activeElement),
+        browserChrome:
+          !document.hasFocus() && document.activeElement === document.body,
+      }));
+      // Native dialogs permit focus to visit browser chrome. Page controls
+      // outside the modal must remain unavailable while the document is focused.
+      assert.ok(
+        focus.modal && (focus.inside || focus.browserChrome),
+        'Tab never focuses background page controls',
+      );
+    }
+    const current = await api(page, 'GET', '/admin/workflow');
+    await system.database.query(
+      `CREATE FUNCTION fail_combined_edit() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'offline combined edit failure'; END; $$ LANGUAGE plpgsql`,
+    );
+    await system.database.query(
+      'CREATE TRIGGER fail_combined_edit BEFORE UPDATE ON workflow_transition_config FOR EACH ROW EXECUTE FUNCTION fail_combined_edit()',
+    );
+    try {
+      // Send the deliberate failure from Node to keep expected HTTP-500 console
+      // noise out of browser health checks. It exercises the same authenticated API.
+      const cookies = await page.context().cookies(system.origin);
+      const failed = await fetch(`${system.origin}/api/admin/workflow`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: cookies
+            .map((cookie) => `${cookie.name}=${cookie.value}`)
+            .join('; '),
+        },
+        body: JSON.stringify({
+          action: 'rename',
+          id: source.id,
+          name: 'E2E combined renamed',
+          emailPolicy: policy,
+          expectedUpdatedAt: current.updatedAt,
+        }),
+      });
+      assert.equal(failed.status, 500);
+      const unchanged = (
+        await api(page, 'GET', '/admin/workflow')
+      ).entries.find((entry) => entry.id === source.id);
+      assert.equal(unchanged.name, source.name);
+      assert.deepEqual(unchanged.emailPolicy, {
+        enabled: false,
+        to: [],
+        cc: [],
+      });
+      assert.equal(
+        (
+          await system.database.query(
+            'SELECT status FROM psf_requests WHERE id=$1',
+            [request.id],
+          )
+        ).rows[0].status,
+        source.name,
+      );
+      assert.equal(
+        (
+          await system.database.query(
+            'SELECT status FROM psf_request_search_index WHERE request_id=$1',
+            [request.id],
+          )
+        ).rows[0].status,
+        source.name,
+      );
+    } finally {
+      await system.database.query(
+        'DROP TRIGGER fail_combined_edit ON workflow_transition_config',
+      );
+      await system.database.query('DROP FUNCTION fail_combined_edit()');
+    }
+    const writes = [];
+    page.on('request', (request) => {
+      if (
+        request.url().endsWith('/api/admin/workflow') &&
+        request.method() === 'PUT'
+      )
+        writes.push(request.postDataJSON());
+    });
+    await save.click();
+    await expect(editor).toHaveCount(0);
+    assert.equal(writes.length, 1);
+    assert.deepEqual(writes[0], {
+      action: 'rename',
+      id: source.id,
+      name: 'E2E combined renamed',
+      emailPolicy: policy,
+      expectedUpdatedAt: current.updatedAt,
+    });
+    const stored = (await api(page, 'GET', '/admin/workflow')).entries.find(
+      (entry) => entry.id === source.id,
+    );
+    assert.equal(stored.name, 'E2E combined renamed');
+    assert.deepEqual(stored.emailPolicy, policy);
+    assert.equal(
+      (
+        await system.database.query(
+          'SELECT status FROM psf_requests WHERE id=$1',
+          [request.id],
+        )
+      ).rows[0].status,
+      stored.name,
+    );
+    assert.deepEqual(
+      await jobs(request.id),
+      [],
+      'Catalog editing does not send request notifications',
+    );
+    await expect(
+      page.getByRole('button', { name: `Edit ${stored.name}`, exact: true }),
+    ).toBeFocused();
+    await page
+      .getByRole('row')
+      .filter({ has: page.getByText(stored.name, { exact: true }) })
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    const deletion = page.getByRole('dialog', {
+      name: 'Replace and delete status',
+      exact: true,
+    });
+    await expect(deletion).toBeVisible();
+    await expect(
+      deletion.getByRole('button', { name: 'Cancel', exact: true }),
+    ).toBeFocused();
+    await deletion
+      .getByRole('combobox', { name: 'Replacement status', exact: true })
+      .selectOption(replacement.id);
+    await expect(
+      deletion.getByText(
+        'Email is disabled for this destination. No notification emails will be queued.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page.screenshot({
+      path: join(system.evidence, 'replacement-dialog.png'),
+      fullPage: false,
+    });
+    await page.keyboard.press('Escape');
+    await expect(deletion).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('row')
+        .filter({ has: page.getByText(stored.name, { exact: true }) })
+        .getByRole('button', { name: 'Delete', exact: true }),
+    ).toBeFocused();
   },
 );

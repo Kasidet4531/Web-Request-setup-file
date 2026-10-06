@@ -62,6 +62,36 @@ describe('Status Management interactions', () => {
     workflowApi.fetchAdminUsers.mockReset().mockResolvedValue([{ id: "user-id", username: "alex", displayName: "Alex", role: "requester", setupOwnerDepartment: null, email: "Alex@example.com" }, { id: "no-email", username: "sam", displayName: "Sam", role: "requester", setupOwnerDepartment: null, email: null }])
     workflowApi.replaceAdminWorkflowTransitionConfiguration.mockReset().mockResolvedValue(config)
   })
+  it('opens status name and recipient editing in one modal', async () => {
+    render(); hookState.effect(); await flush()
+    const edit = control(`Edit ${config.entries[1].name}`)
+    ;(edit.props.onClick as () => void)(); await flush()
+    const dialog = find(render(), (element) => element.type === 'dialog' && element.props['aria-labelledby'] === 'edit-status-heading')
+    expect(dialog).not.toBeNull()
+    expect(find(dialog, (element) => element.props['aria-label'] === 'Status name')?.props.value).toBe(config.entries[1].name)
+    expect(find(dialog, (element) => element.props['aria-label'] === 'To addresses')).not.toBeNull()
+    expect(find(dialog, (element) => element.props['aria-label'] === 'CC addresses')).not.toBeNull()
+  })
+
+  it('adds and removes recipient chips, then saves name and policy in one request', async () => {
+    render(); hookState.effect(); await flush()
+    ;(control(`Edit ${config.entries[1].name}`).props.onClick as () => void)(); await flush()
+    suppress(false)
+    change('Status name', 'Renamed work')
+    change('To addresses', 'TEAM@example.com')
+    ;(button('Add To').props.onClick as () => void)()
+    expect(control('To addresses').props.value).toBe('')
+    expect(control('Remove team@example.com from To')).not.toBeNull()
+    change('To addresses', 'remove@example.com')
+    ;(button('Add To').props.onClick as () => void)()
+    ;(control('Remove remove@example.com from To').props.onClick as () => void)()
+    change('CC addresses', 'lead@example.com')
+    ;(button('Add CC').props.onClick as () => void)()
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({
+      action: 'rename', id: 'open-id', name: 'Renamed work', emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt,
+    })
+  })
   it.each([false, true])('deletes the last unused work entry without a request replacement (trigger=%s)', async (trigger) => {
     const unused = { ...config, entries: config.entries.map((entry) => entry.kind === 'draft' ? entry : { ...entry, requestCount: 0 }), psfVisibilityTriggerId: trigger ? 'open-id' : null }
     workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(unused)
@@ -137,7 +167,7 @@ function control(label: string) {
   return result
 }
 function button(label: string) {
-  const result = find(render(), (element) => element.type === 'button' && element.props.children === label)
+  const result = find(render(), (element) => element.type === 'button' && (element.props.children === label || element.props['aria-label'] === label))
   if (!result) throw new Error(`Missing button: ${label}`)
   return result
 }
@@ -147,9 +177,13 @@ function change(label: string, value: string) {
 async function openEmailEditor(configuration = config) {
   workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(configuration)
   render(); hookState.effect?.(); await flush()
-  const edit = find(render(), (element) => element.type === 'button' && element.props['aria-label'] === `Edit email policy for ${config.entries[1].name}`)
+  const edit = find(render(), (element) => element.type === 'button' && element.props['aria-label'] === `Edit ${config.entries[1].name}`)
   expect(edit, 'A non-Draft status must expose email editing').not.toBeNull()
   ;(edit!.props.onClick as () => void)(); await flush()
+}
+function add(field: 'To' | 'CC', value: string) {
+  change(`${field} addresses`, value)
+  ;(button(`Add ${field}`).props.onClick as () => void)()
 }
 function suppress(checked: boolean) {
   ;(control('Do not send email on entry').props.onChange as (event: unknown) => void)({ target: { checked } })
@@ -169,80 +203,107 @@ describe('Status email policy interactions', () => {
     expect(control('Do not send email on entry').props.checked).toBe(true)
     expect(control('To addresses').props.disabled).toBe(true)
     expect(control('CC addresses').props.disabled).toBe(true)
-    expect(find(render(), (element) => element.props['aria-label'] === 'Edit email policy for Draft')).toBeNull()
+    expect(find(render(), (element) => element.props['aria-label'] === 'Edit Draft')).toBeNull()
     expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
   })
 
   it('combines manually entered group addresses and directory emails only on explicit save', async () => {
     await openEmailEditor()
     suppress(false)
-    change('To addresses', ' Team@EXAMPLE.com, team@example.com; other@example.com ')
+    add('To', ' Team@EXAMPLE.com, team@example.com; other@example.com ')
     change('Add system user to To', 'Alex@example.com')
-    change('CC addresses', 'Team@example.com; Lead@example.com, lead@example.com')
+    add('CC', 'Team@example.com; Lead@example.com, lead@example.com')
     change('Add system user to CC', 'Alex@example.com')
-    expect(control('To addresses').props.value).toContain('Alex@example.com')
+    expect(control('Remove alex@example.com from To')).not.toBeNull()
     const missingUser = find(control('Add system user to To'), (element) => element.type === 'option' && element.props.disabled === true)
     expect(missingUser).not.toBeNull()
     expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
-    ;(button('Save email policy').props.onClick as () => void)(); await flush()
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'email-policy', id: 'open-id', emailPolicy: { enabled: true, to: ['team@example.com', 'other@example.com', 'alex@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
-    expect(find(render(), (element) => element.props['aria-labelledby'] === 'email-policy-heading')).toBeNull()
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, emailPolicy: { enabled: true, to: ['team@example.com', 'other@example.com', 'alex@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+    expect(find(render(), (element) => element.props['aria-labelledby'] === 'edit-status-heading')).toBeNull()
   })
 
   it('suppresses delivery while retaining all recipient values and supports re-enabling', async () => {
     await openEmailEditor(enabledConfig)
     suppress(true)
-    expect(control('To addresses').props.value).toBe('team@example.com')
-    expect(control('CC addresses').props.value).toBe('lead@example.com')
+    expect(control('Remove team@example.com from To')).not.toBeNull()
+    expect(control('Remove lead@example.com from CC')).not.toBeNull()
     expect(control('Add system user to CC').props.disabled).toBe(true)
     suppress(false)
     expect(control('To addresses').props.disabled).toBe(false)
     suppress(true)
-    ;(button('Save email policy').props.onClick as () => void)(); await flush()
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'email-policy', id: 'open-id', emailPolicy: { enabled: false, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, emailPolicy: { enabled: false, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
   })
 
   it.each([['', 'At least one To address is required'], ['not-an-email', 'Enter valid email addresses'], ['valid@example.com', 'Enter valid email addresses']])('rejects empty or invalid enabled recipients (%s)', async (to, message) => {
     await openEmailEditor()
     suppress(false)
-    change('To addresses', to)
-    if (to === 'valid@example.com') change('CC addresses', 'bad-address')
-    ;(button('Save email policy').props.onClick as () => void)(); await flush()
+    add('To', to)
+    if (to === 'valid@example.com') add('CC', 'bad-address')
+    if (to) expect(find(render(), (element) => element.props.role === 'alert' && String(element.props.children).includes(message))).not.toBeNull()
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
     expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
-    expect(find(render(), (element) => element.props.role === 'alert' && String(element.props.children).includes(message))).not.toBeNull()
+    expect(find(render(), (element) => element.props.role === 'alert' && String(element.props.children).includes(to ? 'Click Add' : message))).not.toBeNull()
+  })
+
+  it('requires Add before saving typed recipients and supports Enter to add', async () => {
+    await openEmailEditor()
+    suppress(false)
+    change('To addresses', 'team@example.com')
+    ;(button('Save changes').props.onClick as () => void)()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
+    expect(find(render(), (element) => element.props.role === 'alert' && String(element.props.children).includes('Click Add'))).not.toBeNull()
+    const preventDefault = vi.fn()
+    ;(control('To addresses').props.onKeyDown as (event: unknown) => void)({ key: 'Enter', preventDefault })
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(control('Remove team@example.com from To')).not.toBeNull()
+    expect(control('To addresses').props.value).toBe('')
+  })
+
+  it('uses a replacement modal and allows Escape to cancel without changing data', async () => {
+    render(); hookState.effect(); await flush()
+    ;(button('Delete').props.onClick as () => void)()
+    const dialog = find(render(), (element) => element.type === 'dialog' && element.props['aria-labelledby'] === 'delete-status-heading')!
+    expect(dialog).not.toBeNull()
+    const preventDefault = vi.fn()
+    ;(dialog.props.onCancel as (event: unknown) => void)({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(find(render(), (element) => element.type === 'dialog')).toBeNull()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
   })
 
   it('cancels unsaved edits without persisting them', async () => {
     await openEmailEditor(enabledConfig)
-    change('To addresses', 'changed@example.com')
-    ;(button('Cancel email editing').props.onClick as () => void)()
+    add('To', 'changed@example.com')
+    ;(button('Cancel').props.onClick as () => void)()
     expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
-    expect(find(render(), (element) => element.props['aria-labelledby'] === 'email-policy-heading')).toBeNull()
-    ;(control(`Edit email policy for ${config.entries[1].name}`).props.onClick as () => void)(); await flush()
-    expect(control('To addresses').props.value).toBe('team@example.com')
+    expect(find(render(), (element) => element.props['aria-labelledby'] === 'edit-status-heading')).toBeNull()
+    ;(control(`Edit ${config.entries[1].name}`).props.onClick as () => void)(); await flush()
+    expect(control('Remove team@example.com from To')).not.toBeNull()
   })
 
   it('blocks duplicate saves while busy and preserves edits on a server error', async () => {
     await openEmailEditor(enabledConfig)
     let reject!: (error: Error) => void
     workflowApi.replaceAdminWorkflowTransitionConfiguration.mockImplementation(() => new Promise((_, rejectPromise) => { reject = rejectPromise }))
-    change('To addresses', 'changed@example.com')
-    ;(button('Save email policy').props.onClick as () => void)()
+    add('To', 'changed@example.com')
+    ;(button('Save changes').props.onClick as () => void)()
     expect(button('Saving…').props.disabled).toBe(true)
     expect(control('To addresses').props.disabled).toBe(true)
-    expect(button('Cancel email editing').props.disabled).toBe(true)
+    expect(button('Cancel').props.disabled).toBe(true)
     reject(new Error('Unable to save')); await flush()
-    expect(control('To addresses').props.value).toBe('changed@example.com')
-    expect(button('Save email policy').props.disabled).toBe(false)
+    expect(control('Remove changed@example.com from To')).not.toBeNull()
+    expect(button('Save changes').props.disabled).toBe(false)
     expect(find(render(), (element) => element.props.title === 'Unable to save')).not.toBeNull()
   })
 
   it('refreshes the catalog and closes stale policy editing on conflict', async () => {
     await openEmailEditor(enabledConfig)
     workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Stale email policy', 409, 'Conflict', null))
-    ;(button('Save email policy').props.onClick as () => void)(); await flush()
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
     expect(workflowApi.fetchAdminWorkflowTransitionConfiguration).toHaveBeenCalledTimes(2)
-    expect(find(render(), (element) => element.props['aria-labelledby'] === 'email-policy-heading')).toBeNull()
+    expect(find(render(), (element) => element.props['aria-labelledby'] === 'edit-status-heading')).toBeNull()
     expect(find(render(), (element) => element.props.title === 'Stale email policy')).not.toBeNull()
   })
 
@@ -285,20 +346,20 @@ describe('Status email policy interactions', () => {
       expect(String(option.props.children)).toContain('No valid email available')
       change(`Add system user to ${field}`, email)
     }
-    expect(control('To addresses').props.value).toBe('team@example.com')
-    expect(control('CC addresses').props.value).toBe('lead@example.com')
-    ;(button('Save email policy').props.onClick as () => void)(); await flush()
-    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'email-policy', id: 'open-id', emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
+    expect(control('Remove team@example.com from To')).not.toBeNull()
+    expect(control('Remove lead@example.com from CC')).not.toBeNull()
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, emailPolicy: { enabled: true, to: ['team@example.com'], cc: ['lead@example.com'] }, expectedUpdatedAt: config.updatedAt })
   })
 
   it.each(['cancel', 'save', 'conflict'])('restores focus to the originating status after %s closes the editor', async (action) => {
     await openEmailEditor(enabledConfig)
     const origin = { isConnected: true, disabled: false, focus: vi.fn() }
-    const opener = control(`Edit email policy for ${config.entries[1].name}`)
+    const opener = control(`Edit ${config.entries[1].name}`)
     expect(typeof opener.props.ref).toBe('function')
     ;(opener.props.ref as (node: unknown) => void)(origin)
     if (action === 'conflict') workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Stale email policy', 409, 'Conflict', null))
-    ;(button(action === 'cancel' ? 'Cancel email editing' : 'Save email policy').props.onClick as () => void)()
+    ;(button(action === 'cancel' ? 'Cancel' : 'Save changes').props.onClick as () => void)()
     await flush(); render(); hookState.effect()
     expect(origin.focus).toHaveBeenCalledTimes(1)
     render(); hookState.effect()
@@ -309,7 +370,7 @@ describe('Status email policy interactions', () => {
     await openEmailEditor(enabledConfig)
     const origin = { isConnected: false, disabled: false, focus: vi.fn() }
     const fallback = { focus: vi.fn() }
-    const opener = control(`Edit email policy for ${config.entries[1].name}`)
+    const opener = control(`Edit ${config.entries[1].name}`)
     expect(typeof opener.props.ref).toBe('function')
     ;(opener.props.ref as (node: unknown) => void)(origin)
     const regionRef = control('Status catalog').props.ref as { current: unknown }
@@ -317,7 +378,7 @@ describe('Status email policy interactions', () => {
     regionRef.current = fallback
     workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue({ ...config, entries: [config.entries[0]] })
     workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('Stale email policy', 409, 'Conflict', null))
-    ;(button('Save email policy').props.onClick as () => void)()
+    ;(button('Save changes').props.onClick as () => void)()
     await flush(); render(); hookState.effect()
     expect(origin.focus).not.toHaveBeenCalled()
     expect(fallback.focus).toHaveBeenCalledTimes(1)

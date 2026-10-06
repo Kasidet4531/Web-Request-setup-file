@@ -66,6 +66,97 @@ describe('workflow destination email policies', () => {
     expectedUpdatedAt = REVISION,
   ) => ({ action: 'email-policy', id, emailPolicy, expectedUpdatedAt });
 
+  it('saves a status name and normalized recipients together with one catalog audit', async () => {
+    const result = await service.applyOperation(
+      {
+        action: 'rename',
+        id: WORK,
+        name: 'Renamed work',
+        expectedUpdatedAt: REVISION,
+        emailPolicy: {
+          enabled: true,
+          to: ['GROUP@example.com'],
+          cc: ['group@example.com', 'copy@example.com'],
+        },
+      },
+      ACTOR,
+    );
+    expect(result.entries.find((entry) => entry.id === WORK)).toMatchObject({
+      name: 'Renamed work',
+      emailPolicy: {
+        enabled: true,
+        to: ['group@example.com'],
+        cc: ['copy@example.com'],
+      },
+    });
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record).toHaveBeenCalledWith(
+      matching({
+        metadata: matching({
+          operation: {
+            action: 'rename',
+            id: WORK,
+            name: 'Renamed work',
+            emailPolicy: {
+              enabled: true,
+              to: ['group@example.com'],
+              cc: ['copy@example.com'],
+            },
+          },
+        }),
+      }),
+      client,
+    );
+    expect(query).toHaveBeenCalledWith(
+      'UPDATE psf_requests SET status = $2 WHERE status = $1',
+      ['Work', 'Renamed work'],
+    );
+  });
+
+  it('does not rewrite request statuses when a combined edit only changes recipients', async () => {
+    await service.applyOperation(
+      {
+        action: 'rename',
+        id: WORK,
+        name: 'Work',
+        emailPolicy: ON,
+        expectedUpdatedAt: REVISION,
+      },
+      ACTOR,
+    );
+    expect(
+      query.mock.calls.some(([sql]: [string]) =>
+        sql.startsWith('UPDATE psf_requests '),
+      ),
+    ).toBe(false);
+    expect(
+      query.mock.calls.some(([sql]: [string]) =>
+        sql.startsWith('UPDATE psf_request_search_index '),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects invalid recipients before changing the status name', async () => {
+    await expect(
+      service.applyOperation(
+        {
+          action: 'rename',
+          id: WORK,
+          name: 'Renamed work',
+          emailPolicy: { enabled: true, to: ['invalid'], cc: [] },
+          expectedUpdatedAt: REVISION,
+        },
+        ACTOR,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(connect).not.toHaveBeenCalled();
+    expect(
+      (await service.getConfiguration()).entries.find(
+        (entry) => entry.id === WORK,
+      )?.name,
+    ).toBe('Work');
+  });
+
   it('defaults legacy and newly created entries to disabled', async () => {
     for (const entry of (await service.getConfiguration()).entries)
       expect(entry).toHaveProperty('emailPolicy', OFF);

@@ -4,16 +4,23 @@
   min-width: 104px;
 }
 
-.admin-workflow-transition__email-editor {
-  display: grid;
-  gap: 16px;
-  min-width: 0;
-  scroll-margin-block: 24px;
-}
-
-.admin-workflow-transition__email-editor h2 {
-  overflow-wrap: anywhere;
-}
+.admin-status-dialog { width: min(760px, calc(100vw - 32px)); }
+.admin-status-dialog[open] { display: flex; overflow: hidden; }
+.admin-status-dialog .ui-dialog__body { display: flex; flex-direction: column; min-height: 0; width: 100%; padding: 0; gap: 0; }
+.admin-status-dialog__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px; border-bottom: 1px solid var(--border); }
+.admin-status-dialog__header > div { min-width: 0; }
+.admin-status-dialog__header h2, .admin-status-dialog__header p { overflow-wrap: anywhere; }
+.admin-status-dialog__header p { margin-top: 8px; }
+.admin-status-dialog__header > button { flex-shrink: 0; }
+.admin-status-dialog__content { display: grid; gap: 16px; min-height: 0; padding: 24px; overflow-y: auto; }
+.admin-status-dialog .ui-dialog__actions { flex-shrink: 0; margin-top: 0; padding: 16px 24px; }
+.admin-status-dialog__recipients { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.admin-status-dialog__recipients li { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 4px 4px 4px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); font-size: 12px; }
+.admin-status-dialog__recipients li > span { min-width: 0; overflow-wrap: anywhere; }
+.admin-status-dialog__recipients li > button { flex-shrink: 0; width: 32px; height: 32px; }
+.admin-status-dialog__add-address { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admin-status-dialog__add-address input { flex: 1; min-width: 0; }
+.admin-status-dialog__add-address button { flex-shrink: 0; }
 
 .admin-workflow-transition__email-fields {
   display: grid;
@@ -25,12 +32,10 @@
   display: grid;
   gap: 12px;
   min-width: 0;
+  padding: 0;
+  border: 0;
 }
-
-.admin-workflow-transition__recipient-field textarea {
-  resize: vertical;
-  min-height: 88px;
-}
+.admin-workflow-transition__recipient-field legend { margin-bottom: 12px; }
 
 .admin-workflow-transition__email-error {
   color: var(--destructive);

@@ -120,7 +120,7 @@ export interface WorkflowConfiguration {
 
 export type WorkflowConfigurationOperation =
   | { action: 'create'; name: string; kind: Exclude<WorkflowStatusKind, 'draft'>; expectedUpdatedAt: string }
-  | { action: 'rename'; id: string; name: string; expectedUpdatedAt: string }
+  | { action: 'rename'; id: string; name: string; emailPolicy?: StatusEmailPolicy; expectedUpdatedAt: string }
   | { action: 'delete'; id: string; replacementId?: string; replacementTriggerId?: string | null; expectedUpdatedAt: string }
   | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
   | { action: 'email-policy'; id: string; emailPolicy: StatusEmailPolicy; expectedUpdatedAt: string }
