@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { notifyAuthSessionChanged } from "./auth-session";
 
 export interface RequestExportFilterValues {
   status: string;
@@ -38,11 +39,11 @@ export function buildRequestExportUrl(
   resolveUrl: (path: string) => string = api.resolveUrl,
 ): string {
   const query = new URLSearchParams();
-  const status = filters.status.trim();
+  const status = filters.status;
   const from = filters.from.trim();
   const to = filters.to.trim();
 
-  if (status) {
+  if (status.trim()) {
     query.set("status", status);
   }
 
@@ -63,6 +64,10 @@ export function buildRequestExportUrl(
 }
 
 async function exportErrorMessage(response: Response): Promise<string> {
+  if (response.status === 401) {
+    notifyAuthSessionChanged({ status: "anonymous" });
+  }
+
   const responseText = await response.text();
 
   if (!responseText) {

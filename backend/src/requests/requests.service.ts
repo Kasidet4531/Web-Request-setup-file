@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Pool, PoolClient } from 'pg';
@@ -20,22 +21,26 @@ import {
   FormSchemaService,
 } from '../admin/form_schema.service';
 import {
-  MANUAL_WORKFLOW_STATUSES,
-  WorkflowTransitionService,
-} from '../admin/workflow_transition.service';
+  PSF_CREATED_INFORMATION_FORM_KEY,
+  PSF_CREATED_INFORMATION_SCHEMA,
+  resolvePsfCreatedInformationSchema,
+} from '../admin/form_schema.constants';
+import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
+import { NotificationService } from '../notifications/notification.service';
 import {
   RequestSearchFilters,
   RequestSearchResult,
+  RequestScopeFilters,
   SearchIndexService,
 } from './search-index.service';
+import {
+  assertValidRequiredFormData,
+  validateAndNormalizeFormData,
+} from './form-data-validation';
 
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
-const SUBMITTED_STATUS = 'Submitted';
-const PSF_CREATED_STATUS = 'PSF Created';
-const COMPLETED_STATUS = 'Completed';
-const MANUAL_STATUS_SET = new Set<string>(MANUAL_WORKFLOW_STATUSES);
 
 const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
   updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC',
@@ -49,119 +54,54 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function canActorViewPsfCreatedData(
-  status: string,
+  _status: string,
   actor?: Pick<AuthenticatedUserProfile, 'role'>,
+  psfReleasedAt: Date | string | null = null,
 ): boolean {
   return (
     actor !== undefined &&
     (actor.role !== 'requester' ||
-      status === PSF_CREATED_STATUS ||
-      status === COMPLETED_STATUS)
+      (psfReleasedAt !== null && psfReleasedAt !== undefined))
   );
 }
 
-export const PSF_CREATED_INFORMATION_SCHEMA: FormSchemaJson = {
-  formKey: 'psf-created-information',
-  version: 1,
-  title: 'PSF Created Information',
-  sections: [
-    {
-      sectionKey: 'psf_created_information',
-      title: 'PSF Created Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
-      fields: [
-        {
-          fieldKey: 'first_die_ref_xy',
-          canonicalKey: 'first_die_ref_xy',
-          label: 'First Die Ref. (X,Y)',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'probe_coordinate_quadrant',
-          canonicalKey: 'probe_coordinate_quadrant',
-          label: 'Probe & Coordinate Quadrant',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'wafer_id_format',
-          canonicalKey: 'wafer_id_format',
-          label: 'Wafer ID Format',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'mirror_die_available',
-          canonicalKey: 'mirror_die_available',
-          label: 'Mirror Die Available',
-          type: 'select',
-          required: false,
-          options: ['Yes', 'No'],
-        },
-        {
-          fieldKey: 'prepare_fpc_and_physical_wafer_to_psf_cabinet_e2',
-          canonicalKey: 'prepare_fpc_and_physical_wafer_to_psf_cabinet_e2',
-          label: 'Prepare FPC & Physical Wafer to PSF Cabinet E2',
-          type: 'select',
-          required: false,
-          options: ['Yes', 'No'],
-        },
-        {
-          fieldKey: 'psf_setup_file_name',
-          canonicalKey: 'psf_setup_file_name',
-          label: 'PSF Setup File Name',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'job_file_name',
-          canonicalKey: 'job_file_name',
-          label: 'Job File Name',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'template',
-          canonicalKey: 'template',
-          label: 'Template',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'layout',
-          canonicalKey: 'layout',
-          label: 'Layout',
-          type: 'text',
-          required: false,
-        },
-        {
-          fieldKey: 'attachment_reference',
-          canonicalKey: 'attachment_reference',
-          label: 'Attachment Reference',
-          type: 'text',
-          required: false,
-        },
-      ],
-    },
-  ],
-};
+export { PSF_CREATED_INFORMATION_SCHEMA };
 
 export type RequesterData = Record<string, unknown>;
 
 export interface CreateDraftRequestDto {
   requester?: string;
   requesterData: RequesterData;
+  setupOwnerUserId?: string | null;
 }
+
+export interface AssignableSetupOwner {
+  id: string;
+  displayName: string;
+  setupOwnerDepartment: 'GNTC' | 'MFG';
+}
+
+export interface UpdateRequestAssignmentDto {
+  setupOwnerUserId: string | null;
+  expectedUpdatedAt: string;
+}
+
+type AssignmentSnapshot = Pick<
+  PsfRequestResponse,
+  'setupOwnerUserId' | 'setupOwner' | 'setupOwnerRole'
+>;
 
 export interface UpdateDraftRequesterDataDto {
   formVersion: number;
-  requester?: string;
+  setupOwnerUserId?: string | null;
   requesterData: RequesterData;
+  expectedUpdatedAt: unknown;
 }
 
 export interface SubmitDraftRequestDto {
   formVersion: number;
+  status: string;
+  expectedUpdatedAt: unknown;
 }
 
 export interface UpgradeDraftSchemaDto {
@@ -170,6 +110,7 @@ export interface UpgradeDraftSchemaDto {
 
 export interface UpdateRequestStatusBodyDto {
   status: string;
+  expectedUpdatedAt: unknown;
 }
 
 export interface UpdateRequestStatusDto extends UpdateRequestStatusBodyDto {
@@ -191,7 +132,11 @@ export interface RequestStatusOptionsResponse {
   allowedNextStatuses: string[];
 }
 
-export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'>;
+export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'> & {
+  scope?: 'all' | 'related' | 'my-drafts';
+  relation?: 'all' | 'created' | 'assigned' | 'department';
+  workState?: 'all' | 'open' | 'overdue' | 'completed';
+};
 
 export interface PsfRequestResponse {
   id: string;
@@ -200,6 +145,7 @@ export interface PsfRequestResponse {
   formVersion: number;
   status: string;
   requester: string | null;
+  setupOwnerUserId: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -207,6 +153,10 @@ export interface PsfRequestResponse {
   psfCreatedData: RequesterData;
   psfCreatedDataVisible: boolean;
   canEditPsfCreatedData: boolean;
+  canEditRequesterData: boolean;
+  canSubmitDraft: boolean;
+  requesterUserId: string | null;
+  psfReleasedAt: string | null;
   psfCreatedInformationSchema: FormSchemaJson;
   schemaSnapshot: FormSchemaJson;
   createdAt: string;
@@ -224,17 +174,20 @@ interface PsfRequestRow {
   status: string;
   requester: string | null;
   requester_user_id: string | null;
+  setup_owner_user_id?: string | null;
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
   requester_data_json: RequesterData;
   psf_created_data_json: RequesterData;
   schema_snapshot_json: FormSchemaJson;
+  psf_created_schema_snapshot_json?: FormSchemaJson | null;
   created_at: Date | string;
   updated_at: Date | string;
   updated_at_version?: string;
   submitted_at: Date | string | null;
   psf_created_at: Date | string | null;
+  psf_released_at: Date | string | null;
   completed_at: Date | string | null;
 }
 
@@ -246,6 +199,7 @@ export class RequestsService implements OnModuleInit {
     private readonly workflowTransitionService: WorkflowTransitionService,
     private readonly searchIndexService: SearchIndexService,
     private readonly auditLogService: AuditLogService,
+    @Optional() private readonly notificationService?: NotificationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -259,16 +213,26 @@ export class RequestsService implements OnModuleInit {
     dto: CreateDraftRequestDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
-    this.assertCanCreateDraft(actor);
     const activeSchema =
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
     const requester = actor.displayName;
     const requesterData = this.withServerRequesterIdentity(
-      dto.requesterData,
+      validateAndNormalizeFormData(activeSchema.schema, dto.requesterData, {
+        allowMissingRequired: true,
+      }),
       requester,
     );
 
     return this.withTransaction(async (client) => {
+      const psfCreatedSchema =
+        await this.formSchemaService.getActiveSchemaForUpdate(
+          PSF_CREATED_INFORMATION_FORM_KEY,
+          client,
+        );
+      const assignment =
+        dto.setupOwnerUserId === undefined
+          ? this.emptyAssignment()
+          : await this.resolveAssignment(dto.setupOwnerUserId, client);
       const requestNo = await this.nextDraftRequestNo(client);
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -285,10 +249,12 @@ export class RequestsService implements OnModuleInit {
             requester_data_json,
             psf_created_data_json,
             schema_snapshot_json,
+            psf_created_schema_snapshot_json,
+            setup_owner_user_id, setup_owner, setup_owner_role,
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, $12::uuid, $13, $14, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -302,6 +268,10 @@ export class RequestsService implements OnModuleInit {
           productType,
           requesterData,
           activeSchema.schema,
+          psfCreatedSchema.schema,
+          assignment.setupOwnerUserId,
+          assignment.setupOwner,
+          assignment.setupOwnerRole,
         ],
       );
 
@@ -316,8 +286,186 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
-      return this.mapRequestRow(createdRow);
+      return this.mapRequestRow(createdRow, actor);
     });
+  }
+
+  async listAssignableSetupOwners(): Promise<{
+    items: AssignableSetupOwner[];
+  }> {
+    const result = await this.pool.query<{
+      id: string;
+      display_name: string;
+      setup_owner_department: 'GNTC' | 'MFG';
+    }>(
+      `SELECT id, display_name, setup_owner_department FROM app_users
+       WHERE role = 'setup_owner' AND setup_owner_department IN ('GNTC', 'MFG')
+       ORDER BY display_name, id`,
+    );
+    return {
+      items: result.rows.map((row) => ({
+        id: row.id,
+        displayName: row.display_name,
+        setupOwnerDepartment: row.setup_owner_department,
+      })),
+    };
+  }
+
+  async updateAssignment(
+    id: string,
+    dto: UpdateRequestAssignmentDto,
+    actor: AuthenticatedUserProfile,
+  ): Promise<PsfRequestResponse> {
+    this.assertExpectedUpdatedAt(dto?.expectedUpdatedAt);
+    if (!dto || !Object.hasOwn(dto, 'setupOwnerUserId')) {
+      throw new BadRequestException('setupOwnerUserId is required.');
+    }
+    return this.withTransaction(async (client) => {
+      const current = await client.query<PsfRequestRow>(
+        `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      const request = current.rows[0];
+      if (!request)
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      this.assertCanAccessRequest(request, actor);
+      if (request.updated_at_version !== dto.expectedUpdatedAt) {
+        throw new ConflictException(
+          'The request changed before assignment. Reload and try again.',
+        );
+      }
+      const before = this.assignmentSnapshot(request);
+      const after = await this.resolveAssignment(dto.setupOwnerUserId, client);
+      if (this.sameAssignment(before, after))
+        return this.mapRequestRow(request, actor);
+      const result = await client.query<PsfRequestRow>(
+        `UPDATE psf_requests SET setup_owner_user_id = $2::uuid, setup_owner = $3, setup_owner_role = $4,
+          updated_at = GREATEST(clock_timestamp() AT TIME ZONE current_setting('TIMEZONE'), updated_at + INTERVAL '1 microsecond')
+         WHERE id = $1 AND updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+         RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version`,
+        [
+          id,
+          after.setupOwnerUserId,
+          after.setupOwner,
+          after.setupOwnerRole,
+          dto.expectedUpdatedAt,
+        ],
+      );
+      const updated = result.rows[0];
+      if (!updated)
+        throw new ConflictException(
+          'The request changed during assignment. Reload and try again.',
+        );
+      if (updated.status !== DRAFT_STATUS) {
+        await this.searchIndexService.upsertRequestSearchIndex(
+          {
+            requestId: updated.id,
+            requestNo: updated.request_no,
+            status: updated.status,
+            requester: updated.requester,
+            requesterUserId: updated.requester_user_id,
+            setupOwnerUserId: updated.setup_owner_user_id ?? null,
+            setupOwner: updated.setup_owner,
+            setupOwnerRole: updated.setup_owner_role,
+            productType: updated.product_type,
+            requestDate: updated.created_at,
+            updatedAt: updated.updated_at_version ?? updated.updated_at,
+          },
+          this.searchIndexService.extractCanonicalValues(
+            updated.schema_snapshot_json,
+            updated.requester_data_json ?? {},
+          ),
+          client,
+        );
+      }
+      await this.recordAssignmentChange(id, before, after, actor, client);
+      return this.mapRequestRow(updated, actor);
+    });
+  }
+
+  private emptyAssignment(): AssignmentSnapshot {
+    return { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null };
+  }
+
+  private assignmentSnapshot(row: PsfRequestRow): AssignmentSnapshot {
+    return {
+      setupOwnerUserId: row.setup_owner_user_id ?? null,
+      setupOwner: row.setup_owner,
+      setupOwnerRole: row.setup_owner_role,
+    };
+  }
+
+  private sameAssignment(
+    before: AssignmentSnapshot,
+    after: AssignmentSnapshot,
+  ): boolean {
+    if (before.setupOwnerUserId !== after.setupOwnerUserId) return false;
+    // The person identifies an assignment; profile changes never refresh its snapshots.
+    if (before.setupOwnerUserId !== null) return true;
+    // Legacy null-UUID ownership must still clear its stored name and department.
+    return (
+      before.setupOwner === after.setupOwner &&
+      before.setupOwnerRole === after.setupOwnerRole
+    );
+  }
+
+  private async resolveAssignment(
+    value: unknown,
+    client: QueryRunner,
+  ): Promise<AssignmentSnapshot> {
+    if (value === null) return this.emptyAssignment();
+    if (
+      typeof value !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      )
+    ) {
+      throw new BadRequestException('setupOwnerUserId must be a UUID or null.');
+    }
+    // FOR SHARE blocks role/department updates until this request mutation commits.
+    const result = await client.query<{
+      id: string;
+      display_name: string;
+      role: string;
+      setup_owner_department: string | null;
+    }>(
+      `SELECT id, display_name, role, setup_owner_department FROM app_users WHERE id = $1::uuid FOR SHARE`,
+      [value],
+    );
+    const user = result.rows[0];
+    if (
+      !user ||
+      user.role !== 'setup_owner' ||
+      (user.setup_owner_department !== 'GNTC' &&
+        user.setup_owner_department !== 'MFG')
+    ) {
+      throw new BadRequestException(
+        'The assignee must be an eligible Setup File Owner. Select another user or clear the assignment.',
+      );
+    }
+    return {
+      setupOwnerUserId: user.id,
+      setupOwner: user.display_name,
+      setupOwnerRole: user.setup_owner_department,
+    };
+  }
+
+  private async recordAssignmentChange(
+    id: string,
+    before: AssignmentSnapshot,
+    after: AssignmentSnapshot,
+    actor: AuthenticatedUserProfile,
+    client: QueryRunner,
+  ): Promise<void> {
+    await this.auditLogService.record(
+      {
+        requestId: id,
+        actionType: REQUEST_AUDIT_ACTION.REQUEST_ASSIGNEE_CHANGED,
+        actor,
+        metadata: { before, after },
+      },
+      client,
+    );
   }
 
   async queryRequests(
@@ -327,24 +475,65 @@ export class RequestsService implements OnModuleInit {
     const filters = { ...(query as RequestSearchFilters) };
     delete filters.requesterUserId;
 
-    if (actor.role === 'requester') {
-      delete filters.requester;
-    }
-
     const normalizedFilters = {
       ...filters,
       limit: this.parseOptionalNumber(query.limit),
       offset: this.parseOptionalNumber(query.offset),
     };
 
-    if (actor.role === 'requester') {
-      return this.searchIndexService.queryRequests({
-        ...normalizedFilters,
-        requesterUserId: actor.id,
-      });
+    const scope = query.scope ?? 'all';
+    const relation = query.relation ?? 'all';
+    const workState = query.workState ?? 'all';
+    if (scope === 'my-drafts') {
+      if (relation !== 'all' || workState !== 'all') {
+        throw new BadRequestException(
+          'My drafts cannot be combined with relationship or work-state filters.',
+        );
+      }
+      return this.searchIndexService.queryOwnDrafts(
+        actor.id,
+        normalizedFilters,
+      );
     }
-
-    return this.searchIndexService.queryRequests(normalizedFilters);
+    if (scope === 'all' && relation !== 'all') {
+      throw new BadRequestException(
+        'Relationship filters are only supported for related work.',
+      );
+    }
+    if (
+      scope === 'related' &&
+      relation === 'department' &&
+      actor.role !== 'setup_owner'
+    ) {
+      throw new ForbiddenException(
+        'Only Setup File Owners can view PSF department work.',
+      );
+    }
+    const configuration = await this.workflowTransitionService.getConfiguration(
+      this.pool,
+      false,
+    );
+    const workEntries = configuration.entries.filter(
+      (entry) => entry.kind !== 'draft',
+    );
+    const scopeFilters: RequestScopeFilters = {
+      scope,
+      relation,
+      workState,
+      actorId: actor.id,
+      actorRole: actor.role,
+      department: actor.setupOwnerDepartment,
+      openStatuses: workEntries
+        .filter((entry) => entry.kind === 'open')
+        .map((entry) => entry.name),
+      completedStatuses: workEntries
+        .filter((entry) => entry.kind === 'completed')
+        .map((entry) => entry.name),
+    };
+    return this.searchIndexService.queryRequests(
+      normalizedFilters,
+      scopeFilters,
+    );
   }
 
   async getRequest(
@@ -374,9 +563,11 @@ export class RequestsService implements OnModuleInit {
     id: string,
     actor: AuthenticatedUserProfile,
   ): Promise<RequestAuditHistoryEntry[]> {
-    await this.getRequest(id, actor);
-
-    return this.auditLogService.findByRequestId(id);
+    const request = await this.getRequest(id, actor);
+    return this.auditLogService.findByRequestId(
+      id,
+      request.psfCreatedDataVisible,
+    );
   }
 
   async getAllowedStatusTransitions(
@@ -404,7 +595,6 @@ export class RequestsService implements OnModuleInit {
     return {
       allowedNextStatuses:
         await this.workflowTransitionService.getAllowedNextStatuses(
-          actor,
           request.status,
         ),
     };
@@ -415,18 +605,13 @@ export class RequestsService implements OnModuleInit {
     dto: UpdateDraftRequesterDataDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
-    this.assertCanEditRequesterData(actor);
     this.assertExpectedFormVersion(dto.formVersion);
+    this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
     return this.withTransaction(async (client) => {
-      const current = await client.query<
-        Pick<
-          PsfRequestRow,
-          'id' | 'form_version' | 'status' | 'requester' | 'requester_user_id'
-        >
-      >(
+      const current = await client.query<PsfRequestRow>(
         `
-          SELECT id, form_version, status, requester, requester_user_id
+          SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -440,64 +625,137 @@ export class RequestsService implements OnModuleInit {
       }
 
       this.assertCanAccessRequest(request, actor);
-
-      if (request.status !== DRAFT_STATUS) {
-        throw new ForbiddenException(
-          'Requester-owned fields can only be edited while the request is Draft',
-        );
-      }
-
       if (request.form_version !== dto.formVersion) {
         throw new ConflictException(
-          'The Draft schema changed before these edits were saved. Reload the Draft and try again.',
+          'The request schema changed before these edits were saved. Reload the request and try again.',
+        );
+      }
+      if (dto.expectedUpdatedAt !== request.updated_at_version) {
+        throw new ConflictException(
+          'The request changed before these edits were saved. Reload and try again.',
         );
       }
 
+      if (
+        request.status !== DRAFT_STATUS &&
+        dto.setupOwnerUserId !== undefined
+      ) {
+        throw new BadRequestException(
+          'Use the assignment endpoint for submitted requests.',
+        );
+      }
+      const beforeAssignment = this.assignmentSnapshot(request);
+      const candidateAssignment =
+        dto.setupOwnerUserId === undefined
+          ? beforeAssignment
+          : await this.resolveAssignment(dto.setupOwnerUserId, client);
+      const assignment = this.sameAssignment(
+        beforeAssignment,
+        candidateAssignment,
+      )
+        ? beforeAssignment
+        : candidateAssignment;
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
       const requesterData = this.withServerRequesterIdentity(
-        dto.requesterData,
+        validateAndNormalizeFormData(
+          request.schema_snapshot_json,
+          dto.requesterData,
+          {
+            allowMissingRequired: request.status === DRAFT_STATUS,
+          },
+        ),
         requesterIdentity.displayName,
       );
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
         `
           UPDATE psf_requests
-          SET requester = $2,
-              requester_user_id = $3::uuid,
-              product_type = $4,
-              requester_data_json = $5::jsonb,
+          SET product_type = $2,
+              requester_data_json = $3::jsonb,
+              ${dto.setupOwnerUserId === undefined ? '' : 'setup_owner_user_id = $6::uuid, setup_owner = $7, setup_owner_role = $8,'}
               updated_at = NOW()
           WHERE id = $1
-            AND form_version = $6
+            AND form_version = $4
+            AND updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
           id,
-          requesterIdentity.displayName,
-          requesterIdentity.userId,
           productType,
           requesterData,
           dto.formVersion,
+          dto.expectedUpdatedAt,
+          ...(dto.setupOwnerUserId === undefined
+            ? []
+            : [
+                assignment.setupOwnerUserId,
+                assignment.setupOwner,
+                assignment.setupOwnerRole,
+              ]),
         ],
       );
 
       const updatedRow = result.rows[0];
       if (!updatedRow) {
         throw new ConflictException(
-          'The Draft changed while these edits were being saved. Reload the Draft and try again.',
+          'The request changed while these edits were being saved. Reload and try again.',
+        );
+      }
+      if (request.status !== DRAFT_STATUS) {
+        const canonicalValues =
+          await this.searchIndexService.upsertSubmittedCanonicalValues(
+            id,
+            request.schema_snapshot_json,
+            requesterData,
+            client,
+          );
+        await this.searchIndexService.upsertRequestSearchIndex(
+          {
+            requestId: updatedRow.id,
+            requestNo: updatedRow.request_no,
+            status: updatedRow.status,
+            requester: updatedRow.requester,
+            requesterUserId: updatedRow.requester_user_id,
+            setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
+            setupOwner: updatedRow.setup_owner,
+            setupOwnerRole: updatedRow.setup_owner_role,
+            productType: updatedRow.product_type,
+            requestDate: updatedRow.created_at,
+            updatedAt: updatedRow.updated_at,
+          },
+          canonicalValues,
+          client,
         );
       }
       await this.auditLogService.record(
         {
           requestId: updatedRow.id,
-          actionType: REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED,
+          actionType:
+            request.status === DRAFT_STATUS
+              ? REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED
+              : REQUEST_AUDIT_ACTION.REQUESTER_INFORMATION_UPDATED,
           actor,
-          metadata: {},
+          metadata: {
+            fieldChanges: this.getFieldChanges(
+              request.schema_snapshot_json,
+              request.requester_data_json ?? {},
+              requesterData,
+            ),
+          },
         },
         client,
       );
 
-      return this.mapRequestRow(updatedRow);
+      if (!this.sameAssignment(beforeAssignment, assignment)) {
+        await this.recordAssignmentChange(
+          updatedRow.id,
+          beforeAssignment,
+          assignment,
+          actor,
+          client,
+        );
+      }
+      return this.mapRequestRow(updatedRow, actor);
     });
   }
 
@@ -506,7 +764,6 @@ export class RequestsService implements OnModuleInit {
     dto: UpgradeDraftSchemaDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
-    this.assertCanEditRequesterData(actor);
     this.assertExpectedFormVersion(dto.formVersion);
 
     return this.withTransaction(async (client) => {
@@ -638,7 +895,7 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
-      return this.mapRequestRow(upgradedRow);
+      return this.mapRequestRow(upgradedRow, actor);
     });
   }
 
@@ -647,91 +904,107 @@ export class RequestsService implements OnModuleInit {
     dto: UpdatePsfCreatedDataDto,
   ): Promise<PsfRequestResponse> {
     this.assertCanEditPsfCreatedData(dto.actor);
-
-    const current = await this.pool.query<
-      Pick<PsfRequestRow, 'id' | 'status' | 'updated_at' | 'updated_at_version'>
-    >(
-      `
-        SELECT id,
-               status,
-               updated_at,
-               ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-        FROM psf_requests
-        WHERE id = $1
-      `,
-      [id],
-    );
-
-    const request = current.rows[0];
-    if (!request) {
-      throw new NotFoundException(`PSF request ${id} was not found`);
-    }
-
-    if (
-      dto.actor.role === 'setup_owner' &&
-      request.status === COMPLETED_STATUS
-    ) {
-      throw new ForbiddenException(
-        'Setup File Owners cannot edit PSF Created Information once the request is Completed',
-      );
-    }
-
     this.assertPsfCreatedDataPayload(dto.psfCreatedData);
     this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
-    const currentUpdatedAt = request.updated_at_version ?? request.updated_at;
-    if (dto.expectedUpdatedAt !== this.serializeTimestamp(currentUpdatedAt)) {
-      throw new ConflictException(
-        'The request changed before this update. Reload the request and try again.',
+    return this.withTransaction(async (client) => {
+      const current = await client.query<PsfRequestRow>(
+        `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id = $1 FOR UPDATE`,
+        [id],
       );
-    }
-
-    const psfCreatedData = this.normalizePsfCreatedDataToSchema(
-      dto.psfCreatedData,
-    );
-    const actorName =
-      dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
-    const actorDepartment =
-      dto.actor.role === 'setup_owner' ? dto.actor.setupOwnerDepartment : null;
-    const ownerCompletionGuard =
-      dto.actor.role === 'setup_owner'
-        ? `AND status <> '${COMPLETED_STATUS}'`
-        : '';
-    const result = await this.pool.query<PsfRequestRow>(
-      `
-        UPDATE psf_requests
-        SET psf_created_data_json = $2::jsonb,
-            setup_owner = COALESCE($3, setup_owner),
-            setup_owner_role = COALESCE($4, setup_owner_role),
-            updated_at = NOW()
-        WHERE id = $1
-          AND updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
-          ${ownerCompletionGuard}
-        RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-      `,
-      [id, psfCreatedData, actorName, actorDepartment, currentUpdatedAt],
-    );
-
-    const updatedRow = result.rows[0];
-    if (!updatedRow) {
-      throw new ConflictException(
-        'The request changed before this update. Reload the request and try again.',
+      const request = current.rows[0];
+      if (!request) {
+        throw new NotFoundException(`PSF request ${id} was not found`);
+      }
+      this.assertCanAccessRequest(request, dto.actor);
+      if (dto.expectedUpdatedAt !== request.updated_at_version) {
+        throw new ConflictException(
+          'The request changed before this update. Reload and try again.',
+        );
+      }
+      const schema = resolvePsfCreatedInformationSchema(
+        request.psf_created_schema_snapshot_json,
       );
-    }
-
-    return this.mapRequestRow(updatedRow, dto.actor);
+      const psfCreatedData = validateAndNormalizeFormData(
+        schema,
+        dto.psfCreatedData,
+        {
+          allowMissingRequired: request.status === DRAFT_STATUS,
+        },
+      );
+      const hasPsfData = Object.values(psfCreatedData).some(
+        (value) => typeof value === 'string' && value.trim().length > 0,
+      );
+      const result = await client.query<PsfRequestRow>(
+        `
+          UPDATE psf_requests
+          SET psf_created_data_json = $2::jsonb,
+              psf_created_at = CASE WHEN $3::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
+              updated_at = NOW()
+          WHERE id = $1
+            AND updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+        [id, psfCreatedData, hasPsfData, dto.expectedUpdatedAt],
+      );
+      const updatedRow = result.rows[0];
+      if (!updatedRow) {
+        throw new ConflictException(
+          'The request changed before this update. Reload and try again.',
+        );
+      }
+      if (updatedRow.status !== DRAFT_STATUS) {
+        await this.searchIndexService.upsertRequestSearchIndex(
+          {
+            requestId: updatedRow.id,
+            requestNo: updatedRow.request_no,
+            status: updatedRow.status,
+            requester: updatedRow.requester,
+            requesterUserId: updatedRow.requester_user_id,
+            setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
+            setupOwner: updatedRow.setup_owner,
+            setupOwnerRole: updatedRow.setup_owner_role,
+            productType: updatedRow.product_type,
+            requestDate: updatedRow.created_at,
+            updatedAt: updatedRow.updated_at,
+          },
+          this.searchIndexService.extractCanonicalValues(
+            updatedRow.schema_snapshot_json,
+            updatedRow.requester_data_json ?? {},
+          ),
+          client,
+        );
+      }
+      await this.auditLogService.record(
+        {
+          requestId: updatedRow.id,
+          actionType: REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
+          actor: dto.actor,
+          metadata: {
+            fieldChanges: this.getFieldChanges(
+              schema,
+              request.psf_created_data_json ?? {},
+              psfCreatedData,
+            ),
+          },
+        },
+        client,
+      );
+      return this.mapRequestRow(updatedRow, dto.actor);
+    });
   }
 
   async updateRequestStatus(
     id: string,
     dto: UpdateRequestStatusDto,
   ): Promise<PsfRequestResponse> {
+    this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
     return this.withTransaction(async (client) => {
-      const current = await client.query<
-        Pick<PsfRequestRow, 'id' | 'status' | 'requester_user_id'>
-      >(
+      const configuration =
+        await this.workflowTransitionService.lockConfiguration(client);
+      const current = await client.query<PsfRequestRow>(
         `
-          SELECT id, status, requester_user_id
+          SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -745,35 +1018,62 @@ export class RequestsService implements OnModuleInit {
       }
 
       this.assertCanAccessRequest(currentRequest, dto.actor);
-
-      await this.assertStatusTransitionIsAllowed(
-        dto.actor,
-        currentRequest.status,
-        dto.status,
-        client,
+      if (currentRequest.status === DRAFT_STATUS) {
+        throw new ForbiddenException(
+          'Draft requests must be submitted through the submit action.',
+        );
+      }
+      if (currentRequest.updated_at_version !== dto.expectedUpdatedAt) {
+        throw new ConflictException(
+          'The request changed before this status update. Reload and try again.',
+        );
+      }
+      const target = configuration.entries.find(
+        (entry) => entry.name === dto.status && entry.kind !== 'draft',
       );
-
-      const actorName =
-        dto.actor.role === 'setup_owner' ? dto.actor.displayName : null;
-      const actorDepartment =
-        dto.actor.role === 'setup_owner'
-          ? dto.actor.setupOwnerDepartment
-          : null;
+      if (!target) {
+        throw new BadRequestException(
+          `Unsupported request status: ${dto.status}`,
+        );
+      }
+      if (target.name === currentRequest.status) {
+        return this.mapRequestRow(currentRequest, dto.actor);
+      }
+      const entersTrigger = (
+        configuration.psfVisibilityTriggerIds ?? [
+          configuration.psfVisibilityTriggerId,
+        ]
+      ).includes(target.id);
+      if (entersTrigger) {
+        assertValidRequiredFormData(
+          resolvePsfCreatedInformationSchema(
+            currentRequest.psf_created_schema_snapshot_json,
+          ),
+          currentRequest.psf_created_data_json ?? {},
+          'PSF Created Information',
+        );
+      }
 
       const result = await client.query<PsfRequestRow>(
         `
           UPDATE psf_requests
           SET status = $2,
-              setup_owner = COALESCE($3, setup_owner),
-              setup_owner_role = COALESCE($4, setup_owner_role),
-              psf_created_at = CASE WHEN $2 = '${PSF_CREATED_STATUS}' THEN NOW() ELSE psf_created_at END,
-              completed_at = CASE WHEN $2 = '${COMPLETED_STATUS}' THEN NOW() ELSE completed_at END,
+              completed_at = CASE WHEN $3::boolean THEN NOW() ELSE completed_at END,
+              psf_released_at = CASE WHEN $4::boolean THEN COALESCE(psf_released_at, NOW()) ELSE psf_released_at END,
               updated_at = NOW()
           WHERE id = $1
             AND status = $5
+            AND updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-        [id, dto.status, actorName, actorDepartment, currentRequest.status],
+        [
+          id,
+          target.name,
+          target.kind === 'completed',
+          entersTrigger,
+          currentRequest.status,
+          dto.expectedUpdatedAt,
+        ],
       );
 
       const updatedRow = result.rows[0];
@@ -790,6 +1090,7 @@ export class RequestsService implements OnModuleInit {
           status: updatedRow.status,
           requester: updatedRow.requester,
           requesterUserId: updatedRow.requester_user_id,
+          setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
           setupOwner: updatedRow.setup_owner,
           setupOwnerRole: updatedRow.setup_owner_role,
           productType: updatedRow.product_type,
@@ -816,6 +1117,14 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
+      await this.notificationService?.enqueueRequest(client, {
+        eventType: 'REQUEST_STATUS_CHANGED',
+        requestId: updatedRow.id,
+        fromStatus: currentRequest.status,
+        targetStatus: target,
+        actor: dto.actor,
+      });
+
       return this.mapRequestRow(updatedRow, dto.actor);
     });
   }
@@ -825,35 +1134,24 @@ export class RequestsService implements OnModuleInit {
     dto: SubmitDraftRequestDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
-    this.assertCanSubmitDraft(actor);
-    const client = await this.pool.connect();
+    this.assertExpectedFormVersion(dto.formVersion);
+    this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
-    try {
-      await client.query('BEGIN');
+    return this.withTransaction(async (client) => {
+      const configuration =
+        await this.workflowTransitionService.lockConfiguration(client);
+      const target = configuration.entries.find(
+        (entry) => entry.name === dto.status && entry.kind !== 'draft',
+      );
+      if (!target) {
+        throw new BadRequestException(
+          'Submission requires an explicit non-Draft catalog status.',
+        );
+      }
 
-      const current = await client.query<
-        Pick<
-          PsfRequestRow,
-          | 'id'
-          | 'form_key'
-          | 'status'
-          | 'form_version'
-          | 'requester'
-          | 'requester_user_id'
-          | 'requester_data_json'
-          | 'schema_snapshot_json'
-        >
-      >(
+      const current = await client.query<PsfRequestRow>(
         `
-          SELECT
-            id,
-            form_key,
-            status,
-            form_version,
-            requester,
-            requester_user_id,
-            requester_data_json,
-            schema_snapshot_json
+          SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
           FROM psf_requests
           WHERE id = $1
           FOR UPDATE
@@ -870,6 +1168,15 @@ export class RequestsService implements OnModuleInit {
 
       if (request.status !== DRAFT_STATUS) {
         throw new ForbiddenException('Only Draft requests can be submitted');
+      }
+      if (request.updated_at_version !== dto.expectedUpdatedAt) {
+        throw new ConflictException(
+          'The request changed before submission. Reload and try again.',
+        );
+      }
+
+      if (request.setup_owner_user_id) {
+        await this.resolveAssignment(request.setup_owner_user_id, client);
       }
 
       if (!this.requestSchemaSnapshotMatchesVersion(request)) {
@@ -895,16 +1202,29 @@ export class RequestsService implements OnModuleInit {
       }
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
       const normalizedRequesterData = this.withServerRequesterIdentity(
-        this.normalizeRequesterDataToSchema(
-          activeSchema.schema,
+        validateAndNormalizeFormData(
+          request.schema_snapshot_json,
           request.requester_data_json ?? {},
+          {
+            allowMissingRequired: false,
+          },
         ),
         requesterIdentity.displayName,
       );
-      this.assertRequiredRequesterFieldsPresent(
-        activeSchema.schema,
-        normalizedRequesterData,
-      );
+      const entersTrigger = (
+        configuration.psfVisibilityTriggerIds ?? [
+          configuration.psfVisibilityTriggerId,
+        ]
+      ).includes(target.id);
+      if (entersTrigger) {
+        assertValidRequiredFormData(
+          resolvePsfCreatedInformationSchema(
+            request.psf_created_schema_snapshot_json,
+          ),
+          request.psf_created_data_json ?? {},
+          'PSF Created Information',
+        );
+      }
 
       const productType = this.normalizeString(
         normalizedRequesterData.product_type,
@@ -912,34 +1232,39 @@ export class RequestsService implements OnModuleInit {
       const result = await client.query<PsfRequestRow>(
         `
           UPDATE psf_requests
-          SET status = '${SUBMITTED_STATUS}',
-              requester = $2,
-              requester_user_id = $3::uuid,
-              product_type = $4,
-              requester_data_json = $5::jsonb,
-              form_version = $6,
-              schema_snapshot_json = $7::jsonb,
+          SET status = $2,
+              product_type = $3,
+              requester_data_json = $4::jsonb,
               submitted_at = NOW(),
+              completed_at = CASE WHEN $5::boolean THEN NOW() ELSE completed_at END,
+              psf_released_at = CASE WHEN $6::boolean THEN COALESCE(psf_released_at, NOW()) ELSE psf_released_at END,
               updated_at = NOW()
           WHERE id = $1
+            AND status = '${DRAFT_STATUS}'
+            AND updated_at = ($7::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
           id,
-          requesterIdentity.displayName,
-          requesterIdentity.userId,
+          target.name,
           productType,
           normalizedRequesterData,
-          activeSchema.version,
-          activeSchema.schema,
+          target.kind === 'completed',
+          entersTrigger,
+          dto.expectedUpdatedAt,
         ],
       );
 
       const submittedRow = result.rows[0];
+      if (!submittedRow) {
+        throw new ConflictException(
+          'The request changed during submission. Reload and try again.',
+        );
+      }
       const canonicalValues =
         await this.searchIndexService.upsertSubmittedCanonicalValues(
           id,
-          activeSchema.schema,
+          request.schema_snapshot_json,
           normalizedRequesterData,
           client,
         );
@@ -951,6 +1276,7 @@ export class RequestsService implements OnModuleInit {
           status: submittedRow.status,
           requester: submittedRow.requester,
           requesterUserId: submittedRow.requester_user_id,
+          setupOwnerUserId: submittedRow.setup_owner_user_id ?? null,
           setupOwner: submittedRow.setup_owner,
           setupOwnerRole: submittedRow.setup_owner_role,
           productType: submittedRow.product_type,
@@ -966,44 +1292,21 @@ export class RequestsService implements OnModuleInit {
           requestId: submittedRow.id,
           actionType: REQUEST_AUDIT_ACTION.REQUEST_SUBMITTED,
           actor,
-          metadata: {},
+          metadata: { fromStatus: DRAFT_STATUS, toStatus: target.name },
         },
         client,
       );
 
-      await client.query('COMMIT');
+      await this.notificationService?.enqueueRequest(client, {
+        eventType: 'REQUEST_SUBMITTED',
+        requestId: submittedRow.id,
+        fromStatus: DRAFT_STATUS,
+        targetStatus: target,
+        actor,
+      });
 
-      return this.mapRequestRow(submittedRow);
-    } catch (error) {
-      await this.rollbackTransaction(client);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  private assertCanCreateDraft(actor: AuthenticatedUserProfile): void {
-    if (actor.role === 'setup_owner') {
-      throw new ForbiddenException(
-        'Setup File Owners cannot create requester drafts',
-      );
-    }
-  }
-
-  private assertCanEditRequesterData(actor: AuthenticatedUserProfile): void {
-    if (actor.role === 'setup_owner') {
-      throw new ForbiddenException(
-        'Setup File Owners cannot edit requester-owned fields',
-      );
-    }
-  }
-
-  private assertCanSubmitDraft(actor: AuthenticatedUserProfile): void {
-    if (actor.role === 'setup_owner') {
-      throw new ForbiddenException(
-        'Setup File Owners cannot submit requester drafts',
-      );
-    }
+      return this.mapRequestRow(submittedRow, actor);
+    });
   }
 
   private assertExpectedFormVersion(value: unknown): asserts value is number {
@@ -1027,12 +1330,15 @@ export class RequestsService implements OnModuleInit {
   }
 
   private assertCanAccessRequest(
-    request: Pick<PsfRequestRow, 'requester_user_id'>,
+    request: Pick<PsfRequestRow, 'status' | 'requester_user_id'>,
     actor: AuthenticatedUserProfile,
   ): void {
-    if (actor.role === 'requester' && request.requester_user_id !== actor.id) {
+    if (
+      request.status === DRAFT_STATUS &&
+      request.requester_user_id !== actor.id
+    ) {
       throw new ForbiddenException(
-        'Requesters can only access requests they created',
+        'Draft requests are private to their creator.',
       );
     }
   }
@@ -1041,10 +1347,6 @@ export class RequestsService implements OnModuleInit {
     request: Pick<PsfRequestRow, 'requester' | 'requester_user_id'>,
     actor: AuthenticatedUserProfile,
   ): { displayName: string; userId: string | null } {
-    if (actor.role === 'requester') {
-      return { displayName: actor.displayName, userId: actor.id };
-    }
-
     return {
       displayName: request.requester ?? actor.displayName,
       userId: request.requester_user_id,
@@ -1089,50 +1391,6 @@ export class RequestsService implements OnModuleInit {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
-  private async assertStatusTransitionIsAllowed(
-    actor: AuthenticatedUserProfile,
-    currentStatus: string,
-    nextStatus: string,
-    queryRunner: QueryRunner,
-  ): Promise<void> {
-    if (currentStatus === DRAFT_STATUS) {
-      if (nextStatus === DRAFT_STATUS) {
-        return;
-      }
-
-      throw new ForbiddenException(
-        'Draft requests must be submitted through the submit action',
-      );
-    }
-
-    if (!MANUAL_STATUS_SET.has(nextStatus)) {
-      throw new BadRequestException(
-        `Unsupported request status: ${nextStatus}`,
-      );
-    }
-
-    if (nextStatus === currentStatus) {
-      return;
-    }
-
-    const allowedTargets =
-      await this.workflowTransitionService.getAllowedNextStatuses(
-        actor,
-        currentStatus,
-        queryRunner,
-      );
-
-    if (
-      !allowedTargets.includes(
-        nextStatus as (typeof MANUAL_WORKFLOW_STATUSES)[number],
-      )
-    ) {
-      throw new ForbiddenException(
-        `${actor.role} is not allowed to move a request from ${currentStatus} to ${nextStatus}`,
-      );
-    }
-  }
-
   private async withTransaction<T>(
     operation: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
@@ -1171,23 +1429,43 @@ export class RequestsService implements OnModuleInit {
         status TEXT NOT NULL,
         requester TEXT,
         requester_user_id UUID,
+        setup_owner_user_id UUID NULL,
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
         requester_data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         psf_created_data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         schema_snapshot_json JSONB NOT NULL,
+        psf_created_schema_snapshot_json JSONB NULL,
         created_at TIMESTAMP NOT NULL,
         updated_at TIMESTAMP NOT NULL,
         submitted_at TIMESTAMP,
         psf_created_at TIMESTAMP,
+        psf_released_at TIMESTAMP,
         completed_at TIMESTAMP
       )
     `);
 
+    await queryRunner.query(
+      `ALTER TABLE psf_requests ADD COLUMN IF NOT EXISTS setup_owner_user_id UUID NULL`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_psf_requests_setup_owner_user_id ON psf_requests (setup_owner_user_id)`,
+    );
+
     await queryRunner.query(`
       ALTER TABLE psf_requests
       ADD COLUMN IF NOT EXISTS requester_user_id UUID
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE psf_requests
+      ADD COLUMN IF NOT EXISTS psf_created_schema_snapshot_json JSONB NULL
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE psf_requests
+      ADD COLUMN IF NOT EXISTS psf_released_at TIMESTAMP NULL
     `);
 
     await queryRunner.query(`
@@ -1264,26 +1542,49 @@ export class RequestsService implements OnModuleInit {
 
   private normalizePsfCreatedDataToSchema(
     psfCreatedData: RequesterData,
+    schema: FormSchemaJson,
   ): RequesterData {
+    const fields = new Map(
+      schema.sections.flatMap((section) =>
+        section.fields.map((field) => [field.fieldKey, field] as const),
+      ),
+    );
     const nextData: RequesterData = {};
 
-    PSF_CREATED_INFORMATION_SCHEMA.sections.forEach((section) => {
-      section.fields.forEach((field) => {
-        if (!Object.hasOwn(psfCreatedData, field.fieldKey)) {
-          return;
-        }
+    for (const [fieldKey, rawValue] of Object.entries(psfCreatedData)) {
+      const field = fields.get(fieldKey);
+      if (!field) {
+        throw new BadRequestException(
+          `Unknown PSF Created Information field: ${fieldKey}.`,
+        );
+      }
+      if (rawValue === null || rawValue === undefined) continue;
+      if (typeof rawValue !== 'string') {
+        throw new BadRequestException(`${field.label} must be a string.`);
+      }
 
-        const value = this.normalizeString(psfCreatedData[field.fieldKey]);
-        if (
-          value === null ||
-          (field.options && !field.options.includes(value))
-        ) {
-          return;
-        }
-
-        nextData[field.fieldKey] = value;
+      const value = rawValue.trim();
+      if (!value) continue;
+      if (field.type === 'date' && !this.isValidPsfCreatedCalendarDate(value)) {
+        throw new BadRequestException(
+          `${field.label} must be a valid ISO calendar date.`,
+        );
+      }
+      if (
+        (field.type === 'select' || field.type === 'radio') &&
+        !field.options?.includes(value)
+      ) {
+        throw new BadRequestException(
+          `${field.label} must be one of the configured options.`,
+        );
+      }
+      Object.defineProperty(nextData, fieldKey, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
       });
-    });
+    }
 
     return nextData;
   }
@@ -1305,9 +1606,9 @@ export class RequestsService implements OnModuleInit {
   private assertExpectedUpdatedAt(
     updatedAt: unknown,
   ): asserts updatedAt is string {
-    if (typeof updatedAt !== 'string' || Number.isNaN(Date.parse(updatedAt))) {
+    if (typeof updatedAt !== 'string' || updatedAt.length === 0) {
       throw new BadRequestException(
-        'A valid request updatedAt value is required to save PSF Created Information.',
+        'A request updatedAt revision token is required.',
       );
     }
   }
@@ -1333,6 +1634,47 @@ export class RequestsService implements OnModuleInit {
     }
   }
 
+  private assertRequiredPsfCreatedFieldsPresent(
+    schema: FormSchemaJson,
+    psfCreatedData: RequesterData,
+  ): void {
+    const missingLabels = schema.sections.flatMap((section) =>
+      section.fields
+        .filter((field) => {
+          const value = Object.hasOwn(psfCreatedData, field.fieldKey)
+            ? psfCreatedData[field.fieldKey]
+            : undefined;
+          return (
+            field.required &&
+            (typeof value !== 'string' ||
+              value.trim().length === 0 ||
+              ((field.type === 'select' || field.type === 'radio') &&
+                !field.options?.includes(value.trim())) ||
+              (field.type === 'date' &&
+                !this.isValidPsfCreatedCalendarDate(value.trim())))
+          );
+        })
+        .map((field) => field.label),
+    );
+
+    if (missingLabels.length > 0) {
+      throw new BadRequestException(
+        `PSF Created Information is missing required fields: ${missingLabels.join(', ')}.`,
+      );
+    }
+  }
+
+  private isValidPsfCreatedCalendarDate(value: string): boolean {
+    const normalizedValue = value.trim();
+    const parsedDate = new Date(`${normalizedValue}T00:00:00.000Z`);
+
+    return (
+      /^\d{4}-\d{2}-\d{2}$/.test(normalizedValue) &&
+      !Number.isNaN(parsedDate.getTime()) &&
+      parsedDate.toISOString().slice(0, 10) === normalizedValue
+    );
+  }
+
   private hasSubmittedValue(value: unknown): boolean {
     return typeof value === 'string'
       ? value.trim().length > 0
@@ -1346,24 +1688,25 @@ export class RequestsService implements OnModuleInit {
   }
 
   private canActorEditPsfCreatedData(
-    status: string,
+    _status: string,
     actor?: AuthenticatedUserProfile,
   ): boolean {
     if (!actor) {
       return false;
     }
 
-    return (
-      actor.role === 'admin' ||
-      (actor.role === 'setup_owner' && status !== COMPLETED_STATUS)
-    );
+    return actor.role === 'admin' || actor.role === 'setup_owner';
   }
 
   private mapRequestRow(
     row: PsfRequestRow,
     actor?: AuthenticatedUserProfile,
   ): PsfRequestResponse {
-    const psfCreatedDataVisible = canActorViewPsfCreatedData(row.status, actor);
+    const psfCreatedDataVisible = canActorViewPsfCreatedData(
+      row.status,
+      actor,
+      row.psf_released_at,
+    );
 
     return {
       id: row.id,
@@ -1372,6 +1715,7 @@ export class RequestsService implements OnModuleInit {
       formVersion: row.form_version,
       status: row.status,
       requester: row.requester,
+      setupOwnerUserId: row.setup_owner_user_id ?? null,
       setupOwner: row.setup_owner,
       setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,
@@ -1381,7 +1725,18 @@ export class RequestsService implements OnModuleInit {
         : {},
       psfCreatedDataVisible,
       canEditPsfCreatedData: this.canActorEditPsfCreatedData(row.status, actor),
-      psfCreatedInformationSchema: PSF_CREATED_INFORMATION_SCHEMA,
+      canEditRequesterData:
+        actor !== undefined &&
+        (row.status !== DRAFT_STATUS || row.requester_user_id === actor.id),
+      canSubmitDraft:
+        actor !== undefined &&
+        row.status === DRAFT_STATUS &&
+        row.requester_user_id === actor.id,
+      requesterUserId: row.requester_user_id,
+      psfReleasedAt: this.serializeNullableTimestamp(row.psf_released_at),
+      psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
+        row.psf_created_schema_snapshot_json,
+      ),
       schemaSnapshot: row.schema_snapshot_json,
       createdAt: this.serializeTimestamp(row.created_at),
       updatedAt:
@@ -1390,6 +1745,38 @@ export class RequestsService implements OnModuleInit {
       psfCreatedAt: this.serializeNullableTimestamp(row.psf_created_at),
       completedAt: this.serializeNullableTimestamp(row.completed_at),
     };
+  }
+
+  private getFieldChanges(
+    schema: FormSchemaJson,
+    before: RequesterData,
+    after: RequesterData,
+  ): Array<{
+    fieldKey: string;
+    fieldLabel: string;
+    before: unknown;
+    after: unknown;
+  }> {
+    return schema.sections.flatMap((section) =>
+      section.fields.flatMap((field) => {
+        const previous = Object.hasOwn(before, field.fieldKey)
+          ? before[field.fieldKey]
+          : null;
+        const next = Object.hasOwn(after, field.fieldKey)
+          ? after[field.fieldKey]
+          : null;
+        return JSON.stringify(previous) === JSON.stringify(next)
+          ? []
+          : [
+              {
+                fieldKey: field.fieldKey,
+                fieldLabel: field.label,
+                before: previous,
+                after: next,
+              },
+            ];
+      }),
+    );
   }
 
   private serializeNullableTimestamp(

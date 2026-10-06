@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-03",
+  "tests": {
+    "files": 30,
+    "passed": 300,
+    "command": "npm test",
+    "exitCode": 0,
+    "startedLocal": "07:12:01 Asia/Bangkok"
+  },
+  "lint": {
+    "command": "npm run lint",
+    "exitCode": 0
+  },
+  "build": {
+    "command": "npm run build",
+    "exitCode": 0,
+    "modules": 1875
+  },
+  "diffCheck": {
+    "exitCode": 0
+  },
+  "frozenFileChanges": [],
+  "explicitPresentationException": "frontend/src/components/navigationState.ts",
+  "sourceHashes": {
+    "frontend/index.html": "74ebd0a52e781f085fb978391dd98a8cf3182682ac5b4acd7e18111317d673cd",
+    "frontend/src/components/ActiveSchemaForm.interaction.test.tsx": "cb011724957336d3bbd5b1f5edb247faa02dae34d8fddcf88285fc82b401ae4a",
+    "frontend/src/components/ActiveSchemaForm.tsx": "43e06bed60e8502a45ca0a10b0e2ea8b18e3e39242ec1cba1b209bf7d2f4caef",
+    "frontend/src/components/AdminAutofillRulesPage.interaction.test.tsx": "82ea33519ebb80875530fcb48017187f9d18be844365d4e664a4ac1197f1a2f3",
+    "frontend/src/components/AdminAutofillRulesPage.test.tsx": "571fa97c8e1ef5b712522d8d811e841cd2ea8d8cf3d9ffa6f4d1b84726f6ff53",
+    "frontend/src/components/AdminAutofillRulesPage.tsx": "7636a1d7013d6db950e8618f31a333698284a40e0f685479e334c23d8f1082cc",
+    "frontend/src/components/AdminFormConfigEditor.test.tsx": "9de1d480150949430b2d2b61f5f223335c3f58b3c1bb7a93c89678605f746137",
+    "frontend/src/components/AdminFormConfigEditor.tsx": "f00a31677721fa53c7ce50aaeadb937096d72e9269c04958eae8a96b20a640d8",
+    "frontend/src/components/AdminFormConfigPage.interaction.test.tsx": "5a23dde234490cfe8f351cd3ef3a56755e40d5d923c651423ba23d424057ba41",
+    "frontend/src/components/AdminFormConfigPage.test.tsx": "663686af7bf02d9288c7d2442b93b16924d2b2a396b8f42a72f560b299ef203a",
+    "frontend/src/components/AdminFormConfigPage.tsx": "199e6c9e484d319336287342cf4eead88a7d7de19c7ac4d130acc7a460c284f2",
+    "frontend/src/components/AdminUserManagementPage.interaction.test.tsx": "a608bdb21e9aa5e543b3e391af0b49d9eda49892c1584383188e3d9e22e67883",
+    "frontend/src/components/AdminUserManagementPage.tsx": "862431402cfe90128ada363a6449ff909ccb4728b05d6b76fe79305b57eac49a",
+    "frontend/src/components/AdminWorkflowTransitionPage.interaction.test.tsx": "4027aa5c68597f9736dfa4ee91fe073e5a335ef20f5f86e3922d985aa3e151a0",
+    "frontend/src/components/AdminWorkflowTransitionPage.test.tsx": "0dfa3356727b3ac2cc0aa7c25db753e3f9e4fbb91c5c0eddd590c20a3212a847",
+    "frontend/src/components/AdminWorkflowTransitionPage.tsx": "4b5c6df784890ff7d657c7af6c3de7934b1d9cf6186ea06893cc3d5111d05f1f",
+    "frontend/src/components/AdministrationDirectory.tsx": "bb2f9413f2c42bf815bd6880dcfe3bcb757cedc339ea1dea73fce0075683d72e",
+    "frontend/src/components/AppShell.test.tsx": "52580860a62228433c12624a9cbb3291c561aa32e513cb3abde8c58fd44a3458",
+    "frontend/src/components/AppShell.tsx": "f439c400c41cc6f12af58ecdc001eca0c376ca41dbc2c1cc22b510e6d5483942",
+    "frontend/src/components/DashboardPage.test.tsx": "1d5793bb616e36a7fe447b77f40dadda432eac95464d878d666eb059e2965059",
+    "frontend/src/components/DynamicFormRenderer.test.tsx": "bd2031cb4e353d7637a1170f686e56323a40129b37821132d81f0d17469315a8",
+    "frontend/src/components/DynamicFormRenderer.tsx": "c4482a08416610bfa569aa295496c75ee0beb6228fbeb245ac85a3cfc1d608d5",
+    "frontend/src/components/GlobalHistoryPage.tsx": "633f08f4992da22859095bec9d5ec25fcc5aebde4dcd4c3510b512d97f8c46a4",
+    "frontend/src/components/NavSidebar.test.tsx": "20bf640881bb34a9aa13c1dd1c3c1b2b20b1ccfda9455193a1f1d05e4a05e169",
+    "frontend/src/components/NavSidebar.tsx": "18c257184695c4e8f57f8b47bbfe49f4e4f6bc5ef09fc2b72b6e2abbc67b257d",
+    "frontend/src/components/RequestExportPage.test.tsx": "283ec1f3aba6fe60d3169b64791e7b170efdad6f0a1f61aa90587e3655da6bfc",
+    "frontend/src/components/RequestExportPage.tsx": "802da8d79acd1e3d7e0086f11238e3acb073405674807cb4aa8f3881039d87f7",
+    "frontend/src/components/RequestsWorkspace.test.tsx": "1c42fa7cd451d053acb8913feef13e3aac0711712c6921a47b2182e80874d83d",
+    "frontend/src/components/RequestsWorkspace.tsx": "51e4c259349424012ae4b81857081b909ebbe3b3ef2a5a071f560d4157519f36",
+    "frontend/src/components/navigationState.ts": "fa38d72292f247c1efb0c5ce6c65d9c16b3ef65c3c2372c0b44cfb915f09c5d0",
+    "frontend/src/components/requestBreadcrumb.test.ts": "b09ae0abe7d067049a5ee15f1f2f1564c2093eafdd464f322c59643afaf61c87",
+    "frontend/src/components/requestBreadcrumb.ts": "4c863ce23accf8fa44a6d04c3a500c40ed290603e3f21281880826f2f6a8429b",
+    "frontend/src/components/ui/AsyncNotice.tsx": "03c2e09f24123672415880fb8e546500ef5913c7268a375dd77dce0c962cdbbe",
+    "frontend/src/components/ui/ConfirmDialog.tsx": "2ff476bc0efe72028b334090780380cac6d094c48c76f299f1d8f10534c56d44",
+    "frontend/src/components/ui/PageHeader.tsx": "a889237e58e284b66bf85c3c123e0b1fd44970737888415cea391a353538fc39",
+    "frontend/src/components/ui/StatusLabel.tsx": "209a1aa4e985748f833478d1699cc714ef736733703de8015e0c1d3cd79e8f2f",
+    "frontend/src/components/ui/presentation.test.tsx": "002c811db703b47429caf30c8cefcb6ed184769453f555ca846adfb08f97fed1",
+    "frontend/src/index.css": "ed70ba3c50aa2df5e4f902b12f6e9c0f5cc111ee7567db163aa9ac0ad9bb0113",
+    "frontend/src/routes/admin/index.tsx": "cca4f69bfc6763ccce21c1e197539956ad6d100e5a5cd4426458dcd242be241e",
+    "frontend/src/routes/admin/master-data.tsx": "6cca857f18bd38352951565996dd7f3e1e02198f05f83f261b4bcc09a0548321",
+    "frontend/src/routes/login/-DevelopmentLogin.test.tsx": "72f81aee32c262849f45c8fd17cc947676b71a711d9d7e117da9e4f9e61e0bdb",
+    "frontend/src/routes/login/-DevelopmentLogin.tsx": "8aeaabe93d7e4ae97d947f7afa8f8ac011135f435ae6797c5141653372ecb058",
+    "frontend/src/routes/login/-LoginPage.tsx": "59d4cdf8f7cda9fae95cb7ea1da255791d94e26d66f32d5c703551fa232fd2ee",
+    "frontend/src/routes/login/-development-login.css": "82f6f38fe86da697ad02aaae9b348cf5d5f763d14d31e31eb40112d808370542",
+    "frontend/src/routes/requests/$requestId/history.tsx": "91feb19cde1a5ce045a76e34a2d3356e23cfaa2045e5e2fa881e89543d8bdc23"
+  }
+}

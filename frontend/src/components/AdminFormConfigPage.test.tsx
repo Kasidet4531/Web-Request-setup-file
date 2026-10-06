@@ -1,12 +1,14 @@
-import { createElement } from 'react'
+import type { AnchorHTMLAttributes } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../services/api'
 import type { FormSchemaDraft, FormSchemaVersionResponse } from '../types/forms'
 import * as FormConfigRoute from '../routes/admin/form-config'
+import * as FormConfigIndexRoute from '../routes/admin/form-config.index'
+import * as FormConfigVersionRoute from '../routes/admin/form-config.$version'
+import * as FormConfigFormKeyVersionRoute from '../routes/admin/form-config.$formKey.$version'
 import {
   AdminFormConfigFeedback,
-  AdminFormConfigPage,
   AdminFormConfigPreview,
   AdminFormConfigVersionSelector,
 } from './AdminFormConfigPage'
@@ -16,11 +18,20 @@ import {
   canPublishFormConfig,
   formatFormSchemaDraft,
   getAdminFormConfigErrorMessage,
+  isAdminFormConfigVersionForKey,
+  isAdminFormConfigVersionListForKey,
   parseFormSchemaDraft,
-  requiresUnsavedVersionConfirmation,
+  readFormSchemaEditorDraft,
   selectInitialFormConfigVersion,
   selectRefreshedFormConfigVersion,
 } from './adminFormConfigState'
+import { isFormKey } from '../types/forms'
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@tanstack/react-router')>(),
+  Link: ({ to, params, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; params?: Record<string, string> }) =>
+    <a {...props} href={Object.entries(params ?? {}).reduce((path, [key, value]) => path.replace(`$${key}`, value), to)} />,
+}))
 
 const editableSchema: FormSchemaDraft = {
   formKey: 'psf-request',
@@ -29,7 +40,6 @@ const editableSchema: FormSchemaDraft = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
       fields: [
         {
           fieldKey: 'product_type',
@@ -87,6 +97,44 @@ describe('AdminFormConfigPage helpers', () => {
     expect(parsed.schema).toEqual(editableSchema)
   })
 
+  it('accepts either supported form family without requester-specific fields and rejects family mismatches', () => {
+    const psfCreatedSchema: FormSchemaDraft = {
+      formKey: 'psf-created-information',
+      title: 'Created details',
+      sections: [{
+        sectionKey: 'created_details',
+        title: 'Created details',
+        fields: [{ fieldKey: 'custom_batch_ref', canonicalKey: 'custom_batch_ref', label: 'Batch reference', type: 'text', required: true }],
+      }],
+    }
+    const text = formatFormSchemaDraft(psfCreatedSchema)
+
+    expect(parseFormSchemaDraft(text, 'psf-created-information')).toMatchObject({ error: null, schema: psfCreatedSchema })
+    expect(readFormSchemaEditorDraft(text, 'psf-created-information')).toEqual(psfCreatedSchema)
+    expect(parseFormSchemaDraft(text, 'psf-request').schema).toBeNull()
+    expect(parseFormSchemaDraft(JSON.stringify({ ...psfCreatedSchema, formKey: 'other-form' })).schema).toBeNull()
+    expect(isFormKey('psf-request')).toBe(true)
+    expect(isFormKey('psf-created-information')).toBe(true)
+    expect(isFormKey('other-form')).toBe(false)
+    const matchingVersion = buildVersion({ formKey: 'psf-created-information', schema: { ...psfCreatedSchema, version: 2 } })
+    expect(isAdminFormConfigVersionForKey(matchingVersion, 'psf-created-information')).toBe(true)
+    expect(isAdminFormConfigVersionListForKey({ formKey: 'psf-created-information', versions: [matchingVersion] }, 'psf-created-information')).toBe(true)
+    expect(isAdminFormConfigVersionListForKey({ formKey: 'psf-request', versions: [matchingVersion] }, 'psf-created-information')).toBe(false)
+    expect(buildPreviewSchema(psfCreatedSchema, buildVersion())).toBeNull()
+  })
+
+  it('keeps incomplete labels editable but hides malformed JSON from the visual editor', () => {
+    const incomplete = { ...editableSchema, title: '', sections: [{ ...editableSchema.sections[0], fields: [
+      { ...editableSchema.sections[0].fields[0], label: '' },
+    ] }] }
+    expect(readFormSchemaEditorDraft(JSON.stringify(incomplete))).toEqual(incomplete)
+    expect(parseFormSchemaDraft(JSON.stringify(incomplete)).schema).toBeNull()
+    expect(readFormSchemaEditorDraft('{')).toBeNull()
+    expect(readFormSchemaEditorDraft(JSON.stringify({ ...editableSchema, sections: [{ fields: null }] }))).toBeNull()
+    expect(readFormSchemaEditorDraft(JSON.stringify({ ...editableSchema, sections: [{ ...editableSchema.sections[0], fields: [editableSchema.sections[0].fields[0], editableSchema.sections[0].fields[0]] }] }))).toBeNull()
+    expect(readFormSchemaEditorDraft(JSON.stringify({ ...editableSchema, sections: [{ ...editableSchema.sections[0], fields: [{ ...editableSchema.sections[0].fields[0], fieldKey: '__proto__' }] }] }))).toBeNull()
+  })
+
   it('reports a parse error and a renderer-protecting shape error without producing a preview schema', () => {
     const invalidJson = parseFormSchemaDraft('{')
     const invalidShape = parseFormSchemaDraft(
@@ -98,6 +146,32 @@ describe('AdminFormConfigPage helpers', () => {
 
     expect(invalidJson).toMatchObject({ error: expect.stringMatching(/^JSON is invalid:/), schema: null })
     expect(invalidShape).toEqual({ error: 'Section 1 must have a nonblank sectionKey.', schema: null })
+  })
+
+  it('catches duplicate keys, restricted legacy sections, and empty choices before saving or publishing', () => {
+    const first = editableSchema.sections[0]
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [] })).error).toContain('at least one section')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [] }] })).error).toContain('at least one field')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [first, first] })).error).toContain('duplicate sectionKey')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [first.fields[0], first.fields[0]] }] })).error).toContain('duplicate fieldKey')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, visibleTo: ['admin'] }] })).error).toContain('Legacy role-restricted')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [''] }, first.fields[1]] }] })).error).toContain('nonblank options')
+    expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [] }, first.fields[1]] }] })).error).toContain('at least one option')
+  })
+
+  it('keeps restricted legacy metadata visible to validation and out of the visual editor', () => {
+    const legacy = { ...editableSchema, sections: [{ ...editableSchema.sections[0], visibleTo: ['admin'] }] }
+    const text = formatFormSchemaDraft(legacy)
+    expect(parseFormSchemaDraft(text).error).toContain('Legacy role-restricted')
+    expect(readFormSchemaEditorDraft(text)).toBeNull()
+  })
+
+  it('drops unrestricted legacy metadata from the editor and saved draft', () => {
+    const text = JSON.stringify({ ...editableSchema, sections: editableSchema.sections.map((section) => ({
+      ...section, visibleTo: ['requester', 'setup_owner', 'admin'],
+    })) })
+    expect(parseFormSchemaDraft(text).schema?.sections[0]).not.toHaveProperty('visibleTo')
+    expect(formatFormSchemaDraft(JSON.parse(text) as FormSchemaDraft)).not.toContain('visibleTo')
   })
 
   it('rejects prototype-reserved field keys before they can reach the shared live preview', () => {
@@ -129,10 +203,12 @@ describe('AdminFormConfigPage helpers', () => {
     const validHtml = renderToStaticMarkup(<AdminFormConfigPreview schema={previewSchema} />)
     const invalidHtml = renderToStaticMarkup(<AdminFormConfigPreview schema={null} />)
 
-    expect(validHtml).toContain('Schema preview')
-    expect(validHtml).toContain('PSF Request Form')
-    expect(validHtml).toContain('version 2')
-    expect(validHtml).toContain('disabled=""')
+    expect(validHtml).toContain('Preview only')
+    expect(validHtml).not.toContain('Schema preview')
+    expect(validHtml).not.toContain('psf-request')
+    expect(validHtml).toContain('type="radio"')
+    expect(validHtml).toContain('<textarea')
+    expect(validHtml).toContain('Check required fields')
     expect(invalidHtml).toBe('')
   })
 
@@ -140,6 +216,7 @@ describe('AdminFormConfigPage helpers', () => {
     const payload = buildAdminFormConfigSavePayload(buildVersion(), editableSchema)
 
     expect(payload).toEqual({
+      draftVersion: 2,
       description: 'Editable form configuration',
       schema: editableSchema,
     })
@@ -177,10 +254,60 @@ describe('AdminFormConfigPage helpers', () => {
     ).toBe(false)
   })
 
-  it('requires an explicit unsaved-change guard before switching away from a selected version', () => {
-    expect(requiresUnsavedVersionConfirmation(true, 2, 3)).toBe(true)
-    expect(requiresUnsavedVersionConfirmation(true, 2, 2)).toBe(false)
-    expect(requiresUnsavedVersionConfirmation(false, 2, 3)).toBe(false)
+  it('lists active and historical versions without destructive actions and creates drafts only when none exists', () => {
+    const active = buildVersion({ status: 'active', version: 2 })
+    const old = buildVersion({ status: 'published', version: 1 })
+    const draft = buildVersion({ status: 'draft', version: 3 })
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const history = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[active, old]} />)
+    const pending = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[draft, active, old]} />)
+    expect(history.match(/Duplicate as draft/g)).toHaveLength(2)
+    expect(history).toContain('aria-label="Form versions"')
+    expect(history).toContain('<th scope="col">Created</th>')
+    expect(history).toContain('<th scope="col">Published</th>')
+    expect(history).toContain('Inactive')
+    expect(history).not.toContain('Selected')
+    expect(history).not.toContain('Discard draft')
+    expect(pending).toContain('Duplicate as draft')
+    expect(pending).toMatch(/disabled=""[^>]*>Duplicate as draft/)
+    expect(pending).toContain('>Discard</button>')
+  })
+
+  it('offers View for every version and Edit only for Draft', () => {
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const html = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[
+      buildVersion({ status: 'active', version: 2 }),
+      buildVersion({ status: 'draft', version: 3 }),
+      buildVersion({ status: 'published', version: 1 }),
+    ]} />)
+    expect(html).toContain('href="/admin/form-config/2"')
+    expect(html).toContain('href="/admin/form-config/3"')
+    expect(html.match(/>View<\/a>/g)).toHaveLength(3)
+    expect(html.match(/>Edit<\/a>/g)).toHaveLength(1)
+    expect(html).toMatch(/aria-label="Edit form version 3"[^>]*href="\/admin\/form-config\/3"/)
+  })
+
+  it('hides stored seed descriptions for copies while retaining custom descriptions', () => {
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const html = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[
+      buildVersion({ description: 'Default requester-facing MVP schema for local PSF request creation.', version: 8 }),
+      buildVersion({ description: 'Initial PSF Created Information schema.', version: 9 }),
+      buildVersion({ description: 'Engineering review fields', version: 10 }),
+    ]} />)
+    expect(html).not.toContain('Default requester-facing')
+    expect(html).not.toContain('Initial PSF Created')
+    expect(html).toContain('Engineering review fields')
+  })
+
+  it('uses explicit shareable PSF form-key version links without changing requester links', () => {
+    const props = { disabled: false, onDuplicate: vi.fn(), onDiscard: vi.fn(), onPublish: vi.fn() }
+    const requesterHtml = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} versions={[buildVersion({ status: 'active' })]} />)
+    const psfHtml = renderToStaticMarkup(<AdminFormConfigVersionSelector {...props} formKey="psf-created-information" versions={[
+      buildVersion({ formKey: 'psf-created-information', schema: { ...editableSchema, formKey: 'psf-created-information', version: 2 }, status: 'active' }),
+    ]} />)
+
+    expect(requesterHtml).toContain('href="/admin/form-config/2"')
+    expect(psfHtml).toContain('href="/admin/form-config/psf-created-information/2"')
   })
 
   it('renders native version selection and accessible request feedback', () => {
@@ -188,8 +315,9 @@ describe('AdminFormConfigPage helpers', () => {
     const selectorHtml = renderToStaticMarkup(
       <AdminFormConfigVersionSelector
         disabled={false}
-        onSelect={vi.fn()}
-        selectedVersion={draft}
+        onDuplicate={vi.fn()}
+        onDiscard={vi.fn()}
+        onPublish={vi.fn()}
         versions={[draft]}
       />,
     )
@@ -201,8 +329,11 @@ describe('AdminFormConfigPage helpers', () => {
       <AdminFormConfigFeedback feedback={{ kind: 'error', message: 'Only admins can manage form schema configurations.' }} loading={false} />,
     )
 
-    expect(selectorHtml).toContain('<select')
-    expect(selectorHtml).toContain('Version 2 · draft · PSF Request Form')
+    expect(selectorHtml).toContain('Form versions')
+    expect(selectorHtml).toContain('>v2</a></div>')
+    expect(selectorHtml).toContain('PSF Request Form')
+    expect(selectorHtml).toContain('>—</td>')
+    expect(selectorHtml).toContain('>Discard</button>')
     expect(loadingHtml).toContain('Loading form schema versions…')
     expect(loadingHtml).toContain('role="status"')
     expect(successHtml).toContain('role="status"')
@@ -225,11 +356,14 @@ describe('AdminFormConfigPage helpers', () => {
     expect(forbidden).toContain('Only admins can manage form schema configurations.')
   })
 
-  it('wires only the admin form-config route to the dedicated page', () => {
+  it('wires a list and separate version editor beneath the admin form-config route', () => {
     const routeOptions = Reflect.get(FormConfigRoute.Route, 'options') as { component: unknown }
-    const html = renderToStaticMarkup(createElement(AdminFormConfigPage))
-
-    expect(routeOptions.component).toBe(AdminFormConfigPage)
-    expect(html).toContain('<h1>Form configuration</h1>')
+    const indexOptions = Reflect.get(FormConfigIndexRoute.Route, 'options') as { component: unknown }
+    const versionOptions = Reflect.get(FormConfigVersionRoute.Route, 'options') as { component: unknown }
+    const formKeyVersionOptions = Reflect.get(FormConfigFormKeyVersionRoute.Route, 'options') as { component: unknown }
+    expect(routeOptions.component).toBeDefined()
+    expect(indexOptions.component).toBeDefined()
+    expect(versionOptions.component).toBeDefined()
+    expect(formKeyVersionOptions.component).toBeDefined()
   })
 })

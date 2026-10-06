@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "checks": {
+    "exactCommittedValue": true,
+    "singleLine": true,
+    "actualEllipsis": true,
+    "fullValueDisclosure": true,
+    "noHorizontalOverflow": true
+  }
+}

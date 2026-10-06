@@ -1,0 +1,64 @@
+{
+  "paletteChangesGeometry": false,
+  "baseline": [
+    {
+      "cls": "detail-layout__actions",
+      "x": 128,
+      "y": 232,
+      "width": 1120,
+      "height": 134
+    },
+    {
+      "cls": "detail-summary-grid",
+      "x": 128,
+      "y": 390,
+      "width": 1120,
+      "height": 162
+    },
+    {
+      "cls": "detail-editors",
+      "x": 128,
+      "y": 576,
+      "width": 1120,
+      "height": 1359
+    },
+    {
+      "cls": "detail-layout__history",
+      "x": 128,
+      "y": 1959,
+      "width": 1120,
+      "height": 414
+    }
+  ],
+  "recolored": [
+    {
+      "cls": "detail-layout__actions",
+      "x": 128,
+      "y": 232,
+      "width": 1120,
+      "height": 134
+    },
+    {
+      "cls": "detail-summary-grid",
+      "x": 128,
+      "y": 390,
+      "width": 1120,
+      "height": 162
+    },
+    {
+      "cls": "detail-editors",
+      "x": 128,
+      "y": 576,
+      "width": 1120,
+      "height": 1359
+    },
+    {
+      "cls": "detail-layout__history",
+      "x": 128,
+      "y": 1959,
+      "width": 1120,
+      "height": 414
+    }
+  ],
+  "success": true
+}

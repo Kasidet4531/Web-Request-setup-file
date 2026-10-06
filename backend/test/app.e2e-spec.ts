@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { AuthService } from './../src/auth/auth.service';
+import { FormSchemaService } from './../src/admin/form_schema.service';
 import type { AuthenticatedRequest } from './../src/auth/session.types';
 import {
   DATABASE_POOL,
@@ -38,46 +39,45 @@ type PoolQuery = (
   values?: unknown[],
 ) => Promise<{ rows: unknown[] }>;
 
-const MANUAL_WORKFLOW_STATUSES = [
-  'Submitted',
-  'Setup In Progress',
-  'Need More Information',
-  'PSF Created',
-  'Completed',
-  'Rejected',
-  'Cancelled',
+const WORKFLOW_REVISION = '2026-10-01T00:00:00.123456Z';
+const NEXT_WORKFLOW_REVISION = '2026-10-01T00:00:00.123457Z';
+const DEFAULT_STATUS_NAMES = [
+  'Draft',
+  '5% -- Reject (Information not complete)',
+  '10% -- Test Engineer Data Entry',
+  '20% -- PSF File Creating',
+  '30% -- Compare Old and New layout',
+  '40% -- Feedback Requester(Layout mismatch)',
+  '80% -- Wait for create DCC',
+  '81% -- Edit Template Map (Bin62)',
+  '82% -- Wait for sent Template Map',
+  '83% -- Complete Excel probe pattern',
+  '85 % -- Reject check list',
+  '90% -- Wait for buyoff check list',
+  '93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)',
+  '95% -- Reject (Wrong site location and wafer map)',
+  '99% -- Wait requestor Buyoff site location and wafer map',
+  '100% -- Completed',
+  '0% -- Rejected (Cancel Request)',
 ];
-
-function buildWorkflowConfiguration(
-  ruleOverrides: (
-    fromStatus: string,
-    toStatus: string,
-  ) => Partial<{
-    enabled: boolean;
-    allowedRoles: string[];
-    allowedSetupOwnerDepartments: string[];
-  }> = () => ({}),
-) {
-  return {
-    transitions: MANUAL_WORKFLOW_STATUSES.flatMap((fromStatus) =>
-      MANUAL_WORKFLOW_STATUSES.filter(
-        (toStatus) => toStatus !== fromStatus,
-      ).map((toStatus) => ({
-        fromStatus,
-        toStatus,
-        enabled: true,
-        allowedRoles: ['admin'],
-        allowedSetupOwnerDepartments: [],
-        ...ruleOverrides(fromStatus, toStatus),
-      })),
-    ),
-  };
-}
+const DEFAULT_STATUS_ENTRIES = DEFAULT_STATUS_NAMES.map((name, index) => ({
+  id: `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, '0')}`,
+  name,
+  kind:
+    index === 0
+      ? 'draft'
+      : index === 15
+        ? 'completed'
+        : index === 16
+          ? 'cancelled'
+          : 'open',
+}));
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let activeUserId: string | undefined;
   let workflowConfiguration: unknown;
+  let workflowRevision: string;
   const authService = {
     getProfile: jest.fn(),
     listUsers: jest.fn(),
@@ -107,14 +107,28 @@ describe('AppController (e2e)', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     workflowConfiguration = null;
+    workflowRevision = WORKFLOW_REVISION;
     pool.query.mockImplementation((query: string, values?: unknown[]) => {
       if (query.includes('SELECT config_json')) {
         return Promise.resolve({
           rows:
             workflowConfiguration === null
               ? []
-              : [{ config_json: workflowConfiguration }],
+              : [
+                  {
+                    config_json: workflowConfiguration,
+                    updated_at_version: workflowRevision,
+                  },
+                ],
         });
+      }
+
+      if (query.includes('UPDATE workflow_transition_config')) {
+        expect(values?.[0]).toBe('status-catalog-v1');
+        expect(values?.[2]).toBe(workflowRevision);
+        workflowConfiguration = values?.[1];
+        workflowRevision = NEXT_WORKFLOW_REVISION;
+        return Promise.resolve({ rows: [], rowCount: 1 });
       }
 
       if (query.includes('INSERT INTO workflow_transition_config')) {
@@ -339,7 +353,6 @@ describe('AppController (e2e)', () => {
             {
               sectionKey: 'requester_information',
               title: 'Requester Information',
-              visibleTo: ['requester', 'setup_owner', 'admin'],
               fields: [
                 {
                   fieldKey: 'title',
@@ -360,43 +373,30 @@ describe('AppController (e2e)', () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
 
     pool.query.mockImplementation((query: string, values?: unknown[]) => {
+      if (query.includes('FROM autofill_rules'))
+        return Promise.resolve({ rows: [] });
+
       if (query.includes('FOR UPDATE')) {
         return Promise.resolve({ rows: formDefinitions });
       }
 
-      if (query.includes('INSERT INTO form_definitions')) {
-        const [
-          ,
-          formKey,
-          version,
-          title,
-          description,
-          schema,
-          status,
-          createdBy,
-        ] = values as [
+      if (
+        query.includes('UPDATE form_definitions') &&
+        query.includes('SET title = $1')
+      ) {
+        const [title, description, schema, , version] = values as [
           string,
+          string,
+          FormDefinitionRow['schema_json'],
           string,
           number,
-          string,
-          string | null,
-          Record<string, unknown>,
-          string,
-          string,
         ];
-        const created: FormDefinitionRow = {
-          form_key: formKey,
-          version,
-          title,
-          description,
-          status,
-          schema_json: schema,
-          created_by: createdBy,
-          created_at: new Date('2026-06-02T00:00:00.000Z'),
-          published_at: null,
-        };
-        formDefinitions.push(created);
-        return Promise.resolve({ rows: [created] });
+        const draft = formDefinitions.find(
+          (row) => row.version === version && row.status === 'draft',
+        );
+        if (!draft) return Promise.resolve({ rows: [] });
+        Object.assign(draft, { title, description, schema_json: schema });
+        return Promise.resolve({ rows: [draft] });
       }
 
       if (query.includes("SET status = 'published'")) {
@@ -455,9 +455,18 @@ describe('AppController (e2e)', () => {
         });
       });
 
+    formDefinitions.push({
+      ...formDefinitions[0],
+      version: 2,
+      status: 'draft',
+      schema_json: { ...formDefinitions[0].schema_json, version: 2 },
+      created_by: 'admin.demo',
+      published_at: null,
+    });
     await request(server)
       .put('/api/admin/form-config')
       .send({
+        draftVersion: 2,
         description: 'Draft schema for the next requester form revision.',
         schema: {
           formKey: 'psf-request',
@@ -466,8 +475,26 @@ describe('AppController (e2e)', () => {
             {
               sectionKey: 'requester_information',
               title: 'Requester Information',
-              visibleTo: ['requester', 'setup_owner', 'admin'],
               fields: [
+                {
+                  fieldKey: 'product_type',
+                  canonicalKey: 'product_type',
+                  label: 'Product Type',
+                  type: 'radio',
+                  required: true,
+                  options: [
+                    'New Product',
+                    'Transfer Product',
+                    'Existing Product',
+                  ],
+                },
+                {
+                  fieldKey: 'requester_name',
+                  canonicalKey: 'requester',
+                  label: 'Requester Name',
+                  type: 'text',
+                  required: true,
+                },
                 {
                   fieldKey: 'title',
                   canonicalKey: 'title',
@@ -527,6 +554,33 @@ describe('AppController (e2e)', () => {
 
     await request(server).get('/api/admin/form-config').expect(403);
     expect(pool.query).toHaveBeenCalledTimes(queryCallsBeforeRejection);
+  });
+
+  it('rejects a bracketed publish query before dispatching to the default requester schema service', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    const publishDraft = jest.spyOn(app.get(FormSchemaService), 'publishDraft');
+    const expressApp = app.getHttpAdapter().getInstance() as {
+      get: (setting: string) => unknown;
+    };
+    expect(expressApp.get('query parser')).toBe('simple');
+    transactionClient.query.mockClear();
+    pool.query.mockClear();
+
+    await request(server)
+      .post('/api/admin/form-config/publish?formKey[]=psf-created-information')
+      .send({ version: 1 })
+      .expect(400);
+
+    expect(publishDraft).not.toHaveBeenCalled();
+    expect(transactionClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('FROM form_definitions'),
+      expect.anything(),
+    );
+    expect(transactionClient.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET status ='),
+      expect.anything(),
+    );
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it('registers admin user-management routes with server-side validation and authorization', async () => {
@@ -603,119 +657,292 @@ describe('AppController (e2e)', () => {
     expect(authService.listUsers).toHaveBeenCalledTimes(1);
   });
 
-  it('registers admin workflow transition routes that persist one complete replacement and enforce admin authorization', async () => {
+  it('saves destination email policy through the admin API and hides recipients in the shared catalog', async () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
-
-    await request(server)
-      .get('/api/admin/workflow')
-      .expect(200)
-      .expect(
-        ({
-          body,
-        }: {
-          body: { statuses: string[]; transitions: unknown[] };
-        }) => {
-          expect(body.statuses).toEqual(MANUAL_WORKFLOW_STATUSES);
-          expect(body.transitions).toHaveLength(42);
-        },
-      );
-
-    const gntcOnly = buildWorkflowConfiguration((fromStatus, toStatus) =>
-      fromStatus === 'Submitted' && toStatus === 'Setup In Progress'
-        ? {
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: ['GNTC'],
-          }
-        : {
-            enabled: false,
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: [],
-          },
-    );
-
+    const policy = {
+      enabled: true,
+      to: ['TEAM@nxp.com', 'person@nxp.com'],
+      cc: ['copy@nxp.com', 'team@nxp.com'],
+    };
     await request(server)
       .put('/api/admin/workflow')
-      .send(gntcOnly)
+      .send({
+        action: 'email-policy',
+        id: DEFAULT_STATUS_ENTRIES[2].id,
+        emailPolicy: policy,
+        expectedUpdatedAt: WORKFLOW_REVISION,
+      })
       .expect(200)
       .expect(
         ({
           body,
         }: {
-          body: { transitions: Array<Record<string, unknown>> };
+          body: { entries: Array<{ id: string; emailPolicy: unknown }> };
         }) => {
           expect(
-            body.transitions.find(
-              (transition) =>
-                transition.fromStatus === 'Submitted' &&
-                transition.toStatus === 'Setup In Progress',
-            ),
-          ).toMatchObject({
+            body.entries.find(
+              (entry) => entry.id === DEFAULT_STATUS_ENTRIES[2].id,
+            )?.emailPolicy,
+          ).toEqual({
             enabled: true,
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: ['GNTC'],
+            to: ['team@nxp.com', 'person@nxp.com'],
+            cc: ['copy@nxp.com'],
           });
         },
       );
-
-    const defaultPoolQuery = pool.query.getMockImplementation() as
-      | PoolQuery
-      | undefined;
-    if (!defaultPoolQuery) {
-      throw new Error('Expected the workflow storage query mock');
-    }
-    pool.query.mockImplementation((query: string, values?: unknown[]) => {
-      if (query.includes('FROM psf_requests')) {
-        return Promise.resolve({
-          rows: [
-            {
-              id: 'request-1',
-              status: 'Submitted',
-              requester_user_id: null,
-            },
-          ],
-        });
-      }
-
-      return defaultPoolQuery(query, values);
-    });
-
-    activeUserId = 'setup-owner-gntc';
-    authService.getProfile.mockResolvedValueOnce({
-      id: 'setup-owner-gntc',
-      username: 'setup.gntc.demo',
-      displayName: 'Setup Owner GNTC Demo',
-      role: 'setup_owner',
-      setupOwnerDepartment: 'GNTC',
-    });
-    await request(server)
-      .get('/api/requests/request-1/status-options')
-      .expect(200)
-      .expect(({ body }: { body: { allowedNextStatuses: string[] } }) => {
-        expect(body.allowedNextStatuses).toEqual(['Setup In Progress']);
-      });
-
-    activeUserId = 'setup-owner-mfg';
-    authService.getProfile.mockResolvedValueOnce({
-      id: 'setup-owner-mfg',
-      username: 'setup.mfg.demo',
-      displayName: 'Setup Owner MFG Demo',
-      role: 'setup_owner',
-      setupOwnerDepartment: 'MFG',
-    });
-    await request(server)
-      .put('/api/requests/request-1/status')
-      .send({ status: 'Setup In Progress' })
-      .expect(403);
-
     activeUserId = 'requester-1';
-    authService.getProfile.mockResolvedValueOnce({
-      id: 'requester-1',
-      username: 'requester.demo',
-      displayName: 'Requester Demo',
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'requester',
+      displayName: 'Requester',
       role: 'requester',
       setupOwnerDepartment: null,
     });
-    await request(server).get('/api/admin/workflow').expect(403);
+    await request(server)
+      .get('/api/workflow/statuses')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(JSON.stringify(body)).not.toContain('emailPolicy');
+        expect(JSON.stringify(body)).not.toContain('@nxp.com');
+      });
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({
+        action: 'email-policy',
+        id: DEFAULT_STATUS_ENTRIES[2].id,
+        emailPolicy: policy,
+        expectedUpdatedAt: NEXT_WORKFLOW_REVISION,
+      })
+      .expect(403);
+  });
+
+  it('registers notification admin routes and rejects non-admin access and disabled test delivery', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    activeUserId = undefined;
+    await request(server).get('/api/admin/notifications').expect(401);
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'requester',
+      displayName: 'Requester',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server).get('/api/admin/notifications').expect(403);
+    await request(server)
+      .post('/api/admin/notifications/test')
+      .send({ to: 'arbitrary@nxp.com', html: '<p>arbitrary</p>' })
+      .expect(403);
+    activeUserId = 'admin-1';
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      setupOwnerDepartment: null,
+    });
+    pool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ total: '0' }] });
+    await request(server)
+      .get('/api/admin/notifications')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual({ items: [], total: 0, page: 1, limit: 20 });
+      });
+    await request(server).post('/api/admin/notifications/test').expect(400);
+  });
+
+  it('registers revision-checked admin catalog operations, rejects legacy role matrices, and keeps shared status choices role-independent', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    await request(server)
+      .get('/api/admin/workflow')
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          statuses: DEFAULT_STATUS_NAMES.slice(1),
+          entries: DEFAULT_STATUS_ENTRIES.map((entry) => ({
+            ...entry,
+            requestCount: entry.kind === 'draft' ? null : 0,
+            emailPolicy: { enabled: false, to: [], cc: [] },
+            psfAccessTrigger: false,
+          })),
+          psfVisibilityTriggerId: null,
+          psfVisibilityTriggerIds: [],
+          updatedAt: WORKFLOW_REVISION,
+        });
+      });
+    pool.query.mockClear();
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({ transitions: [] })
+      .expect(400);
+    expect(pool.query).not.toHaveBeenCalled();
+
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({
+        action: 'create',
+        name: 'Renamed business stage',
+        kind: 'open',
+        expectedUpdatedAt: WORKFLOW_REVISION,
+      })
+      .expect(200)
+      .expect(
+        ({
+          body,
+        }: {
+          body: {
+            statuses: string[];
+            entries: Array<Record<string, unknown>>;
+            updatedAt: string;
+          };
+        }) => {
+          expect(body.statuses).toEqual([
+            ...DEFAULT_STATUS_NAMES.slice(1),
+            'Renamed business stage',
+          ]);
+          expect(body.entries.at(-1)).toEqual({
+            id: expect.stringMatching(/^[0-9a-f-]{36}$/) as unknown,
+            name: 'Renamed business stage',
+            kind: 'open',
+            requestCount: 0,
+            emailPolicy: { enabled: false, to: [], cc: [] },
+            psfAccessTrigger: false,
+          });
+          expect(body.updatedAt).toBe(NEXT_WORKFLOW_REVISION);
+        },
+      );
+    expect(transactionClient.query).toHaveBeenLastCalledWith('COMMIT');
+    const queryCalls = pool.query.mock.calls as unknown[][];
+    const auditCalls = queryCalls.filter(
+      ([sql]) =>
+        typeof sql === 'string' &&
+        sql.includes('INSERT INTO psf_request_audit_logs'),
+    );
+    expect(auditCalls).toHaveLength(1);
+    expect(auditCalls[0][1]).toEqual([
+      expect.any(String),
+      null,
+      'WORKFLOW_CATALOG_UPDATED',
+      'admin-1',
+      'admin.demo',
+      'Admin Demo',
+      'admin',
+      expect.objectContaining({
+        operation: {
+          action: 'create',
+          name: 'Renamed business stage',
+          kind: 'open',
+        },
+      }),
+    ]);
+
+    pool.query.mockClear();
+    await request(server)
+      .put('/api/admin/workflow')
+      .send({
+        action: 'create',
+        name: 'Stale operation',
+        kind: 'open',
+        expectedUpdatedAt: WORKFLOW_REVISION,
+      })
+      .expect(409);
+    expect(transactionClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(
+      pool.query.mock.calls.some(
+        ([sql]: [string]) =>
+          sql.includes('UPDATE workflow_transition_config') ||
+          sql.includes('INSERT INTO psf_request_audit_logs'),
+      ),
+    ).toBe(false);
+
+    const defaultPoolQuery = pool.query.getMockImplementation() as PoolQuery;
+    pool.query.mockImplementation((query: string, values?: unknown[]) =>
+      query.includes('FROM psf_requests')
+        ? Promise.resolve({
+            rows: [
+              {
+                id: 'request-1',
+                status: DEFAULT_STATUS_NAMES[1],
+                requester_user_id: 'foreign-requester',
+              },
+            ],
+          })
+        : defaultPoolQuery(query, values),
+    );
+    for (const role of ['requester', 'setup_owner', 'admin']) {
+      activeUserId = `${role}-1`;
+      authService.getProfile.mockResolvedValue({
+        id: activeUserId,
+        username: `${role}.demo`,
+        displayName: 'Test User',
+        role,
+        setupOwnerDepartment: role === 'setup_owner' ? 'MFG' : null,
+      });
+      await request(server)
+        .get('/api/requests/request-1/status-options')
+        .expect(200)
+        .expect(({ body }: { body: { allowedNextStatuses: string[] } }) => {
+          expect(body.allowedNextStatuses).toEqual([
+            ...DEFAULT_STATUS_NAMES.slice(2),
+            'Renamed business stage',
+          ]);
+          expect(body.allowedNextStatuses).not.toContain('Draft');
+        });
+      if (role !== 'admin') {
+        await request(server).get('/api/admin/workflow').expect(403);
+        await request(server)
+          .put('/api/admin/workflow')
+          .send({
+            action: 'settings',
+            psfVisibilityTriggerId: null,
+            expectedUpdatedAt: NEXT_WORKFLOW_REVISION,
+          })
+          .expect(403);
+      }
+    }
+  });
+
+  it('exposes ordered workflow statuses without transition rules to every authenticated role', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    activeUserId = undefined;
+    await request(server).get('/api/workflow/statuses').expect(401);
+
+    for (const role of ['requester', 'setup_owner', 'admin']) {
+      activeUserId = `${role}-1`;
+      authService.getProfile.mockResolvedValue({
+        id: activeUserId,
+        username: `${role}.demo`,
+        displayName: 'Test User',
+        role,
+        setupOwnerDepartment: null,
+      });
+      await request(server)
+        .get('/api/workflow/statuses')
+        .expect(200)
+        .expect(({ body }: { body: Record<string, unknown> }) => {
+          expect(body).toEqual({
+            statuses: DEFAULT_STATUS_NAMES.slice(1),
+            entries: DEFAULT_STATUS_ENTRIES,
+            psfVisibilityTriggerId: null,
+            psfVisibilityTriggerIds: [],
+            updatedAt: WORKFLOW_REVISION,
+          });
+          expect(JSON.stringify(body)).not.toContain('requestCount');
+          expect(JSON.stringify(body)).not.toContain('transitions');
+        });
+      if (role !== 'admin') {
+        await request(server)
+          .put('/api/admin/workflow')
+          .send({
+            action: 'settings',
+            psfVisibilityTriggerId: null,
+            expectedUpdatedAt: WORKFLOW_REVISION,
+          })
+          .expect(403);
+      }
+    }
   });
 
   it('registers admin autofill rules that validate canonical keys, persist atomically, and are readable through the runtime service', async () => {
@@ -733,7 +960,6 @@ describe('AppController (e2e)', () => {
           {
             sectionKey: 'requester_information',
             title: 'Requester Information',
-            visibleTo: ['requester', 'setup_owner', 'admin'],
             fields: [
               {
                 fieldKey: 'reference_psf_name',
@@ -997,7 +1223,6 @@ describe('AppController (e2e)', () => {
           {
             sectionKey: 'requester_information',
             title: 'Requester Information',
-            visibleTo: ['requester'],
             fields: [
               {
                 fieldKey: 'reference_psf_name',
@@ -1049,13 +1274,16 @@ describe('AppController (e2e)', () => {
         return Promise.resolve({ rows: [activeDefinition] });
       }
 
-      if (query.includes('WITH matched_source')) {
+      if (query.includes('matched_source AS')) {
         expect(values).toEqual([
           'psf-request',
           'reference_psf_name',
           JSON.stringify('REF-PSF-1'),
           ['product', 'wafer_fab'],
+          ['100% -- Completed'],
         ]);
+        expect(query).toContain('source_request.status = ANY($5::text[])');
+        expect(query).toContain('source_request.completed_at IS NOT NULL');
         return Promise.resolve({
           rows: [
             {
@@ -1117,15 +1345,18 @@ describe('AppController (e2e)', () => {
       .get(
         '/api/autofill?formKey=psf-request&field=reference_psf_name&value=REF-PSF-1',
       )
-      .expect(403)
-      .expect(({ body }: { body: { message: string } }) => {
-        expect(body.message).toBe(
-          'Setup File Owners cannot edit requester-owned fields',
-        );
+      .expect(200)
+      .expect(({ body }: { body: Record<string, unknown> }) => {
+        expect(body).toEqual({
+          matched: true,
+          suggestedValues: { product: 'New Product', wafer_fab: 'Fab A' },
+        });
+        expect(body).not.toHaveProperty('sourceRequest');
+        expect(JSON.stringify(body)).not.toContain('requester_data_json');
       });
   });
 
-  it('fails closed when a requester directly invokes an admin-only stored autofill rule', async () => {
+  it('fails closed when a requester invokes an autofill rule on a restricted legacy schema', async () => {
     const privateRule = {
       id: '75806824-f1b1-4c2a-bb47-41928cb78609',
       form_key: 'psf-request',
@@ -1196,7 +1427,7 @@ describe('AppController (e2e)', () => {
         return Promise.resolve({ rows: [activeDefinition] });
       }
 
-      if (query.includes('WITH matched_source')) {
+      if (query.includes('matched_source AS')) {
         canonicalLookupCalls += 1;
         expect(values).toEqual([
           'psf-request',
@@ -1233,9 +1464,11 @@ describe('AppController (e2e)', () => {
       .get(
         '/api/autofill?formKey=psf-request&field=private_trigger&value=private-reference',
       )
-      .expect(200);
+      .expect(409);
 
-    expect(response.body).toEqual({ matched: false, suggestedValues: {} });
+    expect((response.body as { message: string }).message).toContain(
+      'Legacy role-restricted',
+    );
     expect(canonicalLookupCalls).toBe(0);
   });
 
@@ -1249,7 +1482,6 @@ describe('AppController (e2e)', () => {
         {
           sectionKey: 'requester_information',
           title: 'Requester Information',
-          visibleTo: ['requester'],
           fields: [
             {
               fieldKey: 'product_type',
@@ -1277,7 +1509,6 @@ describe('AppController (e2e)', () => {
         {
           sectionKey: 'requester_information',
           title: 'Requester Information',
-          visibleTo: ['requester'],
           fields: [
             {
               fieldKey: 'product_type',

@@ -12,6 +12,6 @@ export class FormsController {
   getActiveFormSchema(
     @Param('formKey') formKey: string,
   ): Promise<ActiveFormSchemaResponse> {
-    return this.formSchemaService.getActiveSchema(formKey);
+    return this.formSchemaService.getActiveSchema(formKey, true);
   }
 }

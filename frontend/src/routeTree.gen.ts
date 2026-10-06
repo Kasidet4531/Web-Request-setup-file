@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as MyDraftsRouteImport } from './routes/my-drafts'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RequestsIndexRouteImport } from './routes/requests/index'
 import { Route as LoginIndexRouteImport } from './routes/login/index'
@@ -23,8 +24,16 @@ import { Route as AdminFormConfigRouteImport } from './routes/admin/form-config'
 import { Route as AdminExportProfileRouteImport } from './routes/admin/export-profile'
 import { Route as AdminAutofillRouteImport } from './routes/admin/autofill'
 import { Route as RequestsRequestIdIndexRouteImport } from './routes/requests/$requestId/index'
+import { Route as AdminFormConfigIndexRouteImport } from './routes/admin/form-config.index'
 import { Route as RequestsRequestIdHistoryRouteImport } from './routes/requests/$requestId/history'
+import { Route as AdminFormConfigVersionRouteImport } from './routes/admin/form-config.$version'
+import { Route as AdminFormConfigFormKeyVersionRouteImport } from './routes/admin/form-config.$formKey.$version'
 
+const MyDraftsRoute = MyDraftsRouteImport.update({
+  id: '/my-drafts',
+  path: '/my-drafts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -95,18 +104,35 @@ const RequestsRequestIdIndexRoute = RequestsRequestIdIndexRouteImport.update({
   path: '/requests/$requestId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminFormConfigIndexRoute = AdminFormConfigIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminFormConfigRoute,
+} as any)
 const RequestsRequestIdHistoryRoute =
   RequestsRequestIdHistoryRouteImport.update({
     id: '/requests/$requestId/history',
     path: '/requests/$requestId/history',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminFormConfigVersionRoute = AdminFormConfigVersionRouteImport.update({
+  id: '/$version',
+  path: '/$version',
+  getParentRoute: () => AdminFormConfigRoute,
+} as any)
+const AdminFormConfigFormKeyVersionRoute =
+  AdminFormConfigFormKeyVersionRouteImport.update({
+    id: '/$formKey/$version',
+    path: '/$formKey/$version',
+    getParentRoute: () => AdminFormConfigRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/my-drafts': typeof MyDraftsRoute
   '/admin/autofill': typeof AdminAutofillRoute
   '/admin/export-profile': typeof AdminExportProfileRoute
-  '/admin/form-config': typeof AdminFormConfigRoute
+  '/admin/form-config': typeof AdminFormConfigRouteWithChildren
   '/admin/master-data': typeof AdminMasterDataRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/workflow': typeof AdminWorkflowRoute
@@ -116,14 +142,17 @@ export interface FileRoutesByFullPath {
   '/history/': typeof HistoryIndexRoute
   '/login/': typeof LoginIndexRoute
   '/requests/': typeof RequestsIndexRoute
+  '/admin/form-config/$version': typeof AdminFormConfigVersionRoute
   '/requests/$requestId/history': typeof RequestsRequestIdHistoryRoute
+  '/admin/form-config/': typeof AdminFormConfigIndexRoute
   '/requests/$requestId/': typeof RequestsRequestIdIndexRoute
+  '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/my-drafts': typeof MyDraftsRoute
   '/admin/autofill': typeof AdminAutofillRoute
   '/admin/export-profile': typeof AdminExportProfileRoute
-  '/admin/form-config': typeof AdminFormConfigRoute
   '/admin/master-data': typeof AdminMasterDataRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/workflow': typeof AdminWorkflowRoute
@@ -133,15 +162,19 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryIndexRoute
   '/login': typeof LoginIndexRoute
   '/requests': typeof RequestsIndexRoute
+  '/admin/form-config/$version': typeof AdminFormConfigVersionRoute
   '/requests/$requestId/history': typeof RequestsRequestIdHistoryRoute
+  '/admin/form-config': typeof AdminFormConfigIndexRoute
   '/requests/$requestId': typeof RequestsRequestIdIndexRoute
+  '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/my-drafts': typeof MyDraftsRoute
   '/admin/autofill': typeof AdminAutofillRoute
   '/admin/export-profile': typeof AdminExportProfileRoute
-  '/admin/form-config': typeof AdminFormConfigRoute
+  '/admin/form-config': typeof AdminFormConfigRouteWithChildren
   '/admin/master-data': typeof AdminMasterDataRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/workflow': typeof AdminWorkflowRoute
@@ -151,13 +184,17 @@ export interface FileRoutesById {
   '/history/': typeof HistoryIndexRoute
   '/login/': typeof LoginIndexRoute
   '/requests/': typeof RequestsIndexRoute
+  '/admin/form-config/$version': typeof AdminFormConfigVersionRoute
   '/requests/$requestId/history': typeof RequestsRequestIdHistoryRoute
+  '/admin/form-config/': typeof AdminFormConfigIndexRoute
   '/requests/$requestId/': typeof RequestsRequestIdIndexRoute
+  '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/my-drafts'
     | '/admin/autofill'
     | '/admin/export-profile'
     | '/admin/form-config'
@@ -170,14 +207,17 @@ export interface FileRouteTypes {
     | '/history/'
     | '/login/'
     | '/requests/'
+    | '/admin/form-config/$version'
     | '/requests/$requestId/history'
+    | '/admin/form-config/'
     | '/requests/$requestId/'
+    | '/admin/form-config/$formKey/$version'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/my-drafts'
     | '/admin/autofill'
     | '/admin/export-profile'
-    | '/admin/form-config'
     | '/admin/master-data'
     | '/admin/users'
     | '/admin/workflow'
@@ -187,11 +227,15 @@ export interface FileRouteTypes {
     | '/history'
     | '/login'
     | '/requests'
+    | '/admin/form-config/$version'
     | '/requests/$requestId/history'
+    | '/admin/form-config'
     | '/requests/$requestId'
+    | '/admin/form-config/$formKey/$version'
   id:
     | '__root__'
     | '/'
+    | '/my-drafts'
     | '/admin/autofill'
     | '/admin/export-profile'
     | '/admin/form-config'
@@ -204,15 +248,19 @@ export interface FileRouteTypes {
     | '/history/'
     | '/login/'
     | '/requests/'
+    | '/admin/form-config/$version'
     | '/requests/$requestId/history'
+    | '/admin/form-config/'
     | '/requests/$requestId/'
+    | '/admin/form-config/$formKey/$version'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MyDraftsRoute: typeof MyDraftsRoute
   AdminAutofillRoute: typeof AdminAutofillRoute
   AdminExportProfileRoute: typeof AdminExportProfileRoute
-  AdminFormConfigRoute: typeof AdminFormConfigRoute
+  AdminFormConfigRoute: typeof AdminFormConfigRouteWithChildren
   AdminMasterDataRoute: typeof AdminMasterDataRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminWorkflowRoute: typeof AdminWorkflowRoute
@@ -228,6 +276,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/my-drafts': {
+      id: '/my-drafts'
+      path: '/my-drafts'
+      fullPath: '/my-drafts'
+      preLoaderRoute: typeof MyDraftsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -326,6 +381,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequestsRequestIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/form-config/': {
+      id: '/admin/form-config/'
+      path: '/'
+      fullPath: '/admin/form-config/'
+      preLoaderRoute: typeof AdminFormConfigIndexRouteImport
+      parentRoute: typeof AdminFormConfigRoute
+    }
     '/requests/$requestId/history': {
       id: '/requests/$requestId/history'
       path: '/requests/$requestId/history'
@@ -333,14 +395,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequestsRequestIdHistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/form-config/$version': {
+      id: '/admin/form-config/$version'
+      path: '/$version'
+      fullPath: '/admin/form-config/$version'
+      preLoaderRoute: typeof AdminFormConfigVersionRouteImport
+      parentRoute: typeof AdminFormConfigRoute
+    }
+    '/admin/form-config/$formKey/$version': {
+      id: '/admin/form-config/$formKey/$version'
+      path: '/$formKey/$version'
+      fullPath: '/admin/form-config/$formKey/$version'
+      preLoaderRoute: typeof AdminFormConfigFormKeyVersionRouteImport
+      parentRoute: typeof AdminFormConfigRoute
+    }
   }
 }
 
+interface AdminFormConfigRouteChildren {
+  AdminFormConfigVersionRoute: typeof AdminFormConfigVersionRoute
+  AdminFormConfigIndexRoute: typeof AdminFormConfigIndexRoute
+  AdminFormConfigFormKeyVersionRoute: typeof AdminFormConfigFormKeyVersionRoute
+}
+
+const AdminFormConfigRouteChildren: AdminFormConfigRouteChildren = {
+  AdminFormConfigVersionRoute: AdminFormConfigVersionRoute,
+  AdminFormConfigIndexRoute: AdminFormConfigIndexRoute,
+  AdminFormConfigFormKeyVersionRoute: AdminFormConfigFormKeyVersionRoute,
+}
+
+const AdminFormConfigRouteWithChildren = AdminFormConfigRoute._addFileChildren(
+  AdminFormConfigRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MyDraftsRoute: MyDraftsRoute,
   AdminAutofillRoute: AdminAutofillRoute,
   AdminExportProfileRoute: AdminExportProfileRoute,
-  AdminFormConfigRoute: AdminFormConfigRoute,
+  AdminFormConfigRoute: AdminFormConfigRouteWithChildren,
   AdminMasterDataRoute: AdminMasterDataRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminWorkflowRoute: AdminWorkflowRoute,

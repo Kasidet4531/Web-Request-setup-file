@@ -40,6 +40,29 @@ describe('createApiClient', () => {
     })
   })
 
+  it.each([401, 403, 503])('announces session expiry only for HTTP 401, not %s', async (status) => {
+    const target = new EventTarget()
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: target, writable: true })
+    Object.defineProperty(globalThis, 'CustomEvent', { configurable: true, value: TestCustomEvent, writable: true })
+    const listener = vi.fn()
+    target.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
+    globalThis.fetch = vi.fn(async () => new Response(null, { status })) as typeof fetch
+    await expect(createApiClient().get('/requests')).rejects.toMatchObject({ status })
+    expect(listener).toHaveBeenCalledTimes(status === 401 ? 1 : 0)
+    if (status === 401) expect(listener).toHaveBeenCalledWith(expect.objectContaining({ detail: { status: 'anonymous' } }))
+  })
+
+  it('leaves initial session-check failures to the caller so stale responses cannot invalidate a newer login', async () => {
+    const target = new EventTarget()
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: target, writable: true })
+    Object.defineProperty(globalThis, 'CustomEvent', { configurable: true, value: TestCustomEvent, writable: true })
+    const listener = vi.fn()
+    target.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 401 })) as typeof fetch
+    await expect(fetchCurrentUser()).rejects.toMatchObject({ status: 401 })
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('returns parsed JSON for successful GET requests', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ status: 'ok' }), {
@@ -190,7 +213,7 @@ describe('createApiClient', () => {
     const fetchAdminFormConfig = Reflect.get(client, 'fetchAdminFormConfig') as undefined | (() => Promise<unknown>)
     const saveAdminFormConfigDraft = Reflect.get(client, 'saveAdminFormConfigDraft') as
       | undefined
-      | ((payload: { description?: string | null; schema: typeof schema }) => Promise<unknown>)
+      | ((payload: { draftVersion: number; description?: string | null; schema: typeof schema }) => Promise<unknown>)
     const publishAdminFormConfigDraft = Reflect.get(client, 'publishAdminFormConfigDraft') as
       | undefined
       | ((payload: { version: number }) => Promise<unknown>)
@@ -203,7 +226,7 @@ describe('createApiClient', () => {
     }
 
     await expect(fetchAdminFormConfig()).resolves.toEqual({ formKey: 'psf-request', versions: [draft] })
-    await expect(saveAdminFormConfigDraft({ description: 'Editable schema', schema })).resolves.toEqual(draft)
+    await expect(saveAdminFormConfigDraft({ draftVersion: 2, description: 'Editable schema', schema })).resolves.toEqual(draft)
     await expect(publishAdminFormConfigDraft({ version: 2 })).resolves.toEqual({ ...draft, status: 'active' })
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
@@ -215,7 +238,7 @@ describe('createApiClient', () => {
       2,
       '/api/admin/form-config',
       expect.objectContaining({
-        body: JSON.stringify({ description: 'Editable schema', schema }),
+        body: JSON.stringify({ draftVersion: 2, description: 'Editable schema', schema }),
         credentials: 'include',
         method: 'PUT',
       }),
@@ -229,6 +252,43 @@ describe('createApiClient', () => {
         method: 'POST',
       }),
     )
+  })
+
+  it('calls the admin form-management duplicate and discard endpoints', async () => {
+    const draft = { version: 3, status: 'draft' }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(draft), { status: 201, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 })) as typeof fetch
+    const client = createApiClient({ baseUrl: '/api' })
+    await expect(client.duplicateAdminFormConfigVersion({ version: 1 })).resolves.toEqual(draft)
+    await expect(client.discardAdminFormConfigDraft(3)).resolves.toBeNull()
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/admin/form-config/duplicate', expect.objectContaining({ body: JSON.stringify({ version: 1 }), credentials: 'include', method: 'POST' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/form-config/draft/3', expect.objectContaining({ credentials: 'include', method: 'DELETE' }))
+  })
+
+  it('scopes every admin form-config lifecycle endpoint to PSF Created Information', async () => {
+    const formKey = 'psf-created-information' as const
+    const schema = { formKey, title: 'Created details', sections: [] }
+    const version = { formKey, version: 3, schema: { ...schema, version: 3 }, status: 'draft' }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ formKey, versions: [version] }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(version), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(version), { status: 201, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...version, status: 'active' }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
+    const client = createApiClient({ baseUrl: '/api' })
+
+    await client.fetchAdminFormConfig(formKey)
+    await client.saveAdminFormConfigDraft({ draftVersion: 3, schema }, formKey)
+    await client.duplicateAdminFormConfigVersion({ version: 2 }, formKey)
+    await client.discardAdminFormConfigDraft(3, formKey)
+    await client.publishAdminFormConfigDraft({ version: 3 }, formKey)
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/admin/form-config?formKey=psf-created-information', expect.objectContaining({ method: 'GET' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/form-config?formKey=psf-created-information', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ draftVersion: 3, schema }) }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/api/admin/form-config/duplicate?formKey=psf-created-information', expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 2 }) }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/api/admin/form-config/draft/3?formKey=psf-created-information', expect.objectContaining({ method: 'DELETE' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(5, '/api/admin/form-config/publish?formKey=psf-created-information', expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 3 }) }))
   })
 
   it('propagates the backend admin authorization error without client-side authority claims', async () => {
@@ -257,7 +317,7 @@ describe('createApiClient', () => {
 
   it('propagates backend save and publish errors from their admin form-config paths', async () => {
     const schema = {
-      formKey: 'psf-request',
+      formKey: 'psf-request' as const,
       title: 'PSF Request Form',
       sections: [],
     }
@@ -281,7 +341,7 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: '/api' })
 
     await expect(
-      client.saveAdminFormConfigDraft({ description: 'Editable schema', schema }),
+      client.saveAdminFormConfigDraft({ draftVersion: 2, description: 'Editable schema', schema }),
     ).rejects.toMatchObject({ message: 'Schema validation failed.', name: 'ApiError', status: 400 })
     await expect(client.publishAdminFormConfigDraft({ version: 2 })).rejects.toMatchObject({
       message: 'Draft is no longer publishable.',
@@ -292,7 +352,7 @@ describe('createApiClient', () => {
       1,
       '/api/admin/form-config',
       expect.objectContaining({
-        body: JSON.stringify({ description: 'Editable schema', schema }),
+        body: JSON.stringify({ draftVersion: 2, description: 'Editable schema', schema }),
         credentials: 'include',
         method: 'PUT',
       }),
@@ -349,6 +409,7 @@ describe('createApiClient', () => {
     await expect(client.fetchPsfRequest('request-1')).resolves.toMatchObject({ id: 'request-1' })
     await expect(client.updateDraftRequesterData('request-1', {
       formVersion: 3,
+      expectedUpdatedAt: '2026-10-01T01:02:03.123456Z',
       requesterData: { title: 'Updated' },
     })).resolves.toMatchObject({
       requesterData: { title: 'Updated' },
@@ -356,7 +417,7 @@ describe('createApiClient', () => {
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/requests/request-1', expect.objectContaining({ method: 'GET' }))
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/requester-data', expect.objectContaining({
-      body: JSON.stringify({ formVersion: 3, requesterData: { title: 'Updated' } }),
+      body: JSON.stringify({ formVersion: 3, expectedUpdatedAt: '2026-10-01T01:02:03.123456Z', requesterData: { title: 'Updated' } }),
       method: 'PUT',
     }))
   })
@@ -557,13 +618,13 @@ describe('createApiClient', () => {
 
     const client = createApiClient({ baseUrl: '/api' })
 
-    await expect(client.submitPsfRequest('request-1', { formVersion: 4 })).resolves.toMatchObject({
+    await expect(client.submitPsfRequest('request-1', { formVersion: 4, status: 'Submitted', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' })).resolves.toMatchObject({
       id: 'request-1',
       status: 'Submitted',
     })
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/requests/request-1/submit', expect.objectContaining({
-      body: JSON.stringify({ formVersion: 4 }),
+      body: JSON.stringify({ formVersion: 4, status: 'Submitted', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' }),
       method: 'POST',
     }))
   })
@@ -598,7 +659,7 @@ describe('createApiClient', () => {
       limit: 50,
       offset: 0,
     })
-    await expect(client.updatePsfRequestStatus('request-1', { status: 'Setup In Progress' })).resolves.toMatchObject({
+    await expect(client.updatePsfRequestStatus('request-1', { status: 'Setup In Progress', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' })).resolves.toMatchObject({
       id: 'request-1',
       status: 'Setup In Progress',
     })
@@ -612,7 +673,7 @@ describe('createApiClient', () => {
       expect.objectContaining({ method: 'GET' }),
     )
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/requests/request-1/status', expect.objectContaining({
-      body: JSON.stringify({ status: 'Setup In Progress' }),
+      body: JSON.stringify({ status: 'Setup In Progress', expectedUpdatedAt: '2026-10-01T01:02:03.123456Z' }),
       method: 'PUT',
     }))
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
@@ -622,68 +683,36 @@ describe('createApiClient', () => {
     )
   })
 
-  it('loads and atomically replaces the administrator workflow-transition configuration', async () => {
+  it('loads and applies one optimistic status-catalog operation', async () => {
     const configuration = {
       statuses: ['Submitted', 'Setup In Progress'],
-      transitions: [
-        {
-          fromStatus: 'Submitted',
-          toStatus: 'Setup In Progress',
-          enabled: true,
-          allowedRoles: ['setup_owner'],
-          allowedSetupOwnerDepartments: ['GNTC'],
-        },
+      entries: [
+        { id: 'draft-id', name: 'Draft', kind: 'draft', requestCount: null },
+        { id: 'submitted-id', name: 'Submitted', kind: 'open', requestCount: 2 },
       ],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-01T01:02:03.123456Z',
     }
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(configuration), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(configuration), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-      ) as typeof fetch
-
+    const operation = { action: 'rename' as const, id: 'submitted-id', name: 'Custom Review', expectedUpdatedAt: configuration.updatedAt }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(configuration), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(configuration), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
     const client = createApiClient({ baseUrl: '/api' })
-    const fetchConfiguration = Reflect.get(
-      client,
-      'fetchAdminWorkflowTransitionConfiguration',
-    ) as undefined | (() => Promise<typeof configuration>)
-    const replaceConfiguration = Reflect.get(
-      client,
-      'replaceAdminWorkflowTransitionConfiguration',
-    ) as undefined | ((payload: Pick<typeof configuration, 'transitions'>) => Promise<typeof configuration>)
+    await expect(client.fetchAdminWorkflowTransitionConfiguration()).resolves.toEqual(configuration)
+    await expect(client.replaceAdminWorkflowTransitionConfiguration(operation)).resolves.toEqual(configuration)
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/admin/workflow', expect.objectContaining({ credentials: 'include', method: 'GET' }))
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/admin/workflow', expect.objectContaining({ body: JSON.stringify(operation), credentials: 'include', method: 'PUT' }))
+  })
 
-    expect(fetchConfiguration).toBeTypeOf('function')
-    expect(replaceConfiguration).toBeTypeOf('function')
-    if (!fetchConfiguration || !replaceConfiguration) {
-      return
-    }
-
-    await expect(fetchConfiguration()).resolves.toEqual(configuration)
-    await expect(replaceConfiguration({ transitions: configuration.transitions })).resolves.toEqual(
-      configuration,
-    )
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/workflow',
-      expect.objectContaining({ credentials: 'include', method: 'GET' }),
-    )
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(
-      2,
-      '/api/admin/workflow',
-      expect.objectContaining({
-        body: JSON.stringify({ transitions: configuration.transitions }),
-        credentials: 'include',
-        method: 'PUT',
-      }),
-    )
+  it('reads the public catalog without private usage counts', async () => {
+    const response = { statuses: ['Submitted', 'Need More Information'], entries: [{ id: 'entry-1', name: 'Submitted', kind: 'open' }], psfVisibilityTriggerId: null, updatedAt: '2026-10-01T01:02:03.123456Z' }
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
+    const client = createApiClient({ baseUrl: '/api' })
+    const catalog = await client.fetchWorkflowStatuses()
+    expect(catalog).toEqual(response)
+    expect(catalog.updatedAt).toBe(response.updatedAt)
+    expect(catalog.entries[0]).not.toHaveProperty('requestCount')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/workflow/statuses', expect.objectContaining({ credentials: 'include', method: 'GET' }))
   })
 
   it('lists, creates, and edits administrator autofill rules through canonical-key endpoints', async () => {
@@ -798,10 +827,11 @@ describe('createApiClient', () => {
       role: 'setup_owner',
       setupOwnerDepartment: 'GNTC',
     }
+    const listedUser = { ...updatedUser, email: 'owner@example.test' }
     globalThis.fetch = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify([updatedUser]), {
+        new Response(JSON.stringify([listedUser]), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -816,7 +846,7 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: '/api' })
     const fetchAdminUsers = Reflect.get(client, 'fetchAdminUsers') as
       | undefined
-      | (() => Promise<typeof updatedUser[]>)
+      | (() => Promise<typeof listedUser[]>)
     const updateAdminUser = Reflect.get(client, 'updateAdminUser') as
       | undefined
       | ((
@@ -830,7 +860,7 @@ describe('createApiClient', () => {
       return
     }
 
-    await expect(fetchAdminUsers()).resolves.toEqual([updatedUser])
+    await expect(fetchAdminUsers()).resolves.toEqual([listedUser])
     await expect(
       updateAdminUser(updatedUser.id, {
         role: 'setup_owner',
@@ -939,4 +969,13 @@ describe('createApiClient', () => {
       method: 'POST',
     }))
   })
+  it('fetches the safe assignee directory and updates assignment with an encoded id and revision', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+    const client = createApiClient()
+    await expect(client.fetchRequestAssignees()).resolves.toEqual({ items: [] })
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/assignees', expect.objectContaining({ method: 'GET', credentials: 'include' }))
+    await client.updatePsfRequestAssignment('request /1', { setupOwnerUserId: null, expectedUpdatedAt: 'r2' })
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/request%20%2F1/assignment', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ setupOwnerUserId: null, expectedUpdatedAt: 'r2' }) }))
+  })
+
 })

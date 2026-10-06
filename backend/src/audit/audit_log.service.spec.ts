@@ -71,47 +71,28 @@ describe('AuditLogService', () => {
     >;
   }
 
-  it('creates the baseline request audit storage with request-time and global-time indexes', async () => {
+  it('creates nullable configuration audit storage while retaining both request-time and global-time indexes', async () => {
     await service.onModuleInit();
-
-    expect(pool.query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining(
-        'CREATE TABLE IF NOT EXISTS psf_request_audit_logs',
-      ),
+    const statements = pool.query.mock.calls.map(([sql]: [string]) =>
+      sql.replace(/\s+/g, ' '),
     );
-    expect(pool.query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('actor_id UUID NOT NULL'),
+    expect(statements).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'CREATE TABLE IF NOT EXISTS psf_request_audit_logs',
+        ),
+        expect.stringContaining('ALTER COLUMN request_id DROP NOT NULL'),
+        expect.stringContaining(
+          'CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_request_created_at ON psf_request_audit_logs (request_id, created_at DESC)',
+        ),
+        expect.stringContaining(
+          'CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_created_at ON psf_request_audit_logs (created_at DESC, id DESC)',
+        ),
+      ]),
     );
-    expect(pool.query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('metadata_json JSONB NOT NULL'),
-    );
-    expect(pool.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining(
-        'CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_request_created_at',
-      ),
-    );
-    expect(pool.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining(
-        'ON psf_request_audit_logs (request_id, created_at DESC)',
-      ),
-    );
-    expect(pool.query).toHaveBeenNthCalledWith(
-      3,
-      expect.stringContaining(
-        'CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_created_at',
-      ),
-    );
-    expect(pool.query).toHaveBeenNthCalledWith(
-      3,
-      expect.stringContaining(
-        'ON psf_request_audit_logs (created_at DESC, id DESC)',
-      ),
-    );
+    expect(statements[0]).toContain('request_id UUID,');
+    expect(statements[0]).toContain('actor_id UUID NOT NULL');
+    expect(statements[0]).toContain('metadata_json JSONB NOT NULL');
   });
 
   it('writes a request action with the trusted actor fields through the supplied transaction', async () => {
@@ -302,6 +283,130 @@ describe('AuditLogService', () => {
       ),
       expect.any(Array),
     );
+  });
+
+  it('binds global Draft privacy to the trusted admin identity independently of user filters and permits null configuration events', async () => {
+    const actual = new AuditLogService(pool as unknown as Pool);
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          request_id: null,
+          request_no: null,
+          action_type: 'WORKFLOW_CATALOG_UPDATED',
+          actor_display_name: 'Admin',
+          actor_role: 'admin',
+          created_at: '2026-06-18T01:05:03.123456Z',
+          metadata_json: {
+            action: 'rename',
+            before: { name: 'Old' },
+            after: { name: 'New' },
+          },
+        },
+      ],
+    });
+    const result = await actual.findGlobalAuditLogs(
+      { user: 'foreign.actor', actionType: 'WORKFLOW_CATALOG_UPDATED' },
+      { id: 'server-admin', role: 'admin' },
+    );
+    expect(result).toEqual([
+      {
+        requestId: null,
+        requestNo: null,
+        actionType: 'WORKFLOW_CATALOG_UPDATED',
+        actorDisplayName: 'Admin',
+        actorRole: 'admin',
+        createdAt: '2026-06-18T01:05:03.123456Z',
+        metadata: {
+          action: 'rename',
+          before: { name: 'Old' },
+          after: { name: 'New' },
+        },
+      },
+    ]);
+    const [sql, params] = pool.query.mock.calls[0] as [string, unknown[]];
+    expect(params).toEqual([
+      '%foreign.actor%',
+      'WORKFLOW_CATALOG_UPDATED',
+      'server-admin',
+    ]);
+    expect(sql).toContain('LEFT JOIN psf_requests');
+    expect(sql).toMatch(
+      /audit_log.request_id IS NULL[\s\S]*psf_request.status <> 'Draft'[\s\S]*psf_request.requester_user_id = \$3::uuid/,
+    );
+    expect(sql).not.toContain('foreign.actor');
+  });
+
+  it('records configuration audit with real null request IDs through the supplied transaction', async () => {
+    const actual = new AuditLogService(pool as unknown as Pool);
+    const client = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+    const actor = {
+      id: 'server-admin',
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin' as const,
+      setupOwnerDepartment: null,
+    };
+    const metadata = {
+      before: { trigger: null },
+      after: { trigger: 'catalog-id' },
+    };
+    await actual.record(
+      {
+        requestId: null,
+        actionType: 'WORKFLOW_CATALOG_UPDATED',
+        actor,
+        metadata,
+      },
+      client,
+    );
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO psf_request_audit_logs'),
+      [
+        expect.any(String),
+        null,
+        'WORKFLOW_CATALOG_UPDATED',
+        actor.id,
+        actor.username,
+        actor.displayName,
+        actor.role,
+        metadata,
+      ],
+    );
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it('removes unreleased PSF field values from real request history but preserves requester audit', async () => {
+    const actual = new AuditLogService(pool as unknown as Pool);
+    const rows = [
+      {
+        action_type: 'REQUESTER_INFORMATION_UPDATED',
+        actor_display_name: 'Editor',
+        actor_role: 'requester',
+        created_at: '2026-06-18T01:05:03.123456Z',
+        metadata_json: {
+          fieldChanges: [{ before: 'old public', after: 'new public' }],
+        },
+      },
+      {
+        action_type: 'PSF_CREATED_INFORMATION_UPDATED',
+        actor_display_name: 'Editor',
+        actor_role: 'admin',
+        created_at: '2026-06-18T01:05:03.123457Z',
+        metadata_json: {
+          fieldChanges: [
+            { before: 'old-private.psf', after: 'new-private.psf' },
+          ],
+        },
+      },
+    ];
+    pool.query.mockResolvedValue({ rows });
+    const masked = await actual.findByRequestId('request-1', false);
+    expect(masked).toHaveLength(1);
+    expect(masked[0].metadata).toEqual(rows[0].metadata_json);
+    expect(JSON.stringify(masked)).not.toContain('private.psf');
+    const released = await actual.findByRequestId('request-1', true);
+    expect(released).toHaveLength(2);
+    expect(released[1].metadata).toEqual(rows[1].metadata_json);
   });
 
   it.each([

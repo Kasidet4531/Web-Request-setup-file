@@ -1,9 +1,11 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
+import { resolvePsfCreatedInformationSchema } from '../admin/form_schema.constants';
 import type { FormSchemaJson } from '../admin/form_schema.service';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
 import { DATABASE_POOL } from '../database/database.service';
 import type { RequesterData } from './requests.service';
+import { isCalendarDate } from './form-data-validation';
 
 export type CanonicalValue = string | number | boolean | string[] | null;
 export type CanonicalValues = Record<string, CanonicalValue>;
@@ -14,6 +16,7 @@ export interface RequestSearchIndexSource {
   status: string;
   requester: string | null;
   requesterUserId: string | null;
+  setupOwnerUserId?: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -48,6 +51,8 @@ export interface RequestSearchIndexItem {
   status: string;
   priority: string | null;
   requester: string | null;
+  requesterUserId?: string | null;
+  setupOwnerUserId?: string | null;
   setupOwner: string | null;
   setupOwnerRole: string | null;
   productType: string | null;
@@ -61,6 +66,18 @@ export interface RequestSearchResult {
   total: number;
   limit: number;
   offset: number;
+  summary: { open: number; overdue: number; completed: number };
+}
+
+export interface RequestScopeFilters {
+  scope: 'all' | 'related';
+  relation: 'all' | 'created' | 'assigned' | 'department';
+  workState: 'all' | 'open' | 'overdue' | 'completed';
+  actorId: string;
+  actorRole: AuthenticatedUserProfile['role'];
+  department: AuthenticatedUserProfile['setupOwnerDepartment'];
+  openStatuses: string[];
+  completedStatuses: string[];
 }
 
 export interface RequestExportItem {
@@ -75,6 +92,8 @@ export interface RequestExportItem {
   updatedAt: string;
   requesterData: RequesterData;
   psfCreatedData: RequesterData;
+  psfReleasedAt: string | null;
+  psfCreatedInformationSchema?: FormSchemaJson;
   schemaSnapshot: FormSchemaJson;
   canonicalValues: CanonicalValues | null;
 }
@@ -96,12 +115,34 @@ interface RequestSearchIndexRow {
   status: string;
   priority: string | null;
   requester: string | null;
+  requester_user_id: string | null;
+  setup_owner_user_id?: string | null;
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
   request_date: Date | string | null;
   due_date: Date | string | null;
   updated_at: Date | string;
+  total_count: number;
+  open_count: number;
+  overdue_count: number;
+  completed_count: number;
+}
+
+interface DraftSearchRow {
+  id: string | null;
+  request_no: string | null;
+  requester: string | null;
+  requester_user_id: string | null;
+  setup_owner_user_id?: string | null;
+  setup_owner: string | null;
+  setup_owner_role: string | null;
+  product_type: string | null;
+  requester_data_json: RequesterData | null;
+  schema_snapshot_json: FormSchemaJson | null;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
+  updated_at_version: string | null;
   total_count: number;
 }
 
@@ -117,6 +158,9 @@ interface RequestExportRow {
   updated_at: Date | string;
   requester_data_json: RequesterData;
   psf_created_data_json: RequesterData;
+  psf_released_at: Date | string | null;
+  requester_user_id: string | null;
+  psf_created_schema_snapshot_json?: FormSchemaJson | null;
   schema_snapshot_json: FormSchemaJson;
   canonical_values_json: CanonicalValues | null;
   total_count: number;
@@ -167,6 +211,7 @@ export class SearchIndexService implements OnModuleInit {
     canonicalValues: CanonicalValues,
     queryRunner: QueryRunner = this.pool,
   ): Promise<void> {
+    const dueDate = this.serializeDateForQuery(canonicalValues.due_date);
     await queryRunner.query(
       `
         INSERT INTO psf_request_search_index (
@@ -185,11 +230,12 @@ export class SearchIndexService implements OnModuleInit {
           product_type,
           request_date,
           due_date,
-          updated_at
+          updated_at,
+          setup_owner_user_id
         )
         VALUES (
           $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid,
-          $11, $12, $13, $14::timestamp, $15::timestamp, $16::timestamp
+          $11, $12, $13, $14::timestamp, $15::timestamp, ($16::timestamptz AT TIME ZONE current_setting('TIMEZONE')), $17::uuid
         )
         ON CONFLICT (request_id)
         DO UPDATE SET
@@ -202,6 +248,7 @@ export class SearchIndexService implements OnModuleInit {
           priority = EXCLUDED.priority,
           requester = EXCLUDED.requester,
           requester_user_id = EXCLUDED.requester_user_id,
+          setup_owner_user_id = EXCLUDED.setup_owner_user_id,
           setup_owner = EXCLUDED.setup_owner,
           setup_owner_role = EXCLUDED.setup_owner_role,
           product_type = EXCLUDED.product_type,
@@ -225,22 +272,53 @@ export class SearchIndexService implements OnModuleInit {
         source.productType ??
           this.stringFromCanonical(canonicalValues.product_type),
         this.serializeDateForQuery(source.requestDate),
-        this.serializeDateForQuery(canonicalValues.due_date),
+        dueDate && !dueDate.startsWith('0000-') && isCalendarDate(dueDate)
+          ? dueDate
+          : null,
         this.serializeDateForQuery(source.updatedAt),
+        source.setupOwnerUserId ?? null,
       ],
     );
   }
 
   async queryRequests(
     filters: RequestSearchFilters = {},
+    scopeOrMaximum: RequestScopeFilters | number = 100,
     maximumLimit = 100,
   ): Promise<RequestSearchResult> {
+    const scope: RequestScopeFilters =
+      typeof scopeOrMaximum === 'number'
+        ? {
+            scope: 'all',
+            relation: 'all',
+            workState: 'all',
+            actorId: '',
+            actorRole: 'requester',
+            department: null,
+            openStatuses: [],
+            completedStatuses: [],
+          }
+        : scopeOrMaximum;
+    if (typeof scopeOrMaximum === 'number') {
+      maximumLimit = scopeOrMaximum;
+    }
     const limit = this.normalizeLimit(filters.limit, maximumLimit);
     const offset = this.normalizeOffset(filters.offset);
     const where: string[] = [];
     const params: unknown[] = [];
+    const add = (value: unknown): string => {
+      params.push(value);
+      return `$${params.length}`;
+    };
 
-    this.addCaseInsensitiveFilter(where, params, 'status', filters.status);
+    where.push(`status <> 'Draft'`);
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'status',
+      filters.status,
+      true,
+    );
     this.addCaseInsensitiveFilter(where, params, 'priority', filters.priority);
     this.addCaseInsensitiveFilter(
       where,
@@ -289,6 +367,26 @@ export class SearchIndexService implements OnModuleInit {
     this.addDateFilter(where, params, 'due_date', '>=', filters.dueDateFrom);
     this.addDateFilter(where, params, 'due_date', '<=', filters.dueDateTo);
 
+    if (scope.scope === 'related') {
+      if (scope.relation === 'created') {
+        where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
+      } else if (
+        scope.relation === 'assigned' &&
+        scope.actorRole === 'setup_owner'
+      ) {
+        where.push(`setup_owner_user_id = ${add(scope.actorId)}::uuid`);
+      } else if (scope.relation === 'department') {
+        where.push(`setup_owner_role = ${add(scope.department)}`);
+      } else if (scope.actorRole === 'setup_owner') {
+        const actorId = add(scope.actorId);
+        where.push(
+          `(requester_user_id = ${actorId}::uuid OR setup_owner_user_id = ${actorId}::uuid)`,
+        );
+      } else {
+        where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
+      }
+    }
+
     if (filters.keyword?.trim()) {
       params.push(`%${filters.keyword.trim()}%`);
       const keywordParam = `$${params.length}`;
@@ -301,40 +399,183 @@ export class SearchIndexService implements OnModuleInit {
       )`);
     }
 
-    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const openStatusParam = add(scope.openStatuses);
+    const completedStatusParam = add(scope.completedStatuses);
+    const filterWhere = where.join(' AND ');
+    const filtered = `SELECT * FROM psf_request_search_index WHERE ${filterWhere}`;
+    const overdue = `due_date IS NOT NULL AND due_date::date < (NOW() AT TIME ZONE 'Asia/Bangkok')::date`;
+    let workStatePredicate = '';
+    if (scope.workState === 'open') {
+      workStatePredicate = `status = ANY(${openStatusParam}::text[])`;
+    } else if (scope.workState === 'overdue') {
+      workStatePredicate = `status = ANY(${openStatusParam}::text[]) AND ${overdue}`;
+    } else if (scope.workState === 'completed') {
+      workStatePredicate = `status = ANY(${completedStatusParam}::text[])`;
+    }
+    const visible = workStatePredicate
+      ? `SELECT * FROM filtered WHERE ${workStatePredicate}`
+      : 'SELECT * FROM filtered';
+    params.push(limit, offset);
     const result = await this.pool.query<RequestSearchIndexRow>(
       `
-        SELECT
-          request_id,
-          request_no,
-          title,
-          reference_psf_name,
-          psf_setup_file_name,
-          probecard_name,
-          status,
-          priority,
-          requester,
-          setup_owner,
-          setup_owner_role,
-          product_type,
-          request_date,
-          due_date,
-          updated_at,
-          COUNT(*) OVER()::int AS total_count
-        FROM psf_request_search_index
-        ${whereClause}
-        ORDER BY updated_at DESC, request_no DESC
-        LIMIT $${params.length + 1}
-        OFFSET $${params.length + 2}
+        WITH filtered AS (${filtered}),
+        summary AS (
+          SELECT
+            COUNT(*) FILTER (WHERE status = ANY(${openStatusParam}::text[]))::int AS open_count,
+            COUNT(*) FILTER (WHERE status = ANY(${openStatusParam}::text[]) AND ${overdue})::int AS overdue_count,
+            COUNT(*) FILTER (WHERE status = ANY(${completedStatusParam}::text[]))::int AS completed_count
+          FROM filtered
+        ),
+        visible AS (${visible}),
+        totals AS (SELECT COUNT(*)::int AS total_count FROM visible),
+        page AS (
+          SELECT * FROM visible
+          ORDER BY updated_at DESC, request_no DESC
+          LIMIT $${params.length - 1} OFFSET $${params.length}
+        )
+        SELECT page.*, totals.total_count,
+               summary.open_count, summary.overdue_count, summary.completed_count
+        FROM totals CROSS JOIN summary
+        LEFT JOIN page ON TRUE
       `,
-      [...params, limit, offset],
+      params,
     );
 
     return {
-      items: result.rows.map((row) => this.mapSearchIndexRow(row)),
+      items: result.rows
+        .filter((row) => row.request_id !== null)
+        .map((row) => this.mapSearchIndexRow(row)),
       total: result.rows[0]?.total_count ?? 0,
       limit,
       offset,
+      summary: {
+        open: result.rows[0]?.open_count ?? 0,
+        overdue: result.rows[0]?.overdue_count ?? 0,
+        completed: result.rows[0]?.completed_count ?? 0,
+      },
+    };
+  }
+
+  async queryOwnDrafts(
+    actorId: string,
+    filters: RequestSearchFilters = {},
+  ): Promise<RequestSearchResult> {
+    const limit = this.normalizeLimit(filters.limit, 100);
+    const offset = this.normalizeOffset(filters.offset);
+    const where = [`status = 'Draft'`, 'requester_user_id = $1::uuid'];
+    const params: unknown[] = [actorId];
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'requester',
+      filters.requester,
+    );
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'setup_owner',
+      filters.setupOwner,
+    );
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      this.draftCanonicalText('priority'),
+      filters.priority,
+    );
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'setup_owner_role',
+      filters.setupOwnerRole,
+    );
+    this.addCaseInsensitiveFilter(
+      where,
+      params,
+      'product_type',
+      filters.productType,
+    );
+    this.addDateFilter(
+      where,
+      params,
+      'created_at',
+      '>=',
+      filters.requestDateFrom,
+    );
+    this.addDateFilter(
+      where,
+      params,
+      'created_at',
+      '<=',
+      filters.requestDateTo,
+    );
+    const dueDate = this.draftCanonicalDate();
+    this.addDateFilter(where, params, dueDate, '>=', filters.dueDateFrom);
+    this.addDateFilter(where, params, dueDate, '<=', filters.dueDateTo);
+    if (filters.status && filters.status.toLowerCase() !== 'draft') {
+      where.push('FALSE');
+    }
+    if (filters.keyword?.trim()) {
+      params.push(`%${filters.keyword.trim()}%`);
+      where.push(
+        `(request_no ILIKE $${params.length} OR requester_data_json::text ILIKE $${params.length})`,
+      );
+    }
+    params.push(limit, offset);
+    const result = await this.pool.query<DraftSearchRow>(
+      `
+        WITH filtered AS (
+          SELECT * FROM psf_requests WHERE ${where.join(' AND ')}
+        ), totals AS (SELECT COUNT(*)::int AS total_count FROM filtered),
+        page AS (
+          SELECT id, request_no, requester, requester_user_id, setup_owner_user_id, setup_owner,
+                 setup_owner_role, product_type, requester_data_json,
+                 schema_snapshot_json, created_at, updated_at,
+                 ${`TO_CHAR(updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`} AS updated_at_version
+          FROM filtered ORDER BY updated_at DESC, request_no DESC
+          LIMIT $${params.length - 1} OFFSET $${params.length}
+        )
+        SELECT page.*, totals.total_count FROM totals LEFT JOIN page ON TRUE
+      `,
+      params,
+    );
+    const items = result.rows
+      .filter((row) => row.id !== null && row.schema_snapshot_json !== null)
+      .map((row) => {
+        const canonical = this.extractCanonicalValues(
+          row.schema_snapshot_json!,
+          row.requester_data_json ?? {},
+        );
+        return {
+          requestId: row.id!,
+          requestNo: row.request_no!,
+          title: this.stringFromCanonical(canonical.title),
+          referencePsfName: this.stringFromCanonical(
+            canonical.reference_psf_name,
+          ),
+          psfSetupFileName: this.stringFromCanonical(
+            canonical.psf_setup_file_name,
+          ),
+          probecardName: this.stringFromCanonical(canonical.probecard_name),
+          status: 'Draft',
+          priority: this.stringFromCanonical(canonical.priority),
+          requester: row.requester,
+          requesterUserId: row.requester_user_id,
+          setupOwnerUserId: row.setup_owner_user_id ?? null,
+          setupOwner: row.setup_owner,
+          setupOwnerRole: row.setup_owner_role,
+          productType: row.product_type,
+          requestDate: this.serializeNullableTimestamp(row.created_at),
+          dueDate: this.stringFromCanonical(canonical.due_date),
+          updatedAt:
+            row.updated_at_version ?? this.serializeTimestamp(row.updated_at!),
+        };
+      });
+    return {
+      items,
+      total: result.rows[0]?.total_count ?? 0,
+      limit,
+      offset,
+      summary: { open: 0, overdue: 0, completed: 0 },
     };
   }
 
@@ -360,6 +601,9 @@ export class SearchIndexService implements OnModuleInit {
           request.updated_at,
           request.requester_data_json,
           request.psf_created_data_json,
+          request.psf_released_at,
+          request.requester_user_id,
+          request.psf_created_schema_snapshot_json,
           request.schema_snapshot_json,
           canonical_values.canonical_values_json,
           COUNT(*) OVER()::int AS total_count
@@ -378,7 +622,7 @@ export class SearchIndexService implements OnModuleInit {
     );
 
     return {
-      items: result.rows.map((row) => this.mapExportRow(row)),
+      items: result.rows.map((row) => this.mapExportRow(row, actor)),
       total: result.rows[0]?.total_count ?? 0,
       limit,
       offset,
@@ -466,6 +710,7 @@ export class SearchIndexService implements OnModuleInit {
         priority TEXT,
         requester TEXT,
         requester_user_id UUID,
+        setup_owner_user_id UUID NULL,
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
@@ -474,6 +719,13 @@ export class SearchIndexService implements OnModuleInit {
         updated_at TIMESTAMP NOT NULL
       )
     `);
+
+    await queryRunner.query(
+      `ALTER TABLE psf_request_search_index ADD COLUMN IF NOT EXISTS setup_owner_user_id UUID NULL`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_setup_owner_user_id ON psf_request_search_index (setup_owner_user_id)`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE psf_request_search_index
@@ -491,6 +743,27 @@ export class SearchIndexService implements OnModuleInit {
             WHERE search_entry.request_id = request.id
               AND search_entry.requester_user_id IS NULL
           $backfill_search_requester_owners$;
+        END IF;
+      END
+      $$;
+    `);
+
+    // Upgrade older projections from stored UUIDs only; never infer an assignee from names.
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'psf_requests' AND column_name = 'setup_owner_user_id'
+        ) THEN
+          EXECUTE $backfill_search_assignees$
+            UPDATE psf_request_search_index AS search_entry
+            SET setup_owner_user_id = request.setup_owner_user_id
+            FROM psf_requests AS request
+            WHERE search_entry.request_id = request.id
+              AND search_entry.setup_owner_user_id IS NULL
+              AND request.setup_owner_user_id IS NOT NULL
+          $backfill_search_assignees$;
         END IF;
       END
       $$;
@@ -609,17 +882,50 @@ export class SearchIndexService implements OnModuleInit {
     return Math.max(Math.trunc(value), 0);
   }
 
+  private draftCanonicalText(key: 'priority' | 'due_date'): string {
+    return `NULLIF(REGEXP_REPLACE(requester_data_json ->> (
+      SELECT field.value->>'fieldKey'
+      FROM jsonb_array_elements(schema_snapshot_json->'sections') WITH ORDINALITY AS section(value, position)
+      CROSS JOIN LATERAL jsonb_array_elements(section.value->'fields') WITH ORDINALITY AS field(value, position)
+      WHERE field.value->>'canonicalKey' = '${key}'
+        AND (field.value->'searchable' = 'true'::jsonb
+          OR field.value->'exportable' = 'true'::jsonb
+          OR field.value->'autofillTrigger' = 'true'::jsonb)
+      ORDER BY section.position DESC, field.position DESC LIMIT 1
+    ), '^[[:space:]]+|[[:space:]]+$', '', 'g'), '')`;
+  }
+
+  private draftCanonicalDate(): string {
+    // Captured text controls may contain non-dates; CASE guards every conversion.
+    return `(SELECT CASE
+      WHEN due_text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        AND LEFT(due_text, 4) <> '0000'
+        AND SUBSTRING(due_text, 6, 2) BETWEEN '01' AND '12'
+        AND SUBSTRING(due_text, 9, 2) BETWEEN '01' AND '31'
+      THEN CASE
+        WHEN SUBSTRING(due_text, 9, 2)::int <= EXTRACT(DAY FROM
+          make_date(SUBSTRING(due_text, 1, 4)::int, SUBSTRING(due_text, 6, 2)::int, 1)
+          + INTERVAL '1 month - 1 day')
+        THEN make_date(SUBSTRING(due_text, 1, 4)::int,
+                       SUBSTRING(due_text, 6, 2)::int,
+                       SUBSTRING(due_text, 9, 2)::int)
+        ELSE NULL END
+      ELSE NULL END
+      FROM (SELECT ${this.draftCanonicalText('due_date')} AS due_text) AS captured_due)`;
+  }
+
   private addCaseInsensitiveFilter(
     where: string[],
     params: unknown[],
     column: string,
     value: string | undefined,
+    preserveWhitespace = false,
   ): void {
     if (!value?.trim()) {
       return;
     }
 
-    params.push(value.trim());
+    params.push(preserveWhitespace ? value : value.trim());
     where.push(`LOWER(${column}) = LOWER($${params.length})`);
   }
 
@@ -649,7 +955,11 @@ export class SearchIndexService implements OnModuleInit {
     }
 
     params.push(value.trim());
-    where.push(`${column} ${operator} $${params.length}::timestamp`);
+    where.push(
+      operator === '<='
+        ? `${column} < ($${params.length}::date + INTERVAL '1 day')`
+        : `${column} >= $${params.length}::date`,
+    );
   }
 
   private buildExportWhere(
@@ -658,12 +968,17 @@ export class SearchIndexService implements OnModuleInit {
   ): { whereClause: string; params: unknown[] } {
     const where: string[] = [];
     const params: unknown[] = [];
+    params.push(actor.id);
+    where.push(
+      `(request.status <> 'Draft' OR request.requester_user_id = $${params.length}::uuid)`,
+    );
 
     this.addCaseInsensitiveFilter(
       where,
       params,
       'request.status',
       filters.status,
+      true,
     );
     if (actor.role === 'requester') {
       this.addExactFilter(where, params, 'request.requester_user_id', actor.id);
@@ -702,6 +1017,8 @@ export class SearchIndexService implements OnModuleInit {
       status: row.status,
       priority: row.priority,
       requester: row.requester,
+      requesterUserId: row.requester_user_id,
+      setupOwnerUserId: row.setup_owner_user_id ?? null,
       setupOwner: row.setup_owner,
       setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,
@@ -711,7 +1028,13 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
-  private mapExportRow(row: RequestExportRow): RequestExportItem {
+  private mapExportRow(
+    row: RequestExportRow,
+    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  ): RequestExportItem {
+    const psfVisible =
+      actor.role !== 'requester' ||
+      (row.psf_released_at !== null && row.psf_released_at !== undefined);
     return {
       requestId: row.request_id,
       requestNo: row.request_no,
@@ -723,7 +1046,11 @@ export class SearchIndexService implements OnModuleInit {
       requestDate: this.serializeTimestamp(row.request_date),
       updatedAt: this.serializeTimestamp(row.updated_at),
       requesterData: row.requester_data_json ?? {},
-      psfCreatedData: row.psf_created_data_json ?? {},
+      psfCreatedData: psfVisible ? (row.psf_created_data_json ?? {}) : {},
+      psfReleasedAt: this.serializeNullableTimestamp(row.psf_released_at),
+      psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
+        row.psf_created_schema_snapshot_json,
+      ),
       schemaSnapshot: row.schema_snapshot_json,
       canonicalValues: row.canonical_values_json,
     };

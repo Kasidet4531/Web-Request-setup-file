@@ -1,0 +1,76 @@
+{
+  "screenId": "596760351562290837",
+  "role": "requester",
+  "device": "mobile",
+  "noHorizontalOverflowBothThemes": true,
+  "neutralPaletteBothThemes": true,
+  "exactDatabaseCatalog": true,
+  "twoLineClampAndEllipsis": true,
+  "fullStatusTapFocusEscapeCloseOutside": true,
+  "popoverWithinViewport": true,
+  "filterAndEmptyState": true,
+  "noStatusMutation": true,
+  "mobileDrawerAndFilters": true,
+  "base": {
+    "width": 390,
+    "scrollWidth": 390,
+    "canvas": "rgb(246, 245, 242)",
+    "options": [
+      "5% -- Reject (Information not complete)",
+      "10% -- Test Engineer Data Entry",
+      "20% -- PSF File Creating",
+      "30% -- Compare Old and New layout",
+      "40% -- Feedback Requester(Layout mismatch)",
+      "80% -- Wait for create DCC",
+      "81% -- Edit Template Map (Bin62)",
+      "82% -- Wait for sent Template Map",
+      "83% -- Complete Excel probe pattern",
+      "85 % -- Reject check list",
+      "90% -- Wait for buyoff check list",
+      "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "95% -- Reject (Wrong site location and wafer map)",
+      "99% -- Wait requestor Buyoff site location and wafer map",
+      "100% -- Completed",
+      "0% -- Rejected (Cancel Request)"
+    ],
+    "statuses": [
+      "20% -- PSF File Creating",
+      "93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)",
+      "99% -- Wait requestor Buyoff site location and wafer map",
+      "30% -- Compare Old and New layout",
+      "10% -- Test Engineer Data Entry"
+    ],
+    "clamps": [
+      {
+        "clamp": "2",
+        "height": 16,
+        "scroll": 16
+      },
+      {
+        "clamp": "2",
+        "height": 31,
+        "scroll": 31
+      },
+      {
+        "clamp": "2",
+        "height": 31,
+        "scroll": 31
+      },
+      {
+        "clamp": "2",
+        "height": 16,
+        "scroll": 16
+      },
+      {
+        "clamp": "2",
+        "height": 16,
+        "scroll": 16
+      }
+    ],
+    "counts": [
+      "25",
+      "15",
+      "0"
+    ]
+  }
+}

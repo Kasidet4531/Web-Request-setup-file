@@ -37,7 +37,7 @@ describe('AutofillRuleController', () => {
   let authService: { getProfile: jest.Mock };
   let autofillRuleService: {
     createRule: jest.Mock;
-    listActiveRules: jest.Mock;
+    listRules: jest.Mock;
     updateRule: jest.Mock;
   };
   let controller: AutofillRuleController;
@@ -46,7 +46,7 @@ describe('AutofillRuleController', () => {
     authService = { getProfile: jest.fn() };
     autofillRuleService = {
       createRule: jest.fn(),
-      listActiveRules: jest.fn(),
+      listRules: jest.fn(),
       updateRule: jest.fn(),
     };
 
@@ -61,18 +61,16 @@ describe('AutofillRuleController', () => {
     controller = module.get(AutofillRuleController);
   });
 
-  it('lists active rules only after resolving the current administrator profile', async () => {
+  it('lists configured rules only after resolving the current administrator profile', async () => {
     authService.getProfile.mockResolvedValue(adminActor);
-    autofillRuleService.listActiveRules.mockResolvedValue([rule]);
+    autofillRuleService.listRules.mockResolvedValue([rule]);
 
     await expect(
       controller.listRules({ session: { userId: adminActor.id } } as never),
     ).resolves.toEqual([rule]);
 
     expect(authService.getProfile).toHaveBeenCalledWith(adminActor.id);
-    expect(autofillRuleService.listActiveRules).toHaveBeenCalledWith(
-      'psf-request',
-    );
+    expect(autofillRuleService.listRules).toHaveBeenCalledWith('psf-request');
   });
 
   it('creates and edits complete canonical rule bodies only for an administrator', async () => {
@@ -155,7 +153,7 @@ describe('AutofillRuleController', () => {
       controller.updateRule(rule.id, input, request),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    expect(autofillRuleService.listActiveRules).not.toHaveBeenCalled();
+    expect(autofillRuleService.listRules).not.toHaveBeenCalled();
     expect(autofillRuleService.createRule).not.toHaveBeenCalled();
     expect(autofillRuleService.updateRule).not.toHaveBeenCalled();
   });

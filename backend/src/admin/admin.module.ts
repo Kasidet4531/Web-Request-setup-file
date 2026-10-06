@@ -1,15 +1,20 @@
 import { Module } from '@nestjs/common';
 import { AutofillRuleController } from './autofill_rule.controller';
 import { AutofillRuleService } from './autofill_rule.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
+import { AuditModule } from '../audit/audit.module';
 import { FormSchemaController } from './form_schema.controller';
 import { FormSchemaService } from './form_schema.service';
 import { UserManagementController } from './user_management.controller';
-import { WorkflowTransitionController } from './workflow_transition.controller';
+import {
+  WorkflowStatusController,
+  WorkflowTransitionController,
+} from './workflow_transition.controller';
 import { WorkflowTransitionService } from './workflow_transition.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AuditModule, NotificationsModule],
   providers: [
     FormSchemaService,
     WorkflowTransitionService,
@@ -19,6 +24,7 @@ import { WorkflowTransitionService } from './workflow_transition.service';
     FormSchemaController,
     UserManagementController,
     WorkflowTransitionController,
+    WorkflowStatusController,
     AutofillRuleController,
   ],
   exports: [FormSchemaService, WorkflowTransitionService, AutofillRuleService],

@@ -154,7 +154,7 @@ function findRenderedElement(
     return element
   }
 
-  return findRenderedElement(element.props.children, matches)
+  return findRenderedElement(element.props.children, matches) ?? findRenderedElement(element.props.actions, matches)
 }
 
 function requireRenderedElement(
@@ -298,7 +298,6 @@ const activeSchema = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester', 'setup_owner', 'admin'],
         fields: [
           {
             fieldKey: 'reference_psf_name',

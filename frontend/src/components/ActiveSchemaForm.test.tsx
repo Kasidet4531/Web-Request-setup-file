@@ -20,7 +20,6 @@ const schemaSnapshot: PsfRequestResponse['schemaSnapshot'] = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'product_type',
@@ -50,7 +49,6 @@ const activeRequestSchema: ActiveFormSchemaResponse = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'product_type',
@@ -81,6 +79,7 @@ function buildRequest(overrides: Partial<PsfRequestResponse> = {}): PsfRequestRe
     formVersion: 1,
     status: 'Draft',
     requester: 'requester@example.com',
+    setupOwnerUserId: null,
     setupOwner: null,
     setupOwnerRole: null,
     productType: null,
@@ -88,6 +87,10 @@ function buildRequest(overrides: Partial<PsfRequestResponse> = {}): PsfRequestRe
     psfCreatedData: {},
     psfCreatedDataVisible: false,
     canEditPsfCreatedData: false,
+    canEditRequesterData: true,
+    canSubmitDraft: false,
+    requesterUserId: 'user-1',
+    psfReleasedAt: null,
     psfCreatedInformationSchema: {
       formKey: 'psf-created-information',
       version: 1,
@@ -119,6 +122,17 @@ describe('buildRequestValuesForSchema', () => {
 })
 
 describe('resolveRequestFormSchema', () => {
+  it('uses current active rule triggers by canonical key on an older draft without rewriting its snapshot', () => {
+    const current = structuredClone(activeRequestSchema)
+    current.schema.sections[0].fields[0].fieldKey = 'renamed_product_input'
+    current.schema.sections[0].fields[0].autofillTrigger = true
+    const request = buildRequest()
+    const resolved = resolveRequestFormSchema('request', request, current)
+    expect(resolved.schema.version).toBe(1)
+    expect(resolved.schema.sections[0].fields[0]).toMatchObject({ fieldKey: 'product_type', canonicalKey: 'product_type', autofillTrigger: true })
+    expect(request.schemaSnapshot.sections[0].fields[0].autofillTrigger).toBeUndefined()
+    expect(resolveRequestFormSchema('preview', request, current).schema).toEqual(request.schemaSnapshot)
+  })
   it('keeps an older Draft on its snapshot until the requester explicitly upgrades it', () => {
     const resolved = resolveRequestFormSchema('request', buildRequest(), activeRequestSchema)
 
@@ -134,6 +148,7 @@ describe('resolveRequestFormSchema', () => {
       formVersion: 2,
       schemaSnapshot: activeRequestSchema.schema,
       status: 'Submitted',
+      canEditRequesterData: false,
       submittedAt: '2026-06-20T00:00:00.000Z',
     })
 
@@ -299,6 +314,7 @@ describe('requesterFieldsAreReadOnly', () => {
         'request',
         buildRequest({
           status: 'Submitted',
+          canEditRequesterData: false,
           submittedAt: '2026-06-20T00:00:00.000Z',
         }),
       ),
@@ -317,11 +333,18 @@ describe('RequestDraftStatus', () => {
   })
 
   it('keeps the detail link visible when requester edits are locked', () => {
-    const html = renderToStaticMarkup(<RequestDraftStatus request={buildRequest({ status: 'Submitted' })} />)
+    const html = renderToStaticMarkup(<RequestDraftStatus request={buildRequest({ status: 'Submitted', canEditRequesterData: false })} />)
 
     expect(html).toContain('Submitted')
-    expect(html).toContain('requester-owned fields are locked after Draft status')
+    expect(html).toContain('Requester information editing is unavailable for this request.')
     expect(html).toContain('href="/requests/request-1/"')
+    expect(html).toContain('Open request details')
+  })
+
+  it('does not claim work requester fields lock after Draft when the server permits editing', () => {
+    const html = renderToStaticMarkup(<RequestDraftStatus request={buildRequest({ status: 'Custom work', canEditRequesterData: true })} />)
+    expect(html).not.toContain('locked after Draft')
+    expect(html).not.toContain('editing is unavailable')
     expect(html).toContain('Open request details')
   })
 })

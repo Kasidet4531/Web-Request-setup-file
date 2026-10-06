@@ -1,5 +1,7 @@
 # LDAP API Login Implementation Plan
 
+> **Historical scoped plan (2026-10-02 audit):** This preserves the original LDAP integration design and execution instructions, not current setup instructions or authorization. Use [Current implementation](../../current-implementation.md) for the checked-in baseline. In particular, current `provisionInitialAdmin` upserts the configured administrator even when users already exist, rather than the empty-table-only provisioning proposed below; see [authentication service](../../../backend/src/auth/auth.service.ts). The original remote-test restriction and approval history remain part of this record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **Remote-test boundary:** Implement the LDAP integration and unit tests with mocked `fetch`. Do not send a live request to the LDAP endpoint; the operator will perform live endpoint verification personally.

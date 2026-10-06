@@ -25,7 +25,7 @@ describe("request export URL", () => {
     });
   });
 
-  it("serializes only supplied status and request-date filters", () => {
+  it("preserves a nonblank catalog status exactly while trimming request dates", () => {
     const buildRequestExportUrl = Reflect.get(
       RequestExportClient,
       "buildRequestExportUrl",
@@ -33,13 +33,20 @@ describe("request export URL", () => {
 
     expect(
       buildRequestExportUrl({
-        status: " Submitted ",
-        from: "2026-06-01",
-        to: "2026-06-30",
+        status: "  New work  ",
+        from: " 2026-06-01 ",
+        to: " 2026-06-30 ",
       }),
     ).toBe(
-      "/api/requests/export.xlsx?status=Submitted&from=2026-06-01&to=2026-06-30",
+      "/api/requests/export.xlsx?status=++New+work++&from=2026-06-01&to=2026-06-30",
     );
+  });
+
+  it("omits empty or all-whitespace status without adding an empty query", () => {
+    for (const status of ["", " \t\n "]) {
+      expect(RequestExportClient.buildRequestExportUrl({ status, from: " ", to: " " }))
+        .toBe("/api/requests/export.xlsx");
+    }
   });
 
   it("uses the configured API base URL for the request export", () => {
@@ -170,8 +177,7 @@ describe("request export URL", () => {
     ).rejects.toThrow("Only admins can export requests.");
   });
 
-  it("renders native export filters and disables the export action while downloading", () => {
-    const onExport = vi.fn();
+  it("renders native export filters and disables them while an export is running", () => {
     const RequestExportFiltersForm = Reflect.get(
       RequestExportPageModule,
       "RequestExportFiltersForm",
@@ -179,17 +185,17 @@ describe("request export URL", () => {
       downloading: boolean;
       filters: { status: string; from: string; to: string };
       onChange: (field: string, value: string) => void;
-      onExport: () => void;
+      statuses: string[];
     }) => unknown;
     const props = {
       downloading: false,
       filters: {
-        status: "Submitted",
+        status: "  New work  ",
         from: "2026-06-01",
         to: "2026-06-30",
       },
       onChange: vi.fn(),
-      onExport,
+      statuses: ["  New work  ", ...Array.from({ length: 16 }, (_, index) => `Configured status ${index + 1}`)],
     };
     const form = RequestExportFiltersForm(props);
     const html = renderToStaticMarkup(form as never);
@@ -203,14 +209,11 @@ describe("request export URL", () => {
     expect(html).toContain("<select");
     expect(html).toContain('type="date"');
     expect(loadingHtml).toContain('disabled=""');
-    expect(loadingHtml).toContain("Preparing…");
-
-    const formElement = form as {
-      props: { onSubmit: (event: { preventDefault: () => void }) => void };
-    };
-    formElement.props.onSubmit({ preventDefault: vi.fn() });
-
-    expect(onExport).toHaveBeenCalledTimes(1);
+    expect(html.match(/<option /g)).toHaveLength(18);
+    expect(html).toContain('<option value="  New work  " selected="">  New work  </option>');
+    expect(html).toContain('<option value="Configured status 16">Configured status 16</option>');
+    expect(html).not.toContain('value="Submitted"');
+    expect(html).not.toContain('value="Draft"');
   });
 
   it("renders accessible loading, success, and 403 error feedback", () => {
@@ -252,6 +255,49 @@ describe("request export URL", () => {
     expect(errorHtml).toContain('role="alert"');
   });
 
+  it("renders the filtered server-backed preview with its requested columns", () => {
+    const RequestExportPreview = Reflect.get(
+      RequestExportPageModule,
+      "RequestExportPreview",
+    ) as (props: {
+      error: string | null;
+      items: Array<{
+        dueDate: string | null;
+        productType: string | null;
+        requestId: string;
+        requestNo: string;
+        requester: string | null;
+        status: string;
+        title: string | null;
+      }>;
+      loading: boolean;
+      total: number;
+    }) => unknown;
+
+    const html = renderToStaticMarkup(
+      RequestExportPreview({
+        error: null,
+        items: [{
+          dueDate: "2026-06-30",
+          productType: "New Product",
+          requestId: "request-1",
+          requestNo: "PSF-001",
+          requester: "Request Owner",
+          status: "Submitted",
+          title: "Probe card update",
+        }],
+        loading: false,
+        total: 1,
+      }) as never,
+    );
+
+    expect(html).toContain("Request preview");
+    expect(html).toContain("Request No.");
+    expect(html).toContain("Title / Product Type");
+    expect(html).toContain("Requester");
+    expect(html).toContain("PSF-001");
+  });
+
   it("replaces the route placeholder with the request export page", () => {
     const RequestExportPage = Reflect.get(
       RequestExportPageModule,
@@ -265,10 +311,10 @@ describe("request export URL", () => {
     );
 
     expect(routeOptions.component).toBe(RequestExportPage);
-    expect(html).toContain("<h1>Request export</h1>");
-    expect(html).toContain(
-      "Download a filtered XLSX copy of the current request list.",
-    );
+    expect(html).toContain("<h1>Export to Excel</h1>");
+    expect(html).not.toContain("Admin tools");
+    expect(html).not.toContain("Download a filtered XLSX copy of the current request list.");
+    expect(html).toContain("Request preview");
     expect(html).toContain("Export XLSX");
   });
 });

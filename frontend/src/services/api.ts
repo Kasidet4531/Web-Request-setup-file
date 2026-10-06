@@ -2,6 +2,7 @@ import type {
   ActiveFormSchemaResponse,
   DynamicFormValues,
   FormSchema,
+  FormKey,
   FormSchemaVersionListResponse,
   FormSchemaVersionResponse,
   PublishFormSchemaDraftPayload,
@@ -80,16 +81,69 @@ function buildQueryPath(path: string, query: object): string {
   return queryString ? `${path}?${queryString}` : path
 }
 
+function adminFormConfigPath(path: string, formKey?: FormKey): string {
+  return formKey === 'psf-created-information' ? buildQueryPath(path, { formKey }) : path
+}
+
+export interface AssignableSetupOwner {
+  id: string
+  displayName: string
+  setupOwnerDepartment: SetupOwnerDepartment
+}
+
+export interface UpdateRequestAssignmentPayload {
+  setupOwnerUserId: string | null
+  expectedUpdatedAt: string
+}
+
 export interface PsfRequestPayload {
+  setupOwnerUserId?: string | null
   requester?: string
   requesterData: DynamicFormValues
 }
 
 export interface UpdateDraftRequesterDataPayload extends PsfRequestPayload {
   formVersion: number
+  expectedUpdatedAt: string
 }
 
+export type WorkflowStatusKind = 'draft' | 'open' | 'completed' | 'cancelled'
+
+export interface StatusEmailPolicy {
+  enabled: boolean
+  to: string[]
+  cc: string[]
+}
+
+export interface StatusCatalogEntry {
+  id: string
+  name: string
+  kind: WorkflowStatusKind
+  requestCount: number | null
+  emailPolicy?: StatusEmailPolicy
+  psfAccessTrigger?: boolean
+}
+
+export interface WorkflowConfiguration {
+  statuses: string[]
+  entries: StatusCatalogEntry[]
+  psfVisibilityTriggerIds?: string[]
+  /** Deprecated: the sole trigger id, or null when zero or multiple triggers exist. */
+  psfVisibilityTriggerId: string | null
+  updatedAt: string
+}
+
+export type WorkflowConfigurationOperation =
+  | { action: 'create'; name: string; kind: Exclude<WorkflowStatusKind, 'draft'>; expectedUpdatedAt: string }
+  | { action: 'rename'; id: string; name: string; emailPolicy?: StatusEmailPolicy; psfAccessTrigger?: boolean; expectedUpdatedAt: string }
+  | { action: 'delete'; id: string; replacementId?: string; expectedUpdatedAt: string }
+  | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
+  | { action: 'email-policy'; id: string; emailPolicy: StatusEmailPolicy; expectedUpdatedAt: string }
+
 export interface PsfRequestQuery {
+  scope?: 'all' | 'related' | 'my-drafts'
+  relation?: 'all' | 'created' | 'assigned' | 'department'
+  workState?: 'all' | 'open' | 'overdue' | 'completed'
   keyword?: string
   status?: string
   priority?: string
@@ -115,12 +169,20 @@ export interface PsfRequestListItem {
   status: string
   priority: string | null
   requester: string | null
+  setupOwnerUserId: string | null
   setupOwner: string | null
   setupOwnerRole: string | null
   productType: string | null
   requestDate: string | null
   dueDate: string | null
   updatedAt: string
+  requesterUserId?: string | null
+}
+
+export interface PsfRequestListSummary {
+  open: number
+  overdue: number
+  completed: number
 }
 
 export interface PsfRequestListResponse {
@@ -128,10 +190,12 @@ export interface PsfRequestListResponse {
   total: number
   limit: number
   offset: number
+  summary: PsfRequestListSummary
 }
 
 export interface UpdatePsfRequestStatusPayload {
   status: string
+  expectedUpdatedAt: string
 }
 
 export interface UpdatePsfCreatedDataPayload {
@@ -153,14 +217,18 @@ export interface WorkflowTransitionRule {
   allowedSetupOwnerDepartments: SetupOwnerDepartment[]
 }
 
-export interface AdminWorkflowTransitionConfiguration {
+export type AdminWorkflowTransitionConfiguration = WorkflowConfiguration
+
+export interface WorkflowStatusesResponse {
   statuses: string[]
-  transitions: WorkflowTransitionRule[]
+  entries: Array<Omit<StatusCatalogEntry, 'requestCount' | 'emailPolicy'>>
+  psfVisibilityTriggerIds?: string[]
+  /** Deprecated: the sole trigger id, or null when zero or multiple triggers exist. */
+  psfVisibilityTriggerId: string | null
+  updatedAt: string
 }
 
-export interface ReplaceAdminWorkflowTransitionConfigurationPayload {
-  transitions: WorkflowTransitionRule[]
-}
+export type ReplaceAdminWorkflowTransitionConfigurationPayload = WorkflowConfigurationOperation
 
 export interface AdminAutofillRule {
   id: string
@@ -168,7 +236,8 @@ export interface AdminAutofillRule {
   triggerCanonicalKey: string
   targetCanonicalKeys: string[]
   lookupSource: 'previous_completed_submission'
-  status: 'active'
+  status: 'active' | 'inactive'
+  inactiveReason?: string
   createdAt: string
   updatedAt: string
 }
@@ -194,6 +263,8 @@ export interface RuntimeAutofillSuggestionsResponse {
 
 export interface SubmitPsfRequestPayload {
   formVersion: number
+  status: string
+  expectedUpdatedAt: string
 }
 
 export interface UpgradeDraftSchemaPayload {
@@ -203,10 +274,11 @@ export interface UpgradeDraftSchemaPayload {
 export interface PsfRequestResponse {
   id: string
   requestNo: string
-  formKey: string
+  formKey: FormKey
   formVersion: number
   status: string
   requester: string | null
+  setupOwnerUserId: string | null
   setupOwner: string | null
   setupOwnerRole: string | null
   productType: string | null
@@ -214,6 +286,10 @@ export interface PsfRequestResponse {
   psfCreatedData: Record<string, unknown>
   psfCreatedDataVisible: boolean
   canEditPsfCreatedData: boolean
+  canEditRequesterData: boolean
+  canSubmitDraft: boolean
+  requesterUserId: string | null
+  psfReleasedAt: string | null
   psfCreatedInformationSchema: FormSchema
   schemaSnapshot: FormSchema
   createdAt: string
@@ -228,6 +304,10 @@ export type PsfRequestHistoryAction =
   | 'DRAFT_REQUESTER_DATA_UPDATED'
   | 'REQUEST_SUBMITTED'
   | 'REQUEST_STATUS_CHANGED'
+  | 'REQUEST_ASSIGNEE_CHANGED'
+  | 'REQUESTER_INFORMATION_UPDATED'
+  | 'PSF_CREATED_INFORMATION_UPDATED'
+  | 'WORKFLOW_CATALOG_UPDATED'
 
 export interface PsfRequestHistoryEntry {
   actionType: PsfRequestHistoryAction
@@ -246,8 +326,8 @@ export interface GlobalAuditLogQuery {
 }
 
 export interface GlobalAuditLogEntry {
-  requestId: string
-  requestNo: string
+  requestId: string | null
+  requestNo: string | null
   actionType: PsfRequestHistoryAction
   actorDisplayName: string
   actorRole: UserRole
@@ -296,6 +376,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
     const responseBody = await parseResponseBody(response)
 
     if (!response.ok) {
+      // AppShell owns /me checks and ignores responses predating a newer session.
+      if (response.status === 401 && normalizePath(path) !== '/me') {
+        notifyAuthSessionChanged({ status: 'anonymous' })
+      }
+
       const message =
         typeof responseBody === 'object' &&
         responseBody !== null &&
@@ -325,22 +410,31 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<ActiveFormSchemaResponse>(`/forms/${encodeURIComponent(formKey)}/schema`, {
         method: 'GET',
       }),
-    fetchAdminFormConfig: () =>
-      request<FormSchemaVersionListResponse>('/admin/form-config', {
+    fetchAdminFormConfig: (formKey?: FormKey) =>
+      request<FormSchemaVersionListResponse>(adminFormConfigPath('/admin/form-config', formKey), {
         method: 'GET',
       }),
-    saveAdminFormConfigDraft: (payload: SaveFormSchemaDraftPayload) =>
-      request<FormSchemaVersionResponse>('/admin/form-config', {
+    saveAdminFormConfigDraft: (payload: SaveFormSchemaDraftPayload, formKey?: FormKey) =>
+      request<FormSchemaVersionResponse>(adminFormConfigPath('/admin/form-config', formKey), {
         body: payload,
         method: 'PUT',
       }),
-    publishAdminFormConfigDraft: (payload: PublishFormSchemaDraftPayload) =>
-      request<FormSchemaVersionResponse>('/admin/form-config/publish', {
+    duplicateAdminFormConfigVersion: (payload: { version: number }, formKey?: FormKey) =>
+      request<FormSchemaVersionResponse>(adminFormConfigPath('/admin/form-config/duplicate', formKey), {
+        body: payload,
+        method: 'POST',
+      }),
+    discardAdminFormConfigDraft: (version: number, formKey?: FormKey) =>
+      request<null>(adminFormConfigPath(`/admin/form-config/draft/${encodeURIComponent(version)}`, formKey), {
+        method: 'DELETE',
+      }),
+    publishAdminFormConfigDraft: (payload: PublishFormSchemaDraftPayload, formKey?: FormKey) =>
+      request<FormSchemaVersionResponse>(adminFormConfigPath('/admin/form-config/publish', formKey), {
         body: payload,
         method: 'POST',
       }),
     fetchAdminUsers: () =>
-      request<AuthenticatedUserProfile[]>('/admin/users', {
+      request<AdminUserProfile[]>('/admin/users', {
         method: 'GET',
       }),
     updateAdminUser: (userId: string, payload: UpdateAdminUserPayload) =>
@@ -348,17 +442,12 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    fetchWorkflowStatuses: () =>
+      request<WorkflowStatusesResponse>('/workflow/statuses', { method: 'GET' }),
     fetchAdminWorkflowTransitionConfiguration: () =>
-      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
-        method: 'GET',
-      }),
-    replaceAdminWorkflowTransitionConfiguration: (
-      payload: ReplaceAdminWorkflowTransitionConfigurationPayload,
-    ) =>
-      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', {
-        body: payload,
-        method: 'PUT',
-      }),
+      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', { method: 'GET' }),
+    replaceAdminWorkflowTransitionConfiguration: (payload: WorkflowConfigurationOperation) =>
+      request<AdminWorkflowTransitionConfiguration>('/admin/workflow', { body: payload, method: 'PUT' }),
     fetchAdminAutofillRules: () =>
       request<AdminAutofillRule[]>('/admin/autofill', {
         method: 'GET',
@@ -387,6 +476,9 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',
       }),
+    fetchRequestAssignees: () => request<{ items: AssignableSetupOwner[] }>('/requests/assignees', { method: 'GET' }),
+    updatePsfRequestAssignment: (requestId: string, payload: UpdateRequestAssignmentPayload) =>
+      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/assignment`, { method: 'PUT', body: payload }),
     createDraftRequest: (payload: PsfRequestPayload) =>
       request<PsfRequestResponse>('/requests', {
         body: payload,
@@ -453,6 +545,8 @@ export interface AuthenticatedUserProfile {
   role: UserRole
   setupOwnerDepartment: SetupOwnerDepartment | null
 }
+
+export type AdminUserProfile = AuthenticatedUserProfile & { email: string | null }
 
 export interface UpdateAdminUserPayload {
   role: UserRole

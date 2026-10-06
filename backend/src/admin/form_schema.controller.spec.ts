@@ -17,7 +17,6 @@ const validSchema = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester', 'setup_owner', 'admin'],
       fields: [],
     },
   ],
@@ -34,6 +33,8 @@ const adminActor = {
 describe('FormSchemaController', () => {
   let controller: FormSchemaController;
   let formSchemaService: {
+    duplicateVersion: jest.Mock;
+    discardDraft: jest.Mock;
     listVersions: jest.Mock;
     publishDraft: jest.Mock;
     saveDraft: jest.Mock;
@@ -42,6 +43,8 @@ describe('FormSchemaController', () => {
 
   beforeEach(async () => {
     formSchemaService = {
+      duplicateVersion: jest.fn(),
+      discardDraft: jest.fn(),
       listVersions: jest.fn(),
       publishDraft: jest.fn(),
       saveDraft: jest.fn(),
@@ -68,7 +71,7 @@ describe('FormSchemaController', () => {
     formSchemaService.listVersions.mockResolvedValue(response);
 
     await expect(
-      controller.getFormConfig({ session: { userId: 'admin-1' } } as never),
+      controller.getFormConfig({ session: { userId: 'admin-1' } } as never, {}),
     ).resolves.toEqual(response);
 
     expect(authService.getProfile).toHaveBeenCalledWith('admin-1');
@@ -89,6 +92,7 @@ describe('FormSchemaController', () => {
       controller.saveDraft(
         {
           description: 'Editable draft',
+          draftVersion: 2,
           schema: {
             ...validSchema,
             title: '  PSF Request Form  ',
@@ -100,12 +104,14 @@ describe('FormSchemaController', () => {
           },
         },
         { session: { userId: 'admin-1' } } as never,
+        {},
       ),
     ).resolves.toEqual(response);
 
     expect(formSchemaService.saveDraft).toHaveBeenCalledWith(
       {
         description: 'Editable draft',
+        draftVersion: 2,
         schema: {
           formKey: PSF_REQUEST_FORM_KEY,
           title: 'PSF Request Form',
@@ -115,6 +121,118 @@ describe('FormSchemaController', () => {
       adminActor,
     );
   });
+
+  it('selects PSF Created Information only through its exact query key', async () => {
+    const response = {
+      formKey: 'psf-created-information',
+      versions: [{ version: 1, status: 'active' }],
+    };
+    authService.getProfile.mockResolvedValue(adminActor);
+    formSchemaService.listVersions.mockResolvedValue(response);
+
+    await expect(
+      controller.getFormConfig({ session: { userId: 'admin-1' } } as never, {
+        formKey: 'psf-created-information',
+      }),
+    ).resolves.toEqual(response);
+    expect(formSchemaService.listVersions).toHaveBeenCalledWith(
+      'psf-created-information',
+    );
+
+    await expect(
+      controller.getFormConfig({ session: { userId: 'admin-1' } } as never, {
+        formKey: 'PSF-CREATED-INFORMATION',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects a PSF schema whose form key does not match the selected query key', async () => {
+    authService.getProfile.mockResolvedValue(adminActor);
+
+    await expect(
+      controller.saveDraft(
+        { draftVersion: 2, schema: validSchema },
+        { session: { userId: 'admin-1' } } as never,
+        { formKey: 'psf-created-information' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(formSchemaService.saveDraft).not.toHaveBeenCalled();
+  });
+
+  it('saves PSF Created Information drafts with the query form key', async () => {
+    authService.getProfile.mockResolvedValue(adminActor);
+    formSchemaService.saveDraft.mockResolvedValue({
+      formKey: 'psf-created-information',
+      version: 2,
+      status: 'draft',
+    });
+
+    await expect(
+      controller.saveDraft(
+        {
+          draftVersion: 2,
+          schema: {
+            ...validSchema,
+            formKey: 'psf-created-information',
+          },
+        },
+        { session: { userId: 'admin-1' } } as never,
+        { formKey: 'psf-created-information' },
+      ),
+    ).resolves.toMatchObject({ formKey: 'psf-created-information' });
+    expect(formSchemaService.saveDraft).toHaveBeenCalledWith(
+      {
+        description: undefined,
+        draftVersion: 2,
+        schema: {
+          formKey: 'psf-created-information',
+          title: validSchema.title,
+          sections: validSchema.sections,
+        },
+      },
+      adminActor,
+      'psf-created-information',
+    );
+  });
+
+  it.each([
+    { 'formKey[]': 'psf-created-information' },
+    { 'formKey.nested': 'psf-created-information' },
+    { formKey: ['psf-request', 'psf-created-information'] },
+    { unexpected: 'value' },
+  ])(
+    'rejects malformed query objects before any form service call: %p',
+    async (query) => {
+      authService.getProfile.mockResolvedValue(adminActor);
+      const request = { session: { userId: 'admin-1' } } as never;
+
+      await expect(
+        controller.getFormConfig(request, query),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        controller.saveDraft(
+          { draftVersion: 2, schema: validSchema },
+          request,
+          query,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        controller.publishDraft({ version: 2 }, request, query),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        controller.duplicateVersion({ version: 1 }, request, query),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        controller.discardDraft('2', request, query),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(formSchemaService.listVersions).not.toHaveBeenCalled();
+      expect(formSchemaService.saveDraft).not.toHaveBeenCalled();
+      expect(formSchemaService.publishDraft).not.toHaveBeenCalled();
+      expect(formSchemaService.duplicateVersion).not.toHaveBeenCalled();
+      expect(formSchemaService.discardDraft).not.toHaveBeenCalled();
+    },
+  );
 
   it('publishes a selected draft version for an admin', async () => {
     const response = {
@@ -126,17 +244,58 @@ describe('FormSchemaController', () => {
     formSchemaService.publishDraft.mockResolvedValue(response);
 
     await expect(
-      controller.publishDraft({ version: 2 }, {
-        session: { userId: 'admin-1' },
-      } as never),
+      controller.publishDraft(
+        { version: 2 },
+        { session: { userId: 'admin-1' } } as never,
+        {},
+      ),
     ).resolves.toEqual(response);
 
     expect(formSchemaService.publishDraft).toHaveBeenCalledWith(2);
   });
 
+  it('allows only an admin to duplicate a version or discard an exact draft', async () => {
+    authService.getProfile.mockResolvedValue(adminActor);
+    const request = { session: { userId: 'admin-1' } } as never;
+    formSchemaService.duplicateVersion.mockResolvedValue({
+      version: 3,
+      status: 'draft',
+    });
+    await expect(
+      controller.duplicateVersion({ version: 1 }, request, {}),
+    ).resolves.toMatchObject({ version: 3 });
+    expect(formSchemaService.duplicateVersion).toHaveBeenCalledWith(
+      1,
+      adminActor,
+    );
+    await controller.discardDraft('3', request, {});
+    expect(formSchemaService.discardDraft).toHaveBeenCalledWith(3);
+    authService.getProfile.mockResolvedValue({
+      ...adminActor,
+      role: 'requester',
+    });
+    await expect(
+      controller.discardDraft('3', request, {}),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(formSchemaService.discardDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects malformed duplicate and discard version identifiers before changing data', async () => {
+    authService.getProfile.mockResolvedValue(adminActor);
+    const request = { session: { userId: 'admin-1' } } as never;
+    await expect(
+      controller.duplicateVersion({ version: '2' }, request, {}),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.discardDraft('2x', request, {}),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(formSchemaService.duplicateVersion).not.toHaveBeenCalled();
+    expect(formSchemaService.discardDraft).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing session before reading form schema versions', async () => {
     await expect(
-      controller.getFormConfig({ session: {} } as never),
+      controller.getFormConfig({ session: {} } as never, {}),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(authService.getProfile).not.toHaveBeenCalled();
@@ -148,7 +307,7 @@ describe('FormSchemaController', () => {
     authService.getProfile.mockResolvedValue(null);
 
     await expect(
-      controller.saveDraft({ schema: validSchema }, request as never),
+      controller.saveDraft({ schema: validSchema }, request as never, {}),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(request.session.userId).toBeUndefined();
@@ -182,14 +341,14 @@ describe('FormSchemaController', () => {
       authService.getProfile.mockResolvedValue(actor);
       const request = { session: { userId: actor.id } } as never;
 
-      await expect(controller.getFormConfig(request)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
       await expect(
-        controller.saveDraft({ schema: validSchema }, request),
+        controller.getFormConfig(request, {}),
       ).rejects.toBeInstanceOf(ForbiddenException);
       await expect(
-        controller.publishDraft({ version: 2 }, request),
+        controller.saveDraft({ schema: validSchema }, request, {}),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(
+        controller.publishDraft({ version: 2 }, request, {}),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(formSchemaService.listVersions).not.toHaveBeenCalled();
@@ -210,7 +369,11 @@ describe('FormSchemaController', () => {
     authService.getProfile.mockResolvedValue(adminActor);
 
     await expect(
-      controller.saveDraft(body, { session: { userId: 'admin-1' } } as never),
+      controller.saveDraft(
+        body,
+        { session: { userId: 'admin-1' } } as never,
+        {},
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(formSchemaService.saveDraft).not.toHaveBeenCalled();
@@ -228,9 +391,11 @@ describe('FormSchemaController', () => {
       authService.getProfile.mockResolvedValue(adminActor);
 
       await expect(
-        controller.publishDraft(body, {
-          session: { userId: 'admin-1' },
-        } as never),
+        controller.publishDraft(
+          body,
+          { session: { userId: 'admin-1' } } as never,
+          {},
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(formSchemaService.publishDraft).not.toHaveBeenCalled();

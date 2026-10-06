@@ -1,0 +1,85 @@
+.admin-workflow-transition__email-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 104px;
+}
+
+.admin-status-dialog { width: min(760px, calc(100vw - 32px)); }
+.admin-status-dialog[open] { display: flex; overflow: hidden; }
+.admin-status-dialog .ui-dialog__body { display: flex; flex-direction: column; min-height: 0; width: 100%; padding: 0; gap: 0; }
+.admin-status-dialog__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px; border-bottom: 1px solid var(--border); }
+.admin-status-dialog__header > div { min-width: 0; }
+.admin-status-dialog__header h2, .admin-status-dialog__header p { overflow-wrap: anywhere; }
+.admin-status-dialog__header p { margin-top: 8px; }
+.admin-status-dialog__header > button { flex-shrink: 0; }
+.admin-status-dialog__content { display: grid; gap: 16px; min-height: 0; padding: 24px; overflow-y: auto; }
+.admin-status-dialog .ui-dialog__actions { flex-shrink: 0; margin-top: 0; padding: 16px 24px; }
+.admin-status-dialog__recipients { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.admin-status-dialog__recipients li { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 4px 4px 4px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); font-size: 12px; }
+.admin-status-dialog__recipients li > span { min-width: 0; overflow-wrap: anywhere; }
+.admin-status-dialog__recipients li > button { flex-shrink: 0; width: 32px; height: 32px; }
+.admin-status-dialog__add-address { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admin-status-dialog__add-address input { flex: 1; min-width: 0; }
+.admin-status-dialog__add-address button { flex-shrink: 0; }
+
+.admin-workflow-transition__email-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.admin-workflow-transition__recipient-field {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.admin-workflow-transition__recipient-field legend { margin-bottom: 12px; }
+
+.admin-workflow-transition__email-error {
+  color: var(--destructive);
+}
+
+.admin-workflow-transition__delivery-preview {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  overflow-wrap: anywhere;
+}
+
+.admin-workflow-transition__delivery-preview h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-workflow-transition__delivery-preview p {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 899px) {
+  .admin-workflow-transition__email-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+/* Keep status names and actions readable as the catalog gains PSF access. */
+.admin-workflow-transition .admin-workflow-transition__table table {
+  min-width: 1040px;
+}
+
+.admin-workflow-transition .admin-workflow-transition__table th:first-child { width: 32%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(2) { width: 12%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(3) { width: 8%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(4) { width: 15%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(5) { width: 13%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(6) { width: 20%; }
+
+.admin-workflow-transition .admin-workflow-transition__email-error {
+  color: var(--destructive);
+}
+
+.admin-status-dialog__psf-access { display: grid; gap: 8px; }

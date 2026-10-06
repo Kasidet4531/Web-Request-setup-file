@@ -359,14 +359,13 @@ describe('AuthService', () => {
 
     await provisionInitialAdmin.call(service);
 
-    const provision = query.mock.calls[0]?.[0] as string;
+    const provision = (query.mock.calls as unknown[][])[0]?.[0] as string;
     expect(provision).toContain("VALUES ($1, $1, NULL, 'admin', NULL)");
     expect(provision).toContain('ON CONFLICT (username) DO UPDATE SET');
     expect(provision).toContain("role = 'admin'");
-    expect(query).toHaveBeenLastCalledWith(
-      provision,
-      ['initial.admin.example.test'],
-    );
+    expect(query).toHaveBeenLastCalledWith(provision, [
+      'initial.admin.example.test',
+    ]);
   });
 
   it('ignores a blank initial administrator setting', async () => {
@@ -406,7 +405,7 @@ describe('AuthService', () => {
     });
   });
 
-  it('lists every stored user without exposing password hashes', async () => {
+  it('lists stored users with LDAP email for admins without exposing password hashes', async () => {
     query.mockResolvedValueOnce({
       rows: [
         {
@@ -416,6 +415,7 @@ describe('AuthService', () => {
           password_hash: 'not-returned-to-client',
           role: 'requester',
           setup_owner_department: null,
+          email: 'requester@example.test',
         },
         {
           id: 'setup-owner-1',
@@ -424,6 +424,7 @@ describe('AuthService', () => {
           password_hash: 'not-returned-to-client',
           role: 'setup_owner',
           setup_owner_department: 'GNTC',
+          email: null,
         },
       ],
     });
@@ -435,6 +436,7 @@ describe('AuthService', () => {
         displayName: 'Requester Demo',
         role: 'requester',
         setupOwnerDepartment: null,
+        email: 'requester@example.test',
       },
       {
         id: 'setup-owner-1',
@@ -442,6 +444,7 @@ describe('AuthService', () => {
         displayName: 'Setup Owner GNTC Demo',
         role: 'setup_owner',
         setupOwnerDepartment: 'GNTC',
+        email: null,
       },
     ]);
 
@@ -451,6 +454,7 @@ describe('AuthService', () => {
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('ORDER BY display_name ASC, username ASC'),
     );
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('email'));
   });
 
   it('persists a role and Setup File Owner department update for later profile reads', async () => {

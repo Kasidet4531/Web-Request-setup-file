@@ -1,13 +1,15 @@
 import { ApiError } from '../services/api'
 import type {
   FormControlType,
+  FormKey,
   FormSchema,
   FormSchemaDraft,
+  FormSchemaVersionListResponse,
   FormSchemaVersionResponse,
   SaveFormSchemaDraftPayload,
 } from '../types/forms'
+import { isFormKey } from '../types/forms'
 
-const PSF_REQUEST_FORM_KEY = 'psf-request'
 const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'date', 'select', 'radio'])
 
 export interface FormSchemaDraftParseResult {
@@ -24,6 +26,15 @@ export interface FormConfigPublishState {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isAdminFormConfigVersionForKey(value: unknown, formKey: FormKey): value is FormSchemaVersionResponse {
+  return isRecord(value) && value.formKey === formKey && isRecord(value.schema) && value.schema.formKey === formKey
+}
+
+export function isAdminFormConfigVersionListForKey(value: unknown, formKey: FormKey): value is FormSchemaVersionListResponse {
+  return isRecord(value) && value.formKey === formKey && Array.isArray(value.versions) &&
+    value.versions.every((version) => isAdminFormConfigVersionForKey(version, formKey))
 }
 
 function isNonblankString(value: unknown): value is string {
@@ -73,11 +84,23 @@ function validateField(field: unknown, sectionIndex: number, fieldIndex: number)
     return `${fieldPrefix} must provide string options for ${field.type} controls.`
   }
 
+  if ((field.type === 'select' || field.type === 'radio') && isStringArray(field.options)) {
+    if (field.options.length === 0) return `${fieldPrefix} must have at least one option.`
+    if (field.options.some((option) => !option.trim())) return `${fieldPrefix} must have nonblank options.`
+  }
+
   if (field.options !== undefined && !isStringArray(field.options)) {
     return `${fieldPrefix} options must be an array of strings.`
   }
 
   return null
+}
+
+function hasRestrictedLegacySection(section: unknown): boolean {
+  if (!isRecord(section) || !Object.hasOwn(section, 'visibleTo')) return false
+  const roles = section.visibleTo
+  return !Array.isArray(roles) || roles.length !== 3 ||
+    !['requester', 'setup_owner', 'admin'].every((role) => roles.includes(role))
 }
 
 function validateSection(section: unknown, sectionIndex: number): string | null {
@@ -93,8 +116,8 @@ function validateSection(section: unknown, sectionIndex: number): string | null 
     return `Section ${sectionIndex + 1} must have a nonblank title.`
   }
 
-  if (!isStringArray(section.visibleTo)) {
-    return `Section ${sectionIndex + 1} visibleTo must be an array of strings.`
+  if (hasRestrictedLegacySection(section)) {
+    return `Legacy role-restricted section ${sectionIndex + 1} requires review before editing.`
   }
 
   if (!Array.isArray(section.fields)) {
@@ -115,7 +138,12 @@ function toFormSchemaDraft(schema: FormSchema | FormSchemaDraft): FormSchemaDraf
   return {
     formKey: schema.formKey,
     title: schema.title,
-    sections: schema.sections,
+    sections: schema.sections.map((section) => {
+      if (hasRestrictedLegacySection(section)) return section
+      const copy = { ...section } as FormSchemaDraft['sections'][number] & { visibleTo?: unknown }
+      delete copy.visibleTo
+      return copy
+    }),
   }
 }
 
@@ -123,7 +151,47 @@ export function formatFormSchemaDraft(schema: FormSchema | FormSchemaDraft): str
   return JSON.stringify(toFormSchemaDraft(schema), null, 2)
 }
 
-export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
+export function readFormSchemaEditorDraft(text: string, expectedFormKey?: FormKey): FormSchemaDraft | null {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (
+    !isRecord(value) || !isFormKey(value.formKey) || (expectedFormKey !== undefined && value.formKey !== expectedFormKey) ||
+    typeof value.title !== 'string' || !Array.isArray(value.sections)
+  ) return null
+
+  const sectionKeys = new Set<string>()
+  const fieldKeys = new Set<string>()
+  for (const section of value.sections) {
+    if (
+      !isRecord(section) || typeof section.sectionKey !== 'string' ||
+      typeof section.title !== 'string' ||
+      !Array.isArray(section.fields)
+    ) return null
+    if (hasRestrictedLegacySection(section)) return null
+    if (!section.sectionKey.trim() || sectionKeys.has(section.sectionKey)) return null
+    sectionKeys.add(section.sectionKey)
+
+    for (const field of section.fields) {
+      if (
+        !isRecord(field) || typeof field.fieldKey !== 'string' ||
+        typeof field.canonicalKey !== 'string' || typeof field.label !== 'string' ||
+        typeof field.type !== 'string' || !SUPPORTED_FORM_CONTROL_TYPES.has(field.type as FormControlType) ||
+        typeof field.required !== 'boolean' ||
+        (field.options !== undefined && !isStringArray(field.options))
+      ) return null
+      if (!field.fieldKey.trim() || !isRendererSafeFieldKey(field.fieldKey) || fieldKeys.has(field.fieldKey)) return null
+      fieldKeys.add(field.fieldKey)
+    }
+  }
+
+  return value as unknown as FormSchemaDraft
+}
+
+export function parseFormSchemaDraft(text: string, expectedFormKey?: FormKey): FormSchemaDraftParseResult {
   let parsed: unknown
 
   try {
@@ -139,8 +207,9 @@ export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
     return { error: 'Schema JSON must be an object.', schema: null }
   }
 
-  if (parsed.formKey !== PSF_REQUEST_FORM_KEY) {
-    return { error: `Schema formKey must be exactly "${PSF_REQUEST_FORM_KEY}".`, schema: null }
+  if (!isFormKey(parsed.formKey) || (expectedFormKey !== undefined && parsed.formKey !== expectedFormKey)) {
+    const expected = expectedFormKey ?? 'psf-request or psf-created-information'
+    return { error: `Schema formKey must match the selected form (expected "${expected}").`, schema: null }
   }
 
   if (!isNonblankString(parsed.title)) {
@@ -150,21 +219,40 @@ export function parseFormSchemaDraft(text: string): FormSchemaDraftParseResult {
   if (!Array.isArray(parsed.sections)) {
     return { error: 'Schema sections must be an array.', schema: null }
   }
+  if (parsed.sections.length === 0) {
+    return { error: 'Schema must have at least one section.', schema: null }
+  }
 
+  const sectionKeys = new Set<string>()
+  const fieldKeys = new Set<string>()
   for (const [sectionIndex, section] of parsed.sections.entries()) {
     const error = validateSection(section, sectionIndex)
     if (error) {
       return { error, schema: null }
     }
+    const typedSection = section as FormSchemaDraft['sections'][number]
+    if (sectionKeys.has(typedSection.sectionKey)) {
+      return { error: `Section ${sectionIndex + 1} has a duplicate sectionKey "${typedSection.sectionKey}".`, schema: null }
+    }
+    sectionKeys.add(typedSection.sectionKey)
+    for (const field of typedSection.fields) {
+      if (fieldKeys.has(field.fieldKey)) {
+        return { error: `Field "${field.fieldKey}" has a duplicate fieldKey.`, schema: null }
+      }
+      fieldKeys.add(field.fieldKey)
+    }
+  }
+  if (fieldKeys.size === 0) {
+    return { error: 'Schema must have at least one field.', schema: null }
   }
 
   return {
     error: null,
-    schema: {
-      formKey: PSF_REQUEST_FORM_KEY,
+    schema: toFormSchemaDraft({
+      formKey: parsed.formKey,
       title: parsed.title,
       sections: parsed.sections as FormSchemaDraft['sections'],
-    },
+    }),
   }
 }
 
@@ -190,7 +278,8 @@ export function selectRefreshedFormConfigVersion(
 export function buildPreviewSchema(
   schema: FormSchemaDraft,
   selectedVersion: FormSchemaVersionResponse,
-): FormSchema {
+): FormSchema | null {
+  if (schema.formKey !== selectedVersion.formKey) return null
   return {
     formKey: selectedVersion.formKey,
     version: selectedVersion.version,
@@ -203,7 +292,9 @@ export function buildAdminFormConfigSavePayload(
   selectedVersion: FormSchemaVersionResponse,
   schema: FormSchemaDraft,
 ): SaveFormSchemaDraftPayload {
+  if (selectedVersion.formKey !== schema.formKey) throw new Error('Cannot save a schema for a different form family.')
   return {
+    draftVersion: selectedVersion.version,
     description: selectedVersion.description,
     schema: toFormSchemaDraft(schema),
   }
@@ -216,14 +307,6 @@ export function canPublishFormConfig({
   selectedVersion,
 }: FormConfigPublishState): boolean {
   return !busy && !dirty && parsedSchema !== null && selectedVersion?.status === 'draft'
-}
-
-export function requiresUnsavedVersionConfirmation(
-  dirty: boolean,
-  currentVersion: number | null,
-  nextVersion: number,
-): boolean {
-  return dirty && currentVersion !== nextVersion
 }
 
 export function getAdminFormConfigErrorMessage(error: unknown, fallback: string): string {

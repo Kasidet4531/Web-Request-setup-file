@@ -1,5 +1,7 @@
 # 11. Key-by-Key Diff Request-Specific Audit Logging
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ. The current audit service stores action events with JSON metadata, rather than a separate relational row for every field diff; see [audit service](../../backend/src/audit/audit_log.service.ts).
+
 > **Implementation amendment:** [ADR 0014](0014-current-production-baseline-and-visual-reference-boundary.md) defines the current production baseline and takes precedence where this historical record conflicts with the implemented codebase.
 
 We decided that data modifications to PSF Requests will be audited at the individual field level using key-by-key JSON payload diffing during write operations. These audit records will be stored in a flat relational table and queried specifically on a per-request basis.

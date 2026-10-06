@@ -1,0 +1,21 @@
+{
+  "assertions": 16,
+  "checks": [
+    "loading announces while queue request is pending",
+    "empty queue retains scope and result count",
+    "request error retry reloads actual rows",
+    "catalog failure disables only status filter",
+    "catalog retry restores native status selection",
+    "setup owner has no unauthorized export shortcut",
+    "setup owner retains Related work selector",
+    "unreleased PSF values are absent from requester DOM",
+    "released PSF properties stay readable and read only after status reversal",
+    "foreign private draft denial exposes no request forms",
+    "custom status uses explicit catalog kind without percentage parsing",
+    "long identifier and custom status do not overflow the page",
+    "mobile table fields remain reachable by local horizontal scrolling",
+    "keyboard request link opens resolved request breadcrumb",
+    "expired session redirects to login",
+    "reduced motion leaves no sidebar animation"
+  ]
+}

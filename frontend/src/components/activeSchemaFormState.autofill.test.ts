@@ -13,7 +13,6 @@ const schema: FormSchema = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'reference_psf_input',
@@ -40,16 +39,16 @@ const schema: FormSchema = {
       ],
     },
     {
-      sectionKey: 'admin_only',
-      title: 'Admin-only data',
-      visibleTo: ['admin'],
+      sectionKey: 'additional',
+      title: 'Additional fields',
       fields: [
         {
-          fieldKey: 'private_admin_input',
-          canonicalKey: 'private_admin_value',
-          label: 'Private Admin Value',
+          fieldKey: 'extra_input',
+          canonicalKey: 'extra_value',
+          label: 'Extra Value',
           type: 'text',
           required: false,
+          autofillTrigger: true,
         },
       ],
     },
@@ -57,41 +56,45 @@ const schema: FormSchema = {
 }
 
 describe('runtime autofill form state', () => {
-  it('recognizes only requester-visible configured trigger fields', () => {
+  it('recognizes configured trigger fields across sections', () => {
     expect(getRequesterAutofillTriggerField(schema, 'reference_psf_input')).toMatchObject({
       canonicalKey: 'reference_psf_name',
       autofillTrigger: true,
     })
     expect(getRequesterAutofillTriggerField(schema, 'product_input')).toBeNull()
-    expect(getRequesterAutofillTriggerField(schema, 'private_admin_input')).toBeNull()
+    expect(getRequesterAutofillTriggerField(schema, 'extra_input')).toMatchObject({ canonicalKey: 'extra_value' })
   })
 
-  it('maps only blank requester fields from canonical suggestions and preserves manual values or newer edits', () => {
+  it('maps blank form fields from canonical suggestions and preserves manual values or newer edits', () => {
     const applied = applyRuntimeAutofillSuggestions({
       currentEditVersions: {
+        extra_input: 1,
         product_input: 4,
         wafer_fab_input: 2,
       },
       currentValues: {
+        extra_input: '',
         product_input: '',
         reference_psf_input: 'REF-PSF-1',
         wafer_fab_input: 'Existing FAB',
       },
       lookupEditVersions: {
+        extra_input: 1,
         product_input: 4,
         wafer_fab_input: 2,
       },
       schema,
       suggestedValues: {
-        private_admin_value: 'must not apply',
+        extra_value: 'Additional value',
         product: 'New Product',
         unknown_value: 'must not apply',
         wafer_fab: 'Fab A',
       },
     })
 
-    expect(applied.appliedFieldKeys).toEqual(['product_input'])
+    expect(applied.appliedFieldKeys).toEqual(['extra_input', 'product_input'])
     expect(applied.values).toEqual({
+      extra_input: 'Additional value',
       product_input: 'New Product',
       reference_psf_input: 'REF-PSF-1',
       wafer_fab_input: 'Existing FAB',

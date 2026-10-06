@@ -39,10 +39,8 @@ function fieldKeysForSchema(schema: FormSchema): Set<string> {
   )
 }
 
-function requesterVisibleFields(schema: FormSchema): FormSchemaField[] {
-  return schema.sections.flatMap((section) =>
-    section.visibleTo.includes('requester') ? section.fields : [],
-  )
+function formFields(schema: FormSchema): FormSchemaField[] {
+  return schema.sections.flatMap((section) => section.fields)
 }
 
 export function getRequesterAutofillTriggerField(
@@ -50,7 +48,7 @@ export function getRequesterAutofillTriggerField(
   fieldKey: string,
 ): FormSchemaField | null {
   return (
-    requesterVisibleFields(schema).find(
+    formFields(schema).find(
       (field) => field.fieldKey === fieldKey && field.autofillTrigger === true,
     ) ?? null
   )
@@ -63,14 +61,14 @@ export function applyRuntimeAutofillSuggestions({
   schema,
   suggestedValues,
 }: ApplyRuntimeAutofillSuggestionsInput): ApplyRuntimeAutofillSuggestionsResult {
-  const requesterFieldsByCanonicalKey = new Map(
-    requesterVisibleFields(schema).map((field) => [field.canonicalKey, field]),
+  const fieldsByCanonicalKey = new Map(
+    formFields(schema).map((field) => [field.canonicalKey, field]),
   )
   const nextValues = { ...currentValues }
   const appliedFieldKeys: string[] = []
 
   Object.entries(suggestedValues).forEach(([canonicalKey, suggestedValue]) => {
-    const field = requesterFieldsByCanonicalKey.get(canonicalKey)
+    const field = fieldsByCanonicalKey.get(canonicalKey)
     if (
       !field ||
       typeof suggestedValue !== 'string' ||
@@ -203,12 +201,33 @@ export function resolveRequestFormSchema(
     return activeRequestSchema
   }
 
-  return activeSchemaFromRequest(request)
+  const snapshot = activeSchemaFromRequest(request)
+  if (mode !== 'request' || request.status !== DRAFT_STATUS || !activeRequestSchema) {
+    return snapshot
+  }
+  const triggerKeys = new Set(formFields(activeRequestSchema.schema)
+    .filter((field) => field.autofillTrigger === true)
+    .map((field) => field.canonicalKey))
+  return {
+    ...snapshot,
+    schema: {
+      ...snapshot.schema,
+      sections: snapshot.schema.sections.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => ({
+          ...field,
+          ...(field.autofillTrigger !== undefined || triggerKeys.has(field.canonicalKey)
+            ? { autofillTrigger: triggerKeys.has(field.canonicalKey) }
+            : {}),
+        })),
+      })),
+    },
+  }
 }
 
 export function requesterFieldsAreReadOnly(
   mode: 'request' | 'preview',
   request: PsfRequestResponse | null,
 ): boolean {
-  return mode === 'preview' || (request !== null && request.status !== DRAFT_STATUS)
+  return mode === 'preview' || (request !== null && !request.canEditRequesterData)
 }

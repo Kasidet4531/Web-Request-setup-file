@@ -1,8 +1,11 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+This table records intended label conventions for the five triage roles. Label
+existence and live GitHub state have not been verified by this documentation
+audit; inspect the authenticated issue tracker before relying on them. See
+[issue-tracker conventions](issue-tracker.md) and [documentation index](../README.md).
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
+| Skill role label | Intended tracker label | Meaning                                  |
 | -------------------------- | -------------------- | ---------------------------------------- |
 | `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
 | `needs-info`               | `needs-info`         | Waiting on reporter for more information |

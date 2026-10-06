@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { AuthenticatedUserProfile, UpdateAdminUserPayload } from '../services/api'
+import type { AdminUserProfile } from '../services/api'
 import * as AdminUsersRoute from '../routes/admin/users'
 import {
   AdminUserManagementFeedback,
@@ -9,29 +9,20 @@ import {
   AdminUserManagementUsersTable,
 } from './AdminUserManagementPage'
 
-const setupOwner: AuthenticatedUserProfile = {
+const setupOwner: AdminUserProfile = {
   id: 'setup-owner-1',
   username: 'setup.gntc.demo',
   displayName: 'Setup Owner GNTC Demo',
   role: 'setup_owner',
   setupOwnerDepartment: 'GNTC',
-}
-
-const drafts: Record<string, UpdateAdminUserPayload> = {
-  [setupOwner.id]: {
-    role: 'setup_owner',
-    setupOwnerDepartment: 'GNTC',
-  },
+  email: 'owner@example.test',
 }
 
 describe('AdminUserManagementPage', () => {
-  it('renders per-user role and Setup File Owner department controls without bulk editing', () => {
+  it('shows a read-only user directory with email and a per-user Edit action', () => {
     const html = renderToStaticMarkup(
       <AdminUserManagementUsersTable
-        drafts={drafts}
-        onChangeDepartment={vi.fn()}
-        onChangeRole={vi.fn()}
-        onSave={vi.fn()}
+        onEdit={vi.fn()}
         savingUserId={null}
         users={[setupOwner]}
       />,
@@ -39,11 +30,12 @@ describe('AdminUserManagementPage', () => {
 
     expect(html).toContain('Setup Owner GNTC Demo')
     expect(html).toContain('setup.gntc.demo')
+    expect(html).toContain('owner@example.test')
     expect(html).toContain('Setup File Owner department')
     expect(html).toContain('GNTC')
-    expect(html).toContain('MFG')
-    expect(html).toContain('Save user')
-    expect(html).not.toContain('Save all')
+    expect(html).toContain('Edit')
+    expect(html).not.toContain('<select')
+    expect(html).not.toContain('Save user')
   })
 
   it('renders accessible loading and authorization feedback', () => {
@@ -73,6 +65,6 @@ describe('AdminUserManagementPage', () => {
     const html = renderToStaticMarkup(createElement(AdminUserManagementPage))
 
     expect(routeOptions.component).toBe(AdminUserManagementPage)
-    expect(html).toContain('<h1>User management</h1>')
+    expect(html).toContain('<h1>Users &amp; Roles</h1>')
   })
 })

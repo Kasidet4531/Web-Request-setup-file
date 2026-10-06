@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "data": {
+    "status": "uploaded",
+    "file": ".stitch/suite-dashboard-owner.html",
+    "project": "15540984743145901568",
+    "title": "Dashboard — owner · Desktop Light/Dark · Navigation suite",
+    "screenIds": [
+      "3360253266530025101"
+    ],
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=3360253266530025101",
+    "route": "/dashboard",
+    "routeRecorded": true,
+    "warnings": [
+      "This HTML references 11 local asset(s) (/dashboard, /requests, /my-drafts and 8 more) that won't be uploaded, so they'll render broken on Canvas. Make it self-contained first: re-capture the page with 'stitch capture <url>', or run 'stitch capture <file> --origin http://localhost:<port>' to inline the assets from your dev server."
+    ]
+  }
+}

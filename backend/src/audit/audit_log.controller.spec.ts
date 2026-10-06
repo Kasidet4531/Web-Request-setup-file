@@ -1,4 +1,4 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../auth/auth.service';
 import { AuditLogController } from './audit_log.controller';
@@ -59,32 +59,49 @@ describe('AuditLogController', () => {
     ).resolves.toEqual(entries);
 
     expect(authService.getProfile).toHaveBeenCalledWith('admin-1');
-    expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(filters);
+    expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(
+      filters,
+      admin,
+    );
   });
 
   it.each([
     ['requester', null],
     ['setup_owner', 'GNTC'],
+    ['setup_owner', 'MFG'],
   ] as const)(
-    'rejects a %s before querying global audit logs',
+    'permits a %s with department %s using the fresh server profile',
     async (role, setupOwnerDepartment) => {
-      authService.getProfile.mockResolvedValue({
-        id: `${role}-1`,
-        username: `${role}.demo`,
-        displayName: `${role} Demo`,
+      const actor = {
+        id: 'session-user',
+        username: 'company.user',
+        displayName: 'Company User',
         role,
         setupOwnerDepartment,
-      });
-
+      };
+      authService.getProfile.mockResolvedValue(actor);
+      auditLogService.findGlobalAuditLogs.mockResolvedValue([]);
       await expect(
         controller.getAuditLogs({}, {
-          session: { userId: `${role}-1` },
+          session: { userId: actor.id, role: 'admin' },
         } as never),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-
-      expect(auditLogService.findGlobalAuditLogs).not.toHaveBeenCalled();
+      ).resolves.toEqual([]);
+      expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(
+        {},
+        actor,
+      );
     },
   );
+
+  it('clears an expired identity and rejects it before reading audit data', async () => {
+    authService.getProfile.mockResolvedValue(null);
+    const request = { session: { userId: 'deleted-user' } };
+    await expect(
+      controller.getAuditLogs({}, request as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(request.session.userId).toBeUndefined();
+    expect(auditLogService.findGlobalAuditLogs).not.toHaveBeenCalled();
+  });
 
   it('rejects an unauthenticated global audit read', async () => {
     await expect(

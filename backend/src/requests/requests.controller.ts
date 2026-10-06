@@ -18,6 +18,8 @@ import type {
 } from '../auth/session.types';
 import { RequestsService } from './requests.service';
 import type {
+  AssignableSetupOwner,
+  UpdateRequestAssignmentDto,
   CreateDraftRequestDto,
   PsfRequestResponse,
   RequestQueryDto,
@@ -56,6 +58,24 @@ export class RequestsController {
     const actor = await this.getAuthenticatedActor(request);
 
     return this.requestsService.queryRequests(parsedQuery, actor);
+  }
+
+  @Get('assignees')
+  async listAssignableSetupOwners(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ items: AssignableSetupOwner[] }> {
+    await this.getAuthenticatedActor(request);
+    return this.requestsService.listAssignableSetupOwners();
+  }
+
+  @Put(':requestId/assignment')
+  async updateAssignment(
+    @Param('requestId') requestId: string,
+    @Body() body: UpdateRequestAssignmentDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<PsfRequestResponse> {
+    const actor = await this.getAuthenticatedActor(request);
+    return this.requestsService.updateAssignment(requestId, body, actor);
   }
 
   @Get(':requestId/status-options')
@@ -139,6 +159,7 @@ export class RequestsController {
 
     return this.requestsService.updateRequestStatus(requestId, {
       status: body.status,
+      expectedUpdatedAt: body.expectedUpdatedAt,
       actor,
     });
   }
@@ -190,6 +211,9 @@ export class RequestsController {
       'dueDateTo',
       'limit',
       'offset',
+      'scope',
+      'relation',
+      'workState',
     ]);
     const unsupportedKey = Object.keys(rawQuery).find(
       (key) => !allowedKeys.has(key),
@@ -242,7 +266,38 @@ export class RequestsController {
       dueDateTo,
       limit: this.parseOptionalIntegerFilter(rawQuery.limit, 'limit', 1),
       offset: this.parseOptionalIntegerFilter(rawQuery.offset, 'offset', 0),
+      scope: this.parseOptionalEnum(rawQuery.scope, 'scope', [
+        'all',
+        'related',
+        'my-drafts',
+      ] as const),
+      relation: this.parseOptionalEnum(rawQuery.relation, 'relation', [
+        'all',
+        'created',
+        'assigned',
+        'department',
+      ] as const),
+      workState: this.parseOptionalEnum(rawQuery.workState, 'workState', [
+        'all',
+        'open',
+        'overdue',
+        'completed',
+      ] as const),
     };
+  }
+
+  private parseOptionalEnum<const T extends readonly string[]>(
+    value: unknown,
+    name: string,
+    choices: T,
+  ): T[number] | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (typeof value !== 'string' || !choices.includes(value)) {
+      throw new BadRequestException(`Request query filter ${name} is invalid.`);
+    }
+    return value;
   }
 
   private parseOptionalTextFilter(
@@ -266,7 +321,7 @@ export class RequestsController {
       );
     }
 
-    return normalized;
+    return name === 'status' ? value : normalized;
   }
 
   private parseOptionalIntegerFilter(

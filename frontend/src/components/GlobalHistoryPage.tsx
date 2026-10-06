@@ -1,5 +1,9 @@
+import { HistoryChanges } from './ui/HistoryChanges'
+import { formatHistoryDateTime } from './ui/historyDateTime'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { PageHeader } from './ui/PageHeader'
+import { AsyncNotice } from './ui/AsyncNotice'
 import {
   api,
   type GlobalAuditLogEntry,
@@ -16,7 +20,11 @@ const AUDIT_ACTIONS: Array<{ label: string; value: PsfRequestHistoryAction }> = 
   { label: 'Draft created', value: 'DRAFT_CREATED' },
   { label: 'Draft requester information updated', value: 'DRAFT_REQUESTER_DATA_UPDATED' },
   { label: 'Request submitted', value: 'REQUEST_SUBMITTED' },
+  { label: 'Request assignee changed', value: 'REQUEST_ASSIGNEE_CHANGED' },
   { label: 'Request status changed', value: 'REQUEST_STATUS_CHANGED' },
+  { label: 'Requester information updated', value: 'REQUESTER_INFORMATION_UPDATED' },
+  { label: 'PSF Created Information updated', value: 'PSF_CREATED_INFORMATION_UPDATED' },
+  { label: 'Workflow catalog updated', value: 'WORKFLOW_CATALOG_UPDATED' },
 ]
 
 export interface GlobalAuditLogFiltersProps {
@@ -32,30 +40,8 @@ interface AsyncState<T> {
   data: T
 }
 
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'medium' })
-}
-
 function actionLabel(actionType: PsfRequestHistoryAction): string {
   return AUDIT_ACTIONS.find((action) => action.value === actionType)?.label ?? actionType
-}
-
-function auditDetail(entry: GlobalAuditLogEntry): string {
-  const fromStatus = entry.metadata.fromStatus
-  const toStatus = entry.metadata.toStatus
-
-  if (
-    entry.actionType === 'REQUEST_STATUS_CHANGED' &&
-    typeof fromStatus === 'string' &&
-    typeof toStatus === 'string'
-  ) {
-    return `Status: ${fromStatus} → ${toStatus}`
-  }
-
-  return '—'
 }
 
 export function GlobalAuditLogFilters({
@@ -66,13 +52,13 @@ export function GlobalAuditLogFilters({
 }: GlobalAuditLogFiltersProps) {
   return (
     <form
-      className="filter-bar"
+      className="filter-bar global-history-filters"
       onSubmit={(event) => {
         event.preventDefault()
         onApply()
       }}
     >
-      <label>
+      <label className="global-history-filters__request-id">
         Request ID
         <input
           name="requestId"
@@ -81,7 +67,7 @@ export function GlobalAuditLogFilters({
           value={filters.requestId}
         />
       </label>
-      <label>
+      <label className="global-history-filters__user">
         User
         <input
           name="user"
@@ -90,7 +76,7 @@ export function GlobalAuditLogFilters({
           value={filters.user}
         />
       </label>
-      <label>
+      <label className="global-history-filters__action">
         Action
         <select
           name="actionType"
@@ -105,27 +91,29 @@ export function GlobalAuditLogFilters({
           ))}
         </select>
       </label>
-      <label>
-        From (UTC)
-        <input
-          name="from"
-          onChange={(event) => onChange('from', event.target.value)}
-          type="date"
-          value={filters.from}
-        />
-      </label>
-      <label>
-        To (UTC)
-        <input
-          name="to"
-          onChange={(event) => onChange('to', event.target.value)}
-          type="date"
-          value={filters.to}
-        />
-      </label>
-      <div className="button-row">
+      <div className="global-history-filters__dates">
+        <label>
+          From (UTC)
+          <input
+            name="from"
+            onChange={(event) => onChange('from', event.target.value)}
+            type="date"
+            value={filters.from}
+          />
+        </label>
+        <label>
+          To (UTC)
+          <input
+            name="to"
+            onChange={(event) => onChange('to', event.target.value)}
+            type="date"
+            value={filters.to}
+          />
+        </label>
+      </div>
+      <div className="button-row global-history-filters__actions">
+        <button className="btn-ghost" onClick={onClear} type="button">Clear</button>
         <button className="primary-button" type="submit">Apply</button>
-        <button className="secondary-button" onClick={onClear} type="button">Clear</button>
       </div>
     </form>
   )
@@ -140,28 +128,23 @@ export function GlobalAuditLogTable({
   error: string | null
   loading: boolean
 }) {
-  if (loading) {
-    return <p className="page-card__description" role="status">Loading global audit history…</p>
+  if (loading && entries.length === 0) {
+    return <AsyncNotice kind="loading" title="Loading global audit history…" />
   }
 
   if (error) {
-    return (
-      <p className="status-pill status-pill--error" role="alert">
-        Unable to load global audit history: {error}
-      </p>
-    )
+    return <AsyncNotice kind="error" title={`Unable to load global audit history: ${error}`} />
   }
 
   if (entries.length === 0) {
-    return (
-      <p className="page-card__description" role="status">
-        No global audit history matches the current filters.
-      </p>
-    )
+    return <AsyncNotice kind="empty" title="No global audit history matches the current filters." />
   }
 
   return (
-    <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0}>
+    <>
+    <p className="sr-only" role="status">{loading ? 'Updating global audit history…' : ''}</p>
+    <p className="table-scroll__hint">Scroll horizontally to see audit actors, actions, and details.</p>
+    <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
       <table>
         <thead>
           <tr>
@@ -175,27 +158,26 @@ export function GlobalAuditLogTable({
         <tbody>
           {entries.map((entry, index) => (
             <tr key={`${entry.requestId}-${entry.createdAt}-${entry.actionType}-${index}`}>
-              <td><time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time></td>
+              <td><time dateTime={entry.createdAt}>{formatHistoryDateTime(entry.createdAt)}</time></td>
               <td>
-                <Link
-                  className="table-action"
-                  params={{ requestId: entry.requestId }}
-                  to="/requests/$requestId"
-                >
-                  {entry.requestNo}
-                </Link>
+                {entry.requestId && entry.requestNo ? (
+                  <Link className="table-action font-mono-code" params={{ requestId: entry.requestId }} to="/requests/$requestId">
+                    {entry.requestNo}
+                  </Link>
+                ) : entry.requestNo ?? 'Workflow configuration'}
               </td>
               <td>
                 <strong>{entry.actorDisplayName}</strong>
                 <span>{entry.actorRole}</span>
               </td>
               <td>{actionLabel(entry.actionType)}</td>
-              <td>{auditDetail(entry)}</td>
+              <td><HistoryChanges metadata={entry.metadata} /></td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -214,7 +196,7 @@ export function GlobalHistoryPage() {
     let mounted = true
 
     async function loadHistory() {
-      setHistory({ loading: true, error: null, data: [] })
+      setHistory((current) => ({ ...current, loading: true, error: null }))
 
       try {
         const entries = await api.fetchGlobalAuditLogs(appliedFilters)
@@ -254,23 +236,12 @@ export function GlobalHistoryPage() {
   }
 
   return (
-    <article className="page-card workflow-page">
-      <div className="page-card__header">
-        <div>
-          <p className="page-card__eyebrow">Administrator audit view</p>
-          <h1>Global History</h1>
-          <p className="page-card__description">
-            Review authorized request audit events across the application. Filters are applied by the server.
-          </p>
-        </div>
-      </div>
+    <article className="page-card workflow-page global-history-page">
+      <PageHeader title="Audit History" description="Review authorized request and configuration activity. Edit filters, then choose Apply to update the results." />
 
-      <section className="workflow-section" aria-labelledby="global-history-filters-heading">
+      <section className="workflow-section global-history-page__filters" aria-labelledby="global-history-filters-heading">
         <div className="section-heading">
-          <div>
-            <h2 id="global-history-filters-heading">Filters</h2>
-            <p>From includes the UTC day start; To includes its UTC calendar day.</p>
-          </div>
+          <h2 id="global-history-filters-heading">Filters</h2>
         </div>
         <GlobalAuditLogFilters
           filters={filters}
@@ -280,12 +251,10 @@ export function GlobalHistoryPage() {
         />
       </section>
 
-      <section className="workflow-section" aria-labelledby="global-history-results-heading">
+      <section className="workflow-section global-history-page__results" aria-labelledby="global-history-results-heading">
         <div className="section-heading">
-          <div>
-            <h2 id="global-history-results-heading">Audit entries</h2>
-            <p>Newest entries appear first.</p>
-          </div>
+          <h2 id="global-history-results-heading">Audit entries</h2>
+          <p>Displayed times: Asia/Bangkok (UTC+07:00). Date filters use UTC.</p>
         </div>
         <GlobalAuditLogTable
           entries={history.data}

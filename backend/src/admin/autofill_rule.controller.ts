@@ -45,7 +45,7 @@ export class AutofillRuleController {
   ): Promise<AutofillRule[]> {
     await this.getAuthenticatedAdmin(request);
 
-    return this.autofillRuleService.listActiveRules('psf-request');
+    return this.autofillRuleService.listRules('psf-request');
   }
 
   @Post()

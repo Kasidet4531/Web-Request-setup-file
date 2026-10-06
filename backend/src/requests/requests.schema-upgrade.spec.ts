@@ -22,6 +22,46 @@ const requesterActor = {
   setupOwnerDepartment: null,
 };
 
+const setupOwnerActor = {
+  id: 'setup-owner-1',
+  username: 'setup.gntc.demo',
+  displayName: 'Setup Owner GNTC Demo',
+  role: 'setup_owner' as const,
+  setupOwnerDepartment: 'GNTC' as const,
+};
+
+const adminActor = {
+  id: 'admin-1',
+  username: 'admin.demo',
+  displayName: 'Admin Demo',
+  role: 'admin' as const,
+  setupOwnerDepartment: null,
+};
+
+const CURRENT_REVISION = '2026-08-08T01:02:03.123456Z';
+const STALE_REVISION = '2026-08-08T01:02:03.123455Z';
+
+const psfCreatedSchemaSnapshot = {
+  formKey: 'psf-created-information',
+  version: 4,
+  title: 'PSF Created Information v4',
+  sections: [
+    {
+      sectionKey: 'setup',
+      title: 'Setup',
+      fields: [
+        {
+          fieldKey: 'file_name_v4',
+          canonicalKey: 'file_name',
+          label: 'PSF Setup File Name',
+          type: 'text' as const,
+          required: true,
+        },
+      ],
+    },
+  ],
+};
+
 const oldSchema = {
   formKey: 'psf-request',
   version: 3,
@@ -30,7 +70,6 @@ const oldSchema = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'product_type',
@@ -73,7 +112,6 @@ const activeSchema = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'product_type',
@@ -114,6 +152,7 @@ const lockedDraft = {
     product_type: 'Existing Product',
     requester_name: 'Client supplied name',
   },
+  psf_created_schema_snapshot_json: psfCreatedSchemaSnapshot,
   schema_snapshot_json: oldSchema,
 };
 
@@ -130,6 +169,7 @@ const upgradedRow = {
   schema_snapshot_json: activeSchema.schema,
   created_at: new Date('2026-06-18T01:02:03.000Z'),
   updated_at: new Date('2026-08-08T01:02:03.000Z'),
+  updated_at_version: CURRENT_REVISION,
   submitted_at: null,
   psf_created_at: null,
   completed_at: null,
@@ -171,7 +211,20 @@ describe('RequestsService explicit draft schema upgrade', () => {
         { provide: FormSchemaService, useValue: formSchemaService },
         {
           provide: WorkflowTransitionService,
-          useValue: { getAllowedNextStatuses: jest.fn() },
+          useValue: {
+            getAllowedNextStatuses: jest.fn(),
+            lockConfiguration: jest.fn().mockResolvedValue({
+              entries: [
+                {
+                  id: 'submitted-entry',
+                  name: 'Submitted',
+                  kind: 'open',
+                  requestCount: null,
+                },
+              ],
+              psfVisibilityTriggerId: null,
+            }),
+          },
         },
         {
           provide: SearchIndexService,
@@ -246,6 +299,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
       formVersion: activeSchema.version,
       id: lockedDraft.id,
       requesterData: upgradedRow.requester_data_json,
+      psfCreatedInformationSchema: psfCreatedSchemaSnapshot,
       schemaSnapshot: activeSchema.schema,
       status: 'Draft',
     });
@@ -275,6 +329,10 @@ describe('RequestsService explicit draft schema upgrade', () => {
         lockedDraft.form_version,
       ],
     );
+    const updateCall = dbClient.query.mock.calls[2] as
+      | [string, unknown[]?]
+      | undefined;
+    expect(updateCall?.[0]).not.toContain('psf_created_schema_snapshot_json');
     expect(auditLogService.record).toHaveBeenCalledWith(
       {
         requestId: lockedDraft.id,
@@ -291,7 +349,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects a stale requester-data save after another actor upgraded the Draft schema', async () => {
+  it('rejects a requester-data save with a stale form version when the revision matches', async () => {
     pool.query
       .mockResolvedValueOnce({
         rows: [
@@ -299,6 +357,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
             ...lockedDraft,
             form_version: activeSchema.version,
             schema_snapshot_json: activeSchema.schema,
+            updated_at_version: CURRENT_REVISION,
           },
         ],
       })
@@ -309,18 +368,56 @@ describe('RequestsService explicit draft schema upgrade', () => {
         lockedDraft.id,
         {
           formVersion: lockedDraft.form_version,
+          expectedUpdatedAt: CURRENT_REVISION,
           requesterData: {
-            legacy_field: 'stale value',
-            product_type: 'Existing Product',
+            requester_name: requesterActor.displayName,
           },
         },
         requesterActor,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
 
+    expect(
+      dbClient.query.mock.calls.some(
+        ([query]) =>
+          typeof query === 'string' && /UPDATE\s+psf_requests/i.test(query),
+      ),
+    ).toBe(false);
     expect(auditLogService.record).not.toHaveBeenCalled();
-    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).toHaveBeenCalledWith('ROLLBACK');
     expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+  });
+
+  it('rejects a stale microsecond revision without issuing a requester-data update', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          ...lockedDraft,
+          form_version: activeSchema.version,
+          schema_snapshot_json: activeSchema.schema,
+          updated_at_version: CURRENT_REVISION,
+        },
+      ],
+    });
+
+    await expect(
+      service.updateDraftRequesterData(
+        lockedDraft.id,
+        {
+          formVersion: activeSchema.version,
+          expectedUpdatedAt: STALE_REVISION,
+          requesterData: {
+            product_type: 'Existing Product',
+            requester_name: requesterActor.displayName,
+          },
+        },
+        requesterActor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(auditLogService.record).not.toHaveBeenCalled();
   });
 
   it('refuses to silently migrate an older Draft when submit is called after Remain', async () => {
@@ -335,6 +432,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
           {
             ...lockedDraft,
             psf_created_data_json: {},
+            updated_at_version: CURRENT_REVISION,
             setup_owner: null,
             setup_owner_role: null,
             created_at: new Date('2026-06-18T01:02:03.000Z'),
@@ -350,7 +448,11 @@ describe('RequestsService explicit draft schema upgrade', () => {
     await expect(
       service.submitRequest(
         lockedDraft.id,
-        { formVersion: activeSchema.version },
+        {
+          formVersion: activeSchema.version,
+          status: 'Submitted',
+          expectedUpdatedAt: CURRENT_REVISION,
+        },
         requesterActor,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -371,6 +473,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
         {
           ...lockedDraft,
           form_version: activeSchema.version,
+          updated_at_version: CURRENT_REVISION,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: requesterActor.displayName,
@@ -383,7 +486,11 @@ describe('RequestsService explicit draft schema upgrade', () => {
     await expect(
       service.submitRequest(
         lockedDraft.id,
-        { formVersion: activeSchema.version },
+        {
+          formVersion: activeSchema.version,
+          status: 'Submitted',
+          expectedUpdatedAt: CURRENT_REVISION,
+        },
         requesterActor,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -400,6 +507,7 @@ describe('RequestsService explicit draft schema upgrade', () => {
         {
           ...lockedDraft,
           form_version: activeSchema.version,
+          updated_at_version: CURRENT_REVISION,
           requester_data_json: {
             product_type: 'Existing Product',
             requester_name: requesterActor.displayName,
@@ -412,7 +520,11 @@ describe('RequestsService explicit draft schema upgrade', () => {
     await expect(
       service.submitRequest(
         lockedDraft.id,
-        { formVersion: activeSchema.version },
+        {
+          formVersion: activeSchema.version,
+          status: 'Submitted',
+          expectedUpdatedAt: CURRENT_REVISION,
+        },
         requesterActor,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -423,20 +535,50 @@ describe('RequestsService explicit draft schema upgrade', () => {
     expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
   });
 
-  it('rejects setup-owner schema upgrades before opening a new requester write path', async () => {
-    await expect(
-      invokeUpgrade(lockedDraft.id, activeSchema.version, {
-        id: 'setup-owner-1',
-        username: 'setup.gntc.demo',
-        displayName: 'Setup Owner GNTC Demo',
-        role: 'setup_owner',
-        setupOwnerDepartment: 'GNTC',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+  it.each([
+    { name: 'Setup Owner', actor: setupOwnerActor },
+    { name: 'Admin', actor: adminActor },
+  ])('allows an owned Draft schema upgrade by $name', async ({ actor }) => {
+    const ownedDraft = {
+      ...lockedDraft,
+      requester: actor.displayName,
+      requester_user_id: actor.id,
+      requester_data_json: {
+        ...lockedDraft.requester_data_json,
+        requester_name: actor.displayName,
+      },
+    };
+    const upgradedOwnedRow = {
+      ...upgradedRow,
+      requester: actor.displayName,
+      requester_user_id: actor.id,
+      requester_data_json: {
+        ...upgradedRow.requester_data_json,
+        requester_name: actor.displayName,
+      },
+    };
+    pool.query
+      .mockResolvedValueOnce({ rows: [ownedDraft] })
+      .mockResolvedValueOnce({ rows: [upgradedOwnedRow] });
 
-    expect(pool.connect).not.toHaveBeenCalled();
-    expect(formSchemaService.getActiveSchemaForUpdate).not.toHaveBeenCalled();
-    expect(auditLogService.record).not.toHaveBeenCalled();
+    await expect(
+      invokeUpgrade(ownedDraft.id, activeSchema.version, actor),
+    ).resolves.toMatchObject({
+      formVersion: activeSchema.version,
+      requester: actor.displayName,
+      requesterUserId: actor.id,
+      schemaSnapshot: activeSchema.schema,
+    });
+
+    expect(formSchemaService.getActiveSchemaForUpdate).toHaveBeenCalledWith(
+      'psf-request',
+      dbClient,
+    );
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({ actor }),
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('COMMIT');
   });
 
   it('rejects cross-owner and non-Draft upgrades without mutating the request', async () => {
@@ -444,17 +586,21 @@ describe('RequestsService explicit draft schema upgrade', () => {
       ...lockedDraft,
       requester_user_id: 'other-requester-id',
     };
-    pool.query.mockResolvedValueOnce({ rows: [foreignOwnedDraft] });
+    for (const actor of [requesterActor, setupOwnerActor, adminActor]) {
+      pool.query.mockResolvedValueOnce({ rows: [foreignOwnedDraft] });
 
-    await expect(invokeUpgrade()).rejects.toBeInstanceOf(ForbiddenException);
-    expect(formSchemaService.getActiveSchemaForUpdate).not.toHaveBeenCalled();
-    expect(auditLogService.record).not.toHaveBeenCalled();
-    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
-    expect(dbClient.release).toHaveBeenCalledTimes(1);
+      await expect(
+        invokeUpgrade(lockedDraft.id, activeSchema.version, actor),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(formSchemaService.getActiveSchemaForUpdate).not.toHaveBeenCalled();
+      expect(auditLogService.record).not.toHaveBeenCalled();
+      expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+      expect(dbClient.release).toHaveBeenCalledTimes(1);
 
-    dbClient.query.mockClear();
-    dbClient.release.mockClear();
-    formSchemaService.getActiveSchemaForUpdate.mockClear();
+      dbClient.query.mockClear();
+      dbClient.release.mockClear();
+    }
+
     pool.query.mockResolvedValueOnce({
       rows: [{ ...lockedDraft, status: 'Submitted' }],
     });

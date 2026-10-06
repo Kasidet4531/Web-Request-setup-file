@@ -5,12 +5,15 @@ import {
   startRequestExport,
 } from "./request-export";
 
+import { subscribeAuthSessionChanged } from "./auth-session";
+
 describe("request export asynchronous lifecycle client", () => {
   const originalFetch = globalThis.fetch;
   const originalURL = globalThis.URL;
   const originalDocument = globalThis.document;
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     globalThis.fetch = originalFetch;
     Object.defineProperty(globalThis, "URL", {
       configurable: true,
@@ -22,6 +25,29 @@ describe("request export asynchronous lifecycle client", () => {
       value: originalDocument,
       writable: true,
     });
+  });
+
+  it.each([
+    ["start", 401], ["poll", 401], ["download", 401],
+    ["start", 403], ["poll", 403], ["download", 403],
+  ] as const)("announces expired sessions for %s with HTTP %s only when unauthorized", async (operation, status) => {
+    vi.stubGlobal("window", new EventTarget());
+    const events: unknown[] = [];
+    const unsubscribe = subscribeAuthSessionChanged((detail) => events.push(detail));
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ message: "Access denied" }), { status })) as typeof fetch;
+    try {
+      const request = operation === "start"
+        ? startRequestExport({ status: "", from: "", to: "" })
+        : operation === "poll"
+          ? fetchRequestExportJob("/requests/export-jobs/test")
+          : downloadCompletedRequestExport({
+            id: "test", status: "completed", queuedAt: "2026-10-02T00:00:00Z",
+            startedAt: null, completedAt: "2026-10-02T00:00:00Z", failedAt: null,
+            downloadUrl: "/requests/export-jobs/test/download",
+          });
+      await expect(request).rejects.toThrow("Access denied");
+      expect(events).toEqual(status === 401 ? [{ status: "anonymous" }] : []);
+    } finally { unsubscribe(); }
   });
 
   it("returns a queued lifecycle handle instead of turning the 202 JSON body into an XLSX blob", async () => {

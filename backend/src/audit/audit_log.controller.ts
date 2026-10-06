@@ -1,6 +1,5 @@
 import {
   Controller,
-  ForbiddenException,
   Get,
   Query,
   Req,
@@ -31,11 +30,7 @@ export class AuditLogController {
   ): Promise<GlobalAuditLogEntry[]> {
     const actor = await this.getAuthenticatedActor(request);
 
-    if (actor.role !== 'admin') {
-      throw new ForbiddenException('Only admins can view global audit logs.');
-    }
-
-    return this.auditLogService.findGlobalAuditLogs(filters);
+    return this.auditLogService.findGlobalAuditLogs(filters, actor);
   }
 
   private async getAuthenticatedActor(

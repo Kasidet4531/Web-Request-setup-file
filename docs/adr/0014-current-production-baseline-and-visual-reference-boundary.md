@@ -1,5 +1,15 @@
 # 14. Current Production Baseline and Visual-Reference Boundary
 
+> **Historical baseline, superseded for this branch:** the original text below
+> records an earlier source baseline, not the current `unified-local-auth`
+> runtime or a verified deployment. Use [current implementation](../current-implementation.md)
+> for source-backed behavior. Current amendments include two form families,
+> the configurable 17-entry seed catalog, persistent PSF release, field diffs
+> inside audit metadata, and removable development authentication. Older status
+> labels and claims that these features are unimplemented no longer apply.
+> The original body is preserved for provenance; its production/reference
+> repository assertions are historical claims, not independently reverified here.
+
 **Status:** Accepted as a documentation baseline by T01; product decisions and release approval remain unresolved.
 
 ## Scope and source
@@ -25,6 +35,14 @@ This record is the implementation-state amendment for ADRs 0002, 0004, 0005, 000
 ## Current UI state
 
 The dashboard, request list, request creation, request detail, global history, user management, form configuration, workflow configuration, autofill configuration, and request export routes are connected to production API components. The `/admin/`, `/admin/master-data`, and `/requests/:requestId/history` routes remain placeholders. Existing mounted-session invalidation is incomplete: the API client throws 401 responses without broadcasting session invalidation; T03 remains required.
+
+## Branch amendment: form section metadata removal
+
+The `rapid-frontend-rewrite` branch removes configurable section-role visibility from the form model, editor, autofill checks, and export columns. This is a source-code amendment, not evidence of a production deployment.
+
+- Request access remains server-authorized. All configured Requester Information sections are available within that access scope; `exportable` and canonical-key validation remain unchanged.
+- PSF Created Information retains its actor/status visibility and edit rules, including requester export-cell masking before `PSF Created` or `Completed`.
+- Existing published schemas and request snapshots are not rewritten. Shared legacy section metadata is omitted from API/editor output and new drafts. Restricted legacy metadata is retained for administrator inspection and rejected for active use, duplication, saving, or publishing until reviewed; it is never silently converted to shared access.
 
 ## Deployment and release limits
 

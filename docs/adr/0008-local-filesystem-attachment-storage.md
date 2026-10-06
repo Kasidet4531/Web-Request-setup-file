@@ -1,5 +1,7 @@
 # 8. Local Filesystem Attachment Storage with Abstract Service Layer
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ. Filesystem upload/storage below remains a target decision; the current form uses text attachment references. See [current form descriptors](../../backend/src/admin/form_schema.constants.ts).
+
 We decided to store uploaded attachments on the local server filesystem for the MVP, and register their metadata in the PostgreSQL database, while abstracting the storage operations via an interface to allow clean future migration to cloud object storage.
 
 ## Context

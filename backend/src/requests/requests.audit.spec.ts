@@ -24,7 +24,6 @@ const activeSchema = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'product_type',
@@ -32,6 +31,7 @@ const activeSchema = {
             label: 'Product Type',
             type: 'radio' as const,
             required: true,
+            options: ['New Product', 'Transfer Product', 'Existing Product'],
           },
           {
             fieldKey: 'requester_name',
@@ -44,6 +44,48 @@ const activeSchema = {
       },
     ],
   },
+};
+
+const CURRENT_REVISION = '2026-06-18T01:02:03.123456Z';
+const NEXT_REVISION = '2026-06-18T01:02:03.123457Z';
+const workflowConfiguration = {
+  entries: [
+    { id: 'submitted', name: 'Submitted', kind: 'open', requestCount: null },
+    {
+      id: 'setup-in-progress',
+      name: 'Setup In Progress',
+      kind: 'open',
+      requestCount: null,
+    },
+    {
+      id: 'psf-created',
+      name: 'PSF Created',
+      kind: 'open',
+      requestCount: null,
+    },
+  ],
+  psfVisibilityTriggerId: 'psf-created',
+};
+
+const psfCreatedSchemaSnapshot = {
+  formKey: 'psf-created-information',
+  version: 4,
+  title: 'PSF Created Information v4',
+  sections: [
+    {
+      sectionKey: 'setup',
+      title: 'Setup',
+      fields: [
+        {
+          fieldKey: 'file_name_v4',
+          canonicalKey: 'file_name',
+          label: 'PSF Setup File Name',
+          type: 'text' as const,
+          required: true,
+        },
+      ],
+    },
+  ],
 };
 
 const requesterActor = {
@@ -81,6 +123,7 @@ const draftRow = {
   schema_snapshot_json: activeSchema.schema,
   created_at: new Date('2026-06-18T01:02:03.000Z'),
   updated_at: new Date('2026-06-18T01:02:03.000Z'),
+  updated_at_version: CURRENT_REVISION,
   submitted_at: null,
   psf_created_at: null,
   completed_at: null,
@@ -132,6 +175,9 @@ describe('RequestsService audit baseline', () => {
             getAllowedNextStatuses: jest
               .fn()
               .mockResolvedValue(['Setup In Progress']),
+            lockConfiguration: jest
+              .fn()
+              .mockResolvedValue(workflowConfiguration),
           },
         },
         { provide: SearchIndexService, useValue: searchIndexService },
@@ -174,6 +220,35 @@ describe('RequestsService audit baseline', () => {
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
+  it('rolls back draft creation when the audit insert fails', async () => {
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ next: draftRow.request_no }] })
+      .mockResolvedValueOnce({ rows: [draftRow] });
+    auditLogService.record.mockRejectedValueOnce(
+      new Error('audit insert failed'),
+    );
+
+    await expect(
+      service.createDraft(
+        { requesterData: draftRow.requester_data_json },
+        requesterActor,
+      ),
+    ).rejects.toThrow('audit insert failed');
+
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: draftRow.id,
+        actionType: REQUEST_AUDIT_ACTION.DRAFT_CREATED,
+        actor: requesterActor,
+      }),
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+    expect(dbClient.release).toHaveBeenCalledTimes(1);
+  });
+
   it('records requester-data draft updates with the authenticated actor in the same transaction', async () => {
     const updatedRow = {
       ...draftRow,
@@ -183,16 +258,14 @@ describe('RequestsService audit baseline', () => {
         requester_name: 'Fook',
       },
       updated_at: new Date('2026-06-18T01:04:03.000Z'),
+      updated_at_version: NEXT_REVISION,
     };
     pool.query
       .mockResolvedValueOnce({
         rows: [
           {
-            id: draftRow.id,
-            form_version: draftRow.form_version,
-            status: 'Draft',
-            requester: draftRow.requester,
-            requester_user_id: draftRow.requester_user_id,
+            ...draftRow,
+            updated_at_version: CURRENT_REVISION,
           },
         ],
       })
@@ -202,38 +275,109 @@ describe('RequestsService audit baseline', () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            id: draftRow.id,
-            form_version: draftRow.form_version,
-            status: 'Draft',
-            requester: draftRow.requester,
-            requester_user_id: draftRow.requester_user_id,
+            ...draftRow,
+            updated_at_version: CURRENT_REVISION,
           },
         ],
       })
       .mockResolvedValueOnce({ rows: [updatedRow] })
       .mockResolvedValueOnce({});
 
-    await service.updateDraftRequesterData(
+    const response = await service.updateDraftRequesterData(
       draftRow.id,
       {
         formVersion: draftRow.form_version,
-        requester: 'Client supplied requester',
+        expectedUpdatedAt: CURRENT_REVISION,
         requesterData: updatedRow.requester_data_json,
       },
       requesterActor,
     );
+    expect(response.updatedAt).toBe(NEXT_REVISION);
 
     expect(auditLogService.record).toHaveBeenCalledWith(
       {
         requestId: draftRow.id,
         actionType: REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED,
         actor: requesterActor,
-        metadata: {},
+        metadata: {
+          fieldChanges: [
+            {
+              fieldKey: 'product_type',
+              fieldLabel: 'Product Type',
+              before: 'New Product',
+              after: 'Transfer Product',
+            },
+          ],
+        },
       },
       dbClient,
     );
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('updated_at = ($5::timestamptz'),
+      [
+        draftRow.id,
+        'Transfer Product',
+        updatedRow.requester_data_json,
+        draftRow.form_version,
+        CURRENT_REVISION,
+      ],
+    );
     expect(dbClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(dbClient.query).toHaveBeenLastCalledWith('COMMIT');
+    expect(dbClient.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back requester-data changes when the audit insert fails', async () => {
+    const updatedRow = {
+      ...draftRow,
+      product_type: 'Transfer Product',
+      requester_data_json: {
+        product_type: 'Transfer Product',
+        requester_name: 'Fook',
+      },
+      updated_at_version: NEXT_REVISION,
+    };
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{ ...draftRow, updated_at_version: CURRENT_REVISION }],
+      })
+      .mockResolvedValueOnce({ rows: [updatedRow] });
+    auditLogService.record.mockRejectedValueOnce(
+      new Error('audit insert failed'),
+    );
+
+    await expect(
+      service.updateDraftRequesterData(
+        draftRow.id,
+        {
+          formVersion: draftRow.form_version,
+          expectedUpdatedAt: CURRENT_REVISION,
+          requesterData: updatedRow.requester_data_json,
+        },
+        requesterActor,
+      ),
+    ).rejects.toThrow('audit insert failed');
+
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: requesterActor,
+        metadata: {
+          fieldChanges: [
+            {
+              fieldKey: 'product_type',
+              fieldLabel: 'Product Type',
+              before: 'New Product',
+              after: 'Transfer Product',
+            },
+          ],
+        },
+      }),
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
@@ -243,71 +387,179 @@ describe('RequestsService audit baseline', () => {
       status: 'Submitted',
       submitted_at: new Date('2026-06-18T01:05:03.000Z'),
       updated_at: new Date('2026-06-18T01:05:03.000Z'),
+      updated_at_version: NEXT_REVISION,
     };
     dbClient.query
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         rows: [
           {
-            id: draftRow.id,
-            form_key: draftRow.form_key,
-            form_version: activeSchema.version,
-            status: 'Draft',
-            requester: draftRow.requester,
-            requester_user_id: draftRow.requester_user_id,
-            requester_data_json: draftRow.requester_data_json,
-            schema_snapshot_json: activeSchema.schema,
+            ...draftRow,
+            updated_at_version: CURRENT_REVISION,
           },
         ],
       })
       .mockResolvedValueOnce({ rows: [submittedRow] })
       .mockResolvedValueOnce({});
 
-    await service.submitRequest(
+    const response = await service.submitRequest(
       draftRow.id,
-      { formVersion: activeSchema.version },
+      {
+        formVersion: activeSchema.version,
+        status: 'Submitted',
+        expectedUpdatedAt: CURRENT_REVISION,
+      },
       requesterActor,
     );
+    expect(response.updatedAt).toBe(NEXT_REVISION);
 
     expect(auditLogService.record).toHaveBeenCalledWith(
       {
         requestId: draftRow.id,
         actionType: REQUEST_AUDIT_ACTION.REQUEST_SUBMITTED,
         actor: requesterActor,
-        metadata: {},
+        metadata: { fromStatus: 'Draft', toStatus: 'Submitted' },
       },
       dbClient,
+    );
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).toHaveBeenCalledWith(
+      draftRow.id,
+      activeSchema.schema,
+      draftRow.requester_data_json,
+      dbClient,
+    );
+    expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: draftRow.id,
+        status: 'Submitted',
+      }),
+      { product_type: 'New Product', requester: 'Fook' },
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('updated_at = ($7::timestamptz'),
+      [
+        draftRow.id,
+        'Submitted',
+        'New Product',
+        draftRow.requester_data_json,
+        false,
+        false,
+        CURRENT_REVISION,
+      ],
     );
     expect(dbClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(dbClient.query).toHaveBeenLastCalledWith('COMMIT');
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('records status transitions with trusted actor attribution and from/to status metadata', async () => {
+  it('rolls back submit status, release, and search projections when the audit insert fails', async () => {
+    const currentRow = {
+      ...draftRow,
+      psf_created_schema_snapshot_json: psfCreatedSchemaSnapshot,
+      psf_created_data_json: { file_name_v4: 'request.psf' },
+      updated_at_version: CURRENT_REVISION,
+    };
+    const submittedRow = {
+      ...currentRow,
+      status: 'PSF Created',
+      submitted_at: new Date('2026-06-18T01:05:03.000Z'),
+      psf_released_at: new Date('2026-06-18T01:05:03.000Z'),
+      updated_at_version: NEXT_REVISION,
+    };
+    dbClient.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [currentRow] })
+      .mockResolvedValueOnce({ rows: [submittedRow] });
+    auditLogService.record.mockRejectedValueOnce(
+      new Error('audit insert failed'),
+    );
+
+    await expect(
+      service.submitRequest(
+        draftRow.id,
+        {
+          formVersion: activeSchema.version,
+          status: 'PSF Created',
+          expectedUpdatedAt: CURRENT_REVISION,
+        },
+        requesterActor,
+      ),
+    ).rejects.toThrow('audit insert failed');
+
+    expect(
+      searchIndexService.upsertSubmittedCanonicalValues,
+    ).toHaveBeenCalledWith(
+      draftRow.id,
+      activeSchema.schema,
+      draftRow.requester_data_json,
+      dbClient,
+    );
+    expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'PSF Created' }),
+      { product_type: 'New Product', requester: 'Fook' },
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('psf_released_at = CASE WHEN $6::boolean'),
+      [
+        draftRow.id,
+        'PSF Created',
+        'New Product',
+        draftRow.requester_data_json,
+        false,
+        true,
+        CURRENT_REVISION,
+      ],
+    );
+    expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
+    expect(dbClient.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('records status transitions with trusted actor attribution and preserves request identity and assignment', async () => {
+    const existingAssignment = {
+      setup_owner: 'Existing Setup Owner MFG',
+      setup_owner_role: 'MFG',
+    };
     const transitionedRow = {
       ...draftRow,
+      ...existingAssignment,
       status: 'Setup In Progress',
-      setup_owner: setupOwnerActor.displayName,
-      setup_owner_role: setupOwnerActor.setupOwnerDepartment,
       submitted_at: new Date('2026-06-18T01:05:03.000Z'),
       updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      updated_at_version: NEXT_REVISION,
+    };
+    const currentRow = {
+      ...draftRow,
+      ...existingAssignment,
+      status: 'Submitted',
+      updated_at_version: CURRENT_REVISION,
     };
     pool.query
-      .mockResolvedValueOnce({
-        rows: [{ id: draftRow.id, status: 'Submitted' }],
-      })
+      .mockResolvedValueOnce({ rows: [currentRow] })
       .mockResolvedValueOnce({ rows: [transitionedRow] });
     dbClient.query
       .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        rows: [{ id: draftRow.id, status: 'Submitted' }],
-      })
+      .mockResolvedValueOnce({ rows: [currentRow] })
       .mockResolvedValueOnce({ rows: [transitionedRow] })
       .mockResolvedValueOnce({});
 
-    await service.updateRequestStatus(draftRow.id, {
+    const response = await service.updateRequestStatus(draftRow.id, {
       status: 'Setup In Progress',
+      expectedUpdatedAt: CURRENT_REVISION,
       actor: setupOwnerActor,
+    });
+    expect(response).toMatchObject({
+      updatedAt: NEXT_REVISION,
+      requester: draftRow.requester,
+      requesterUserId: draftRow.requester_user_id,
+      setupOwner: existingAssignment.setup_owner,
+      setupOwnerRole: existingAssignment.setup_owner_role,
     });
 
     expect(auditLogService.record).toHaveBeenCalledWith(
@@ -326,34 +578,56 @@ describe('RequestsService audit baseline', () => {
       expect.objectContaining({
         requestId: draftRow.id,
         status: 'Setup In Progress',
+        requester: draftRow.requester,
+        requesterUserId: draftRow.requester_user_id,
+        setupOwner: existingAssignment.setup_owner,
+        setupOwnerRole: existingAssignment.setup_owner_role,
       }),
       { product_type: 'New Product', requester: 'Fook' },
       dbClient,
+    );
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.not.stringMatching(
+        /\b(requester|requester_user_id|setup_owner|setup_owner_role)\s*=/i,
+      ),
+      expect.any(Array),
     );
     expect(dbClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
     expect(dbClient.query).toHaveBeenLastCalledWith('COMMIT');
     expect(dbClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('rolls back the status mutation and rethrows when its audit insert fails', async () => {
+  it('rolls back status and release changes when the audit insert fails', async () => {
+    const existingAssignment = {
+      setup_owner: 'Existing Setup Owner MFG',
+      setup_owner_role: 'MFG',
+    };
     const transitionedRow = {
       ...draftRow,
-      status: 'Setup In Progress',
-      setup_owner: setupOwnerActor.displayName,
-      setup_owner_role: setupOwnerActor.setupOwnerDepartment,
+      ...existingAssignment,
+      status: 'PSF Created',
+      psf_created_data_json: { file_name_v4: 'request.psf' },
+      psf_created_schema_snapshot_json: psfCreatedSchemaSnapshot,
+      psf_released_at: new Date('2026-06-18T01:06:03.000Z'),
       submitted_at: new Date('2026-06-18T01:05:03.000Z'),
       updated_at: new Date('2026-06-18T01:06:03.000Z'),
+      updated_at_version: NEXT_REVISION,
+    };
+    const currentRow = {
+      ...draftRow,
+      ...existingAssignment,
+      status: 'Submitted',
+      psf_created_data_json: { file_name_v4: 'request.psf' },
+      psf_created_schema_snapshot_json: psfCreatedSchemaSnapshot,
+      updated_at_version: CURRENT_REVISION,
     };
     pool.query
-      .mockResolvedValueOnce({
-        rows: [{ id: draftRow.id, status: 'Submitted' }],
-      })
+      .mockResolvedValueOnce({ rows: [currentRow] })
       .mockResolvedValueOnce({ rows: [transitionedRow] });
     dbClient.query
       .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
-        rows: [{ id: draftRow.id, status: 'Submitted' }],
-      })
+      .mockResolvedValueOnce({ rows: [currentRow] })
       .mockResolvedValueOnce({ rows: [transitionedRow] })
       .mockResolvedValueOnce({});
     auditLogService.record.mockRejectedValueOnce(
@@ -362,11 +636,35 @@ describe('RequestsService audit baseline', () => {
 
     await expect(
       service.updateRequestStatus(draftRow.id, {
-        status: 'Setup In Progress',
+        status: 'PSF Created',
+        expectedUpdatedAt: CURRENT_REVISION,
         actor: setupOwnerActor,
       }),
     ).rejects.toThrow('audit insert failed');
 
+    expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'PSF Created',
+        requester: draftRow.requester,
+        requesterUserId: draftRow.requester_user_id,
+        setupOwner: existingAssignment.setup_owner,
+        setupOwnerRole: existingAssignment.setup_owner_role,
+      }),
+      { product_type: 'New Product', requester: 'Fook' },
+      dbClient,
+    );
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('psf_released_at = CASE WHEN $4::boolean'),
+      [draftRow.id, 'PSF Created', false, true, 'Submitted', CURRENT_REVISION],
+    );
+    expect(dbClient.query).toHaveBeenNthCalledWith(
+      3,
+      expect.not.stringMatching(
+        /\b(requester|requester_user_id|setup_owner|setup_owner_role)\s*=/i,
+      ),
+      expect.any(Array),
+    );
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');
     expect(dbClient.query).not.toHaveBeenCalledWith('COMMIT');
     expect(dbClient.release).toHaveBeenCalledTimes(1);

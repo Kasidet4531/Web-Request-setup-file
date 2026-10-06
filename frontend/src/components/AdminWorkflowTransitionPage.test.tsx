@@ -1,56 +1,62 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
-import * as AdminWorkflowRoute from '../routes/admin/workflow'
-import {
-  AdminWorkflowTransitionMatrix,
-  AdminWorkflowTransitionPage,
-} from './AdminWorkflowTransitionPage'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as WorkflowRoute from '../routes/admin/workflow'
+import type { WorkflowConfiguration } from '../services/api'
+import { AdminWorkflowTransitionPage } from './AdminWorkflowTransitionPage'
 
-describe('AdminWorkflowTransitionPage', () => {
-  it('renders directed transition controls with role and department selectors', () => {
-    const html = renderToStaticMarkup(
-      <AdminWorkflowTransitionMatrix
-        disabled={false}
-        onToggleDepartment={vi.fn()}
-        onToggleEnabled={vi.fn()}
-        onToggleRole={vi.fn()}
-        statuses={['Submitted', 'Setup In Progress']}
-        transitions={[
-          {
-            fromStatus: 'Submitted',
-            toStatus: 'Setup In Progress',
-            enabled: true,
-            allowedRoles: ['setup_owner'],
-            allowedSetupOwnerDepartments: ['GNTC'],
-          },
-          {
-            fromStatus: 'Setup In Progress',
-            toStatus: 'Submitted',
-            enabled: false,
-            allowedRoles: [],
-            allowedSetupOwnerDepartments: [],
-          },
-        ]}
-      />,
-    )
+const hookState = vi.hoisted(() => ({ configuration: null as WorkflowConfiguration | null, calls: 0 }))
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>()
+  return { ...actual, useState: (initial: unknown) => actual.useState(hookState.calls++ === 0 && hookState.configuration ? hookState.configuration : initial) }
+})
 
-    expect(html).toContain('From Submitted')
-    expect(html).toContain('Setup In Progress')
-    expect(html).toContain('Enabled')
-    expect(html).toContain('Setup File Owner')
-    expect(html).toContain('Administrator')
-    expect(html).toContain('GNTC')
-    expect(html).toContain('MFG')
+beforeEach(() => { hookState.configuration = null; hookState.calls = 0 })
+
+describe('Status Management page', () => {
+  it('keeps the existing route and exposes the catalog heading', () => {
+    const options = Reflect.get(WorkflowRoute.Route, 'options') as { component: unknown }
+    const html = renderToStaticMarkup(createElement(AdminWorkflowTransitionPage))
+    expect(options.component).toBe(AdminWorkflowTransitionPage)
+    expect(html).toContain('<h1>Status Management</h1>')
   })
 
-  it('wires the admin workflow route to the transition editor', () => {
-    const routeOptions = Reflect.get(AdminWorkflowRoute.Route, 'options') as {
-      component: unknown
+  it('shows multiple PSF triggers in the catalog and protects Draft', () => {
+    hookState.configuration = {
+      statuses: ['First work', 'Second work', 'Other work'],
+      entries: [
+        { id: 'draft', name: 'Draft', kind: 'draft', requestCount: null },
+        { id: 'first', name: 'First work', kind: 'open', requestCount: 2 },
+        { id: 'second', name: 'Second work', kind: 'completed', requestCount: 1 },
+        { id: 'other', name: 'Other work', kind: 'open', requestCount: 0 },
+      ],
+      psfVisibilityTriggerIds: ['draft', 'first', 'second'],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-02T00:00:00.123456Z',
     }
     const html = renderToStaticMarkup(createElement(AdminWorkflowTransitionPage))
+    expect(html).toContain('<th scope="col">PSF access trigger</th>')
+    expect(html.match(/<td>Trigger<\/td>/g)).toHaveLength(2)
+    expect(html).not.toContain('Requester PSF visibility trigger')
+    expect(html).not.toContain('Trigger status')
+  })
 
-    expect(routeOptions.component).toBe(AdminWorkflowTransitionPage)
-    expect(html).toContain('<h1>Workflow transition editor</h1>')
+  it('labels the status type and displays Cancel without changing its API value', () => {
+    hookState.configuration = {
+      statuses: ['Draft', 'Canceled request'],
+      entries: [
+        { id: 'draft', name: 'Draft', kind: 'draft', requestCount: null },
+        { id: 'cancel', name: 'Canceled request', kind: 'cancelled', requestCount: 0 },
+      ],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-02T00:00:00.123456Z',
+    }
+    const html = renderToStaticMarkup(createElement(AdminWorkflowTransitionPage))
+    expect(html).toContain('Status type</span><select')
+    expect(html).toContain('<th scope="col">Status type</th>')
+    expect(html).toContain('<option value="cancelled">Cancel</option>')
+    expect(html).toContain('<td>Cancel</td>')
+    expect(html).not.toContain('Meaning')
+    expect(html).not.toContain('Cancelled')
   })
 })

@@ -1,0 +1,10 @@
+.development-login {
+  padding: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 4px;
+  background: var(--card);
+  display: grid;
+  gap: 12px;
+}
+
+.development-login__actions { display: flex; flex-wrap: wrap; gap: 8px; }

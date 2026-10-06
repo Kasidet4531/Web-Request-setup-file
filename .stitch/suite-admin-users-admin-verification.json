@@ -1,0 +1,47 @@
+{
+  "key": "admin-users-admin",
+  "route": "/admin/users",
+  "role": "admin",
+  "modes": [
+    {
+      "mode": "light",
+      "image": "suite-admin-users-admin-light.png",
+      "check": {
+        "mode": "light",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Users & Roles",
+        "bodyText": "Back\nAdministration\n\u203a\nUsers & Roles\nUsers & Roles\n\nChange access roles and Setup Owner departments. Identity details come from company sign-in.\n\nUser\tEmail\tRole\tOwner department\t\nJordan Lee\njordan.lee\tjordan@example.invalid\tAdministrator\t\u2014\tEdit\nAlex Morgan\nalex.morgan\talex@example.invalid\tSetup File Owner\tMFG\tEdit\nRowan Miller\nrowan.miller\trowan@example.invalid\tSetup File Owner\tGNTC\tEdit\nSam Taylor\nsam.taylor\tsam@example.invalid\tRequester\t\u2014\tEdit",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nUsers & Roles",
+        "themeControl": true,
+        "statusLines": true
+      }
+    },
+    {
+      "mode": "dark",
+      "image": "suite-admin-users-admin-dark.png",
+      "check": {
+        "mode": "dark",
+        "overflow": false,
+        "width": 1280,
+        "heading": "Users & Roles",
+        "bodyText": "Back\nAdministration\n\u203a\nUsers & Roles\nUsers & Roles\n\nChange access roles and Setup Owner departments. Identity details come from company sign-in.\n\nUser\tEmail\tRole\tOwner department\t\nJordan Lee\njordan.lee\tjordan@example.invalid\tAdministrator\t\u2014\tEdit\nAlex Morgan\nalex.morgan\talex@example.invalid\tSetup File Owner\tMFG\tEdit\nRowan Miller\nrowan.miller\trowan@example.invalid\tSetup File Owner\tGNTC\tEdit\nSam Taylor\nsam.taylor\tsam@example.invalid\tRequester\t\u2014\tEdit",
+        "hasToggle": true,
+        "breadcrumb": "Administration\n\u203a\nUsers & Roles",
+        "themeControl": true,
+        "statusLines": true
+      }
+    }
+  ],
+  "navigation": {
+    "expanded": 220,
+    "collapsed": 72,
+    "labels": true,
+    "controlsStayVisible": true,
+    "correct": true,
+    "restored": true,
+    "themePreserved": true
+  },
+  "success": true
+}

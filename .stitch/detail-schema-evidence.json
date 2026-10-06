@@ -1,0 +1,200 @@
+{
+  "inspectedAt": "2026-10-04T16:08:45.242Z",
+  "method": "pg.Pool; BEGIN READ ONLY; default_transaction_read_only=on; form schema and non-identity choice metadata only, no request record values",
+  "forms": [
+    {
+      "formKey": "psf-created-information",
+      "version": 1,
+      "title": "PSF Created Information",
+      "sections": [
+        {
+          "title": "PSF Created Information",
+          "fields": [
+            {
+              "fieldKey": "first_die_ref_xy",
+              "label": "First Die Ref. (X,Y)",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "first_die_ref_xy"
+            },
+            {
+              "fieldKey": "probe_coordinate_quadrant",
+              "label": "Probe & Coordinate Quadrant",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "probe_coordinate_quadrant"
+            },
+            {
+              "fieldKey": "wafer_id_format",
+              "label": "Wafer ID Format",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "wafer_id_format"
+            },
+            {
+              "fieldKey": "mirror_die_available",
+              "label": "Mirror Die Available",
+              "type": "select",
+              "required": false,
+              "canonicalKey": "mirror_die_available",
+              "options": [
+                "Yes",
+                "No"
+              ]
+            },
+            {
+              "fieldKey": "prepare_fpc_and_physical_wafer_to_psf_cabinet_e2",
+              "label": "Prepare FPC & Physical Wafer to PSF Cabinet E2",
+              "type": "select",
+              "required": false,
+              "canonicalKey": "prepare_fpc_and_physical_wafer_to_psf_cabinet_e2",
+              "options": [
+                "Yes",
+                "No"
+              ]
+            },
+            {
+              "fieldKey": "psf_setup_file_name",
+              "label": "PSF Setup File Name",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "psf_setup_file_name"
+            },
+            {
+              "fieldKey": "job_file_name",
+              "label": "Job File Name",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "job_file_name"
+            },
+            {
+              "fieldKey": "template",
+              "label": "Template",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "template"
+            },
+            {
+              "fieldKey": "layout",
+              "label": "Layout",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "layout"
+            },
+            {
+              "fieldKey": "attachment_reference",
+              "label": "Attachment Reference",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "attachment_reference"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "formKey": "psf-request",
+      "version": 2,
+      "title": "PSF Request Form",
+      "sections": [
+        {
+          "title": "Requester Information",
+          "fields": [
+            {
+              "fieldKey": "product_type",
+              "label": "Product Type",
+              "type": "radio",
+              "required": true,
+              "canonicalKey": "product_type",
+              "options": [
+                "New Product",
+                "Transfer Product",
+                "Existing Product"
+              ]
+            },
+            {
+              "fieldKey": "title",
+              "label": "Title",
+              "type": "text",
+              "required": true,
+              "canonicalKey": "title"
+            },
+            {
+              "fieldKey": "requester_name",
+              "label": "Requester Name",
+              "type": "text",
+              "required": true,
+              "canonicalKey": "requester"
+            },
+            {
+              "fieldKey": "due_date",
+              "label": "Due Date",
+              "type": "date",
+              "required": true,
+              "canonicalKey": "due_date"
+            },
+            {
+              "fieldKey": "priority",
+              "label": "Priority",
+              "type": "select",
+              "required": true,
+              "canonicalKey": "priority",
+              "options": [
+                "Low",
+                "Normal",
+                "High",
+                "Urgent"
+              ]
+            },
+            {
+              "fieldKey": "product",
+              "label": "Product",
+              "type": "text",
+              "required": true,
+              "canonicalKey": "product"
+            },
+            {
+              "fieldKey": "wafer_fab",
+              "label": "Wafer FAB",
+              "type": "text",
+              "required": true,
+              "canonicalKey": "wafer_fab"
+            },
+            {
+              "fieldKey": "probecard_name",
+              "label": "Probecard Name",
+              "type": "text",
+              "required": true,
+              "canonicalKey": "probecard_name"
+            },
+            {
+              "fieldKey": "reference_psf_name",
+              "label": "Reference PSF Name",
+              "type": "text",
+              "required": false,
+              "canonicalKey": "reference_psf_name"
+            },
+            {
+              "fieldKey": "request_note",
+              "label": "Request Note",
+              "type": "textarea",
+              "required": false,
+              "canonicalKey": "request_note"
+            },
+            {
+              "fieldKey": "field_1",
+              "label": "New field",
+              "type": "select",
+              "required": false,
+              "canonicalKey": "field_1",
+              "options": [
+                "Hello",
+                "Hello2"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -37,3 +37,13 @@ export function subscribeAuthSessionChanged(
 
   return () => eventTarget.removeEventListener(AUTH_SESSION_CHANGED_EVENT, listener)
 }
+
+/** Only return to an internal page; never redirect back into login. */
+export function getLoginRedirect(value: unknown): string {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\\\s]/.test(value)) {
+    return '/dashboard'
+  }
+  const url = new URL(value, 'http://localhost')
+  if (url.pathname.startsWith('//') || url.pathname === '/login' || url.pathname === '/login/') return '/dashboard'
+  return `${url.pathname}${url.search}${url.hash}`
+}

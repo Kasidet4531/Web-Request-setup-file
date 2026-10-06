@@ -1,5 +1,9 @@
 # Refined GitHub Issues List: PSF Setup File Request Management
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
+> **Historical target/backlog snapshot (2026-10-02 audit):** Issue drafts, references and checkboxes below preserve their original planning state; they are not a live GitHub issue/PR status report or a current implementation checklist. Some target APIs, permissions and features differ from the checked-in source. Use [Current implementation](current-implementation.md) for present behavior; publication/execution instructions below do not grant new authorization.
+
 This document is a refined replacement for `docs/github_issues.md` when preparing real GitHub implementation issues.
 
 The original file is still useful as a **feature inventory / epic overview**.
@@ -251,6 +255,8 @@ Create the request detail page foundation with a clear header, requester informa
 ---
 
 ## GI-12: Manual Workflow Transition MVP
+
+> **Superseded Status instructions:** Old short stages, transition permissions/paths and automatic owner assignment through Status changes below must not be reimplemented. Use [the current Status catalog and action constraints](status-catalog-and-manual-updates.md).
 
 ### What to build
 

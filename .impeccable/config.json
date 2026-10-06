@@ -1,0 +1,32 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-03T14:03:43.434Z",
+        "reason": "Lead agent: retained established engineering operations typography specified in docs/design/2026-10-03-frontend-design-spec.md:63; consistency and scanability suit this existing product."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/index.css"
+        ],
+        "createdAt": "2026-10-05T05:29:54.279Z",
+        "reason": "Agent: .stitch/DESIGN.md sections 2 and 4 explicitly prescribe semantic summary-card edges; this incumbent styling predates the loading fix in commits f7759dd and 5453c0a."
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "frontend/src/index.css"
+        ],
+        "createdAt": "2026-10-05T05:29:54.360Z",
+        "reason": "Agent: .stitch/DESIGN.md section 3 specifies Inter for English UI; preserve the approved existing typography while fixing loading behavior."
+      }
+    ]
+  }
+}

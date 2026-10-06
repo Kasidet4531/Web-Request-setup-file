@@ -1,5 +1,7 @@
 # 3. Admin-Configured Auto-fill Rules
 
+> **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ.
+
 We decided to implement a dynamic schema-driven auto-fill mechanism configured by administrators through database rules, rejecting the options of hardcoded mapping or automated recent co-occurrence suggestions.
 
 ## Context

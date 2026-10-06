@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { RequestHistoryRoutePage } from '../../../components/RequestsWorkspace'
 
-export const Route = createFileRoute('/requests/$requestId/history')({
-  component: () => <div>Request History Structure Placeholder</div>,
-})
+export const Route = createFileRoute('/requests/$requestId/history')({ component: RequestHistoryRoutePage })

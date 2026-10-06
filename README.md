@@ -1,166 +1,59 @@
-# PSF Setup File Web Application
+# PSF Setup File Request Management
 
-This repository contains the architecture, specification, and codebase for the **PSF Setup File Request Management Web Application**. The system streamlines the workflow of submitting PSF requests, managing dynamic form schemas, tracking setup status, performing search indexing, auto-filling fields, auditing changes, and exporting reports.
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
 
-> **Current implementation baseline (T01):** [`ADR 0014`](docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md) is the source for the current runtime, API, authentication, visual-reference boundary, and known release limits. The material below is historical target architecture unless ADR 0014 repeats it. In particular, current authentication is LDAP-backed with locally stored authorization profiles, the backend uses Express, and Nginx/proxy deployment is not verified by this repository.
+This application tracks requests to create or update PSF Setup Files. It does
+not generate the physical PSF Setup Files. Current development takes place in
+`unified-local-auth`, based on `rapid-frontend-rewrite` with removable local
+authentication. The original branches remain unchanged by this documentation update.
 
----
+## Start here
 
-## 🗺️ System Architecture
+- [Exact database Status catalog and no automatic Status changes](docs/status-catalog-and-manual-updates.md)
 
-The application is built on a modular architecture leveraging a file-based React frontend and a TypeScript-based NestJS backend, backed by PostgreSQL.
+- [Confirmed Audit History access for every authenticated role](docs/audit-history-access.md)
+- [Current implementation and source references](docs/current-implementation.md)
+- [Backend setup and commands](backend/README.md)
+- [Frontend setup and commands](frontend/README.md)
+- [LDAP/local testing and mock removal](docs/local-development-auth.md)
+- [Current diagrams](docs/diagrams.md)
+- [Domain glossary](CONTEXT.md)
+- [Documentation index and historical records](docs/README.md)
 
-```mermaid
-graph TD
-    %% Roles
-    User_Req[Requester]
-    User_Owner[Setup File Owner]
-    User_Admin[Admin]
+## Runtime
 
-    %% Frontend Layer
-    subgraph Frontend [React Frontend Client]
-        Routes[TanStack Router File Routes]
-        Pages[UI Pages: Login, Dashboard, Request Form, History, Admin]
-        State[State Management / Local Cache]
-    end
+The frontend uses React, TypeScript, TanStack Router file routes and Vite.
+The backend uses NestJS with Express, `express-session`, PostgreSQL through
+`pg.Pool`, and ExcelJS. Vite proxies local `/api` calls to port 3000.
 
-    %% Proxy Layer
-    Nginx[Nginx Reverse Proxy]
+LDAP login verifies credentials through the configured company HTTP endpoint;
+roles and setup-owner departments are stored in local `app_users` profiles.
+Local development additionally offers four reserved test identities, gated by
+explicit backend/frontend flags. Both paths use the same backend business logic,
+server session and current-profile authorization.
 
-    %% Backend Layer
-    subgraph Backend [NestJS Backend API Service]
-        AuthMod[Auth Module: Local Auth, Bcrypt]
-        ReqMod[Requests Module: CRUD, Manual Workflow Flow]
-        SearchMod[Search/Index Module: Write-time Canonical Extraction]
-        AutofillMod[Autofill Module: Most Recent Completed match]
-        ExportMod[Excel Export Module: Streaming & Background Job]
-        AuditMod[Audit Module: Key-by-key JSON Diff]
-        AdminMod[Admin Module: Schema Validation & Preview Helpers]
-        AttachSvc[Attachment Storage: Local Filesystem Service]
-    end
+## Development
 
-    %% Database Layer
-    subgraph Database [PostgreSQL Database]
-        DB_Reqs[(psf_requests table: JSONB payloads)]
-        DB_Index[(psf_request_search_index table: Canonical values)]
-        DB_Audit[(psf_request_audit_logs table)]
-        DB_Meta[(form_definitions, autofill_rules, export_profiles)]
-    end
+Use this checkout's frontend and backend together. Install packages separately
+with `npm ci` in `backend/` and `frontend/`, then follow the
+[local development guide](docs/local-development-auth.md). PostgreSQL is required;
+mock authentication does not replace the database. The supplied development
+server is `10.0.20.6:5432/psf_setup_db`; credentials belong only in ignored local
+configuration. Docker Compose is an alternative local PostgreSQL setup.
 
-    %% Connections
-    User_Req -->|Access UI| Frontend
-    User_Owner -->|Access UI| Frontend
-    User_Admin -->|Access UI| Frontend
+The application has request drafts and shared work, two versioned form families,
+an administrator-managed status catalog, autofill rules, audit history, and
+backend XLSX export. See the current implementation guide for authorization,
+snapshot/release rules, endpoints and limitations.
 
-    Routes --> Pages
-    Pages --> State
-    State -->|HTTP Requests| Nginx
-    Nginx --> Backend
+## Verification scope
 
-    AuthMod --> DB_Meta
-    ReqMod --> DB_Reqs
-    SearchMod --> DB_Index
-    AutofillMod --> DB_Meta
-    ExportMod --> DB_Index
-    AuditMod --> DB_Audit
-    AdminMod --> DB_Meta
-```
+The [unified-auth verification record](docs/verification/2026-10-02-unified-local-auth.md)
+records 594 backend tests, 18 mocked-database HTTP integration tests, 237 frontend
+tests, and passing builds/lint for commit `01eab7b`. A later read-only `pg.Pool`
+connection check reached the supplied database. Neither result establishes
+company LDAP connectivity, full live database/browser acceptance, or deployment.
 
----
-
-## 📂 Project Organization
-
-The repository is structured to separate frontend and backend concerns clearly, facilitating clean dependencies and organized deployments:
-
-```text
-/
-├── CONTEXT.md                              # Ubiquitous Domain Glossary & Language rules
-├── psf_setup_file_web_application_spec_en.md # Full Web Application Product Specification
-├── docs/
-│   ├── diagrams.md                         # Mermaid Diagrams (Data Flow, Sequence, ER)
-│   └── adr/                                # Architectural Decision Records (ADRs)
-│       ├── 0001-nestjs-postgresql-backend.md
-│       ├── 0002-draft-form-version-upgrade.md
-│       ├── ...
-│       └── 0013-excel-export-schema-alignment.md
-├── frontend/                               # React UI Application (Vite / TS)
-│   ├── src/
-│   │   ├── routes/                         # Route components (Login, Dashboard, Admin, etc.)
-│   │   ├── components/                     # Reusable UI components
-│   │   └── services/                       # API clients and query managers
-│   └── package.json
-└── backend/                                # Backend API Service (NestJS / TS)
-    ├── src/                                # NestJS Domain Modules
-    │   ├── auth/
-    │   ├── requests/
-    │   ├── audit/
-    │   ├── export/
-    │   ├── database/
-    │   └── admin/
-    └── package.json
-```
-
----
-
-## 🛠️ Tech Stack & Key Choices
-
-The core technologies selected for the MVP are:
-
-* **Frontend**: React, TanStack Start/Router, Vite, TypeScript, Vanilla CSS.
-* **Backend API**: NestJS (TypeScript) with Fastify (or Express) adapter.
-* **Database**: PostgreSQL (using `JSONB` for schema flexibility and index tables for performance).
-* **Reverse Proxy**: Nginx (handling static asset routing and local API proxying).
-* **Storage**: Local Server filesystem with abstract `AttachmentService` for future Cloud Storage migration.
-* **Authentication**: Local Database Authentication (Username/Password with Bcrypt hashing and secure HttpOnly cookie sessions).
-
----
-
-## 📚 Key Architectural Decisions (ADRs)
-
-The historical records below retain original rationale. ADR 0014 amends their implementation-status claims; it does not claim that their proposed features exist.
-
-Detailed rationales for key technical decisions are recorded in the [docs/adr/](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/) directory:
-
-| Record | Title | Summary |
-|---|---|---|
-| [ADR 0001](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0001-nestjs-postgresql-backend.md) | NestJS and PostgreSQL Backend | Chose NestJS + PostgreSQL over Rust Axum for dev speed and TypeScript tooling alignment. |
-| [ADR 0002](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0002-draft-form-version-upgrade.md) | Draft Form Version Upgrade | Hybrid approach prompting users to upgrade draft schemas or remain on the snapshot. |
-| [ADR 0004](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0004-write-time-canonical-extraction.md) | Write-Time Canonical Extraction | Extracted index keys at write-time into a flat table to guarantee fast sorting and exporting. |
-| [ADR 0005](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0005-manual-workflow-status-transitions.md) | Manual Status Transitions | Workflow transitions are manual actions configured dynamically by administrators. |
-| [ADR 0006](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0006-local-database-authentication.md) | Local Database Authentication | Username/Bcrypt login for MVP to eliminate third-party credentials configuration overhead. |
-| [ADR 0007](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0007-admin-json-schema-editor.md) | Admin JSON Schema Editor | Integrated Monaco/CodeMirror editor with visual preview panel, avoiding visual builder complexity. |
-| [ADR 0008](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0008-local-filesystem-attachment-storage.md) | Local Filesystem Attachment Storage | Stores uploaded spec sheets locally with metadata in PostgreSQL, abstracted for future S3 migration. |
-| [ADR 0009](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0009-autofill-resolution-strategy.md) | Auto-fill Duplicate Resolution | Resolves duplicate trigger fields using the most recent completed request (`completed_at DESC`). |
-| [ADR 0010](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0010-shared-setup-queue-visibility.md) | Shared Queue Model for Owners | Setup File Owners have full visibility over all requests to maximize team throughput. |
-| [ADR 0011](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0011-key-by-key-diff-request-audit-logs.md) | Key-by-Key Diff Audit Logging | Audits dynamic JSON changes at the granular field-key level during writes for single-request logs. |
-| [ADR 0012](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0012-schema-embedded-master-data.md) | Schema-Embedded Master Data | Embeds master data reference lists inside the JSON Form Schema definitions to avoid relational tables. |
-| [ADR 0013](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/adr/0013-excel-export-schema-alignment.md) | Excel Export Layout Strategy | Aligns columns to latest schema using canonical mapping and hides unauthorized fields dynamically. |
-
----
-
-## 📊 System Diagrams
-
-For comprehensive visual diagrams of the architecture, refer to [docs/diagrams.md](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/docs/diagrams.md):
-
-| Diagram | Description |
-|---|---|
-| **⭐ Deployment Architecture** | **3-tier deployment: Client → Nginx → NestJS → PostgreSQL with security boundaries** |
-| **⭐ Component Architecture** | **Internal backend modules, guards pipeline, controllers, services, and data access** |
-| **⭐ Data Architecture** | **Hybrid JSONB + canonical + search index strategy — the core design** |
-| **⭐ Write Pipeline** | **Critical write path: validation → save → canonical extraction → search index → audit** |
-| System Data Flow | End-to-end data movement across actors, frontend, backend, and database |
-| Request Lifecycle State Machine | All valid status transitions including optional statuses |
-| Login Flow | Local auth sequence with HttpOnly cookie |
-| Create & Submit PSF Request | Form rendering, draft save, submission, and canonical extraction |
-| Setup Owner Completes PSF Created | Full setup owner workflow from pickup to mark-as-created |
-| Auto-fill Flow | Trigger → resolve → suggest → user accept/edit |
-| Excel Export Flow | Sync streaming vs. async background job with cell masking |
-| Admin: Publish New Form Version | Schema editing, preview, and publish with canonical mapping |
-| Database ER Diagram | Complete entity-relationship model for all 8 tables |
-| Backend Module Dependency | NestJS module dependency graph |
-
----
-
-## 📖 Glossary
-
-Refer to [CONTEXT.md](file:///c:/Users/nxg22301/Desktop/Anti_Folder/Web_setup_file/CONTEXT.md) for standard domain terminology (e.g., *PSF Setup File*, *PSF Request*, *Setup File Owner*, *Canonical Key*, *Search Index*).
+Historical specs, ADRs and plans remain available as dated design evidence.
+Their status notices distinguish original targets from this branch's current
+implementation; source code remains authoritative.

@@ -1,0 +1,56 @@
+{
+  "success": true,
+  "screens": [
+    {
+      "screenId": "5633881947599169946",
+      "role": "requester",
+      "success": true,
+      "checks": {
+        "breadcrumbText": "Requests \u203a PSF-2026-0039",
+        "parentHref": "/requests",
+        "parentCount": 1,
+        "current": "PSF-2026-0039",
+        "currentIsNotLink": true,
+        "separatorHidden": true,
+        "listPresent": true,
+        "focusVisible": true,
+        "breadcrumbStableAcrossTabs": true,
+        "noDuplicateBackLink": true,
+        "noOverflow": true,
+        "tabsPreserved": true,
+        "saveStatusPreserved": true,
+        "onlyBreadcrumbMarkupAndStyleChanged": true
+      },
+      "v1BehaviorEvidence": "detail-v1-requester-desktop-verification.json"
+    },
+    {
+      "screenId": "7913272643343574371",
+      "role": "owner",
+      "success": true,
+      "checks": {
+        "breadcrumbText": "Requests \u203a PSF-2026-0039",
+        "parentHref": "/requests",
+        "parentCount": 1,
+        "current": "PSF-2026-0039",
+        "currentIsNotLink": true,
+        "separatorHidden": true,
+        "listPresent": true,
+        "focusVisible": true,
+        "breadcrumbStableAcrossTabs": true,
+        "noDuplicateBackLink": true,
+        "noOverflow": true,
+        "tabsPreserved": true,
+        "saveStatusPreserved": true,
+        "onlyBreadcrumbMarkupAndStyleChanged": true
+      },
+      "v1BehaviorEvidence": "detail-v1-owner-desktop-verification.json"
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "visualStateCount": 4,
+  "unchangedV1BehaviorEvidence": "detail-v1-verification.json",
+  "productionSourceModified": false
+}

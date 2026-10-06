@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { PayloadTooLargeException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { FormSchemaService } from '../admin/form_schema.service';
+import { LEGACY_PSF_CREATED_INFORMATION_SCHEMA } from '../admin/form_schema.constants';
 import { SearchIndexService } from '../requests/search-index.service';
 import {
   ExcelExportService,
@@ -50,20 +51,28 @@ describe('ExcelExportService', () => {
       ),
     };
     formSchemaService = {
-      getActiveSchema: jest.fn().mockResolvedValue({
-        formKey: 'psf-request',
-        version: 1,
-        title: 'PSF Request Form',
-        description: null,
-        status: 'active',
-        publishedAt: null,
-        schema: {
-          formKey: 'psf-request',
+      getActiveSchema: jest.fn().mockImplementation((formKey: string) =>
+        Promise.resolve({
+          formKey,
           version: 1,
-          title: 'PSF Request Form',
-          sections: [],
-        },
-      }),
+          title:
+            formKey === 'psf-request'
+              ? 'PSF Request Form'
+              : 'PSF Created Information',
+          description: null,
+          status: 'active',
+          publishedAt: null,
+          schema:
+            formKey === 'psf-request'
+              ? {
+                  formKey,
+                  version: 1,
+                  title: 'PSF Request Form',
+                  sections: [],
+                }
+              : LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+        }),
+      ),
     };
     service = Reflect.construct(ExcelExportService, [
       searchIndexService,
@@ -120,6 +129,9 @@ describe('ExcelExportService', () => {
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
     );
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-created-information',
+    );
   });
 
   it('writes the latest active schema in canonical-key order, including bounded fallback values and deterministic cells', async () => {
@@ -131,7 +143,6 @@ describe('ExcelExportService', () => {
         {
           sectionKey: 'shared',
           title: 'Shared fields',
-          visibleTo: ['requester', 'admin'],
           fields: [
             {
               fieldKey: 'title_v9',
@@ -202,7 +213,6 @@ describe('ExcelExportService', () => {
         {
           sectionKey: 'admin_only',
           title: 'Admin fields',
-          visibleTo: ['admin'],
           fields: [
             {
               fieldKey: 'admin_v9',
@@ -224,7 +234,6 @@ describe('ExcelExportService', () => {
         {
           sectionKey: 'legacy',
           title: 'Legacy fields',
-          visibleTo: ['requester', 'admin'],
           fields: [
             {
               fieldKey: 'legacy_title',
@@ -307,7 +316,9 @@ describe('ExcelExportService', () => {
 
     const result = await service.exportRequests({}, adminActor);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.content);
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
     const worksheet = workbook.getWorksheet('PSF Requests');
 
     if (!worksheet) {
@@ -382,7 +393,161 @@ describe('ExcelExportService', () => {
     );
   });
 
-  it('filters active-schema sections by role and masks requester PSF Created cells before PSF Created', async () => {
+  it('exports active PSF fields first and retains historic fields by canonical identity', async () => {
+    const requesterSchema = {
+      formKey: 'psf-request',
+      version: 10,
+      title: 'PSF Request Form',
+      sections: [],
+    };
+    const activePsfSchema = {
+      formKey: 'psf-created-information',
+      version: 8,
+      title: 'Current PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'current',
+          title: 'Current fields',
+          fields: [
+            {
+              fieldKey: 'setup_file_name_v8',
+              canonicalKey: 'psf_setup_file_name',
+              label: 'Current Setup File',
+              type: 'text' as const,
+              required: false,
+            },
+            {
+              fieldKey: 'new_active_field',
+              canonicalKey: 'new_active_field',
+              label: 'New Active Field',
+              type: 'text' as const,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    const historicalSchema = {
+      formKey: 'psf-created-information',
+      version: 3,
+      title: 'Historical PSF Created Information',
+      sections: [
+        {
+          sectionKey: 'historic',
+          title: 'Historic fields',
+          fields: [
+            {
+              fieldKey: 'old_setup_file_name',
+              canonicalKey: 'psf_setup_file_name',
+              label: 'Old Setup File',
+              type: 'text' as const,
+              required: false,
+            },
+            {
+              fieldKey: 'deleted_field',
+              canonicalKey: 'deleted_field',
+              label: 'Removed From Current',
+              type: 'text' as const,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    formSchemaService.getActiveSchema.mockImplementation((formKey: string) => ({
+      formKey,
+      version: formKey === 'psf-request' ? 10 : 8,
+      title:
+        formKey === 'psf-request'
+          ? requesterSchema.title
+          : activePsfSchema.title,
+      description: null,
+      status: 'active',
+      publishedAt: null,
+      schema: formKey === 'psf-request' ? requesterSchema : activePsfSchema,
+    }));
+    searchIndexService.queryExportRequests.mockResolvedValueOnce({
+      items: [
+        {
+          requestId: 'request-old',
+          requestNo: 'PSF-OLD',
+          status: 'PSF Created',
+          requester: 'Requester Demo',
+          setupOwner: 'Setup Owner Demo',
+          setupOwnerRole: 'GNTC',
+          productType: 'New Product',
+          requestDate: '2026-06-18T01:02:03.000Z',
+          updatedAt: '2026-06-18T01:05:03.000Z',
+          requesterData: {},
+          psfCreatedData: {
+            old_setup_file_name: 'historical.psf',
+            deleted_field: 'still exported',
+          },
+          psfCreatedInformationSchema: historicalSchema,
+          schemaSnapshot: requesterSchema,
+          canonicalValues: {},
+        },
+        {
+          requestId: 'request-legacy',
+          requestNo: 'PSF-LEGACY',
+          status: 'PSF Created',
+          requester: 'Requester Demo',
+          setupOwner: 'Setup Owner Demo',
+          setupOwnerRole: 'GNTC',
+          productType: 'New Product',
+          requestDate: '2026-06-19T01:02:03.000Z',
+          updatedAt: '2026-06-19T01:05:03.000Z',
+          requesterData: {},
+          psfCreatedData: { psf_setup_file_name: 'legacy.psf' },
+          psfCreatedInformationSchema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+          schemaSnapshot: requesterSchema,
+          canonicalValues: {},
+        },
+      ],
+      total: 2,
+      limit: 2000,
+      offset: 0,
+    });
+
+    const result = await service.exportRequests({}, adminActor);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
+    const worksheet = workbook.getWorksheet('PSF Requests');
+    if (!worksheet) throw new Error('Expected PSF Requests worksheet');
+    const headers = Array.from(
+      { length: worksheet.columnCount },
+      (_, index) => worksheet.getRow(1).getCell(index + 1).value,
+    );
+    const psfHeaders = headers.slice(6);
+
+    expect(psfHeaders.slice(0, 3)).toEqual([
+      'Current Setup File',
+      'New Active Field',
+      'Removed From Current',
+    ]);
+    expect(
+      psfHeaders.filter((header) => header === 'Current Setup File'),
+    ).toHaveLength(1);
+    expect(
+      worksheet.getRow(2).getCell(headers.indexOf('Current Setup File') + 1)
+        .value,
+    ).toBe('historical.psf');
+    expect(
+      worksheet.getRow(2).getCell(headers.indexOf('Removed From Current') + 1)
+        .value,
+    ).toBe('still exported');
+    expect(
+      worksheet.getRow(3).getCell(headers.indexOf('Current Setup File') + 1)
+        .value,
+    ).toBe('legacy.psf');
+    expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
+      'psf-created-information',
+    );
+  });
+
+  it('exports all configured form sections while using sticky release rather than status names to reveal PSF cells', async () => {
     formSchemaService.getActiveSchema.mockResolvedValueOnce({
       formKey: 'psf-request',
       version: 10,
@@ -398,7 +563,7 @@ describe('ExcelExportService', () => {
           {
             sectionKey: 'requester',
             title: 'Requester fields',
-            visibleTo: ['requester', 'admin'],
+
             fields: [
               {
                 fieldKey: 'title_v10',
@@ -413,7 +578,7 @@ describe('ExcelExportService', () => {
           {
             sectionKey: 'requester_only',
             title: 'Requester only fields',
-            visibleTo: ['requester'],
+
             fields: [
               {
                 fieldKey: 'requester_only',
@@ -428,7 +593,7 @@ describe('ExcelExportService', () => {
           {
             sectionKey: 'admin_only',
             title: 'Admin fields',
-            visibleTo: ['admin'],
+
             fields: [
               {
                 fieldKey: 'admin_only',
@@ -449,6 +614,7 @@ describe('ExcelExportService', () => {
           requestId: `request-${index + 1}`,
           requestNo: `PSF-${index + 1}`,
           status,
+          psfReleasedAt: index >= 2 ? '2026-06-18T01:05:03.000001Z' : null,
           requester: 'Requester Demo',
           setupOwner: null,
           setupOwnerRole: null,
@@ -477,7 +643,9 @@ describe('ExcelExportService', () => {
 
     const result = await service.exportRequests({}, requesterActor);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.content);
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
     const worksheet = workbook.getWorksheet('PSF Requests');
 
     if (!worksheet) {
@@ -492,7 +660,11 @@ describe('ExcelExportService', () => {
 
     expect(headers).toContain('Requester Title');
     expect(headers).toContain('Requester Only');
-    expect(headers).not.toContain('Admin Only');
+    expect(headers).toContain('Admin Only');
+    const additionalColumn = headers.indexOf('Admin Only') + 1;
+    expect(worksheet.getRow(2).getCell(additionalColumn).value).toBe(
+      'Draft admin value',
+    );
     expect(worksheet.getRow(2).getCell(psfSetupFileColumn).value).toBe('');
     expect(worksheet.getRow(3).getCell(psfSetupFileColumn).value).toBe('');
     expect(worksheet.getRow(4).getCell(psfSetupFileColumn).value).toBe(
@@ -502,6 +674,210 @@ describe('ExcelExportService', () => {
       'Completed.psf',
     );
   });
+
+  it.each(['synchronous', 'queued'] as const)(
+    'retains historical requester and PSF sections in a %s workbook while masking unreleased PSF cells',
+    async (mode) => {
+      const currentSchema = {
+        formKey: 'psf-request',
+        version: 10,
+        title: 'Current',
+        sections: [
+          {
+            sectionKey: 'current',
+            title: 'Current',
+            fields: [
+              {
+                fieldKey: 'current_title',
+                canonicalKey: 'title',
+                label: 'Current Title',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+        ],
+      };
+      const capturedSchema = {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'Captured',
+        sections: [
+          {
+            sectionKey: 'one',
+            title: 'One',
+            fields: [
+              {
+                fieldKey: 'old_title',
+                canonicalKey: 'title',
+                label: 'Old Title',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+          {
+            sectionKey: 'two',
+            title: 'Two',
+            fields: [
+              {
+                fieldKey: 'old_second',
+                canonicalKey: 'historical_second',
+                label: 'Historical second section',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+          {
+            sectionKey: 'three',
+            title: 'Three',
+            fields: [
+              {
+                fieldKey: 'old_third',
+                canonicalKey: 'historical_third',
+                label: 'Historical third section',
+                type: 'text' as const,
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+        ],
+      };
+      const capturedPsf = {
+        formKey: 'psf-created-information',
+        version: 2,
+        title: 'Captured PSF',
+        sections: [
+          {
+            sectionKey: 'psf_one',
+            title: 'PSF one',
+            fields: [
+              {
+                fieldKey: 'old_file',
+                canonicalKey: 'psf_setup_file_name',
+                label: 'Old file',
+                type: 'text' as const,
+                required: false,
+              },
+            ],
+          },
+          {
+            sectionKey: 'psf_two',
+            title: 'PSF two',
+            fields: [
+              {
+                fieldKey: 'old_note',
+                canonicalKey: 'historical_note',
+                label: 'Historical PSF note',
+                type: 'text' as const,
+                required: false,
+              },
+            ],
+          },
+        ],
+      };
+      formSchemaService.getActiveSchema.mockImplementation((key: string) =>
+        Promise.resolve({
+          formKey: key,
+          version: 10,
+          schema:
+            key === 'psf-request'
+              ? currentSchema
+              : LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+        }),
+      );
+      searchIndexService.queryExportRequests.mockResolvedValueOnce({
+        items: [null, '2026-06-18T01:05:03.000001Z'].map((release, index) => ({
+          requestId: `old-${index}`,
+          requestNo: `OLD-${index}`,
+          status: index === 0 ? 'Completed' : 'Renamed trigger moved back',
+          requester: 'Requester Demo',
+          setupOwner: null,
+          setupOwnerRole: null,
+          productType: null,
+          requestDate: '2026-06-18T01:05:03Z',
+          updatedAt: '2026-06-18T01:05:03Z',
+          requesterData: {
+            old_title: 'Captured title',
+            old_second: 'Captured two',
+            old_third: 'Captured three',
+          },
+          canonicalValues: null,
+          schemaSnapshot: capturedSchema,
+          psfCreatedData: {
+            old_file: 'captured.psf',
+            old_note: 'Captured private note',
+          },
+          psfCreatedInformationSchema: capturedPsf,
+          psfReleasedAt: release,
+        })),
+        total: 2,
+        limit: 500,
+        offset: 0,
+      });
+      const result =
+        mode === 'synchronous'
+          ? await service.exportRequests({}, requesterActor)
+          : await service.exportAllRequests({}, requesterActor);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+      );
+      const sheet = workbook.getWorksheet('PSF Requests');
+      if (!sheet) throw new Error('Expected worksheet');
+      const headers = Array.from(
+        { length: sheet.columnCount },
+        (_, index) => sheet.getRow(1).getCell(index + 1).value,
+      );
+      expect(headers).toContain('Historical second section');
+      expect(headers).toContain('Historical third section');
+      expect(headers).toContain('Historical PSF note');
+      expect(
+        headers.filter((header) => header === 'Current Title'),
+      ).toHaveLength(1);
+      for (const rowNumber of [2, 3]) {
+        expect(
+          sheet
+            .getRow(rowNumber)
+            .getCell(headers.indexOf('Historical second section') + 1).value,
+        ).toBe('Captured two');
+        expect(
+          sheet
+            .getRow(rowNumber)
+            .getCell(headers.indexOf('Historical third section') + 1).value,
+        ).toBe('Captured three');
+      }
+      expect(
+        sheet.getRow(2).getCell(headers.indexOf('PSF Setup File Name') + 1)
+          .value,
+      ).toBe('');
+      expect(
+        sheet.getRow(2).getCell(headers.indexOf('Historical PSF note') + 1)
+          .value,
+      ).toBe('');
+      expect(
+        sheet.getRow(3).getCell(headers.indexOf('PSF Setup File Name') + 1)
+          .value,
+      ).toBe('captured.psf');
+      expect(
+        sheet.getRow(3).getCell(headers.indexOf('Historical PSF note') + 1)
+          .value,
+      ).toBe('Captured private note');
+      expect(searchIndexService.extractCanonicalValues).toHaveBeenCalledWith(
+        capturedSchema,
+        {
+          old_title: 'Captured title',
+          old_second: 'Captured two',
+          old_third: 'Captured three',
+        },
+      );
+    },
+  );
 
   it('rejects an export exceeding the synchronous record ceiling instead of returning a partial workbook', async () => {
     searchIndexService.queryExportRequests.mockResolvedValueOnce({
@@ -556,7 +932,9 @@ describe('ExcelExportService', () => {
       requesterActor,
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.content);
+    await workbook.xlsx.load(
+      result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
     const worksheet = workbook.getWorksheet('PSF Requests');
 
     expect(worksheet?.getRow(2).getCell(1).value).toBe('PSF-0001');

@@ -1,0 +1,96 @@
+{
+  "success": true,
+  "data": {
+    "resource": "screen",
+    "id": "313d4b1e7eb24525b0d3161f1349f656",
+    "project": "15540984743145901568",
+    "title": "PSF Request Portal — Dashboard (v4 Neutral Desktop)",
+    "device": "DESKTOP",
+    "screenType": "DESIGN",
+    "canvasUrl": "https://stitch.google.com/projects/15540984743145901568?node-id=313d4b1e7eb24525b0d3161f1349f656",
+    "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WstyNORZR65dI3-7UhuJO6OxFwZJxsv2xlkfcOKoFxh7nn_j-h_8PyudTrNz5W6c3SgWSle-thwK76MENOK8cUxdobLBktc-hlz3a8ZcS_oW2Bn4q8A-MHQRmDcaFlKmjpEzfrM3SXx-XMn5VvBNaJHTFZRPvBDtnRXxOt9iHgNfHBQmhMYJ9lLbqLJwOAg1wPMo2BXsOYGG0M5QmA_NNwzMGYBE-wG1E_PrRvD5Ly4RqziRAHOtkEaXQ",
+    "htmlCode": {
+      "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2I4YTc0MTI5NDljMDQxODI5Zjg1NTQ2ZDg2ZDI0ZmJmEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+      "mimeType": "text/html",
+      "name": "projects/15540984743145901568/files/523c46abfa2744e0b49a90ce03e8ae5d"
+    },
+    "rawScreen": {
+      "outputComponents": [
+        {
+          "design": {
+            "screens": [
+              {
+                "deviceType": "DESKTOP",
+                "generatedBy": "create_datastore_entry",
+                "height": "2048",
+                "htmlCode": {
+                  "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2I4YTc0MTI5NDljMDQxODI5Zjg1NTQ2ZDg2ZDI0ZmJmEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+                  "mimeType": "text/html",
+                  "name": "projects/15540984743145901568/files/523c46abfa2744e0b49a90ce03e8ae5d"
+                },
+                "id": "313d4b1e7eb24525b0d3161f1349f656",
+                "name": "projects/15540984743145901568/screens/313d4b1e7eb24525b0d3161f1349f656",
+                "screenMetadata": {
+                  "agentType": "PRO_AGENT",
+                  "status": "COMPLETE"
+                },
+                "screenType": "DESIGN",
+                "screenshot": {
+                  "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WstyNORZR65dI3-7UhuJO6OxFwZJxsv2xlkfcOKoFxh7nn_j-h_8PyudTrNz5W6c3SgWSle-thwK76MENOK8cUxdobLBktc-hlz3a8ZcS_oW2Bn4q8A-MHQRmDcaFlKmjpEzfrM3SXx-XMn5VvBNaJHTFZRPvBDtnRXxOt9iHgNfHBQmhMYJ9lLbqLJwOAg1wPMo2BXsOYGG0M5QmA_NNwzMGYBE-wG1E_PrRvD5Ly4RqziRAHOtkEaXQ",
+                  "name": "projects/15540984743145901568/files/193e492287ec4ca7bdef907c4abfc2d9"
+                },
+                "theme": {},
+                "title": "PSF Request Portal — Dashboard (v4 Neutral Desktop)",
+                "width": "2560"
+              }
+            ],
+            "theme": {}
+          }
+        },
+        {
+          "text": "I have restarted the `/dashboard` route as **Revision 4 (v4 Neutral Desktop)** for the **Setup Owner (MFG)** role, adhering strictly to the latest approved DESIGN.md specifications and tokens:\n\n### Key Design & Architectural Highlights\n\n1. **Calm Neutral Visual Language (No Navy/Blue Washes):**\n   - Implemented warm neutral canvas (`#F6F5F2`), crisp paper surfaces (`#FFFFFF`), neutral sidebar navigation (`#FAFAF8`), and fine quiet borders (`#E2E3DE`).\n   - Saturated blue is strictly reserved for the primary `+ New Request` action (`#006F95`) and the small active navigation indicator (`#00A9E0`). All open status badges use clean neutral gray surfaces (`#F0F1ED` / `#373D43`) with hollow `CircleDot` icons, completely replacing cyan washes and play triangles.\n\n2. **Setup Owner (Alex Morgan · MFG) Shell & Navigation:**\n   - Account identifier in the bottom sidebar displays fictional **Alex Morgan** (`Setup Owner · MFG`) with avatar initials **AM**.\n   - Navigation links: **Dashboard** (active), **Requests**, **My Drafts**, and **Audit History** (confirmed accessible for all authenticated roles). **Export** and Admin tools remain omitted for the Setup Owner role.\n   - Theme toggle (`Switch to dark mode` / `Switch to light mode`) and profile stay in the sidebar footer and remain visible within 1280×800 viewports.\n\n3. **Summary Filter Tiles (44 / 24 / 6):**\n   - **Open work**: Count **44** (in scope), marked with an active filter outline, neutral surface, and department tag.\n   - **Overdue**: Count **24** (past deadline) with an alert border accent and restrained orange badge (`24 critical`).\n   - **Completed**: Count **6** (this cycle) with a completion border accent and restrained green badge (`6 archived`).\n   - Tiles function as view filter controls without mutating backend request statuses.\n\n4. **Queue Controls & Exact Status Catalog Decoding:**\n   - The queue header displays **Work queue**, `Open work`, and `MFG Department (44 total)`.\n   - Single-row desktop toolbar includes:\n     - **Work scope select**: `Related work`, `Created by me`, and `PSF department work` (selected).\n     - **Keyword search**: Explicitly labeled with placeholder `\"Search request no., title, PSF or probecard\"`.\n     - **Status dropdown**: Decoded directly from the exact 16 non-Draft catalog JSON entries.\n     - **Clear filters** button with working sample filtering and empty state handling.\n\n5. **2-Line Clamped Status Truncation & Interactive Popover:**\n   - All five fictional sample rows (`SAMPLE-001` through `SAMPLE-005` in MFG scope) are rendered with the 4 columns: **Request**, **Status**, **Due date**, and **Owner / Dept**.\n   - Status buttons have a fixed width of `176px` with `-webkit-line-clamp: 2`. The 71-character status (`93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`) visibly overflows into a real CSS ellipsis (`…`).\n   - Hovering, keyboard focusing, or clicking/tapping any status badge launches an accessible, dismissible popover (`role=\"dialog\"`, `aria-label=\"Full status\"`) displaying the exact unmodified database string. Can be dismissed via the close button, clicking outside, or pressing `Esc`.\n\n6. **Interactive Responsive Scripts & Pagination:**\n   - Built-in theme switcher dynamically toggles light and dark modes with corresponding CSS token shifts.\n   - Preserved truthful pagination metadata: *\"Showing 5 illustrative requests · 44 open requests in scope (Page size: 25)\"* with `Page 1 of 2`."
+        },
+        {
+          "suggestion": "Generate the Mobile counterpart (390px) for this v4 Neutral Setup Owner Dashboard"
+        },
+        {
+          "suggestion": "Generate the Requester role variant (Sam Taylor · 25/15/0 scope) with the v4 Neutral palette"
+        },
+        {
+          "suggestion": "Inspect the Dark mode view of this v4 Neutral Desktop Dashboard"
+        }
+      ],
+      "projectId": "15540984743145901568",
+      "sessionId": "5683644849215491709",
+      "deviceType": "DESKTOP",
+      "generatedBy": "create_datastore_entry",
+      "height": "2048",
+      "htmlCode": {
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ8Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpbCiVodG1sX2I4YTc0MTI5NDljMDQxODI5Zjg1NTQ2ZDg2ZDI0ZmJmEgsSBxDOwNyfsQUYAZIBJAoKcHJvamVjdF9pZBIWQhQxNTU0MDk4NDc0MzE0NTkwMTU2OA&filename=&opi=96797242",
+        "mimeType": "text/html",
+        "name": "projects/15540984743145901568/files/523c46abfa2744e0b49a90ce03e8ae5d"
+      },
+      "id": "313d4b1e7eb24525b0d3161f1349f656",
+      "name": "projects/15540984743145901568/screens/313d4b1e7eb24525b0d3161f1349f656",
+      "screenMetadata": {
+        "agentType": "PRO_AGENT",
+        "status": "COMPLETE"
+      },
+      "screenType": "DESIGN",
+      "screenshot": {
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WstyNORZR65dI3-7UhuJO6OxFwZJxsv2xlkfcOKoFxh7nn_j-h_8PyudTrNz5W6c3SgWSle-thwK76MENOK8cUxdobLBktc-hlz3a8ZcS_oW2Bn4q8A-MHQRmDcaFlKmjpEzfrM3SXx-XMn5VvBNaJHTFZRPvBDtnRXxOt9iHgNfHBQmhMYJ9lLbqLJwOAg1wPMo2BXsOYGG0M5QmA_NNwzMGYBE-wG1E_PrRvD5Ly4RqziRAHOtkEaXQ",
+        "name": "projects/15540984743145901568/files/193e492287ec4ca7bdef907c4abfc2d9"
+      },
+      "theme": {},
+      "title": "PSF Request Portal — Dashboard (v4 Neutral Desktop)",
+      "width": "2560",
+      "agentText": "I have restarted the `/dashboard` route as **Revision 4 (v4 Neutral Desktop)** for the **Setup Owner (MFG)** role, adhering strictly to the latest approved DESIGN.md specifications and tokens:\n\n### Key Design & Architectural Highlights\n\n1. **Calm Neutral Visual Language (No Navy/Blue Washes):**\n   - Implemented warm neutral canvas (`#F6F5F2`), crisp paper surfaces (`#FFFFFF`), neutral sidebar navigation (`#FAFAF8`), and fine quiet borders (`#E2E3DE`).\n   - Saturated blue is strictly reserved for the primary `+ New Request` action (`#006F95`) and the small active navigation indicator (`#00A9E0`). All open status badges use clean neutral gray surfaces (`#F0F1ED` / `#373D43`) with hollow `CircleDot` icons, completely replacing cyan washes and play triangles.\n\n2. **Setup Owner (Alex Morgan · MFG) Shell & Navigation:**\n   - Account identifier in the bottom sidebar displays fictional **Alex Morgan** (`Setup Owner · MFG`) with avatar initials **AM**.\n   - Navigation links: **Dashboard** (active), **Requests**, **My Drafts**, and **Audit History** (confirmed accessible for all authenticated roles). **Export** and Admin tools remain omitted for the Setup Owner role.\n   - Theme toggle (`Switch to dark mode` / `Switch to light mode`) and profile stay in the sidebar footer and remain visible within 1280×800 viewports.\n\n3. **Summary Filter Tiles (44 / 24 / 6):**\n   - **Open work**: Count **44** (in scope), marked with an active filter outline, neutral surface, and department tag.\n   - **Overdue**: Count **24** (past deadline) with an alert border accent and restrained orange badge (`24 critical`).\n   - **Completed**: Count **6** (this cycle) with a completion border accent and restrained green badge (`6 archived`).\n   - Tiles function as view filter controls without mutating backend request statuses.\n\n4. **Queue Controls & Exact Status Catalog Decoding:**\n   - The queue header displays **Work queue**, `Open work`, and `MFG Department (44 total)`.\n   - Single-row desktop toolbar includes:\n     - **Work scope select**: `Related work`, `Created by me`, and `PSF department work` (selected).\n     - **Keyword search**: Explicitly labeled with placeholder `\"Search request no., title, PSF or probecard\"`.\n     - **Status dropdown**: Decoded directly from the exact 16 non-Draft catalog JSON entries.\n     - **Clear filters** button with working sample filtering and empty state handling.\n\n5. **2-Line Clamped Status Truncation & Interactive Popover:**\n   - All five fictional sample rows (`SAMPLE-001` through `SAMPLE-005` in MFG scope) are rendered with the 4 columns: **Request**, **Status**, **Due date**, and **Owner / Dept**.\n   - Status buttons have a fixed width of `176px` with `-webkit-line-clamp: 2`. The 71-character status (`93% -- Provide test template map to EWFM\\Update auto FI script (ST Fab)`) visibly overflows into a real CSS ellipsis (`…`).\n   - Hovering, keyboard focusing, or clicking/tapping any status badge launches an accessible, dismissible popover (`role=\"dialog\"`, `aria-label=\"Full status\"`) displaying the exact unmodified database string. Can be dismissed via the close button, clicking outside, or pressing `Esc`.\n\n6. **Interactive Responsive Scripts & Pagination:**\n   - Built-in theme switcher dynamically toggles light and dark modes with corresponding CSS token shifts.\n   - Preserved truthful pagination metadata: *\"Showing 5 illustrative requests · 44 open requests in scope (Page size: 25)\"* with `Page 1 of 2`.",
+      "suggestions": [
+        "Generate the Mobile counterpart (390px) for this v4 Neutral Setup Owner Dashboard",
+        "Generate the Requester role variant (Sam Taylor · 25/15/0 scope) with the v4 Neutral palette",
+        "Inspect the Dark mode view of this v4 Neutral Desktop Dashboard"
+      ],
+      "imageUrl": "https://lh3.googleusercontent.com/aida/AEtjO1WstyNORZR65dI3-7UhuJO6OxFwZJxsv2xlkfcOKoFxh7nn_j-h_8PyudTrNz5W6c3SgWSle-thwK76MENOK8cUxdobLBktc-hlz3a8ZcS_oW2Bn4q8A-MHQRmDcaFlKmjpEzfrM3SXx-XMn5VvBNaJHTFZRPvBDtnRXxOt9iHgNfHBQmhMYJ9lLbqLJwOAg1wPMo2BXsOYGG0M5QmA_NNwzMGYBE-wG1E_PrRvD5Ly4RqziRAHOtkEaXQ"
+    }
+  }
+}

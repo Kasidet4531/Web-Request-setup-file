@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { RequestAssigneePicker } from './RequestAssigneePicker'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { AsyncNotice } from './ui/AsyncNotice'
 import {
   activeSchemaFromRequest,
   applyRuntimeAutofillSuggestions,
   buildRequestValuesForSchema,
-  canSubmitDraftForSchemaVersion,
   classifyDraftSchemaVersion,
   createDraftSchemaUpgradeLock,
   DRAFT_STATUS,
@@ -21,7 +22,6 @@ import {
   type PsfRequestResponse,
   type RuntimeAutofillSuggestionsResponse,
 } from '../services/api'
-import { validateRequiredFields } from '../services/formValidation'
 import type {
   ActiveFormSchemaResponse,
   DynamicFormErrors,
@@ -31,6 +31,10 @@ import type {
 } from '../types/forms'
 
 const PSF_REQUEST_FORM_KEY = 'psf-request'
+
+function isRequesterIdentityKey(canonicalKey: string): boolean {
+  return canonicalKey === 'requester' || canonicalKey === 'requester_name'
+}
 
 function buildInitialValues(schema: FormSchema): DynamicFormValues {
   return schema.sections.reduce<DynamicFormValues>((values, section) => {
@@ -44,7 +48,18 @@ function buildInitialValues(schema: FormSchema): DynamicFormValues {
 
 export interface ActiveSchemaFormProps {
   mode: 'request' | 'preview'
+  headerTitle?: string
   requestId?: string
+  disabled?: boolean
+  explicitEdit?: boolean
+  requesterIdentity?: string
+  onDirtyChange?: (dirty: boolean) => void
+  onDraftSchemaSubmitAllowedChange?: (allowed: boolean) => void
+  onRequestSaved?: (request: PsfRequestResponse) => void
+  onSavingChange?: (saving: boolean) => void
+  onSubmissionConflictSettled?: (pending: boolean) => void
+  requestSnapshot?: PsfRequestResponse
+  submissionConflict?: number
 }
 
 export interface RequestDraftStatusProps {
@@ -58,7 +73,7 @@ export function RequestDraftStatus({ request }: RequestDraftStatusProps) {
   return (
     <p className="page-card__description">
       {request.requestNo} · {request.status} · <a href={requestPath}>{requestLinkLabel}</a>
-      {request.status !== DRAFT_STATUS ? ' · requester-owned fields are locked after Draft status.' : null}
+      {!request.canEditRequesterData ? ' · Requester information editing is unavailable for this request.' : null}
     </p>
   )
 }
@@ -66,6 +81,7 @@ export function RequestDraftStatus({ request }: RequestDraftStatusProps) {
 export interface DraftSchemaUpgradeDecisionProps {
   activeVersion: number
   currentVersion: number
+  disabled?: boolean
   error: string | null
   hasRemained?: boolean
   isUpgradePending: boolean
@@ -78,6 +94,7 @@ export interface DraftSchemaUpgradeDecisionProps {
 export function DraftSchemaUpgradeDecision({
   activeVersion,
   currentVersion,
+  disabled = false,
   error,
   hasRemained = false,
   isUpgradePending,
@@ -89,10 +106,10 @@ export function DraftSchemaUpgradeDecision({
   return (
     <section
       aria-busy={isUpgradePending}
-      aria-labelledby="draft-schema-upgrade-heading"
+      aria-label={hasRemained ? 'Schema upgrade required before submit' : 'Schema update required'}
       className="draft-schema-upgrade"
     >
-      <h2 id="draft-schema-upgrade-heading">
+      <h2>
         {hasRemained ? 'Schema upgrade required before submit' : 'Schema update required'}
       </h2>
       <p>
@@ -103,15 +120,11 @@ export function DraftSchemaUpgradeDecision({
           : 'Choose whether to upgrade now or remain on the Draft schema while editing.'}
       </p>
       {isUpgradePending ? <p role="status">Upgrading Draft schema…</p> : null}
-      {error ? (
-        <p className="status-pill status-pill--error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <AsyncNotice kind="error" title={error} /> : null}
       <div className="draft-schema-upgrade__actions">
         <button
-          className="primary-button"
-          disabled={isUpgradePending}
+          className="ui-button ui-button--primary"
+          disabled={isUpgradePending || disabled}
           onClick={onUpgrade}
           type="button"
         >
@@ -119,8 +132,8 @@ export function DraftSchemaUpgradeDecision({
         </button>
         {showRemain ? (
           <button
-            className="secondary-button"
-            disabled={isUpgradePending}
+            className="ui-button ui-button--secondary"
+            disabled={isUpgradePending || disabled}
             onClick={onRemain}
             type="button"
           >
@@ -129,8 +142,8 @@ export function DraftSchemaUpgradeDecision({
         ) : null}
         {error ? (
           <button
-            className="secondary-button"
-            disabled={isUpgradePending}
+            className="ui-button ui-button--secondary"
+            disabled={isUpgradePending || disabled}
             onClick={onReload}
             type="button"
           >
@@ -144,7 +157,11 @@ export function DraftSchemaUpgradeDecision({
 
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
-export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
+export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
+  const savedValuesRef = useRef<DynamicFormValues>({})
+  const savedOwnerRef = useRef<string | null | undefined>(null)
+  const ownerRef = useRef<string | null | undefined>(null)
+  const [owner, setOwner] = useState<string | null | undefined>(null)
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [currentRequest, setCurrentRequest] = useState<PsfRequestResponse | null>(null)
@@ -161,22 +178,35 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [upgradeError, setUpgradeError] = useState<string | null>(null)
+  const [submissionConflictError, setSubmissionConflictError] = useState<string | null>(null)
   const [upgradePending, setUpgradePending] = useState(false)
   const [values, setValues] = useState<DynamicFormValues>({})
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [editingInformation, setEditingInformation] = useState(false)
   const draftSchemaUpgradeLock = useRef(createDraftSchemaUpgradeLock())
   const autofillLookupGeneration = useRef(0)
   const fieldEditVersions = useRef<Record<string, number>>({})
+  const handledSubmissionConflict = useRef(0)
   const isMountedRef = useRef(true)
   const valuesRef = useRef<DynamicFormValues>({})
+  const onRequestSavedRef = useRef(onRequestSaved)
   const loadKey = `${mode}:${requestId ?? 'new'}:${reloadKey}`
+
+  function syncOwner(snapshot: PsfRequestResponse | null, preserveLocal = false) {
+    const nextSavedOwner = snapshot?.setupOwnerUserId ?? (snapshot?.setupOwner ? undefined : null)
+    const nextOwner = preserveLocal && ownerRef.current !== savedOwnerRef.current ? ownerRef.current : nextSavedOwner
+    savedOwnerRef.current = nextSavedOwner
+    ownerRef.current = nextOwner
+    setOwner(nextOwner)
+  }
 
   function replaceValues(nextValues: DynamicFormValues) {
     valuesRef.current = nextValues
     setValues(nextValues)
+    setHasUnsavedChanges(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current)
   }
 
   function invalidateRuntimeAutofill() {
@@ -191,6 +221,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       isMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    onRequestSavedRef.current = onRequestSaved
+  }, [onRequestSaved])
 
   useEffect(() => {
     let mounted = true
@@ -222,13 +256,20 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
           setUpgradeError(null)
           setErrors({})
           setCurrentRequest(request)
+          setEditingInformation(false)
+          // Publish the same snapshot so the shell cannot rebase this load onto its old request.
+          if (mode === 'request') onRequestSavedRef.current?.(request)
           setActiveRequestSchema(requestSchema)
           setActiveSchema(resolvedSchema)
           setDraftSchemaVersion(classification)
+          onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
           setDraftSchemaDecision(
             isDraftSchemaDecisionRequired(classification) ? 'unresolved' : 'not-needed',
           )
           const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, request.requesterData)
+          syncOwner(request)
+          savedValuesRef.current = nextValues
+          onDirtyChange?.(false)
           invalidateRuntimeAutofill()
           fieldEditVersions.current = {}
           replaceValues(nextValues)
@@ -250,11 +291,16 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         setUpgradeError(null)
         setErrors({})
         setCurrentRequest(null)
+        setEditingInformation(false)
         setActiveRequestSchema(null)
         setDraftSchemaDecision('not-needed')
         setDraftSchemaVersion('not-applicable')
+        onDraftSchemaSubmitAllowedChange?.(false)
         setActiveSchema(response)
         const nextValues = buildInitialValues(response.schema)
+        syncOwner(null)
+        savedValuesRef.current = nextValues
+        onDirtyChange?.(false)
         invalidateRuntimeAutofill()
         fieldEditVersions.current = {}
         replaceValues(nextValues)
@@ -278,47 +324,218 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
     return () => {
       mounted = false
     }
-  }, [loadKey, mode, requestId])
+  }, [loadKey, mode, onDirtyChange, onDraftSchemaSubmitAllowedChange, requestId])
+
+  useEffect(() => {
+    if (mode !== 'request' || requestId || currentRequest || !activeSchema || loadedSchemaKey !== loadKey || !requesterIdentity?.trim()) return
+    const identityFields = activeSchema.schema.sections.flatMap((section) => section.fields)
+      .filter((field) => isRequesterIdentityKey(field.canonicalKey))
+    if (!identityFields.some((field) => valuesRef.current[field.fieldKey] !== requesterIdentity)) return
+
+    const nextBaseline = { ...savedValuesRef.current }
+    const nextValues = { ...valuesRef.current }
+    identityFields.forEach((field) => {
+      nextBaseline[field.fieldKey] = requesterIdentity
+      nextValues[field.fieldKey] = requesterIdentity
+    })
+    savedValuesRef.current = nextBaseline
+    // Account data can arrive after schema loading and must preserve typed fields.
+    replaceValues(nextValues)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(nextBaseline) || ownerRef.current !== savedOwnerRef.current)
+  }, [activeSchema, currentRequest, loadedSchemaKey, loadKey, mode, onDirtyChange, requestId, requesterIdentity])
+
+  useEffect(() => {
+    if (
+      mode !== 'request' ||
+      !requestId ||
+      !requestSnapshot ||
+      requestSnapshot.id !== requestId ||
+      !currentRequest ||
+      requestSnapshot === currentRequest
+    ) {
+      return
+    }
+
+    const nextActiveRequestSchema = requestSnapshot.status === DRAFT_STATUS
+      ? activeRequestSchema
+      : null
+    const classification = classifyDraftSchemaVersion(mode, requestSnapshot, nextActiveRequestSchema)
+    const resolvedSchema = resolveRequestFormSchema(mode, requestSnapshot, nextActiveRequestSchema)
+    const requestDataWithLocalEdits = { ...requestSnapshot.requesterData }
+    Object.keys(valuesRef.current).forEach((fieldKey) => {
+      if (valuesRef.current[fieldKey] !== savedValuesRef.current[fieldKey]) {
+        requestDataWithLocalEdits[fieldKey] = valuesRef.current[fieldKey]
+      }
+    })
+    const latestSavedValues = buildRequestValuesForSchema(resolvedSchema.schema, requestSnapshot.requesterData)
+    const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, requestDataWithLocalEdits)
+    const schemaChanged =
+      currentRequest.formVersion !== requestSnapshot.formVersion ||
+      currentRequest.schemaSnapshot.version !== requestSnapshot.schemaSnapshot.version
+
+    // This external server snapshot must rebase the child's editable local state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentRequest(requestSnapshot)
+    setActiveRequestSchema(nextActiveRequestSchema)
+    setActiveSchema(resolvedSchema)
+    setDraftSchemaVersion(classification)
+    onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
+    setDraftSchemaDecision(
+      classification === 'not-applicable'
+        ? 'not-needed'
+        : schemaChanged && isDraftSchemaDecisionRequired(classification)
+          ? 'unresolved'
+          : draftSchemaDecision,
+    )
+    syncOwner(requestSnapshot, true)
+    savedValuesRef.current = latestSavedValues
+    replaceValues(nextValues)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues) || ownerRef.current !== savedOwnerRef.current)
+    setErrors({})
+    invalidateRuntimeAutofill()
+  }, [
+    activeRequestSchema,
+    currentRequest,
+    draftSchemaDecision,
+    mode,
+    onDirtyChange,
+    onDraftSchemaSubmitAllowedChange,
+    requestId,
+    requestSnapshot,
+  ])
+
+  useEffect(() => {
+    if (
+      mode !== 'request' ||
+      !requestId ||
+      !currentRequest ||
+      submissionConflict === 0 ||
+      handledSubmissionConflict.current === submissionConflict
+    ) {
+      return
+    }
+
+    handledSubmissionConflict.current = submissionConflict
+    onDraftSchemaSubmitAllowedChange?.(false)
+    const conflictRequestId = requestId
+    let mounted = true
+    let settled = false
+
+    function settleConflictRecovery() {
+      if (!settled) {
+        settled = true
+        onSubmissionConflictSettled?.(false)
+      }
+    }
+
+    async function refreshAfterSubmissionConflict() {
+      try {
+        const latestRequest = await api.fetchPsfRequest(conflictRequestId)
+        const latestRequestSchema = latestRequest.status === DRAFT_STATUS
+          ? await api.fetchActiveFormSchema(latestRequest.formKey)
+          : null
+
+        if (!mounted) return
+
+        const classification = classifyDraftSchemaVersion('request', latestRequest, latestRequestSchema)
+        const resolvedSchema = resolveRequestFormSchema('request', latestRequest, latestRequestSchema)
+        const requesterDataWithLocalEdits = { ...latestRequest.requesterData }
+        Object.keys(valuesRef.current).forEach((fieldKey) => {
+          if (valuesRef.current[fieldKey] !== savedValuesRef.current[fieldKey]) {
+            requesterDataWithLocalEdits[fieldKey] = valuesRef.current[fieldKey]
+          }
+        })
+        const latestSavedValues = buildRequestValuesForSchema(resolvedSchema.schema, latestRequest.requesterData)
+        const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, requesterDataWithLocalEdits)
+
+        setCurrentRequest(latestRequest)
+        onRequestSaved?.(latestRequest)
+        setActiveRequestSchema(latestRequestSchema)
+        setActiveSchema(resolvedSchema)
+        setDraftSchemaVersion(classification)
+        onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
+        setDraftSchemaDecision(
+          isDraftSchemaDecisionRequired(classification) ? 'unresolved' : 'not-needed',
+        )
+        syncOwner(latestRequest, true)
+        savedValuesRef.current = latestSavedValues
+        replaceValues(nextValues)
+        onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues) || ownerRef.current !== savedOwnerRef.current)
+        setErrors({})
+
+        if (isDraftSchemaDecisionRequired(classification)) {
+          setSubmissionConflictError(null)
+          setUpgradeError(
+            'The active schema changed while this Draft was being submitted. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
+          )
+        } else {
+          setUpgradeError(null)
+          setSubmissionConflictError(
+            classification === 'newer-or-inconsistent'
+              ? 'This Draft schema does not match the active request schema. Your edits are preserved, but it cannot be submitted. Reload the Draft.'
+              : 'The Draft changed while it was being submitted. Your edits are preserved. Reload the Draft before continuing.',
+          )
+        }
+      } catch {
+        if (mounted) {
+          setSubmissionConflictError(
+            'The Draft changed while it was being submitted. Your edits are preserved; reload the Draft to refresh its schema and revision.',
+          )
+        }
+      } finally {
+        settleConflictRecovery()
+      }
+    }
+
+    void refreshAfterSubmissionConflict()
+    return () => {
+      mounted = false
+      settleConflictRecovery()
+    }
+  }, [currentRequest, mode, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSubmissionConflictSettled, requestId, submissionConflict])
 
   const schemaDecisionRequired = isDraftSchemaDecisionRequired(draftSchemaVersion)
   const isSchemaChoicePending = schemaDecisionRequired && draftSchemaDecision === 'unresolved'
   const hasInconsistentDraftSchema = draftSchemaVersion === 'newer-or-inconsistent'
-  const readOnly = requesterFieldsAreReadOnly(mode, currentRequest)
-  const formReadOnly = readOnly || saving || submitting || upgradePending || hasInconsistentDraftSchema
-  const canSubmitDraft =
-    mode === 'request' &&
-    currentRequest?.status === DRAFT_STATUS &&
-    !isSchemaChoicePending &&
-    canSubmitDraftForSchemaVersion(draftSchemaVersion)
-  const submitIsBlockedBySchema =
-    mode === 'request' &&
-    currentRequest?.status === DRAFT_STATUS &&
-    !isSchemaChoicePending &&
-    !canSubmitDraftForSchemaVersion(draftSchemaVersion)
-
+  const requestSnapshotPending = Boolean(
+    requestSnapshot &&
+    requestSnapshot.id === requestId &&
+    currentRequest &&
+    requestSnapshot !== currentRequest,
+  )
+  const readOnly = requesterFieldsAreReadOnly(
+    mode,
+    requestSnapshotPending && requestSnapshot ? requestSnapshot : currentRequest,
+  )
+  const usesExplicitEdit = explicitEdit && mode === 'request' && Boolean(currentRequest && currentRequest.status !== DRAFT_STATUS)
+  const formUnavailable = readOnly || disabled || requestSnapshotPending || saving || upgradePending || hasInconsistentDraftSchema
+  const formReadOnly = formUnavailable || (usesExplicitEdit && !editingInformation)
+  const readOnlyFieldKeys = activeSchema?.schema.sections.flatMap((section) => section.fields
+    .filter((field) => isRequesterIdentityKey(field.canonicalKey))
+    .map((field) => field.fieldKey)) ?? []
   const submitLabel = useMemo(() => {
+    if (usesExplicitEdit) return 'Save information'
     if (currentRequest) {
-      return currentRequest.status === DRAFT_STATUS ? 'Save draft changes' : 'Requester edits locked'
+      if (currentRequest.status === DRAFT_STATUS) return 'Save draft changes'
+      return currentRequest.canEditRequesterData ? 'Save requester information' : 'Requester edits locked'
     }
 
     return mode === 'request' ? 'Save draft request' : 'Preview only'
-  }, [currentRequest, mode])
+  }, [currentRequest, mode, usesExplicitEdit])
 
-  const schemaSubmissionMessage = useMemo(() => {
-    if (!currentRequest || currentRequest.status !== DRAFT_STATUS) {
-      return null
-    }
-
-    if (draftSchemaVersion === 'older') {
-      return `Schema version ${currentRequest.formVersion} is still editable, but Upgrade to version ${activeRequestSchema?.version ?? 'the active version'} is required before submitting.`
-    }
-
-    if (draftSchemaVersion === 'newer-or-inconsistent') {
-      return 'This Draft schema does not match the active schema. Its values remain unchanged, but it cannot be submitted until the mismatch is resolved.'
-    }
-
-    return null
-  }, [activeRequestSchema?.version, currentRequest, draftSchemaVersion])
+  function cancelInformationEdit() {
+    if (formUnavailable) return
+    invalidateRuntimeAutofill()
+    fieldEditVersions.current = {}
+    replaceValues({ ...savedValuesRef.current })
+    setAutofillStatuses({})
+    setErrors({})
+    setAutofillError(null)
+    setSaveError(null)
+    setSaveMessage(null)
+    onDirtyChange?.(false)
+    setEditingInformation(false)
+  }
 
   function isCurrentRuntimeAutofillLookup(
     generation: number,
@@ -371,13 +588,15 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       currentValues: valuesRef.current,
       lookupEditVersions,
       schema,
-      suggestedValues: response.suggestedValues,
+      suggestedValues: Object.fromEntries(Object.entries(response.suggestedValues)
+        .filter(([canonicalKey]) => !isRequesterIdentityKey(canonicalKey))),
     })
     if (applied.appliedFieldKeys.length === 0) {
       return
     }
 
     replaceValues(applied.values)
+    onDirtyChange?.(JSON.stringify(applied.values) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current)
     setAutofillStatuses((currentStatuses) => {
       const nextStatuses = { ...currentStatuses }
       applied.appliedFieldKeys.forEach((fieldKey) => {
@@ -388,6 +607,10 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   }
 
   function updateField(fieldKey: string, value: string) {
+    if (formReadOnly || readOnlyFieldKeys.includes(fieldKey)) {
+      return
+    }
+
     const nextValues = { ...valuesRef.current, [fieldKey]: value }
     const nextEditVersion = (fieldEditVersions.current[fieldKey] ?? 0) + 1
     fieldEditVersions.current = {
@@ -395,6 +618,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       [fieldKey]: nextEditVersion,
     }
     replaceValues(nextValues)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current)
     setErrors((currentErrors) => {
       const nextErrors = { ...currentErrors }
       delete nextErrors[fieldKey]
@@ -444,30 +668,37 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   function remainOnDraftSchema() {
     setDraftSchemaDecision('remain')
     setUpgradeError(null)
+    setSubmissionConflictError(null)
     setSaveError(null)
     setSaveMessage(null)
   }
 
   function reloadDraftSchema() {
+    if (disabled || saving || upgradePending || loadedSchemaKey !== loadKey) return
+    if ((JSON.stringify(valuesRef.current) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current) &&
+      !window.confirm('Discard unsaved requester changes and reload this request?')) return
     invalidateRuntimeAutofill()
+    onDraftSchemaSubmitAllowedChange?.(false)
     setUpgradeError(null)
+    setSubmissionConflictError(null)
     setReloadKey((currentReloadKey) => currentReloadKey + 1)
   }
 
   async function saveDraft(currentValues: DynamicFormValues) {
-    if (!activeSchema || formReadOnly || isSchemaChoicePending) {
+    const mutationLock = draftSchemaUpgradeLock.current
+    if (
+      !activeSchema ||
+      formReadOnly ||
+      isSchemaChoicePending ||
+      !mutationLock.tryStart()
+    ) {
       return
     }
 
-    const nextErrors = validateRequiredFields(activeSchema.schema, currentValues)
-    setErrors(nextErrors)
-
-    if (Object.keys(nextErrors).length > 0) {
-      return
-    }
-
+    setErrors({})
     invalidateRuntimeAutofill()
     setSaving(true)
+    onSavingChange?.(true)
     setSaveError(null)
     setSaveMessage(null)
 
@@ -475,31 +706,96 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       const savedRequest = currentRequest
         ? await api.updateDraftRequesterData(currentRequest.id, {
             formVersion: currentRequest.formVersion,
+            expectedUpdatedAt: currentRequest.updatedAt,
             requesterData: currentValues,
+            ...(currentRequest.status === DRAFT_STATUS && ownerRef.current !== savedOwnerRef.current ? { setupOwnerUserId: ownerRef.current } : {}),
           })
-        : await api.createDraftRequest({ requesterData: currentValues })
+        : await api.createDraftRequest({ requesterData: currentValues, ...(ownerRef.current !== savedOwnerRef.current ? { setupOwnerUserId: ownerRef.current } : {}) })
       const nextActiveRequestSchema =
         currentRequest && activeRequestSchema
           ? activeRequestSchema
-          : activeSchemaFromRequest(savedRequest)
+          : activeSchema ?? activeSchemaFromRequest(savedRequest)
       const classification = classifyDraftSchemaVersion(mode, savedRequest, nextActiveRequestSchema)
       const resolvedSchema = resolveRequestFormSchema(mode, savedRequest, nextActiveRequestSchema)
 
       setCurrentRequest(savedRequest)
+      onRequestSaved?.(savedRequest)
       setActiveRequestSchema(nextActiveRequestSchema)
       setActiveSchema(resolvedSchema)
       setDraftSchemaVersion(classification)
+      onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
       setDraftSchemaDecision(
         isDraftSchemaDecisionRequired(classification) ? 'remain' : 'not-needed',
       )
+      setSubmissionConflictError(null)
       fieldEditVersions.current = {}
+      const savedValues = buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData)
+      syncOwner(savedRequest)
+      savedValuesRef.current = savedValues
+      onDirtyChange?.(false)
       setAutofillError(null)
       setAutofillStatuses({})
       replaceValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
-      setSaveMessage(`Draft ${savedRequest.requestNo} saved.`)
+      setEditingInformation(false)
+      setSaveMessage(savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.')
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Unable to save draft request')
+      if (error instanceof ApiError && error.status === 409 && currentRequest) {
+        try {
+          const latestRequest = await api.fetchPsfRequest(currentRequest.id)
+          const latestRequestSchema = latestRequest.status === DRAFT_STATUS
+            ? await api.fetchActiveFormSchema(latestRequest.formKey)
+            : null
+          const classification = classifyDraftSchemaVersion(mode, latestRequest, latestRequestSchema)
+          const resolvedSchema = resolveRequestFormSchema(mode, latestRequest, latestRequestSchema)
+          const requesterDataWithLocalEdits = { ...latestRequest.requesterData }
+          Object.keys(valuesRef.current).forEach((fieldKey) => {
+            if (valuesRef.current[fieldKey] !== savedValuesRef.current[fieldKey]) {
+              requesterDataWithLocalEdits[fieldKey] = valuesRef.current[fieldKey]
+            }
+          })
+          const latestSavedValues = buildRequestValuesForSchema(resolvedSchema.schema, latestRequest.requesterData)
+          const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, requesterDataWithLocalEdits)
+          const schemaChanged =
+            currentRequest.formVersion !== latestRequest.formVersion ||
+            currentRequest.schemaSnapshot.version !== latestRequest.schemaSnapshot.version ||
+            activeRequestSchema?.version !== latestRequestSchema?.version
+
+          setCurrentRequest(latestRequest)
+          onRequestSaved?.(latestRequest)
+          setActiveRequestSchema(latestRequestSchema)
+          setActiveSchema(resolvedSchema)
+          setDraftSchemaVersion(classification)
+          onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
+          setDraftSchemaDecision(
+            isDraftSchemaDecisionRequired(classification)
+              ? schemaChanged ? 'unresolved' : draftSchemaDecision
+              : 'not-needed',
+          )
+          syncOwner(latestRequest, true)
+          savedValuesRef.current = latestSavedValues
+          replaceValues(nextValues)
+          onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues) || ownerRef.current !== savedOwnerRef.current)
+          setErrors({})
+          setUpgradeError(
+            isDraftSchemaDecisionRequired(classification)
+              ? 'The active schema changed while this Draft was being saved. Your compatible edits are preserved. Choose Upgrade, Remain, or Reload before continuing.'
+              : null,
+          )
+          setSubmissionConflictError(
+            classification === 'newer-or-inconsistent'
+              ? 'This Draft schema does not match the active request schema. Your edits are preserved, but it cannot be saved. Reload the Draft.'
+              : null,
+          )
+          setSaveError('This request changed in another session. Your unsaved requester values are preserved; review them against the latest revision before saving again.')
+        } catch {
+          setSaveError('This request changed in another session. Your unsaved requester values are preserved; reload before saving again.')
+        }
+      } else {
+        setSaveError(error instanceof Error ? error.message : 'Unable to save draft request')
+      }
     } finally {
+      mutationLock.finish()
+      onSavingChange?.(false)
       setSaving(false)
     }
   }
@@ -508,7 +804,8 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
     if (
       !currentRequest ||
       !activeRequestSchema ||
-      !schemaDecisionRequired
+      !schemaDecisionRequired ||
+      formReadOnly
     ) {
       return
     }
@@ -520,6 +817,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
 
     invalidateRuntimeAutofill()
     setUpgradePending(true)
+    onSavingChange?.(true)
     setUpgradeError(null)
     setSaveError(null)
     setSaveMessage(null)
@@ -528,19 +826,27 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       const upgradedRequest = await api.upgradeDraftSchema(currentRequest.id, {
         formVersion: activeRequestSchema.version,
       })
-      const upgradedSchema = activeSchemaFromRequest(upgradedRequest)
+      const upgradedSchema = resolveRequestFormSchema('request', upgradedRequest, activeRequestSchema)
       const classification = classifyDraftSchemaVersion('request', upgradedRequest, upgradedSchema)
 
       setCurrentRequest(upgradedRequest)
+      onRequestSaved?.(upgradedRequest)
       setActiveRequestSchema(upgradedSchema)
       setActiveSchema(upgradedSchema)
       setDraftSchemaVersion(classification)
+      onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
       setDraftSchemaDecision('not-needed')
+      const savedValues = buildRequestValuesForSchema(upgradedSchema.schema, upgradedRequest.requesterData)
+      syncOwner(upgradedRequest, true)
+      savedValuesRef.current = savedValues
+      const nextValues = buildRequestValuesForSchema(upgradedSchema.schema, valuesRef.current)
+      onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(savedValues) || ownerRef.current !== savedOwnerRef.current)
+      setSubmissionConflictError(null)
       setErrors({})
       fieldEditVersions.current = {}
       setAutofillError(null)
       setAutofillStatuses({})
-      replaceValues(buildRequestValuesForSchema(upgradedSchema.schema, valuesRef.current))
+      replaceValues(nextValues)
       setSaveMessage(
         `Draft ${upgradedRequest.requestNo} upgraded to schema version ${upgradedRequest.formVersion}.`,
       )
@@ -552,149 +858,36 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
       )
     } finally {
       upgradeLock.finish()
+      onSavingChange?.(false)
       setUpgradePending(false)
     }
   }
 
-  async function submitDraft() {
-    if (!activeSchema || !currentRequest || !canSubmitDraft || formReadOnly) {
-      return
-    }
-
-    invalidateRuntimeAutofill()
-    setSubmitting(true)
-    setSaveError(null)
-    setSaveMessage(null)
-
-    try {
-      const latestActiveSchema = await api.fetchActiveFormSchema(currentRequest.formKey)
-      const latestClassification = classifyDraftSchemaVersion(
-        'request',
-        currentRequest,
-        latestActiveSchema,
-      )
-
-      if (!canSubmitDraftForSchemaVersion(latestClassification)) {
-        const lockedSchema = activeSchemaFromRequest(currentRequest)
-        const requiresChoice = isDraftSchemaDecisionRequired(latestClassification)
-
-        setActiveRequestSchema(latestActiveSchema)
-        setActiveSchema(lockedSchema)
-        setDraftSchemaVersion(latestClassification)
-        setDraftSchemaDecision(requiresChoice ? 'unresolved' : 'not-needed')
-        setErrors({})
-        fieldEditVersions.current = {}
-        setAutofillError(null)
-        setAutofillStatuses({})
-        replaceValues(buildRequestValuesForSchema(lockedSchema.schema, valuesRef.current))
-        if (requiresChoice) {
-          setUpgradeError(
-            'A newer active schema is available. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
-          )
-        } else {
-          setSaveError(
-            'The Draft schema no longer matches the active schema. Reload the Draft before submitting.',
-          )
-        }
-        return
-      }
-
-      const nextRequesterData = buildRequestValuesForSchema(latestActiveSchema.schema, valuesRef.current)
-      const nextErrors = validateRequiredFields(latestActiveSchema.schema, nextRequesterData)
-
-      setActiveRequestSchema(latestActiveSchema)
-      setActiveSchema(latestActiveSchema)
-      setDraftSchemaVersion(latestClassification)
-      replaceValues(nextRequesterData)
-      setErrors(nextErrors)
-
-      if (Object.keys(nextErrors).length > 0) {
-        return
-      }
-
-      const savedRequesterData = buildRequestValuesForSchema(
-        latestActiveSchema.schema,
-        currentRequest.requesterData,
-      )
-      const hasUnsavedChanges =
-        JSON.stringify(savedRequesterData) !== JSON.stringify(nextRequesterData)
-      const readyToSubmit = hasUnsavedChanges
-        ? await api.updateDraftRequesterData(currentRequest.id, {
-            formVersion: currentRequest.formVersion,
-            requesterData: nextRequesterData,
-          })
-        : currentRequest
-      const submittedRequest = await api.submitPsfRequest(readyToSubmit.id, {
-        formVersion: latestActiveSchema.version,
-      })
-
-      setCurrentRequest(submittedRequest)
-      setActiveRequestSchema(null)
-      setActiveSchema(activeSchemaFromRequest(submittedRequest))
-      setDraftSchemaVersion('not-applicable')
-      setDraftSchemaDecision('not-needed')
-      fieldEditVersions.current = {}
-      setAutofillError(null)
-      setAutofillStatuses({})
-      replaceValues(buildRequestValuesForSchema(submittedRequest.schemaSnapshot, submittedRequest.requesterData))
-      setSaveMessage(`Request ${submittedRequest.requestNo} submitted.`)
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        try {
-          const refreshedActiveSchema = await api.fetchActiveFormSchema(currentRequest.formKey)
-          const refreshedClassification = classifyDraftSchemaVersion(
-            'request',
-            currentRequest,
-            refreshedActiveSchema,
-          )
-
-          if (isDraftSchemaDecisionRequired(refreshedClassification)) {
-            const lockedSchema = activeSchemaFromRequest(currentRequest)
-
-            setActiveRequestSchema(refreshedActiveSchema)
-            setActiveSchema(lockedSchema)
-            setDraftSchemaVersion(refreshedClassification)
-            setDraftSchemaDecision('unresolved')
-            setErrors({})
-            fieldEditVersions.current = {}
-            setAutofillError(null)
-            setAutofillStatuses({})
-            replaceValues(buildRequestValuesForSchema(lockedSchema.schema, valuesRef.current))
-            setUpgradeError(
-              'The active schema changed while this Draft was being submitted. Your unsaved edits are preserved. Choose Upgrade, Remain, or Reload the Draft before continuing.',
-            )
-            return
-          }
-        } catch {
-          // Preserve the original submit conflict when the active schema cannot be refreshed.
-        }
-      }
-
-      setSaveError(error instanceof Error ? error.message : 'Unable to submit request')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  let editState = currentRequest ? 'Saved' : 'Not saved'
+  if (hasUnsavedChanges) editState = 'Unsaved changes'
+  if (upgradePending) editState = 'Upgrading schema…'
+  if (saving) editState = 'Saving…'
+  if (hasInconsistentDraftSchema) editState = 'Editing is unavailable until the Draft schema is reloaded.'
+  if (disabled) editState = 'Editing is temporarily unavailable while another action is pending.'
+  if (readOnly) editState = 'Requester information is read-only.'
+  if (mode === 'preview') editState = 'Read-only preview'
 
   if (loading || loadedSchemaKey !== loadKey) {
-    return <p className="page-card__description">Loading PSF request draft…</p>
+    return <AsyncNotice kind="loading" title="Loading PSF request draft…" />
   }
 
   if (loadError || !activeSchema) {
-    return (
-      <p className="status-pill status-pill--error" role="alert">
-        {loadError ?? 'PSF request draft is unavailable.'}
-      </p>
-    )
+    return <AsyncNotice kind="error" title={loadError ?? 'PSF request draft is unavailable.'} />
   }
 
   if (isSchemaChoicePending && currentRequest && activeRequestSchema) {
     return (
       <>
-        <RequestDraftStatus request={currentRequest} />
+        {!requestId ? <RequestDraftStatus request={currentRequest} /> : null}
         <DraftSchemaUpgradeDecision
           activeVersion={activeRequestSchema.version}
           currentVersion={currentRequest.formVersion}
+          disabled={formReadOnly}
           error={upgradeError}
           isUpgradePending={upgradePending}
           onReload={reloadDraftSchema}
@@ -706,23 +899,21 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
   }
 
   return (
-    <>
-      {currentRequest ? <RequestDraftStatus request={currentRequest} /> : null}
-      {saveMessage ? (
-        <p className="status-pill status-pill--success" role="status">
-          {saveMessage}
-        </p>
+    <div className="active-schema-form">
+      {currentRequest && !requestId ? <RequestDraftStatus request={currentRequest} /> : null}
+      {saving ? <AsyncNotice kind="loading" title="Saving requester information…" /> : null}
+      {saveMessage ? <AsyncNotice kind="success" title={saveMessage} /> : null}
+      {saveError ? <AsyncNotice kind="error" title={saveError} /> : null}
+      {submissionConflictError ? (
+        <AsyncNotice kind="error" title={submissionConflictError} action={
+          <button className="ui-button ui-button--secondary" onClick={reloadDraftSchema} type="button">
+            Reload draft
+          </button>
+        } />
       ) : null}
-      {saveError ? (
-        <p className="status-pill status-pill--error" role="alert">
-          {saveError}
-        </p>
-      ) : null}
-      {autofillLoading ? <p role="status">Loading autofill suggestions…</p> : null}
+      {autofillLoading ? <p className="sr-only" role="status">Loading autofill suggestions…</p> : null}
       {autofillError ? (
-        <p className="status-pill status-pill--error" role="alert">
-          Autofill suggestions could not be loaded: {autofillError}
-        </p>
+        <AsyncNotice kind="error" title={`Autofill suggestions could not be loaded: ${autofillError}`} />
       ) : null}
       {schemaDecisionRequired &&
       draftSchemaDecision === 'remain' &&
@@ -731,6 +922,7 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
         <DraftSchemaUpgradeDecision
           activeVersion={activeRequestSchema.version}
           currentVersion={currentRequest.formVersion}
+          disabled={formReadOnly}
           error={upgradeError}
           hasRemained
           isUpgradePending={upgradePending}
@@ -740,34 +932,55 @@ export function ActiveSchemaForm({ mode, requestId }: ActiveSchemaFormProps) {
           showRemain={false}
         />
       ) : null}
+      <div className="active-schema-form__identity">
+        <div>
+          {headerTitle ? <h2>{headerTitle}</h2> : null}
+          <span className="active-schema-form__version">{headerTitle ? 'Form version' : `${activeSchema.title} · version`} {activeSchema.version}</span>
+        </div>
+        <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+        {usesExplicitEdit && !editingInformation && !readOnly ? (
+          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={() => { if (!formUnavailable) setEditingInformation(true) }} type="button">
+            Edit information
+          </button>
+        ) : null}
+      </div>
+      {mode === 'request' && (!currentRequest || currentRequest.status === DRAFT_STATUS) ? <RequestAssigneePicker
+        value={owner}
+        disabled={formReadOnly}
+        recordedOwner={currentRequest?.setupOwner ? `${currentRequest.setupOwner}${currentRequest.setupOwnerRole ? ` / ${currentRequest.setupOwnerRole}` : ''}` : undefined}
+        onChange={nextOwner => {
+          if (formReadOnly) return
+          ownerRef.current = nextOwner
+          setOwner(nextOwner)
+          const dirty = JSON.stringify(valuesRef.current) !== JSON.stringify(savedValuesRef.current) || nextOwner !== savedOwnerRef.current
+          setHasUnsavedChanges(dirty)
+          onDirtyChange?.(dirty)
+          setSaveError(null)
+          setSaveMessage(null)
+        }}
+      /> : null}
       <DynamicFormRenderer
         errors={errors}
+        footerActions={!formReadOnly && (usesExplicitEdit || currentRequest) ? <>
+          {usesExplicitEdit ? <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button> : null}
+          {currentRequest ? (
+            <div className="active-schema-form__footer">
+              <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
+              <p className="ui-help">Requester information is saved separately from PSF information.</p>
+            </div>
+          ) : null}
+        </> : undefined}
+        headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}
         onChange={!formReadOnly ? updateField : undefined}
         onSubmit={!formReadOnly ? saveDraft : undefined}
         readOnly={formReadOnly}
+        readOnlyFieldKeys={readOnlyFieldKeys}
         schema={activeSchema.schema}
-        submitLabel={saving ? 'Saving draft…' : submitLabel}
+        showSchemaHeader={false}
+        submitLabel={saving ? usesExplicitEdit ? 'Saving information…' : 'Saving draft…' : submitLabel}
         values={values}
       />
-      {currentRequest?.status === DRAFT_STATUS ? (
-        <div className="dynamic-form__actions">
-          <button
-            aria-describedby={submitIsBlockedBySchema ? 'draft-schema-submit-status' : undefined}
-            className="secondary-button"
-            disabled={saving || submitting || upgradePending || !canSubmitDraft}
-            onClick={() => void submitDraft()}
-            type="button"
-          >
-            {submitting ? 'Submitting request…' : 'Submit request'}
-          </button>
-          {submitIsBlockedBySchema && schemaSubmissionMessage ? (
-            <p id="draft-schema-submit-status" role="status">
-              {schemaSubmissionMessage}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </>
+    </div>
   )
 }

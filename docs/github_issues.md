@@ -1,5 +1,9 @@
 # GitHub Issues List: PSF Setup File Request Management
 
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. The retained body is historical evidence, not a Status catalog or current UX instruction. Do not reuse old named-stage buttons or transition-editor requirements.
+
+> **Historical target/backlog snapshot (2026-10-02 audit):** Issue drafts, references and checkboxes below preserve their original planning state; they are not a live GitHub issue/PR status report or a current implementation checklist. Some target APIs, permissions and features differ from the checked-in source. Use [Current implementation](current-implementation.md) for present behavior; publication/execution instructions below do not grant new authorization.
+
 This document contains the refined GitHub issues for the vertical slices defined for the PSF Setup File Request Management project. These issues are designed as end-to-end tracer bullets.
 
 ---
@@ -120,6 +124,8 @@ Setup `psf_request_search_index` database table. On request creation/submission,
 ---
 
 ## #7: Manual Workflow Transitions & Setup Owner Auto-Assignment
+
+> **Superseded Status instructions:** Old short stages, transition permissions/paths and automatic owner assignment through Status changes below must not be reimplemented. Use [the current Status catalog and action constraints](status-catalog-and-manual-updates.md).
 
 ### What to build
 

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AutofillRuleService } from '../admin/autofill_rule.service';
 import { FormSchemaService } from '../admin/form_schema.service';
+import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { AutofillService } from './autofill.service';
 
@@ -13,6 +14,24 @@ const activeRule = {
   status: 'active' as const,
   createdAt: '2026-08-11T10:00:00.000Z',
   updatedAt: '2026-08-11T10:00:00.000Z',
+};
+
+const workflowConfiguration = {
+  entries: [
+    { id: 'draft', name: 'Draft', kind: 'draft', requestCount: null },
+    {
+      id: 'completed',
+      name: 'Fulfilled after rename',
+      kind: 'completed',
+      requestCount: null,
+    },
+    {
+      id: 'open-completed-label',
+      name: '100% -- Completed',
+      kind: 'open',
+      requestCount: null,
+    },
+  ],
 };
 
 const requesterVisibleSchema = {
@@ -30,7 +49,6 @@ const requesterVisibleSchema = {
       {
         sectionKey: 'requester_information',
         title: 'Requester Information',
-        visibleTo: ['requester'],
         fields: [
           {
             fieldKey: 'reference_psf_name',
@@ -60,43 +78,79 @@ const requesterVisibleSchema = {
   },
 };
 
-const schemaWithAdminOnlyAutofillFields = {
-  ...requesterVisibleSchema,
-  schema: {
-    ...requesterVisibleSchema.schema,
-    sections: [
-      ...requesterVisibleSchema.schema.sections,
-      {
-        sectionKey: 'admin_only_information',
-        title: 'Admin-only Information',
-        visibleTo: ['admin'],
-        fields: [
-          {
-            fieldKey: 'private_trigger',
-            canonicalKey: 'private_trigger',
-            label: 'Private Trigger',
-            type: 'text',
-            required: false,
-            autofillTrigger: true,
-          },
-          {
-            fieldKey: 'private_target',
-            canonicalKey: 'private_target',
-            label: 'Private Target',
-            type: 'text',
-            required: false,
-          },
-        ],
-      },
-    ],
-  },
-};
-
 describe('AutofillService', () => {
   let autofillRuleService: { listActiveRules: jest.Mock };
   let formSchemaService: { getActiveSchema: jest.Mock };
+  let workflowTransitionService: { getConfiguration: jest.Mock };
   let pool: { query: jest.Mock };
   let service: AutofillService;
+
+  it('queries historical snapshot values for newly configured unindexed trigger and target fields', async () => {
+    autofillRuleService.listActiveRules.mockResolvedValue([
+      {
+        ...activeRule,
+        triggerCanonicalKey: 'product',
+        targetCanonicalKeys: ['wafer_fab'],
+      },
+    ]);
+    pool.query.mockResolvedValue({
+      rows: [
+        { canonical_key: 'wafer_fab', matched: true, value_json: 'Fab A' },
+      ],
+    });
+    await expect(
+      service.lookupSuggestions({
+        formKey: 'psf-request',
+        field: 'product',
+        value: 'Product A',
+      }),
+    ).resolves.toEqual({
+      matched: true,
+      suggestedValues: { wafer_fab: 'Fab A' },
+    });
+    const [sql] = pool.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("schema_snapshot_json->'sections'");
+    expect(sql).toContain("requester_data_json->>(field.value->>'fieldKey')");
+    expect(sql).toContain("field.value->>'canonicalKey'");
+    expect(sql).toContain('NOT EXISTS');
+    expect(sql).not.toContain("field.value->'autofillTrigger'");
+    expect(sql).toContain("historical_section.value ? 'visibleTo'");
+    expect(sql).toContain('jsonb_array_length');
+    expect(sql).toContain('["requester", "setup_owner", "admin"]');
+  });
+
+  it('keeps remaining targets usable after another target is removed from the published schema', async () => {
+    autofillRuleService.listActiveRules.mockResolvedValue([
+      { ...activeRule, targetCanonicalKeys: ['product', 'deleted_target'] },
+    ]);
+    pool.query.mockResolvedValue({
+      rows: [
+        { canonical_key: 'product', matched: true, value_json: 'Product A' },
+        {
+          canonical_key: 'deleted_target',
+          matched: true,
+          value_json: 'must not return',
+        },
+      ],
+    });
+    await expect(
+      service.lookupSuggestions({
+        formKey: 'psf-request',
+        field: 'reference_psf_name',
+        value: 'REF-1',
+      }),
+    ).resolves.toEqual({
+      matched: true,
+      suggestedValues: { product: 'Product A' },
+    });
+    expect(pool.query).toHaveBeenCalledWith(expect.any(String), [
+      'psf-request',
+      'reference_psf_name',
+      JSON.stringify('REF-1'),
+      ['product'],
+      ['Fulfilled after rename'],
+    ]);
+  });
 
   beforeEach(async () => {
     autofillRuleService = {
@@ -105,12 +159,19 @@ describe('AutofillService', () => {
     formSchemaService = {
       getActiveSchema: jest.fn().mockResolvedValue(requesterVisibleSchema),
     };
+    workflowTransitionService = {
+      getConfiguration: jest.fn().mockResolvedValue(workflowConfiguration),
+    };
     pool = { query: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AutofillService,
         { provide: AutofillRuleService, useValue: autofillRuleService },
         { provide: FormSchemaService, useValue: formSchemaService },
+        {
+          provide: WorkflowTransitionService,
+          useValue: workflowTransitionService,
+        },
         { provide: DATABASE_POOL, useValue: pool },
       ],
     }).compile();
@@ -142,22 +203,19 @@ describe('AutofillService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('fails closed without querying historical canonical values when a stored rule targets an admin-only field', async () => {
+  it('fails closed without querying historical canonical values when a stored rule targets an unknown field', async () => {
     autofillRuleService.listActiveRules.mockResolvedValue([
       {
         ...activeRule,
-        targetCanonicalKeys: ['private_target'],
+        targetCanonicalKeys: ['unknown_target'],
       },
     ]);
-    formSchemaService.getActiveSchema.mockResolvedValue(
-      schemaWithAdminOnlyAutofillFields,
-    );
     pool.query.mockResolvedValue({
       rows: [
         {
-          canonical_key: 'private_target',
+          canonical_key: 'unknown_target',
           matched: true,
-          value_json: 'historical-admin-only-value',
+          value_json: 'historical-value',
         },
       ],
     });
@@ -176,22 +234,19 @@ describe('AutofillService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('fails closed without querying historical canonical values when a stored rule has an admin-only trigger', async () => {
+  it('fails closed without querying historical canonical values when a stored rule has an unknown trigger', async () => {
     autofillRuleService.listActiveRules.mockResolvedValue([
       {
         ...activeRule,
-        triggerCanonicalKey: 'private_trigger',
+        triggerCanonicalKey: 'unknown_trigger',
         targetCanonicalKeys: ['product'],
       },
     ]);
-    formSchemaService.getActiveSchema.mockResolvedValue(
-      schemaWithAdminOnlyAutofillFields,
-    );
 
     await expect(
       service.lookupSuggestions({
         formKey: 'psf-request',
-        field: 'private_trigger',
+        field: 'unknown_trigger',
         value: 'REF-PSF-1',
       }),
     ).resolves.toEqual({ matched: false, suggestedValues: {} });
@@ -202,7 +257,7 @@ describe('AutofillService', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('uses an exact canonical JSON scalar match and returns only safe configured target values from the deterministic newest Completed source', async () => {
+  it('uses the catalog completed kind after status renames and returns only safe configured target values', async () => {
     autofillRuleService.listActiveRules.mockResolvedValue([activeRule]);
     let executedQuery = '';
     pool.query.mockImplementation((query: string) => {
@@ -254,9 +309,14 @@ describe('AutofillService', () => {
         'reference_psf_name',
         JSON.stringify('REF-PSF-1'),
         ['product', 'wafer_fab'],
+        ['Fulfilled after rename'],
       ],
     );
-    expect(executedQuery).toContain("source_request.status = 'Completed'");
+    expect(workflowTransitionService.getConfiguration).toHaveBeenCalledWith(
+      pool,
+      false,
+    );
+    expect(executedQuery).toContain('source_request.status = ANY($5::text[])');
     expect(executedQuery).toContain('source_request.completed_at IS NOT NULL');
     expect(executedQuery).toContain('trigger_value.value_json = $3::jsonb');
     expect(executedQuery).toContain(
@@ -265,8 +325,8 @@ describe('AutofillService', () => {
     expect(executedQuery).toContain(
       'ORDER BY source_request.completed_at DESC, source_request.id DESC',
     );
-    expect(executedQuery).not.toContain('requester_data_json');
     expect(executedQuery).not.toContain('request_no');
+    expect(executedQuery).not.toContain('psf_created_data_json');
   });
 
   it('reports a source match with an empty suggestion map when every configured target is missing or null', async () => {
@@ -307,6 +367,7 @@ describe('AutofillService', () => {
         'reference_psf_name',
         JSON.stringify('NO-MATCH'),
         ['product', 'wafer_fab'],
+        ['Fulfilled after rename'],
       ],
     );
   });

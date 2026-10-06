@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "source": "headless_browser",
+    "url": "http://127.0.0.1:4182/screens/4400343785376533824",
+    "route": "/screens/4400343785376533824",
+    "title": "Capture /screens/4400343785376533824",
+    "outputPath": "/home/kasidet4531/Desktop/Web_Setup_file/Web-Request-setup-file/.stitch/dashboard-v4-owner-mobile-dark.html",
+    "pageId": 1,
+    "screenshotPath": "/home/kasidet4531/Desktop/Web_Setup_file/Web-Request-setup-file/.stitch/dashboard-v4-owner-mobile-dark.png",
+    "matchedLiveTab": true,
+    "telemetry": {
+      "visibleTextLength": 911,
+      "interactiveCount": 32,
+      "leafNodeCount": 163,
+      "loadingIndicatorsFound": []
+    },
+    "status": "saved",
+    "htmlBytes": 66940
+  }
+}

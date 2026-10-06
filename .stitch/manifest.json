@@ -1,0 +1,169 @@
+{
+  "version": "1.0",
+  "stitch": {
+    "projectId": "15540984743145901568",
+    "referenceScreen": {
+      "id": "10463777411470288956",
+      "route": "/admin/form-config/psf-created-information/1",
+      "title": "PSF Created Information Form — Active — admin · Desktop Light/Dark · Navigation suite",
+      "deviceType": "DESKTOP",
+      "extractedAt": "2026-10-04T17:32:10.915Z"
+    },
+    "referenceScreens": [
+      {
+        "id": "5633881947599169946",
+        "route": "/requests/$requestId",
+        "title": "Request Detail v1.1 — Requester · Breadcrumb · Desktop Light/Dark",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T16:49:51.589Z"
+      },
+      {
+        "id": "3360253266530025101",
+        "route": "/dashboard",
+        "title": "Dashboard — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:28:36.073Z"
+      },
+      {
+        "id": "10964833883209500206",
+        "route": "/requests",
+        "title": "Requests — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:28:44.063Z"
+      },
+      {
+        "id": "13760605604055105348",
+        "route": "/requests/PSF-2026-0039",
+        "title": "Request Detail — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:28:51.698Z"
+      },
+      {
+        "id": "11725053362149875942",
+        "route": "/requests/new",
+        "title": "New Request — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:29:23.373Z"
+      },
+      {
+        "id": "4561225278074530880",
+        "route": "/my-drafts",
+        "title": "My Drafts — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:29:29.871Z"
+      },
+      {
+        "id": "11593276805698257844",
+        "route": "/requests/DRAFT-2026-0012",
+        "title": "ST Fab template map review — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:29:38.503Z"
+      },
+      {
+        "id": "16772701750426698848",
+        "route": "/requests/PSF-2026-0039/history",
+        "title": "Request History — owner · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:30:02.167Z"
+      },
+      {
+        "id": "8993818983778680877",
+        "route": "/history",
+        "title": "Audit History — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:30:17.154Z"
+      },
+      {
+        "id": "8838975277194552739",
+        "route": "/admin/export-profile",
+        "title": "Export to Excel — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:30:32.962Z"
+      },
+      {
+        "id": "3832818407496273134",
+        "route": "/login",
+        "title": "Company sign-in — public · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:30:40.444Z"
+      },
+      {
+        "id": "13319518955257527315",
+        "route": "/admin",
+        "title": "Administration — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:30:47.906Z"
+      },
+      {
+        "id": "14697717261015693809",
+        "route": "/admin/users",
+        "title": "Users & Roles — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:30:55.478Z"
+      },
+      {
+        "id": "10495529682721251919",
+        "route": "/admin/workflow",
+        "title": "Status Management — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:06.209Z"
+      },
+      {
+        "id": "11595710009703226268",
+        "route": "/admin/form-config?formKey=psf-request",
+        "title": "Form Management — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:14.099Z"
+      },
+      {
+        "id": "1111836746780652368",
+        "route": "/admin/form-config/psf-request/3",
+        "title": "Requester Information Form — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:22.340Z"
+      },
+      {
+        "id": "5769791481467384463",
+        "route": "/admin/form-config?formKey=psf-created-information",
+        "title": "Form Management — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:30.277Z"
+      },
+      {
+        "id": "5079366848255975639",
+        "route": "/admin/form-config/psf-created-information/2",
+        "title": "PSF Created Information Form — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:39.018Z"
+      },
+      {
+        "id": "2187442404172737842",
+        "route": "/admin/autofill",
+        "title": "Auto-fill Rules — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:46.219Z"
+      },
+      {
+        "id": "16640110873866473275",
+        "route": "/admin/master-data",
+        "title": "Master Data — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:31:53.503Z"
+      },
+      {
+        "id": "16780460359036933340",
+        "route": "/admin/form-config/psf-request/2",
+        "title": "Requester Information Form — Active — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:32:02.061Z"
+      },
+      {
+        "id": "10463777411470288956",
+        "route": "/admin/form-config/psf-created-information/1",
+        "title": "PSF Created Information Form — Active — admin · Desktop Light/Dark · Navigation suite",
+        "deviceType": "DESKTOP",
+        "extractedAt": "2026-10-04T17:32:10.915Z"
+      }
+    ]
+  }
+}

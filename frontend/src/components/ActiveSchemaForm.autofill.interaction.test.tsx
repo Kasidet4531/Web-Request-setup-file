@@ -137,7 +137,6 @@ const runtimeAutofillSchema: FormSchema = {
     {
       sectionKey: 'requester_information',
       title: 'Requester Information',
-      visibleTo: ['requester'],
       fields: [
         {
           fieldKey: 'reference_psf_input',
@@ -177,6 +176,7 @@ function buildDraft(overrides: Partial<PsfRequestResponse> = {}): PsfRequestResp
     formVersion: 1,
     status: 'Draft',
     requester: 'Requester Demo',
+    setupOwnerUserId: null,
     setupOwner: null,
     setupOwnerRole: null,
     productType: null,
@@ -187,6 +187,10 @@ function buildDraft(overrides: Partial<PsfRequestResponse> = {}): PsfRequestResp
     psfCreatedData: {},
     psfCreatedDataVisible: false,
     canEditPsfCreatedData: false,
+    canEditRequesterData: true,
+    canSubmitDraft: false,
+    requesterUserId: 'user-1',
+    psfReleasedAt: null,
     psfCreatedInformationSchema: {
       formKey: 'psf-created-information',
       version: 1,
@@ -285,6 +289,43 @@ async function loadPreview() {
 }
 
 describe('ActiveSchemaForm runtime autofill interactions', () => {
+  it('keeps the form editable while pending autofill status stays outside the visible layout', async () => {
+    let resolveLookup!: (response: RuntimeAutofillSuggestionsResponse) => void
+    requestApi.fetchRuntimeAutofillSuggestions.mockImplementationOnce(() =>
+      new Promise<RuntimeAutofillSuggestionsResponse>((resolve) => { resolveLookup = resolve }),
+    )
+    let page = await loadDraft()
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('reference_psf_input', 'REF-1')
+    page = renderDraft()
+    const status = requireRenderedElement(page, (element) => element.props.children === 'Loading autofill suggestions…')
+    expect(status.props.className).toBe('sr-only')
+    expect(status.props.role).toBe('status')
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('product_input', 'Typed while waiting')
+    resolveLookup({ matched: true, suggestedValues: { product: 'Historical Product' } })
+    await flushAsyncWork()
+    page = renderDraft()
+    expect(getFormRenderer(page).props.values).toMatchObject({ reference_psf_input: 'REF-1', product_input: 'Typed while waiting' })
+    expect(findRenderedElement(page, (element) => element.props.children === 'Loading autofill suggestions…')).toBeNull()
+  })
+  it('looks up Title on a new unsaved request and fills its blank configured targets', async () => {
+    const active = structuredClone(runtimeAutofillActiveSchema)
+    active.schema.sections[0].fields[0] = { fieldKey: 'title', canonicalKey: 'title', label: 'Title', type: 'text', required: true, autofillTrigger: true }
+    requestApi.fetchActiveFormSchema.mockResolvedValue(active)
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValue({ matched: true, suggestedValues: { product: 'Historical Product' } })
+    hookHarness.beginRender()
+    ActiveSchemaForm({ mode: 'request' })
+    hookHarness.runEffects()
+    await flushAsyncWork()
+    hookHarness.beginRender()
+    let page = ActiveSchemaForm({ mode: 'request' })
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('title', 'Completed title')
+    await flushAsyncWork()
+    hookHarness.beginRender()
+    page = ActiveSchemaForm({ mode: 'request' })
+    expect(requestApi.fetchRuntimeAutofillSuggestions).toHaveBeenCalledWith({ formKey: 'psf-request', field: 'title', value: 'Completed title' })
+    expect(getFormRenderer(page).props.values).toMatchObject({ title: 'Completed title', product_input: 'Historical Product' })
+  })
   beforeEach(() => {
     hookHarness.reset()
     requestApi.fetchActiveFormSchema.mockReset()
@@ -407,6 +448,7 @@ describe('ActiveSchemaForm runtime autofill interactions', () => {
       throw new Error('Expected target edit callback')
     }
     onChange('product_input', 'Manual target value')
+    expect(requestApi.fetchRuntimeAutofillSuggestions).toHaveBeenCalledTimes(3)
 
     if (!resolveProtectedLookup) {
       throw new Error('Expected protected lookup request to be pending')
@@ -523,7 +565,7 @@ describe('ActiveSchemaForm runtime autofill interactions', () => {
     expect(getFormRenderer(page).props.onChange).toBeUndefined()
 
     hookHarness.reset()
-    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ status: 'Submitted' }))
+    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ status: 'Submitted', canEditRequesterData: false }))
     page = await loadDraft()
 
     expect(getFormRenderer(page).props.onChange).toBeUndefined()

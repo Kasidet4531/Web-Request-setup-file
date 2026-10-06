@@ -1,5 +1,11 @@
 # PSF Setup File Web Application Specification
 
+> **Current Status requirement, 4 October 2026:** [Exact database Status catalog and interaction constraints](docs/status-catalog-and-manual-updates.md) replace the previous short stages and transition configuration. Use full database strings and do not create action-driven automatic Status changes.
+
+> **Latest product clarification, 4 October 2026:** [Audit History access](docs/audit-history-access.md) is required for all authenticated roles. Source-audit references below describe current implementation only and do not override this confirmed requirement.
+
+> **Historical product target/specification (2026-10-02 audit):** Requirements, examples, permission matrices and earlier implementation annotations below preserve the evolving product target. They are not a complete description of the checked-in application. [Current implementation](docs/current-implementation.md) is the authoritative source-audited baseline and takes precedence over conflicting statements here, including older ADR 0014 baseline claims. This specification does not establish current GitHub state or verify a deployed runtime.
+
 > This document consolidates the discussed requirements and architecture for a Web Application to manage PSF Setup File Requests, Dynamic Forms, Workflow Status, Search, Auto-fill, Excel Export, and Audit History.
 
 > **Implementation status:** This is a product specification, not a claim that every described component exists. The current source baseline is [`ADR 0014`](docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md). It overrides conflicting implementation claims in this document: the current runtime is `Web-Request-setup-file`; `UI_Web_Setup_file` is visual reference only; authentication is LDAP-backed with session-backed local authorization profiles; current auth routes are `/api/login`, `/api/logout`, and `/api/me`; and the current backend uses NestJS with Express. Deployment proxy/TLS, attachment runtime, export-profile CRUD, Monaco/CodeMirror, and several route/page capabilities remain unverified or unimplemented.
@@ -49,7 +55,7 @@ The main user roles are:
 
 The key workflow requirement is:
 
-> The requester must not see the **PSF Created Information** section until the setup file owner has completed the setup information and updated the request status to **PSF Created**.
+> The requester must not see the **PSF Created Information** section until the setup file owner has completed the setup information and explicitly saved the configured PSF release-trigger Status; visibility remains released afterward.
 
 ---
 
@@ -113,12 +119,9 @@ The Dashboard should include:
 ### Suggested Summary Cards
 
 ```text
-Total Requests
-Waiting for Setup
-Setup In Progress
-PSF Created
-Completed
+Open work
 Overdue
+Completed
 ```
 
 ### Suggested Dashboard Table Columns
@@ -228,90 +231,71 @@ This section is filled in by the setup file owner or engineer after completing t
 - Attachment
 ```
 
+### Form Management and Historical Data
+
+- Admins configure this section through the existing Form Management editor, selecting **PSF Created Information**. Its form key is `psf-created-information`; versions and drafts are independent from Requester Information (`psf-request`).
+- Reuse **Duplicate → Draft → Edit → Preview → Save → Publish**. Published definitions are immutable. Discard deletes only a never-published draft.
+- Store definitions in the existing `form_definitions` table. Storage initialization adds the nullable `psf_created_schema_snapshot_json JSONB` column to `psf_requests`; no request values or requester snapshots are backfilled or overwritten.
+- Capture the active PSF descriptor when a new request is created. Publishing affects subsequently created requests only. A requester schema upgrade does not upgrade the PSF descriptor.
+- Requests without a stored PSF descriptor retain the immutable original field definition as compatibility metadata; this is not a fabricated historical snapshot. Their existing values remain unchanged.
+- Save may retain incomplete required fields. Explicitly saving the configured PSF release-trigger Status requires every required PSF field from that request's descriptor. Validate supplied field keys, scalar values and configured choices against the same descriptor; preserve optimistic concurrency.
+- Preserve actor/status visibility and edit permissions below. Section-role configuration is not reintroduced. Attachment remains a text reference, not an upload feature.
+- Excel interprets each record through its descriptor and keeps missing historical/legacy PSF fields after the active fields, so deleting a field from a newer definition does not remove its old exported values. Unreleased Requester PSF masking remains enforced.
+
 ### Visibility Rules
 
-| User Role | Before PSF Created | After PSF Created |
+| User Role | Before persistent PSF release | After persistent PSF release |
 |---|---|---|
 | Requester | Hidden or placeholder only | Visible as read-only |
-| Setup File Owner | Visible and editable | Visible and editable if not completed |
+| Setup File Owner | Visible and editable | Visible and editable on accessible work, including completed work |
 | Admin | Visible and editable | Visible and editable |
 
 ### Recommended Placeholder for Requester
 
-Before the PSF Created section becomes visible, the requester should see a clear placeholder message instead of empty fields:
+Before PSF Created Information is released to a Requester, the requester should see a clear placeholder message instead of empty fields:
 
 ```text
 PSF setup information is not available yet.
-This section will be visible after the setup file owner completes the PSF setup.
+This section will be visible after PSF information is released.
 ```
 
 ---
 
 ## 7. Workflow Status
 
-### Recommended Status Flow
+### Configured database Status catalog
 
-```text
-Draft
-  ↓
-Submitted
-  ↓
-Setup In Progress
-  ↓
-PSF Created
-  ↓
-Completed
-```
+Use the [complete database catalog](docs/status-catalog-and-manual-updates.md). Names are verbatim strings; runtime options come from `GET /api/workflow/statuses`. Do not display the previous `Submitted`, `Setup In Progress` or `PSF Created` stages. The 17-entry snapshot is:
 
-### Optional Statuses
+| Exact database Status | Catalog kind |
+| --- | --- |
+| `Draft` | `draft` |
+| `5% -- Reject (Information not complete)` | `open` |
+| `10% -- Test Engineer Data Entry` | `open` |
+| `20% -- PSF File Creating` | `open` |
+| `30% -- Compare Old and New layout` | `open` |
+| `40% -- Feedback Requester(Layout mismatch)` | `open` |
+| `80% -- Wait for create DCC` | `open` |
+| `81% -- Edit Template Map (Bin62)` | `open` |
+| `82% -- Wait for sent Template Map` | `open` |
+| `83% -- Complete Excel probe pattern` | `open` |
+| `85 % -- Reject check list` | `open` |
+| `90% -- Wait for buyoff check list` | `open` |
+| `93% -- Provide test template map to EWFM\Update auto FI script (ST Fab)` | `open` |
+| `95% -- Reject (Wrong site location and wafer map)` | `open` |
+| `99% -- Wait requestor Buyoff site location and wafer map` | `open` |
+| `100% -- Completed` | `completed` |
+| `0% -- Rejected (Cancel Request)` | `cancelled` |
 
-```text
-Need More Information
-Rejected
-Cancelled
-```
+### Status behavior
 
-### Status Description
+There is no directed transition matrix, mandatory linear order, automatic advancement or preset Next/Approve/Reject/Mark Complete action. Form saves, autofill, queue filters and exports do not change Status. Percent prefixes are part of names, not a progress calculation. The detailed interaction confirmation is recorded in the linked contract.
 
-| Status | Meaning | Requester Sees PSF Created? |
-|---|---|---|
-| Draft | Request has not been submitted | No |
-| Submitted | Request has been submitted | No |
-| Setup In Progress | Setup owner is working on the setup file | No, or placeholder only |
-| PSF Created | Setup file information has been completed and updated | Yes, read-only |
-| Completed | Request is fully completed | Yes, read-only |
-| Need More Information | Additional information is required from requester | No, or partial only |
-| Rejected | Request has been rejected | No |
-| Cancelled | Request has been cancelled | No |
+Catalog kinds drive grouping: `open`, `completed`, `cancelled`, with a protected private `draft` lifecycle. Draft submission uses an explicitly selected catalog work Status, never a hardcoded `Submitted` target. Requester PSF visibility remains controlled by persistent release state and the configured release trigger; it is not inferred from a short stage label.
 
-### Email Notification System
+### Notifications
 
-The system automatically dispatches email notifications on key status transitions:
-
-1. **Submission Notification**:
-   - **Trigger**: When a Request status changes from `Draft` or `Need More Information` to `Submitted` (upon Requester submission).
-   - **Recipient**: All users with the `Setup File Owner` role (both GNTC and MFG).
-   - **Email Subject**: `[PSF Request] New Request Assigned: [Request No.] - [Title]`
-   - **Email Content**: A structured table containing:
-     - Requester Name
-     - Due Date
-     - Priority
-     - Product Type
-     - A prominent Call-to-Action (CTA) button/link to the Request detail page.
-
-2. **Status Update / Completion Notification**:
-   - **Trigger**: When any user manually updates the request status using the status actions dropdown (including marking as `PSF Created`, `Completed`, `Rejected`, or reverting to an earlier stage).
-   - **Recipient**: The original `Requester` and all users with the `Setup File Owner` role (both GNTC and MFG).
-   - **Email Subject**: `[PSF Request] Status Updated to [New Status]: [Request No.] - [Title]`
-   - **Email Content**: A structured table showing the new status, who performed the update, key metadata (Requester, Due Date, Priority, Product Type), and a prominent CTA button/link to view the Request detail page.
-
-### Manual and Dynamic Status Transitions
-
-To support manual human evaluation and flexible workflows:
-- A **Status Dropdown Control** is visible on the Request Detail page to all roles (**Requester**, **Setup Owner**, and **Admin**) in **all request statuses**.
-- Users can manually select any target status from the dropdown to transition the request based on their assessment (e.g., if a request is in the `PSF Created` status but is found to be incorrect, both the Requester and Setup Owner can change the status to `Rejected` or revert it to `Setup In Progress` to signal a correction is needed).
-- The list of available statuses and transitions remains configurable by administrators via the Admin Page, but the UI allows manual selection of the next status directly.
-- The system automatically records the Setup File Owner and their department (GNTC or MFG) when a Setup File Owner changes the status or updates the PSF Created section.
+Notification delivery is outside the current Stitch-only redesign scope. Do not infer implemented email delivery or a Status update from clicking a notification/action. Any future notification must describe the actual committed full Status string and must not choose or change it.
 
 ---
 
@@ -325,9 +309,9 @@ To support manual human evaluation and flexible workflows:
 | Edit Requester Information | Before submit | No | Yes |
 | View Requester Information | Yes | Yes | Yes |
 | Edit PSF Created Information | No | Yes | Yes |
-| View PSF Created Information | After PSF Created | Yes | Yes |
+| View PSF Created Information | After persistent PSF release | Yes | Yes |
 | Update Status Manually (Dropdown) | Yes (All statuses) | Yes (All statuses) | Yes (All statuses) |
-| View History | Related requests | All requests | All requests |
+| View Audit History page | Yes | Yes | Yes |
 | Export Excel | Optional | Yes | Yes |
 | Admin Page | No | Optional | Yes |
 
@@ -365,7 +349,6 @@ Frontend renders form automatically
     {
       "sectionKey": "requester_information",
       "title": "Requester Information",
-      "visibleTo": ["requester", "setup_owner", "admin"],
       "fields": [
         {
           "fieldKey": "title",
@@ -430,7 +413,7 @@ Search, export, and auto-fill use canonical data
 - When a user opens a Draft request associated with an older form version, the UI prompts them with a confirmation dialog:
   1. **Upgrade**: Migrates the draft to the latest active schema (matching fields preserved, new fields added, obsolete fields removed).
   2. **Remain on Old Version**: Renders the draft form using its original schema snapshot.
-- Once a request is submitted (status moves from Draft to Submitted), it is locked permanently to its form version schema snapshot.
+- Once a request is submitted (the creator explicitly submits Draft to a selected non-Draft catalog Status), it is locked permanently to its form version schema snapshot.
 
 ### Required Submission Fields
 
@@ -669,7 +652,7 @@ We use the **Latest Active Schema Alignment** strategy for Excel exports, combin
    - **Nested JSON Objects**: Extracted to specific sub-fields (like `.name`) or serialized as a simplified readable string (`key: value`).
 8. **Security & Cell-Level Masking**:
    - All users share the same column layout.
-   - If a user with the `Requester` role exports, columns in the `PSF Created Information` section for requests that are not yet in `PSF Created` or `Completed` status are blanked out or set to `N/A (Pending Setup)`.
+   - If a user with the `Requester` role exports, columns in the `PSF Created Information` section for requests whose PSF information has not been released are blanked out or set to `N/A (Pending Setup)`.
 9. **Date & Time Formatting**:
    - All date fields are exported in the system's default timezone (**`Asia/Bangkok` / GMT+7**).
    - Date cells are formatted as Excel Date cells in `YYYY-MM-DD` format (without time portion) so users can filter, sort, and calculate dates natively.
@@ -707,6 +690,8 @@ We use the **Latest Active Schema Alignment** strategy for Excel exports, combin
 
 ## 15. History / Audit Log
 
+**Product-owner clarification, 4 October 2026:** Audit History page access is available to all authenticated roles: Requester, Setup Owner and Admin. Use the shared `/history` navigation link. Existing private Draft and PSF field visibility rules still apply independently. This clarification supersedes older Admin-only page rules; [implementation status and the authoritative requirement](docs/audit-history-access.md) are recorded separately.
+
 ### Purpose
 
 The History page shows who changed data in a request, when the change occurred, which field was changed, and the old and new values.
@@ -738,9 +723,9 @@ The History page shows who changed data in a request, when the change occurred, 
 
 | Time | User | Action | Field | Old Value | New Value |
 |---|---|---|---|---|---|
-| 2026-06-10 14:10 | requester01 | CREATE_REQUEST | Status | - | Submitted |
+| 2026-06-10 14:10 | requester01 | CREATE_REQUEST | Status | - | 10% -- Test Engineer Data Entry |
 | 2026-06-10 14:30 | setup01 | UPDATE_FIELD | PSF Setup File Name | - | PSF_ABC_001 |
-| 2026-06-10 14:35 | setup01 | CHANGE_STATUS | Status | Setup In Progress | PSF Created |
+| 2026-06-10 14:35 | setup01 | CHANGE_STATUS | Status | 10% -- Test Engineer Data Entry | 20% -- PSF File Creating |
 | 2026-06-10 14:36 | setup01 | UPLOAD_ATTACHMENT | Template | - | template.xlsx |
 
 ### Audit Log Table
@@ -809,19 +794,9 @@ Admin
 - **Visual Preview**: A side-by-side split screen renders a live draft preview of the form based on the edited JSON.
 - **Embedded Master Data**: Dropdown options for master data (Products, Wafer FABs, Priority, Machines, etc.) are embedded directly within the dynamic JSON Form Schema definition (`options` array) rather than requiring separate database lookup tables and CRUD admin screens.
 
-### Workflow Configuration
+### Status Management
 
-- Configure statuses.
-- Configure allowed status transitions.
-- Configure which roles can update each status.
-
-Example:
-
-```text
-Submitted -> Setup In Progress: Setup Owner / Admin
-Setup In Progress -> PSF Created: Setup Owner / Admin
-PSF Created -> Completed: Setup Owner / Admin
-```
+Admins manage the configured catalog: create/rename/delete-with-replacement, exact names, semantic kinds and PSF visibility-release settings. There is no role/department transition matrix or fixed stage list. Reuse the existing catalog API and validation; technical filenames containing `workflow_transition` do not imply a transition editor.
 
 ---
 
@@ -843,7 +818,7 @@ The term **middleware** alone may be too narrow because this layer contains sign
 - Authentication and authorization (Local Auth with Bcrypt)
 - Form schema management & validation
 - Submission processing & optimistic locking
-- Workflow status control (Manual status transitions)
+- Configured Status catalog and explicit manual Status persistence; no automatic progression
 - Canonical mapping (Write-time canonical extraction)
 - Search index updates (psf_request_search_index table)
 - Auto-fill rule suggestion & duplicate match resolution
@@ -1192,17 +1167,9 @@ The corresponding directory structure for routing (using TanStack Router / file-
 - Error messages should appear close to the related field.
 - The PSF Created section should show a placeholder when the requester cannot view the content yet.
 
-### Suggested Status Text
+### Status Text
 
-Use user-friendly status labels:
-
-```text
-Waiting for PSF setup
-Setup in progress
-PSF created
-Completed
-Need more information
-```
+Display the complete configured database string in badges, filters, request detail and audit values. For example, use `20% -- PSF File Creating`, not `Setup in progress`, and `100% -- Completed`, not a bare `Completed` request Status. Keep exact spelling, spaces and backslashes. Queue labels use at most one line and an overflow ellipsis (…), with full names available through hover/keyboard focus/click on Desktop in both themes. The current design scope excludes Mobile. This presentation must not alter stored values or change Status. Summary controls may say Open work, Overdue and Completed because they represent groups, not Status aliases. Request Detail uses explicit catalog selection plus a separate manual save, confirmed by the product owner on 4 October 2026. The latest Detail v1.1 direction retains the Stitch v1 tabs, Edit/Save/Cancel and separate Save Status, and adds Requests › current request number as a breadcrumb above the masthead. The intervening original-layout/color-only exploration is superseded. A pending choice is not saved by Requester/PSF form saves; dirty form data must be saved or discarded before Status can be saved.
 
 ### Auto-fill UI
 
@@ -1238,7 +1205,7 @@ The system shall allow requesters to create and submit PSF requests.
 
 ### FR-005 PSF Created Visibility [Must Have]
 
-The system shall hide PSF Created Information from the requester until the request status is updated to PSF Created.
+The system shall mask unreleased PSF Created Information for Requesters and use persistent release state, not a hardcoded Status name, to determine visibility.
 
 ### FR-006 Setup Owner Update [Must Have]
 
@@ -1246,7 +1213,7 @@ The system shall allow setup file owners to update PSF Created Information.
 
 ### FR-007 Status Workflow [Must Have]
 
-The system shall support workflow statuses including Draft, Submitted, Setup In Progress, PSF Created, and Completed.
+The system shall use exact configured database Status strings and semantic kinds. It shall not implement a fixed stage chain, transition matrix or action-driven automatic Status changes. See the current Status contract for the catalog and confirmed interaction.
 
 ### FR-008 Search [Must Have]
 
@@ -1340,3 +1307,8 @@ PostgreSQL
   ├── autofill_rules
   └── export_profiles
 ```
+
+
+### Stitch Desktop suite direction — 5 October 2026
+
+The product owner authorized all remaining pages together, including all Admin pages. Retain the preferred tabbed Stitch Detail v1 layout. Add shared 220 px / 72 px collapsible Desktop navigation, state-labelled collapse/expand control, explicit parent Back buttons on nested pages, semantic breadcrumbs and unsaved-edit guards. Keep exact catalog Status values, explicit manual Save Status, separate form saves, private Draft lifecycle, PSF release policy and Audit History access for all authenticated roles. The active design inventory and review are `.stitch/suite-inventory.json` and `.stitch/suite-review.md`. Desktop Light/Dark only. The intervening original-layout/color-only Detail exploration and earlier per-page/Admin-deferral directions are superseded. This records design decisions; production implementation is unchanged.

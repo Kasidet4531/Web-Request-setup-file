@@ -1,73 +1,68 @@
-# React + TypeScript + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../docs/status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. The 4 October clarification was documentation-only; the approved 5 October implementation now updates source. See the current implementation and verification record.
 
-Currently, two official plugins are available:
+> **4 October 2026 product requirement:** Audit History navigation and page viewing are available to Requester, Setup Owner and Admin. See [the implemented rule and verification](../docs/audit-history-access.md); older Admin-only History guidance must not drive future UI work.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+React + TypeScript with TanStack Router file routes, Vite and Lucide icons.
+The runtime is a client application, not TanStack Start. See
+[current implementation](../docs/current-implementation.md#frontend-routes-and-session-state).
 
-## React Compiler
+## Setup and development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Run commands from this directory:
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+npm ci
+cp .env.example .env.local
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open `http://127.0.0.1:5173/login`. Run the backend from this same
+`unified-local-auth` checkout. Vite forwards `/api` to `http://127.0.0.1:3000`
+([configuration](vite.config.ts)). The API client defaults to `/api` and includes
+cookies ([source](src/services/api.ts)).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Setting | Behavior |
+| --- | --- |
+| `VITE_API_BASE_URL` | Optional API base URL override; default `/api` |
+| `VITE_DEV_AUTH_ENABLED` | Exact `true` shows local test account buttons only during Vite development |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Set `VITE_DEV_AUTH_ENABLED=true` in ignored `.env.local` and enable the backend's
+`DEV_AUTH_ENABLED` to test without LDAP. The password form always calls LDAP;
+the role buttons call the development endpoint. Production builds exclude the
+local account chooser, even if its flag is set. Restart Vite after changing env.
+See [local accounts/removal](../docs/local-development-auth.md).
+
+## Routes and limits
+
+Dashboard, request lists/drafts/create/detail, global audit history, user/role
+management, two form families, status management, autofill and XLSX export have
+API-backed components. The `/admin/export-profile` path opens the export page;
+it is not export-profile CRUD. `/admin/`, `/admin/master-data` and the standalone
+`/requests/$requestId/history` page remain placeholders. See the current guide
+for route/source mappings and backend permissions.
+
+`routeTree.gen.ts` is generated by the TanStack Vite plugin. Non-route support
+files under `src/routes` use a leading `-` so the plugin ignores them.
+
+Login/logout and profile refresh publish session-change events, and AppShell
+loads `/api/me`. Ordinary API errors, including 401 responses, throw `ApiError`;
+the client does not globally broadcast logout for every 401. Hiding UI links
+is presentation; backend controllers/services enforce authorization.
+
+## Checks and build
+
+```sh
+npm test
+npm run lint
+npm run build
+npm run preview
 ```
+
+Tests use Vitest. Build runs TypeScript checking then Vite production bundling.
+`preview` serves the build for inspection. In the installed Vite version it
+inherits `server.proxy` when `preview.proxy` is unset, so this checkout's preview
+also forwards `/api` to the backend. Independently hosted build files do not run
+Vite's proxy: provide an API URL/CORS configuration or an external proxy for that
+deployment. No tracked production reverse-proxy setup is present.
