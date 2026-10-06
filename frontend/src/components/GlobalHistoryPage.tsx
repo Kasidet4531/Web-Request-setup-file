@@ -141,7 +141,7 @@ export function GlobalAuditLogTable({
 
   return (
     <>
-    <p className="global-history-refresh" role="status">{loading ? 'Updating global audit history…' : ''}</p>
+    <p className="sr-only" role="status">{loading ? 'Updating global audit history…' : ''}</p>
     <p className="table-scroll__hint">Scroll horizontally to see audit actors, actions, and details.</p>
     <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
       <table>

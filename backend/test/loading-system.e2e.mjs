@@ -42,6 +42,23 @@ async function holdNextRequest(page, pattern) {
   };
 }
 
+async function expectBackgroundStatus(page, message) {
+  const status = page.getByText(message, { exact: true });
+  await expect(status).toHaveCount(1);
+  const box = await status.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      width: rect.width,
+      height: rect.height,
+      clip: getComputedStyle(element).clip,
+    };
+  });
+  assert.ok(
+    box.width <= 1 && box.height <= 1 && box.clip !== 'auto',
+    'Refresh feedback must be available to screen readers without being drawn on screen',
+  );
+}
+
 test(
   'loaded dashboard, request lists and audit history stay in place during slow refreshes',
   { timeout: 60_000 },
@@ -89,9 +106,10 @@ test(
         .getByRole('combobox', { name: /^Status/ })
         .selectOption(completed.name);
       await held.reached;
+      await expectBackgroundStatus(page, 'Updating dashboard queue…');
       await expect(
-        page.getByText('Updating dashboard queue…', { exact: true }),
-      ).toBeVisible();
+        page.locator('.dashboard-page .queue-surface__heading > span').first(),
+      ).toHaveText('Open work');
       await expect(page.locator('.summary-card strong')).toHaveText([
         '1',
         '0',
@@ -101,6 +119,10 @@ test(
         page.getByText(submitted.requesterData.title, { exact: true }),
       ).toBeVisible();
       await expect(page.getByLabel('Dashboard pagination')).toBeVisible();
+      await expect(page.locator('.dashboard-page .request-results')).toHaveCSS(
+        'opacity',
+        '1',
+      );
       assert.ok(
         Math.abs((await workspace.boundingBox()).y - top) < 1,
         'Refreshing must not move the dashboard workspace',
@@ -142,6 +164,8 @@ test(
           .getByLabel('Keyword', { exact: true })
           .fill('does-not-match-any-request');
         await held.reached;
+        await expectBackgroundStatus(page, 'Updating PSF requests…');
+        await expect(results).toHaveCSS('opacity', '1');
         await expect(results.locator('tbody tr')).toHaveCount(1);
         await expect(results).toHaveAttribute('inert', '');
         await expect(page.getByLabel('Request list pagination')).toBeVisible();
@@ -183,9 +207,7 @@ test(
         .fill('does-not-match-any-actor');
       await page.getByRole('button', { name: 'Apply', exact: true }).click();
       await held.reached;
-      await expect(
-        page.getByText('Updating global audit history…', { exact: true }),
-      ).toBeVisible();
+      await expectBackgroundStatus(page, 'Updating global audit history…');
       await expect(history.locator('tbody tr')).toHaveCount(rows);
       await expect(history).toHaveAttribute('aria-busy', 'true');
       await expect(history).toHaveAttribute('inert', '');

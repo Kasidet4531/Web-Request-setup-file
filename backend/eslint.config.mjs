@@ -38,7 +38,7 @@ export default tseslint.config(
     languageOptions: {
       sourceType: 'module',
       parserOptions: { projectService: false },
-      globals: { document: 'readonly', window: 'readonly', innerWidth: 'readonly' },
+      globals: { document: 'readonly', window: 'readonly', innerWidth: 'readonly', getComputedStyle: 'readonly' },
     },
   },
 );

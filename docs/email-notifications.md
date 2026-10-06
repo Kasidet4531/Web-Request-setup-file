@@ -132,7 +132,7 @@ On 2026-10-06, all five flows and the startup-cleanup regression passed. A delib
 
 ## Loading-state regression — 2026-10-06
 
-Dashboard, Requests, My Drafts and Audit History retain their last successful results during filter refreshes. Dashboard summary values and pagination stay visible; pagination and stale rows are disabled until the new response arrives. Refresh feedback occupies existing layout space. Initial loading, account/scope changes and API errors still withhold unavailable or unauthorized data.
+Dashboard, Requests, My Drafts and Audit History refresh in the background while retaining their last successful results. Dashboard summary values, result opacity and pagination stay stable; pagination and stale rows are disabled until the new response arrives. Refresh feedback is available only to screen readers, with `aria-busy` marking pending data; no visible Updating message is shown. Initial loading, account/scope changes and API errors still withhold unavailable or unauthorized data.
 
 From `backend`, run the real-browser/backend/PostgreSQL regression with the same prerequisites as the email system suite:
 

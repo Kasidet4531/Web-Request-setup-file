@@ -580,13 +580,13 @@ export function DashboardPage() {
       </div> : null}
       </aside>
       <section className="queue-surface" aria-label="Related request queue">
-      <div className="queue-surface__heading"><h2>Related request queue</h2><span role={pending && hasResults ? 'status' : undefined}>{pending && hasResults ? 'Updating dashboard queue…' : workState === 'all' ? 'All work' : workState === 'open' ? 'Open work' : workState === 'overdue' ? 'Overdue work' : 'Completed work'}</span></div>
+      <div className="queue-surface__heading"><h2>Related request queue</h2><span>{workState === 'all' ? 'All work' : workState === 'open' ? 'Open work' : workState === 'overdue' ? 'Overdue work' : 'Completed work'}</span><span className="sr-only" role="status">{pending && hasResults ? 'Updating dashboard queue…' : ''}</span></div>
       <div className="filter-bar dashboard-filters" aria-label="Dashboard filters">
         <label>Keyword<span className="filter-bar__control"><Search size={16} /><input className="input-with-icon" placeholder="Request no, title, PSF name…" value={keyword} onChange={(event) => { setKeyword(event.target.value) }} /></span></label>
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
-      {hasResults ? <div className={`request-results${pending ? ' request-results--updating' : ''}`} inert={pending} aria-busy={pending}>
+      {hasResults ? <div className="request-results" inert={pending} aria-busy={pending}>
         <RequestsTable compact statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
       {hasResults ? <div className="table-footer" aria-label="Dashboard pagination" aria-busy={pending}><span>{state.data.items.length ? `${state.data.offset + 1}–${Math.min(state.data.offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
@@ -707,7 +707,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
         actions={hasResults ? <Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link> : undefined} />
 
       <section className="request-browser" aria-label="PSF request browser">
-        <div className="queue-surface__heading"><h2>{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span role={pending && hasResults ? 'status' : undefined}>{pending && hasResults ? 'Updating PSF requests…' : hasActiveFilters ? 'Filtered results' : 'All results'}</span></div>
+        <div className="queue-surface__heading"><h2>{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span>{hasActiveFilters ? 'Filtered results' : 'All results'}</span><span className="sr-only" role="status">{pending && hasResults ? 'Updating PSF requests…' : ''}</span></div>
         <QueueFilterPanel active={hasActiveFilters}>
         <div className="toolbar request-browser__toolbar" aria-label="Request filters">
           <form className={`filter-bar request-list-filters${scope === 'my-drafts' ? ' request-list-filters--drafts' : ''}`} onSubmit={(event) => event.preventDefault()}>
@@ -764,7 +764,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
           </p>
         ) : null}
         {!state.loading && state.error ? <button className="btn-secondary" onClick={() => { setState((current) => ({ ...current, loading: true })); setRetry((current) => current + 1) }} type="button">Retry requests</button> : null}
-        {hasResults ? <div className={`request-results${pending ? ' request-results--updating' : ''}`} inert={pending} aria-busy={pending}><RequestsTable
+        {hasResults ? <div className="request-results" inert={pending} aria-busy={pending}><RequestsTable
           items={state.data.items}
           drafts={scope === 'my-drafts'}
           statusKinds={catalog.statusKinds}
