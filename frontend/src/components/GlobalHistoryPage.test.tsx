@@ -131,6 +131,18 @@ describe('GlobalAuditLogFilters', () => {
 })
 
 describe('GlobalAuditLogTable', () => {
+  it('keeps loaded audit rows visible and inert while refreshing instead of replacing the table', () => {
+    const html = renderToStaticMarkup(GlobalAuditLogTable({
+      entries: [{
+        requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUEST_SUBMITTED',
+        actorDisplayName: 'Requester', actorRole: 'requester', createdAt: '2026-10-06T01:00:00Z', metadata: {},
+      }], error: null, loading: true,
+    }))
+    expect(html).toContain('PSF-0001')
+    expect(html).toContain('aria-busy="true"')
+    expect(html).toContain('inert=""')
+  })
+
   it('displays Bangkok time and readable server-provided field changes without inventing missing history', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [{

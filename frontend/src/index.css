@@ -509,6 +509,7 @@ dialog::backdrop { background: #10182066; }
 .request-export__filter-panel, .request-export__preview { background: var(--card); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
 .queue-surface__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px 16px; }
 .queue-surface__heading > span { color: var(--muted-foreground); font-size: 12px; }
+.global-history-refresh { min-height: 20px; margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 20px; }
 .dashboard-filters { padding: 0 24px 20px; margin: 0; grid-template-columns: minmax(180px,1fr) minmax(200px,1fr) auto; }
 .queue-surface .data-table { border: 0; border-radius: 0; }
 .queue-surface .table-footer { padding: 12px 24px 16px; margin: 0; border-top: 1px solid var(--border); }

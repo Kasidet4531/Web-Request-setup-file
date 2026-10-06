@@ -502,8 +502,9 @@ export function DashboardPage() {
     summary: { open: number; overdue: number; completed: number } | null
     summaryError: string | null
     limit: number
+    offset: number
     queryKey: string | null
-  }>>({ loading: true, error: null, data: { user: null, items: [], total: 0, summary: null, summaryError: null, limit: 25, queryKey: null } })
+  }>>({ loading: true, error: null, data: { user: null, items: [], total: 0, summary: null, summaryError: null, limit: 25, offset: 0, queryKey: null } })
 
   useEffect(() => {
     let mounted = true
@@ -537,7 +538,7 @@ export function DashboardPage() {
           offset,
         })
         const summaryAvailable = response.summary && ['open', 'overdue', 'completed'].every((key) => Number.isFinite(response.summary[key as keyof typeof response.summary]))
-        if (isCurrent()) setState({ loading: false, error: null, data: { user, items: response.items, total: response.total, summary: summaryAvailable ? response.summary : null, summaryError: summaryAvailable ? null : 'Dashboard totals are unavailable from the server.', limit: response.limit, queryKey } })
+        if (isCurrent()) setState({ loading: false, error: null, data: { user, items: response.items, total: response.total, summary: summaryAvailable ? response.summary : null, summaryError: summaryAvailable ? null : 'Dashboard totals are unavailable from the server.', limit: response.limit, offset: response.offset, queryKey } })
       } catch (error) {
         if (isCurrent()) setState((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : 'Unable to load dashboard requests', errorStatus: error instanceof ApiError ? error.status : undefined, data: { ...current.data, user: null, items: [], total: 0, summary: null, queryKey: null } }))
       }
@@ -554,7 +555,7 @@ export function DashboardPage() {
   return (
     <article className="workflow-page dashboard-page">
       <PageHeader title="Dashboard" description="Your related work, at a glance." actions={<Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link>} />
-      {pending && !state.error ? <p className="page-card__description" role="status">{hasResults ? 'Updating dashboard queue…' : 'Loading dashboard queue…'}</p> : null}
+      {pending && !hasResults && !state.error ? <p className="page-card__description" role="status">Loading dashboard queue…</p> : null}
       {state.error ? <p className="status-pill status-pill--error" role="alert">{state.error}{state.errorStatus === 401 ? <> <Link to="/login">Sign in again</Link></> : null}</p> : null}
       {!state.loading && !state.error && state.data.summaryError ? <p className="status-pill status-pill--error" role="alert">{state.data.summaryError}</p> : null}
       {!state.loading && (state.error || state.data.summaryError) ? <button className="btn-secondary" onClick={() => { setState((current) => ({ ...current, loading: true })); setRetry((current) => current + 1) }} type="button">Retry dashboard requests</button> : null}
@@ -573,25 +574,25 @@ export function DashboardPage() {
         </select>
       </label> : null}
       {summary ? <div className="summary-grid dashboard-summary-grid" aria-busy={pending}>
-        <SummaryCard active={workState === 'open'} icon={FileText} label="Open work" value={pending ? null : summary.open} onSelect={() => { setWorkState(workState === 'open' ? 'all' : 'open'); setOffset(0) }} />
-        <SummaryCard active={workState === 'overdue'} icon={AlertTriangle} label="Overdue" value={pending ? null : summary.overdue} onSelect={() => { setWorkState(workState === 'overdue' ? 'all' : 'overdue'); setOffset(0) }} />
-        <SummaryCard active={workState === 'completed'} icon={Clock3} label="Completed" value={pending ? null : summary.completed} onSelect={() => { setWorkState(workState === 'completed' ? 'all' : 'completed'); setOffset(0) }} />
+        <SummaryCard active={workState === 'open'} icon={FileText} label="Open work" value={summary.open} onSelect={() => { setWorkState(workState === 'open' ? 'all' : 'open'); setOffset(0) }} />
+        <SummaryCard active={workState === 'overdue'} icon={AlertTriangle} label="Overdue" value={summary.overdue} onSelect={() => { setWorkState(workState === 'overdue' ? 'all' : 'overdue'); setOffset(0) }} />
+        <SummaryCard active={workState === 'completed'} icon={Clock3} label="Completed" value={summary.completed} onSelect={() => { setWorkState(workState === 'completed' ? 'all' : 'completed'); setOffset(0) }} />
       </div> : null}
       </aside>
       <section className="queue-surface" aria-label="Related request queue">
-      <div className="queue-surface__heading"><h2>Related request queue</h2><span>{workState === 'all' ? 'All work' : workState === 'open' ? 'Open work' : workState === 'overdue' ? 'Overdue work' : 'Completed work'}</span></div>
+      <div className="queue-surface__heading"><h2>Related request queue</h2><span role={pending && hasResults ? 'status' : undefined}>{pending && hasResults ? 'Updating dashboard queue…' : workState === 'all' ? 'All work' : workState === 'open' ? 'Open work' : workState === 'overdue' ? 'Overdue work' : 'Completed work'}</span></div>
       <div className="filter-bar dashboard-filters" aria-label="Dashboard filters">
         <label>Keyword<span className="filter-bar__control"><Search size={16} /><input className="input-with-icon" placeholder="Request no, title, PSF name…" value={keyword} onChange={(event) => { setKeyword(event.target.value) }} /></span></label>
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
-      {hasResults && (state.data.items.length > 0 || !pending) ? <div className={`request-results${pending ? ' request-results--updating' : ''}`} inert={pending} aria-busy={pending}>
+      {hasResults ? <div className={`request-results${pending ? ' request-results--updating' : ''}`} inert={pending} aria-busy={pending}>
         <RequestsTable compact statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
-      {hasResults && !pending ? <div className="table-footer" aria-label="Dashboard pagination"><span>{state.data.items.length ? `${offset + 1}–${Math.min(offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
-        {offset > 0 || state.data.total > state.data.limit ? <div className="toolbar__actions">
-          <button className="btn-secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - state.data.limit))} type="button">Previous</button>
-          <button className="btn-secondary" disabled={offset + state.data.limit >= state.data.total} onClick={() => setOffset(offset + state.data.limit)} type="button">Next</button>
+      {hasResults ? <div className="table-footer" aria-label="Dashboard pagination" aria-busy={pending}><span>{state.data.items.length ? `${state.data.offset + 1}–${Math.min(state.data.offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
+        {state.data.offset > 0 || state.data.total > state.data.limit ? <div className="toolbar__actions">
+          <button className="btn-secondary" disabled={pending || state.data.offset === 0} onClick={() => setOffset(Math.max(0, offset - state.data.limit))} type="button">Previous</button>
+          <button className="btn-secondary" disabled={pending || state.data.offset + state.data.limit >= state.data.total} onClick={() => setOffset(offset + state.data.limit)} type="button">Next</button>
         </div> : null}
       </div> : null}
       </section>
@@ -628,10 +629,10 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
   const [debouncedKeyword, debouncedProductType] = JSON.parse(debouncedText) as [string, string]
   const requestGeneration = useRef(0)
   const queryKey = JSON.stringify([debouncedKeyword, debouncedProductType, filters.status, offset, scope])
-  const [state, setState] = useState<AsyncState<{ user: AuthenticatedUserProfile | null; items: PsfRequestListItem[]; total: number; limit: number; scope: typeof scope | null; queryKey: string | null }>>({
+  const [state, setState] = useState<AsyncState<{ user: AuthenticatedUserProfile | null; items: PsfRequestListItem[]; total: number; limit: number; offset: number; scope: typeof scope | null; queryKey: string | null }>>({
     loading: true,
     error: null,
-    data: { user: null, items: [], total: 0, limit: 100, scope: null, queryKey: null },
+    data: { user: null, items: [], total: 0, limit: 100, offset: 0, scope: null, queryKey: null },
   })
 
   useEffect(() => {
@@ -671,7 +672,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
         )
 
         if (isCurrent()) {
-          setState({ loading: false, error: null, data: { user, items: response.items, total: response.total, limit: response.limit, scope, queryKey } })
+          setState({ loading: false, error: null, data: { user, items: response.items, total: response.total, limit: response.limit, offset: response.offset, scope, queryKey } })
         }
       } catch (error) {
         if (isCurrent()) {
@@ -706,7 +707,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
         actions={hasResults ? <Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link> : undefined} />
 
       <section className="request-browser" aria-label="PSF request browser">
-        <div className="queue-surface__heading"><h2>{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span>{hasActiveFilters ? 'Filtered results' : 'All results'}</span></div>
+        <div className="queue-surface__heading"><h2>{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span role={pending && hasResults ? 'status' : undefined}>{pending && hasResults ? 'Updating PSF requests…' : hasActiveFilters ? 'Filtered results' : 'All results'}</span></div>
         <QueueFilterPanel active={hasActiveFilters}>
         <div className="toolbar request-browser__toolbar" aria-label="Request filters">
           <form className={`filter-bar request-list-filters${scope === 'my-drafts' ? ' request-list-filters--drafts' : ''}`} onSubmit={(event) => event.preventDefault()}>
@@ -756,14 +757,14 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
           {catalog.errorStatus === 401 ? <Link to="/login">Sign in again</Link> : null}
           <button className="btn-secondary" disabled={catalog.loading} onClick={() => { setCatalog((current) => ({ ...current, loading: true, error: null, errorStatus: undefined })); setCatalogRetry((current) => current + 1) }} type="button">Retry status catalog</button>
         </div> : null}
-        {pending && !state.error ? <p className="page-card__description" role="status">{hasResults ? 'Updating PSF requests…' : 'Loading PSF requests…'}</p> : null}
+        {pending && !hasResults && !state.error ? <p className="page-card__description" role="status">Loading PSF requests…</p> : null}
         {state.error ? (
           <p className="status-pill status-pill--error" role="alert">
             {state.error}{state.errorStatus === 401 ? <> <Link to="/login">Sign in again</Link></> : null}
           </p>
         ) : null}
         {!state.loading && state.error ? <button className="btn-secondary" onClick={() => { setState((current) => ({ ...current, loading: true })); setRetry((current) => current + 1) }} type="button">Retry requests</button> : null}
-        {hasResults && (state.data.items.length > 0 || !pending) ? <div className={`request-results${pending ? ' request-results--updating' : ''}`} inert={pending} aria-busy={pending}><RequestsTable
+        {hasResults ? <div className={`request-results${pending ? ' request-results--updating' : ''}`} inert={pending} aria-busy={pending}><RequestsTable
           items={state.data.items}
           drafts={scope === 'my-drafts'}
           statusKinds={catalog.statusKinds}
@@ -772,10 +773,10 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
           onClearFilters={hasActiveFilters ? clearFilters : undefined}
           onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })}
         /></div> : null}
-        {hasResults && !pending ? <div className="table-footer" aria-label="Request list pagination"><span>{state.data.items.length ? `${offset + 1}–${Math.min(offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
-          {offset > 0 || state.data.total > state.data.limit ? <div className="toolbar__actions">
-            <button className="btn-secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - state.data.limit))} type="button">Previous</button>
-            <button className="btn-secondary" disabled={offset + state.data.limit >= state.data.total} onClick={() => setOffset(offset + state.data.limit)} type="button">Next</button>
+        {hasResults ? <div className="table-footer" aria-label="Request list pagination" aria-busy={pending}><span>{state.data.items.length ? `${state.data.offset + 1}–${Math.min(state.data.offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
+          {state.data.offset > 0 || state.data.total > state.data.limit ? <div className="toolbar__actions">
+            <button className="btn-secondary" disabled={pending || state.data.offset === 0} onClick={() => setOffset(Math.max(0, offset - state.data.limit))} type="button">Previous</button>
+            <button className="btn-secondary" disabled={pending || state.data.offset + state.data.limit >= state.data.total} onClick={() => setOffset(offset + state.data.limit)} type="button">Next</button>
           </div> : null}
         </div> : null}
         </div>

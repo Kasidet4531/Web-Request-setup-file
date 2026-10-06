@@ -33,12 +33,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ['test/email-system*.mjs'],
+    files: ['test/email-system*.mjs', 'test/loading-system.e2e.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       sourceType: 'module',
       parserOptions: { projectService: false },
-      globals: { document: 'readonly', window: 'readonly' },
+      globals: { document: 'readonly', window: 'readonly', innerWidth: 'readonly' },
     },
   },
 );

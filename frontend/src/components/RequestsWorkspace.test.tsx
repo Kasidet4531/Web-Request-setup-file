@@ -900,7 +900,7 @@ describe('Queue filtering and retained results', () => {
     expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: 'probe', productType: 'Transfer Product', offset: 0 }))
   })
 
-  it.each([true, false])('retains inert rows while updating, suppresses stale counts, and clears rows on failure (dashboard=%s)', async (dashboard) => {
+  it.each([true, false])('retains rows and disabled pagination while updating, and clears rows on failure (dashboard=%s)', async (dashboard) => {
     render(dashboard); let page = await settle(dashboard)
     let reject: ((reason: unknown) => void) | undefined
     requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((_resolve, rejectRequest) => { reject = rejectRequest }))
@@ -908,9 +908,29 @@ describe('Queue filtering and retained results', () => {
     expect(table(page)?.props.items).toEqual(response().items)
     expect(findRenderedElement(page, (element) => element.props.inert === true && element.props['aria-busy'] === true)).not.toBeNull()
     expect(findRenderedElement(page, (element) => element.props.role === 'status' && typeof element.props.children === 'string' && element.props.children.startsWith('Updating'))).not.toBeNull()
-    expect(findRenderedElement(page, (element) => element.props.className === 'table-footer')).toBeNull()
+    const footer = requireRenderedElement(page, (element) => element.props.className === 'table-footer')
+    expect(footer.props['aria-busy']).toBe(true)
+    expect(findRenderedElement(footer, (element) => element.type === 'button' && element.props.children === 'Next')?.props.disabled).toBe(true)
     reject!(new Error('Queue unavailable')); await vi.advanceTimersByTimeAsync(0); page = render(dashboard)
     expect(table(page)).toBeNull()
+  })
+
+  it.each([true, false])('keeps the displayed page range until the next page arrives (dashboard=%s)', async (dashboard) => {
+    render(dashboard); let page = await settle(dashboard)
+    let resolve: ((value: unknown) => void) | undefined
+    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((done) => { resolve = done }))
+    const next = requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Next')
+    ;(next.props.onClick as () => void)()
+    page = render(dashboard)
+    let footer = requireRenderedElement(page, (element) => element.props.className === 'table-footer')
+    expect(findRenderedElement(footer, (element) => element.type === 'span')?.props.children).toBe('1–1 of 101 requests')
+    expect(findRenderedElement(footer, (element) => element.type === 'button' && element.props.children === 'Next')?.props.disabled).toBe(true)
+    await settle(dashboard)
+    resolve!({ ...response('PSF-101'), offset: 100 })
+    await vi.advanceTimersByTimeAsync(0)
+    page = render(dashboard)
+    footer = requireRenderedElement(page, (element) => element.props.className === 'table-footer')
+    expect(findRenderedElement(footer, (element) => element.type === 'span')?.props.children).toBe('101–101 of 101 requests')
   })
 
   it('hides private draft rows immediately when the scope changes', async () => {
@@ -1918,7 +1938,7 @@ describe('Request identity and dashboard orientation', () => {
     expect(findRenderedElement(denied, element => element.type === AsyncNotice && element.props.kind === 'error')).not.toBeNull()
   })
 
-  it('keeps count filters in place with unavailable totals while dashboard results refresh', async () => {
+  it('keeps previous dashboard totals visible and marked busy while results refresh', async () => {
     const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.DashboardPage() }
     render()
     requestDetailHookHarness.runEffects()
@@ -1928,7 +1948,8 @@ describe('Request identity and dashboard orientation', () => {
     ;(status.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: 'Complete' } })
     const pending = render()
     const counts = requireRenderedElement(pending, element => element.props.className === 'summary-grid dashboard-summary-grid')
-    expect((counts.props.children as RenderedElement[]).map(element => element.props.value)).toEqual([null, null, null])
+    expect(counts.props['aria-busy']).toBe(true)
+    expect((counts.props.children as RenderedElement[]).map(element => element.props.value)).toEqual([5, 2, 3])
   })
 })
 

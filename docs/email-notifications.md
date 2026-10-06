@@ -130,6 +130,18 @@ Retry verification first checks that the worker scheduled the job within one min
 
 On 2026-10-06, all five flows and the startup-cleanup regression passed. A deliberate mutation in ignored build output that bypassed enqueue made the destination flow fail with no outbox job; restoring the build returned the test to green. Backend 682 tests, frontend 415 tests and API integration 20 tests also passed; both builds and lint passed. No company database or services were used. The existing 18-test SQL/concurrency evidence below is from the prior verification.
 
+## Loading-state regression — 2026-10-06
+
+Dashboard, Requests, My Drafts and Audit History retain their last successful results during filter refreshes. Dashboard summary values and pagination stay visible; pagination and stale rows are disabled until the new response arrives. Refresh feedback occupies existing layout space. Initial loading, account/scope changes and API errors still withhold unavailable or unauthorized data.
+
+From `backend`, run the real-browser/backend/PostgreSQL regression with the same prerequisites as the email system suite:
+
+```sh
+EMAIL_E2E_CHROME=/usr/bin/google-chrome npm run test:ui:system
+```
+
+The test holds real API requests while checking pending layout, then releases them and checks the updated result. It covers all four pages, including My Drafts at 390px, without mocking application responses. The suite passed alongside all five email system flows and the startup-cleanup regression. Frontend 418 tests, backend 682 tests, both builds and both lint checks passed. Pagination regression tests also verify that the visible page range updates only when its new response arrives. A separate slow-API Chrome check measured dashboard workspace movement changing from 20px before the fix to 0px afterwards; idle/focus checks did not trigger extra requests in that local reproduction. Company connectivity and other causes of loading on route changes were not verified by this check.
+
 ## Local verification — 2026-10-05
 
 | Check | Result |

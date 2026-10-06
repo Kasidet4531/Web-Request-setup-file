@@ -127,7 +127,7 @@ export function GlobalAuditLogTable({
   error: string | null
   loading: boolean
 }) {
-  if (loading) {
+  if (loading && entries.length === 0) {
     return <AsyncNotice kind="loading" title="Loading global audit history…" />
   }
 
@@ -141,8 +141,9 @@ export function GlobalAuditLogTable({
 
   return (
     <>
+    <p className="global-history-refresh" role="status">{loading ? 'Updating global audit history…' : ''}</p>
     <p className="table-scroll__hint">Scroll horizontally to see audit actors, actions, and details.</p>
-    <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0}>
+    <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
       <table>
         <thead>
           <tr>
@@ -194,7 +195,7 @@ export function GlobalHistoryPage() {
     let mounted = true
 
     async function loadHistory() {
-      setHistory({ loading: true, error: null, data: [] })
+      setHistory((current) => ({ ...current, loading: true, error: null }))
 
       try {
         const entries = await api.fetchGlobalAuditLogs(appliedFilters)
