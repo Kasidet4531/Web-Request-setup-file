@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { StatusLabel } from './ui/StatusLabel'
@@ -22,10 +23,11 @@ type AdminAutofillRulesFeedbackValue = {
 function getFieldDescription(
   canonicalKey: string,
   fields: FormSchemaField[],
+  removedLabel = 'Removed trigger field',
 ): string {
   const field = fields.find((candidate) => candidate.canonicalKey === canonicalKey)
 
-  return field ? `${field.label} (${field.canonicalKey})` : `Removed field (${canonicalKey})`
+  return field?.label ?? removedLabel
 }
 
 function getDraftValidationMessage(draft: AdminAutofillRuleDraft): string | null {
@@ -82,7 +84,6 @@ export function AdminAutofillRulesTable({
           <tr>
             <th scope="col">Trigger field</th>
             <th scope="col">Fill target fields</th>
-            <th scope="col">Source</th>
             <th scope="col">Status</th>
             <th scope="col">Action</th>
           </tr>
@@ -92,19 +93,16 @@ export function AdminAutofillRulesTable({
             <tr key={rule.id}>
               <td>
                 <strong>{fields.find((field) => field.canonicalKey === rule.triggerCanonicalKey)?.label ?? getFieldDescription(rule.triggerCanonicalKey, fields)}</strong>
-                <code>{rule.triggerCanonicalKey}</code>
               </td>
               <td>
                 <ul className="admin-autofill-rules__targets">
-                  {rule.targetCanonicalKeys.map((targetCanonicalKey) => (
+                  {rule.targetCanonicalKeys.map((targetCanonicalKey, index) => (
                     <li key={targetCanonicalKey}>
-                      <div>{fields.find((field) => field.canonicalKey === targetCanonicalKey)?.label ?? 'Removed field'}</div>
-                      <code>{targetCanonicalKey}</code>
+                      {getFieldDescription(targetCanonicalKey, fields, `Removed target field ${index + 1}`)}
                     </li>
                   ))}
                 </ul>
               </td>
-              <td>Previous completed PSF request</td>
               <td>
                 <StatusLabel status={rule.status === 'active' ? 'Active' : 'Inactive'} kind={rule.status === 'active' ? 'completed' : 'neutral'} />
                 {rule.inactiveReason ? <p className="ui-help">{rule.inactiveReason}</p> : null}
@@ -135,6 +133,7 @@ export interface AdminAutofillRuleEditorProps {
   isEditing: boolean
   onCancel: () => void
   onChangeTarget: (canonicalKey: string, checked: boolean) => void
+  onChangeStatus: (status: AdminAutofillRule['status']) => void
   onChangeTrigger: (canonicalKey: string) => void
   onSave: () => void
 }
@@ -146,6 +145,7 @@ export function AdminAutofillRuleEditor({
   isEditing,
   onCancel,
   onChangeTarget,
+  onChangeStatus,
   onChangeTrigger,
   onSave,
 }: AdminAutofillRuleEditorProps) {
@@ -163,15 +163,15 @@ export function AdminAutofillRuleEditor({
   const saveLabel = isEditing ? 'Save autofill rule' : 'Create autofill rule'
 
   return (
-    <section className="page-card__section admin-autofill-rules__editor">
+    <section className="ui-dialog__body admin-autofill-rules__editor">
       <div className="admin-autofill-rules__editor-header">
         <div>
-          <h2>{isEditing ? 'Edit autofill rule' : 'Create autofill rule'}</h2>
+          <h2 id="admin-autofill-editor-heading">{isEditing ? 'Edit autofill rule' : 'Create autofill rule'}</h2>
           <p>
-            Choose a schema field that may trigger autofill, then choose the
-            canonical fields it should fill from a previous completed submission.
+            Choose a trigger and the fields to fill from a previous completed PSF request.
           </p>
         </div>
+        <button className="icon-button" type="button" aria-label="Close autofill rule editor" disabled={disabled} onClick={onCancel}><X size={18} aria-hidden="true" /></button>
       </div>
 
       <div className="admin-autofill-rules__editor-grid">
@@ -180,36 +180,43 @@ export function AdminAutofillRuleEditor({
         <span>Autofill trigger field</span>
         <select
           disabled={disabled}
+          data-initial-focus
           id="admin-autofill-trigger"
           onChange={(event) => onChangeTrigger(event.target.value)}
           value={draft.triggerCanonicalKey}
         >
           <option value="">Choose a trigger field</option>
           {triggerRemoved ? <option disabled value={draft.triggerCanonicalKey}>
-            Removed field ({draft.triggerCanonicalKey})
+            Removed trigger field
           </option> : null}
           {triggerFields.map((field) => (
             <option key={field.canonicalKey} value={field.canonicalKey}>
-              {field.label} ({field.canonicalKey})
+              {field.label}
             </option>
           ))}
         </select>
       </label>
+      <label className="admin-autofill-rules__field" htmlFor="admin-autofill-status">
+        <span>Rule status</span>
+        <select id="admin-autofill-status" disabled={disabled} value={draft.status} onChange={(event) => onChangeStatus(event.target.value as AdminAutofillRule['status'])}>
+          <option value="active">Active</option><option value="inactive">Inactive</option>
+        </select>
+      </label>
+      <p className="ui-help">Inactive rules stay saved but do not fill request fields.</p>
       <p className="ui-help">Source: a previous completed PSF request. Auto-fill preserves values entered manually.</p>
       </div>
 
       <fieldset className="admin-autofill-rules__targets-fieldset">
         <legend>Fill target fields</legend>
         <p className="page-card__description">
-          Select one or more fields to fill. Canonical keys are saved; labels are
-          shown only for administration.
+          Select one or more fields to fill.
         </p>
         <div className="admin-autofill-rules__target-options">
           {removedTargets.map((key) => (
             <label key={key} htmlFor={`admin-autofill-target-${key}`}>
               <input id={`admin-autofill-target-${key}`} type="checkbox" checked disabled={disabled}
                 onChange={(event) => onChangeTarget(key, event.target.checked)} />
-              <span>Removed field ({key}) — deselect before saving</span>
+              <span>Removed target field {draft.targetCanonicalKeys.indexOf(key) + 1} — deselect before saving</span>
             </label>
           ))}
           {targetFields.map((field) => {
@@ -227,7 +234,7 @@ export function AdminAutofillRuleEditor({
                   type="checkbox"
                 />
                 <span>
-                  {field.label} ({field.canonicalKey})
+                  {field.label}
                 </span>
               </label>
             )
@@ -236,7 +243,6 @@ export function AdminAutofillRuleEditor({
       </fieldset>
       </div>
 
-      {isEditing ? <p className="page-card__description">Saving a valid rule activates it again.</p> : null}
 
       {validationMessage ? (
         <p className="form-error" role="alert">
@@ -280,6 +286,23 @@ export function AdminAutofillRulesPage() {
   const [saving, setSaving] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
   const requestInFlight = useRef(false)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const focusReturnTarget = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!showEditor || !dialog) return
+    if (!dialog.open) dialog.showModal()
+    dialog.querySelector<HTMLElement>('[data-initial-focus]')?.focus()
+    return () => { if (dialog.open) dialog.close() }
+  }, [showEditor])
+
+  useEffect(() => {
+    if (showEditor || saving || !focusReturnTarget.current) return
+    const opener = focusReturnTarget.current
+    focusReturnTarget.current = null
+    if (opener.isConnected) opener.focus()
+  }, [showEditor, saving])
 
   useEffect(() => {
     let mounted = true
@@ -328,6 +351,7 @@ export function AdminAutofillRulesPage() {
       return
     }
 
+    focusReturnTarget.current = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null
     setDraft(createAdminAutofillRuleDraft())
     setEditingRuleId(null)
     setFeedback(null)
@@ -339,6 +363,7 @@ export function AdminAutofillRulesPage() {
       return
     }
 
+    focusReturnTarget.current = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null
     setDraft(toAdminAutofillRuleDraft(rule))
     setEditingRuleId(rule.id)
     setFeedback(null)
@@ -376,6 +401,12 @@ export function AdminAutofillRulesPage() {
     setFeedback(null)
   }
 
+  function changeStatus(status: AdminAutofillRule['status']) {
+    if (saving || requestInFlight.current) return
+    setDraft((current) => ({ ...current, status }))
+    setFeedback(null)
+  }
+
   async function saveRule() {
     if (
       loading ||
@@ -391,6 +422,7 @@ export function AdminAutofillRulesPage() {
       formKey: draft.formKey,
       triggerCanonicalKey: draft.triggerCanonicalKey,
       targetCanonicalKeys: [...draft.targetCanonicalKeys],
+      status: draft.status,
     }
     const wasEditing = editingRuleId !== null
     requestInFlight.current = true
@@ -460,13 +492,13 @@ export function AdminAutofillRulesPage() {
         </button>} />
 
       <div className="page-card__body admin-autofill-rules__body">
-        <AdminAutofillRulesFeedback feedback={feedback} loading={loading} />
+        {!showEditor ? <AdminAutofillRulesFeedback feedback={feedback} loading={loading} /> : null}
         {!loading && rules.length === 0 && !showEditor && !feedback ? (
           <AsyncNotice kind="empty" title="No autofill rules are configured." />
         ) : null}
         {!loading && rules.length > 0 ? (
           <div className="admin-autofill-rules__catalog">
-          <p className="table-scroll__hint">Scroll horizontally to see rule sources, status, and actions.</p>
+          <p className="table-scroll__hint">Scroll horizontally to see fill targets, status, and actions.</p>
           <AdminAutofillRulesTable
             disabled={saving}
             fields={fields}
@@ -476,16 +508,20 @@ export function AdminAutofillRulesPage() {
           </div>
         ) : null}
         {!loading && showEditor ? (
+          <dialog ref={dialogRef} className="ui-dialog admin-autofill-dialog" aria-labelledby="admin-autofill-editor-heading" aria-busy={saving} onCancel={(event) => { event.preventDefault(); cancelEditing() }}>
           <AdminAutofillRuleEditor
             disabled={saving}
             draft={draft}
             fields={fields}
             isEditing={editingRuleId !== null}
             onCancel={cancelEditing}
+            onChangeStatus={changeStatus}
             onChangeTarget={changeTarget}
             onChangeTrigger={changeTrigger}
             onSave={() => void saveRule()}
           />
+          {feedback?.kind === 'error' ? <div className="admin-autofill-dialog__feedback"><AdminAutofillRulesFeedback feedback={feedback} loading={false} /></div> : null}
+          </dialog>
         ) : null}
       </div>
     </article>

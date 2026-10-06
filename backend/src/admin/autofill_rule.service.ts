@@ -21,6 +21,7 @@ export const AUTOFILL_RULE_LOOKUP_SOURCE = 'previous_completed_submission';
 export const AUTOFILL_RULE_STATUS = 'active';
 
 export interface AutofillRuleInput {
+  status?: 'active' | 'inactive';
   formKey: string;
   triggerCanonicalKey: string;
   targetCanonicalKeys: string[];
@@ -180,10 +181,11 @@ export class AutofillRuleService implements OnModuleInit {
               lookup_source,
               fill_targets_json,
               status,
+              inactive_reason,
               created_at,
               updated_at
             )
-            VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, NOW(), NOW())
+            VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, NOW(), NOW())
             RETURNING
               id,
               form_key,
@@ -191,6 +193,7 @@ export class AutofillRuleService implements OnModuleInit {
               lookup_source,
               fill_targets_json,
               status,
+              inactive_reason,
               created_at,
               updated_at
           `,
@@ -200,7 +203,10 @@ export class AutofillRuleService implements OnModuleInit {
             normalizedInput.triggerCanonicalKey,
             AUTOFILL_RULE_LOOKUP_SOURCE,
             JSON.stringify(normalizedInput.targetCanonicalKeys),
-            AUTOFILL_RULE_STATUS,
+            normalizedInput.status ?? AUTOFILL_RULE_STATUS,
+            normalizedInput.status === 'inactive'
+              ? 'Disabled by administrator.'
+              : null,
           ],
         );
         const created = result.rows[0];
@@ -236,8 +242,12 @@ export class AutofillRuleService implements OnModuleInit {
             SET
               trigger_canonical_key = $1,
               fill_targets_json = $2::jsonb,
-              status = 'active',
-              inactive_reason = NULL,
+              status = COALESCE($5::text, status),
+              inactive_reason = CASE
+                WHEN $5::text = 'active' THEN NULL
+                WHEN $5::text = 'inactive' THEN 'Disabled by administrator.'
+                ELSE inactive_reason
+              END,
               updated_at = NOW()
             WHERE id = $3::uuid AND form_key = $4
             RETURNING
@@ -247,6 +257,7 @@ export class AutofillRuleService implements OnModuleInit {
               lookup_source,
               fill_targets_json,
               status,
+              inactive_reason,
               created_at,
               updated_at
           `,
@@ -255,6 +266,7 @@ export class AutofillRuleService implements OnModuleInit {
             JSON.stringify(normalizedInput.targetCanonicalKeys),
             normalizedRuleId,
             normalizedInput.formKey,
+            normalizedInput.status ?? null,
           ],
         );
         const updated = result.rows[0];
@@ -302,9 +314,21 @@ export class AutofillRuleService implements OnModuleInit {
       'formKey',
       'triggerCanonicalKey',
       'targetCanonicalKeys',
+      'status',
     ]);
 
+    if (
+      Object.hasOwn(input, 'status') &&
+      input.status !== 'active' &&
+      input.status !== 'inactive'
+    ) {
+      throw new BadRequestException('status must be active or inactive.');
+    }
+
     return {
+      ...(input.status === undefined
+        ? {}
+        : { status: input.status as 'active' | 'inactive' }),
       formKey: this.parseManagedFormKey(input.formKey),
       triggerCanonicalKey: this.parseCanonicalKey(
         input.triggerCanonicalKey,

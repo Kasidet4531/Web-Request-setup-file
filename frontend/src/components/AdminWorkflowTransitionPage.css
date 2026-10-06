@@ -83,3 +83,11 @@
 }
 
 .admin-status-dialog__psf-access { display: grid; gap: 8px; }
+
+/* Reserve height so growing selected lists cannot recenter the edit inputs. */
+.admin-status-dialog--edit { height: min(820px, calc(100dvh - 32px)); }
+.admin-status-dialog--edit .admin-status-dialog__content { flex: 1; align-content: start; }
+.admin-status-dialog__recipient-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+@media (max-width: 899px) {
+  .admin-status-dialog__recipient-lists { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}

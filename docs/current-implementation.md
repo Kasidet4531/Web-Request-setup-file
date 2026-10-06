@@ -1,9 +1,11 @@
 # Current implementation — main
 
 Documentation baseline: `main` at commit `745ae99`, merged on 6 October 2026.
-The dated updates below describe the changes incorporated into that baseline.
+The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
+
+> **Admin rule dialogs update, 7 October 2026:** Auto-fill Rules now supports explicit Active/Inactive selection, modal Create/Edit and label-only wrapping targets. Edit Status keeps added recipients below both input groups. See [the approved spec](specs/2026-10-07-autofill-admin-dialogs-design.md) and [fresh verification](verification/2026-10-07-admin-autofill-dialogs.md).
 
 > **Forms and assignment update, 6 October 2026:** The feature update, now merged into `main`, implements
 > [the approved form management and request assignment design](superpowers/specs/2026-10-06-form-management-and-request-assignment-design.md).
@@ -193,15 +195,25 @@ active rules, including for older drafts using their original field keys.
 Publishing a schema inactivates rules whose trigger is removed or whose targets
 are all removed, retaining the rule and its reason for administrator review.
 Partially removed targets are skipped. Saving a draft schema does not change
-rules, restoring a field does not reactivate a rule, and explicitly saving a
-valid edited rule activates it again. Renaming labels does not change canonical
-identity. Autofill preserves manual values and edits made during a lookup.
+rules, and restoring a field does not reactivate a rule. Administrators select
+Active or Inactive when creating/editing a rule. Inactive edits preserve that
+choice until Active is explicitly selected; manual disabling is identified as
+"Disabled by administrator." All saves still validate the trigger and selected
+targets against the active schema. Existing clients omitting status create Active
+rules and preserve stored status/reason when editing. Renaming labels does not
+change canonical identity. Autofill preserves manual values and edits made during a lookup.
 Unindexed historical values are read through their original schema snapshot;
 requests with restricted legacy sections are excluded as autofill sources.
 
 `cd backend && npm run test:postgres` exercises lookup and publication against
 an isolated embedded PostgreSQL database without using configured credentials.
-Sources: [autofill](../backend/src/requests/autofill.service.ts),
+Auto-fill Rules uses the same modal for Create and Edit. Cancel/Escape/Close
+discard the local draft; failed saves retain it, and pending saves block closing
+or duplicate submission. Field selectors and the table display labels without
+canonical keys. Fill target labels wrap horizontally in the space freed by
+removing the Source table column; lookup still uses previous completed requests.
+Sources: [admin rule editor](../frontend/src/components/AdminAutofillRulesPage.tsx),
+[autofill](../backend/src/requests/autofill.service.ts),
 [rules](../backend/src/admin/autofill_rule.service.ts),
 [audit service](../backend/src/audit/audit_log.service.ts),
 [audit controller](../backend/src/audit/audit_log.controller.ts),

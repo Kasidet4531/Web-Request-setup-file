@@ -226,7 +226,7 @@ export function AdminWorkflowTransitionPage() {
               </>}</div></td>
             </tr>)}</tbody>
           </table></div></div>
-          {dialogMode ? <dialog ref={dialogRef} className="ui-dialog admin-status-dialog" aria-labelledby={dialogMode === 'edit' ? 'edit-status-heading' : 'delete-status-heading'} aria-busy={busy}
+          {dialogMode ? <dialog ref={dialogRef} className={`ui-dialog admin-status-dialog${dialogMode === 'edit' ? ' admin-status-dialog--edit' : ''}`} aria-labelledby={dialogMode === 'edit' ? 'edit-status-heading' : 'delete-status-heading'} aria-busy={busy}
             onCancel={(event) => { event.preventDefault(); closeDialog() }} onClick={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
           {emailEditing ? <form className="ui-dialog__body" onSubmit={(event) => { event.preventDefault(); if (editName.trim()) saveEmailPolicy() }}>
             <div className="admin-status-dialog__header"><div><h2 id="edit-status-heading">Edit status</h2><p className="ui-help">Update the name, requester PSF access, and email recipients together.</p></div><button className="icon-button" type="button" aria-label="Close status editor" disabled={busy} onClick={closeDialog}><X size={18} aria-hidden="true" /></button></div>
@@ -244,13 +244,19 @@ export function AdminWorkflowTransitionPage() {
             <div className="admin-workflow-transition__email-fields">
               {(['To', 'CC'] as const).map((field) => <fieldset key={field} className="admin-workflow-transition__recipient-field">
                 <legend className="ui-label">{field}{field === 'To' ? ' (required when enabled)' : ' (optional)'}</legend>
-                <ul className="admin-status-dialog__recipients" aria-label={`${field} recipients`}>{(field === 'To' ? emailTo : emailCc).map((address) => <li key={address}><span>{address}</span><button className="icon-button" aria-label={`Remove ${address} from ${field}`} type="button" disabled={recipientControlsDisabled} onClick={() => { (field === 'To' ? setEmailTo : setEmailCc)((field === 'To' ? emailTo : emailCc).filter((item) => item !== address)); setEmailError(null) }}><X size={14} aria-hidden="true" /></button></li>)}</ul>
+
                 <div className="admin-status-dialog__add-address"><input aria-label={`${field} addresses`} aria-describedby={`email-recipients-help${emailError ? ' email-policy-error' : ''}`} aria-invalid={Boolean(emailError)} disabled={recipientControlsDisabled} value={field === 'To' ? toInput : ccInput} placeholder="name@example.com" onChange={(event) => { (field === 'To' ? setToInput : setCcInput)(event.target.value); setEmailError(null) }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addRecipients(field, field === 'To' ? toInput : ccInput) } }} /><button className="ui-button ui-button--secondary" aria-label={`Add ${field}`} disabled={recipientControlsDisabled || !(field === 'To' ? toInput : ccInput).trim()} type="button" onClick={() => addRecipients(field, field === 'To' ? toInput : ccInput)}>Add {field}</button></div>
                 <label className="ui-field"><span className="ui-label">Add system user to {field}</span><select aria-label={`Add system user to ${field}`} disabled={recipientControlsDisabled || usersLoading || users === null} value="" onChange={(event) => {
                   if (!isValidEmailAddress(event.target.value)) return
                   addRecipients(field, event.target.value)
                 }}><option value="">Choose a user</option>{users?.map((user) => <option key={user.id} value={isValidEmailAddress(user.email) ? user.email.trim() : ''} disabled={!isValidEmailAddress(user.email)}>{user.displayName} ({user.username}) — {isValidEmailAddress(user.email) ? user.email.trim() : 'No valid email available'}</option>)}</select></label>
               </fieldset>)}
+            </div>
+            <div className="admin-status-dialog__recipient-lists">
+              {(['To', 'CC'] as const).map((field) => <section key={field} className="admin-workflow-transition__recipient-field">
+                <h3 className="ui-label">{field} recipients</h3>
+                <ul className="admin-status-dialog__recipients" aria-label={`${field} recipients`}>{(field === 'To' ? emailTo : emailCc).map((address) => <li key={address}><span>{address}</span><button className="icon-button" aria-label={`Remove ${address} from ${field}`} type="button" disabled={recipientControlsDisabled} onClick={() => { (field === 'To' ? setEmailTo : setEmailCc)((field === 'To' ? emailTo : emailCc).filter((item) => item !== address)); setEmailError(null) }}><X size={14} aria-hidden="true" /></button></li>)}</ul>
+              </section>)}
             </div>
             {emailError ? <p id="email-policy-error" className="admin-workflow-transition__email-error" role="alert">{emailError}</p> : null}
             {feedback?.kind === 'error' ? <AsyncNotice kind="error" title={feedback.message} /> : null}

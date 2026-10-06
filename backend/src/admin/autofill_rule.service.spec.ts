@@ -147,7 +147,7 @@ describe('AutofillRuleService', () => {
     await expect(service.listActiveRules('psf-request')).resolves.toEqual([]);
   });
 
-  it('only reactivates an inactive rule after an administrator saves valid fields', async () => {
+  it('only reactivates an inactive rule after an administrator explicitly selects Active', async () => {
     const saved = await service.createRule(validInput);
     storedRules[0].status = 'inactive';
     storedRules[0].inactive_reason =
@@ -157,6 +157,7 @@ describe('AutofillRuleService', () => {
         ...validInput,
         triggerCanonicalKey: 'product',
         targetCanonicalKeys: ['wafer_fab'],
+        status: 'active',
       }),
     ).resolves.toMatchObject({
       status: 'active',
@@ -210,8 +211,8 @@ describe('AutofillRuleService', () => {
       }
 
       if (query.includes('UPDATE autofill_rules')) {
-        const [triggerCanonicalKey, fillTargetsJson, ruleId, formKey] =
-          values as [string, string, string, string];
+        const [triggerCanonicalKey, fillTargetsJson, ruleId, formKey, status] =
+          values as [string, string, string, string, string | null];
         const existing = storedRules.find(
           (rule) => rule.id === ruleId && rule.form_key === formKey,
         );
@@ -235,9 +236,10 @@ describe('AutofillRuleService', () => {
         lastPersistedTargetJson = fillTargetsJson;
         existing.fill_targets_json = JSON.parse(fillTargetsJson) as string[];
         existing.updated_at = new Date('2026-08-11T11:00:00.000Z');
-        if (query.includes("status = 'active'")) {
-          existing.status = 'active';
-          existing.inactive_reason = null;
+        if (status !== null) {
+          existing.status = status;
+          existing.inactive_reason =
+            status === 'inactive' ? 'Disabled by administrator.' : null;
         }
         return Promise.resolve({ rows: [existing] });
       }

@@ -2,7 +2,7 @@
 
 This project is a Web Application to manage PSF Setup File Requests.
 
-Current documentation baseline is `main` at `745ae99` (6 October 2026).
+Work in the current `main` checkout. Maintained guides include dated feature updates.
 For behavior changes, read
 [current implementation](docs/current-implementation.md), [documentation index](docs/README.md)
 and [domain glossary](CONTEXT.md) before relying on historical specs/ADRs/plans.

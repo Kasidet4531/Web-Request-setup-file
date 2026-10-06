@@ -1,3 +1,6 @@
+import { BadRequestException } from '@nestjs/common';
+import { AutofillRuleController } from '../src/admin/autofill_rule.controller';
+import type { AuthService } from '../src/auth/auth.service';
 import { PGlite } from '@electric-sql/pglite';
 import assert from 'node:assert/strict';
 import { describe, it, before, beforeEach, after } from 'node:test';
@@ -108,6 +111,91 @@ void describe('autofill PostgreSQL integration', () => {
       value: 'Product A',
     });
   }
+
+  void it('persists admin-selected inactivity through legacy edits and publication, then activates explicitly', async () => {
+    const controller = new AutofillRuleController(rules, {
+      getProfile: () => Promise.resolve(actor),
+    } as unknown as AuthService);
+    const request = { session: { userId: actor.id } } as never;
+    const saved = await controller.createRule(
+      { ...ruleInput, status: 'inactive' },
+      request,
+    );
+    assert.equal(saved.status, 'inactive');
+    assert.equal(saved.inactiveReason, 'Disabled by administrator.');
+    await seedSource(1, 'Fab A');
+    assert.deepEqual(await lookup(), { matched: false, suggestedValues: {} });
+    const inactiveSchema = await schemas.getActiveSchema('psf-request', true);
+    assert.notEqual(
+      inactiveSchema.schema.sections
+        .flatMap((section) => section.fields)
+        .find((field) => field.canonicalKey === 'product')?.autofillTrigger,
+      true,
+    );
+    const edited = await controller.updateRule(saved.id, ruleInput, request);
+    assert.equal(edited.status, 'inactive');
+    assert.equal(edited.inactiveReason, 'Disabled by administrator.');
+    const draft = await schemas.duplicateVersion(1, actor);
+    await schemas.publishDraft(draft.version);
+    assert.equal((await rules.listRules('psf-request'))[0].status, 'inactive');
+    const enabled = await controller.updateRule(
+      saved.id,
+      { ...ruleInput, status: 'active' },
+      request,
+    );
+    assert.equal(enabled.status, 'active');
+    assert.equal(enabled.inactiveReason, undefined);
+    assert.equal((await lookup()).matched, true);
+    const activeSchema = await schemas.getActiveSchema('psf-request', true);
+    assert.equal(
+      activeSchema.schema.sections
+        .flatMap((section) => section.fields)
+        .find((field) => field.canonicalKey === 'product')?.autofillTrigger,
+      true,
+    );
+    assert.equal(
+      (await rules.updateRule(saved.id, ruleInput)).status,
+      'active',
+    );
+    const disabled = await controller.updateRule(
+      saved.id,
+      { ...ruleInput, status: 'inactive' },
+      request,
+    );
+    assert.equal(disabled.inactiveReason, 'Disabled by administrator.');
+    assert.deepEqual(await rules.listActiveRules('psf-request'), []);
+    const persisted = await db.query<{
+      status: string;
+      inactive_reason: string;
+    }>('SELECT status, inactive_reason FROM autofill_rules WHERE id=$1', [
+      saved.id,
+    ]);
+    assert.deepEqual(persisted.rows[0], {
+      status: 'inactive',
+      inactive_reason: 'Disabled by administrator.',
+    });
+  });
+
+  void it('rejects invalid activation values and schema-invalid saves without changing storage', async () => {
+    const saved = await rules.createRule(ruleInput);
+    for (const status of [null, true, '', 'paused', 'Active']) {
+      await assert.rejects(
+        rules.updateRule(saved.id, { ...ruleInput, status }),
+        BadRequestException,
+      );
+    }
+    for (const status of ['active', 'inactive']) {
+      await assert.rejects(
+        rules.updateRule(saved.id, {
+          ...ruleInput,
+          status,
+          targetCanonicalKeys: ['removed'],
+        }),
+        BadRequestException,
+      );
+    }
+    assert.equal((await rules.listRules('psf-request'))[0].status, 'active');
+  });
 
   void it('matches unindexed historical fields by canonical key despite renamed inputs and labels', async () => {
     await rules.createRule(ruleInput);
@@ -239,7 +327,12 @@ void describe('autofill PostgreSQL integration', () => {
     await schemas.publishDraft(restored.version);
     assert.deepEqual(await rules.listActiveRules('psf-request'), []);
     assert.equal(
-      (await rules.updateRule(saved.id, ruleInput)).status,
+      (await rules.updateRule(saved.id, ruleInput)).inactiveReason,
+      'Trigger field was removed from the published form.',
+    );
+    assert.equal(
+      (await rules.updateRule(saved.id, { ...ruleInput, status: 'active' }))
+        .status,
       'active',
     );
   });

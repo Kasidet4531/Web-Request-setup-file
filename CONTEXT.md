@@ -59,7 +59,7 @@ An Admin-configured catalog entry with immutable identity, verbatim name and exp
 A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.
 
 **Auto-fill Rule**:
-A configuration defining a trigger field and its target fields to automatically populate data from historical records.
+An administrator-managed configuration defining a trigger field and its target fields to populate from a previous completed PSF Request. Active rules participate in autofill; Inactive rules do not. Administrators explicitly choose activation, while publishing an incompatible form may disable a rule for review. Editing an Inactive rule or restoring its fields does not reactivate it.
 _Avoid_: Smart suggestion, autofill setting
 
 **Canonical Key**:

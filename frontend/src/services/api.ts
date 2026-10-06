@@ -243,6 +243,7 @@ export interface AdminAutofillRule {
 }
 
 export interface SaveAdminAutofillRulePayload {
+  status?: 'active' | 'inactive'
   formKey: string
   triggerCanonicalKey: string
   targetCanonicalKeys: string[]

@@ -4,7 +4,7 @@ import {
   type SaveAdminAutofillRulePayload,
 } from '../services/api'
 
-export type AdminAutofillRuleDraft = SaveAdminAutofillRulePayload
+export type AdminAutofillRuleDraft = SaveAdminAutofillRulePayload & { status: AdminAutofillRule['status'] }
 
 const MANAGED_FORM_KEY = 'psf-request'
 
@@ -13,19 +13,21 @@ export function createAdminAutofillRuleDraft(): AdminAutofillRuleDraft {
     formKey: MANAGED_FORM_KEY,
     triggerCanonicalKey: '',
     targetCanonicalKeys: [],
+    status: 'active',
   }
 }
 
 export function toAdminAutofillRuleDraft(
   rule: Pick<
     AdminAutofillRule,
-    'formKey' | 'triggerCanonicalKey' | 'targetCanonicalKeys'
+    'formKey' | 'triggerCanonicalKey' | 'targetCanonicalKeys' | 'status'
   >,
 ): AdminAutofillRuleDraft {
   return {
     formKey: rule.formKey,
     triggerCanonicalKey: rule.triggerCanonicalKey,
     targetCanonicalKeys: [...rule.targetCanonicalKeys],
+    status: rule.status,
   }
 }
 

@@ -162,6 +162,10 @@ describe('AutofillRuleController', () => {
     null,
     {},
     { ...input, unexpected: true },
+    ...[null, true, '', 'paused', 'Active'].map((status) => ({
+      ...input,
+      status,
+    })),
     { formKey: 'psf-request', targetCanonicalKeys: ['product'] },
   ])('rejects malformed rule envelopes before writing', async (body) => {
     authService.getProfile.mockResolvedValue(adminActor);

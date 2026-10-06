@@ -392,6 +392,7 @@ describe('AdminAutofillRulesPage interactions', () => {
       formKey: 'psf-request',
       triggerCanonicalKey: 'reference_product',
       targetCanonicalKeys: ['product'],
+      status: 'active',
     })
 
     await flushAsyncWork()
@@ -524,6 +525,7 @@ describe('AdminAutofillRulesPage interactions', () => {
         formKey: 'psf-request',
         triggerCanonicalKey: 'reference_psf_name',
         targetCanonicalKeys: ['product'],
+        status: 'active',
       },
     )
     expect(getTargetCheckbox(editor, 'wafer_fab').props.checked).toBe(false)
@@ -532,6 +534,76 @@ describe('AdminAutofillRulesPage interactions', () => {
       kind: 'error',
       message: 'The trigger already has a rule.',
     })
+  })
+
+  it('opens editing in a native dialog and preserves an inactive rule on save', async () => {
+    const inactiveRule = { ...existingRule, status: 'inactive' as const }
+    adminAutofillApi.fetchAdminAutofillRules.mockResolvedValue([inactiveRule])
+    adminAutofillApi.updateAdminAutofillRule.mockResolvedValue(inactiveRule)
+    let page = await loadAdminAutofillRulesPage()
+    click(getEditButton(renderRulesTable(page), existingRule.id))
+    page = renderAdminAutofillRulesPage()
+    expect(findRenderedElement(page, element => element.type === 'dialog')).not.toBeNull()
+    expect(requireRenderedElement(renderEditor(page), element => element.props.id === 'admin-autofill-status').props.value).toBe('inactive')
+    click(getEditorButton(renderEditor(page), 'Save autofill rule'))
+    await flushAsyncWork()
+    expect(adminAutofillApi.updateAdminAutofillRule).toHaveBeenCalledWith(existingRule.id, {
+      formKey: 'psf-request', triggerCanonicalKey: 'reference_psf_name', targetCanonicalKeys: ['product', 'wafer_fab'], status: 'inactive',
+    })
+    expect(findRenderedElement(renderAdminAutofillRulesPage(), element => element.type === 'dialog')).toBeNull()
+  })
+
+  it('discards dialog edits on Escape and blocks closing or duplicate writes while saving', async () => {
+    adminAutofillApi.fetchAdminAutofillRules.mockResolvedValue([existingRule])
+    let page = await loadAdminAutofillRulesPage()
+    click(getEditButton(renderRulesTable(page), existingRule.id))
+    page = renderAdminAutofillRulesPage()
+    toggleTarget(renderEditor(page), 'wafer_fab', false)
+    page = renderAdminAutofillRulesPage()
+    let dialog = requireRenderedElement(page, element => element.type === 'dialog')
+    ;(dialog.props.onCancel as (event: unknown) => void)({ preventDefault() {} })
+    expect(findRenderedElement(renderAdminAutofillRulesPage(), element => element.type === 'dialog')).toBeNull()
+    page = renderAdminAutofillRulesPage()
+    click(getEditButton(renderRulesTable(page), existingRule.id))
+    page = renderAdminAutofillRulesPage()
+    expect(getTargetCheckbox(renderEditor(page), 'wafer_fab').props.checked).toBe(true)
+    let resolveSave!: (rule: AdminAutofillRule) => void
+    adminAutofillApi.updateAdminAutofillRule.mockImplementationOnce(() => new Promise(resolve => { resolveSave = resolve }))
+    const save = getEditorButton(renderEditor(page), 'Save autofill rule')
+    click(save); click(save)
+    dialog = requireRenderedElement(page, element => element.type === 'dialog')
+    ;(dialog.props.onCancel as (event: unknown) => void)({ preventDefault() {} })
+    expect(findRenderedElement(renderAdminAutofillRulesPage(), element => element.type === 'dialog')).not.toBeNull()
+    expect(adminAutofillApi.updateAdminAutofillRule).toHaveBeenCalledTimes(1)
+    resolveSave(existingRule); await flushAsyncWork()
+  })
+
+  it('creates an explicitly inactive rule and retains that selection after a failed save', async () => {
+    adminAutofillApi.fetchAdminAutofillRules.mockResolvedValue([])
+    adminAutofillApi.createAdminAutofillRule.mockRejectedValueOnce(new ApiError('Save unavailable.', 503, 'Unavailable', null))
+    let page = await loadAdminAutofillRulesPage()
+    click(getPageButton(page, 'Create rule'))
+    page = renderAdminAutofillRulesPage()
+    changeTrigger(renderEditor(page), 'reference_product')
+    page = renderAdminAutofillRulesPage()
+    toggleTarget(renderEditor(page), 'product', true)
+    page = renderAdminAutofillRulesPage()
+    const status = requireRenderedElement(renderEditor(page), element => element.props.id === 'admin-autofill-status')
+    ;(status.props.onChange as (event: unknown) => void)({ target: { value: 'inactive' } })
+    page = renderAdminAutofillRulesPage()
+    click(getEditorButton(renderEditor(page), 'Create autofill rule'))
+    await flushAsyncWork()
+    page = renderAdminAutofillRulesPage()
+    expect(adminAutofillApi.createAdminAutofillRule).toHaveBeenCalledWith({
+      formKey: 'psf-request', triggerCanonicalKey: 'reference_product', targetCanonicalKeys: ['product'], status: 'inactive',
+    })
+    expect(requireRenderedElement(renderEditor(page), element => element.props.id === 'admin-autofill-status').props.value).toBe('inactive')
+    expect(getTargetCheckbox(renderEditor(page), 'product').props.checked).toBe(true)
+    const dialog = requireRenderedElement(page, element => element.type === 'dialog')
+    expect(requireRenderedElement(dialog, element => element.type === AdminAutofillRulesFeedback).props.feedback).toEqual({ kind: 'error', message: 'Save unavailable.' })
+    const close = requireRenderedElement(renderEditor(page), element => element.props['aria-label'] === 'Close autofill rule editor')
+    click(close)
+    expect(findRenderedElement(renderAdminAutofillRulesPage(), element => element.type === 'dialog')).toBeNull()
   })
 
 })

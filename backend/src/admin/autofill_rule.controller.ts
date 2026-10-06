@@ -99,12 +99,21 @@ export class AutofillRuleController {
     }
 
     const hasExactKeys =
-      Object.keys(body).length === RULE_BODY_KEYS.length &&
-      RULE_BODY_KEYS.every((key) => Object.hasOwn(body, key));
+      Object.keys(body).every(
+        (key) => RULE_BODY_KEYS.includes(key) || key === 'status',
+      ) && RULE_BODY_KEYS.every((key) => Object.hasOwn(body, key));
     if (!hasExactKeys) {
       throw new BadRequestException(
-        'Autofill rule must contain exactly formKey, triggerCanonicalKey, and targetCanonicalKeys.',
+        'Autofill rule requires formKey, triggerCanonicalKey, targetCanonicalKeys, and optionally status.',
       );
+    }
+
+    if (
+      Object.hasOwn(body, 'status') &&
+      body.status !== 'active' &&
+      body.status !== 'inactive'
+    ) {
+      throw new BadRequestException('status must be active or inactive.');
     }
 
     return body as unknown as AutofillRuleInput;

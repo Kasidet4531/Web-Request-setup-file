@@ -31,6 +31,17 @@ into documentation or version control.
 | [docs/local-development-auth.md](local-development-auth.md) | Remote/local database setup, mock guards and removal |
 | [frontend/README.md](../frontend/README.md) | Frontend environment, routing and commands |
 
+## Recent feature specs and plans
+
+These documents describe agreed requirements and the implementation checklist.
+Use the current implementation guide and dated verification records for completed
+behavior and test outcomes.
+
+| Document | Use/scope |
+| --- | --- |
+| [Auto-fill Rules and Status recipient design](specs/2026-10-07-autofill-admin-dialogs-design.md) | Active/Inactive selection, modal editing, field labels and recipient layout requirements |
+| [Auto-fill Admin Dialogs plan](plans/2026-10-07-autofill-admin-dialogs.md) | Implementation checklist using `/implement` and `/code-review` |
+
 ## Agent and tracker conventions
 
 | Document | Use/scope |
@@ -73,6 +84,7 @@ into documentation or version control.
 | [docs/plans/production-ui-integration-execution-plan.md](plans/production-ui-integration-execution-plan.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/psf-created-information-editing.md](plans/psf-created-information-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/superpowers/plans/2026-09-01-ldap-api-login.md](superpowers/plans/2026-09-01-ldap-api-login.md) | Original scoped plan; not a current execution instruction |
+| [docs/verification/2026-10-07-admin-autofill-dialogs.md](verification/2026-10-07-admin-autofill-dialogs.md) | Rule activation, modal editing and recipient-layout regression tests, browser evidence and two-axis review |
 | [docs/verification/2026-10-06-main-documentation-alignment.md](verification/2026-10-06-main-documentation-alignment.md) | Main documentation baseline, assignment semantics, link checks and original Task 4 evidence availability |
 | [docs/verification/2026-10-02-documentation-alignment.md](verification/2026-10-02-documentation-alignment.md) | Dated documentation audit and validation boundaries |
 | [docs/verification/2026-10-02-status-management.md](verification/2026-10-02-status-management.md) | Dated evidence with its original test/runtime scope; not current deployment acceptance |

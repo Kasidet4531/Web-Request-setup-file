@@ -720,3 +720,25 @@ dialog::backdrop { background: #10182066; }
 .request-assignee-picker input, .request-assignee-picker select { width: 100%; min-width: 0; }
 .request-assignment-dialog { width: min(32rem, calc(100vw - 2rem)); }
 .detail-assignment-action { display: flex; justify-content: flex-end; margin-block: 0.5rem 1rem; }
+
+/* Auto-fill editing uses the native modal; labels keep target mappings readable. */
+.admin-autofill-dialog { width: min(960px, calc(100vw - 32px)); }
+.admin-autofill-dialog .admin-autofill-rules__editor { padding: 24px; }
+.admin-autofill-dialog .admin-autofill-rules__editor-header { flex-wrap: nowrap; margin-bottom: 0; }
+.admin-autofill-dialog .admin-autofill-rules__editor-header > div { min-width: 0; }
+.admin-autofill-dialog .admin-autofill-rules__editor-header > button { flex-shrink: 0; }
+.admin-autofill-dialog .admin-autofill-rules__editor-grid { grid-template-columns: minmax(220px, 2fr) minmax(0, 3fr); }
+.admin-autofill-dialog .admin-autofill-rules__source { padding: 0; }
+.admin-autofill-dialog__feedback { padding: 0 24px 24px; }
+.admin-autofill-rules__target-options { display: flex; flex-wrap: wrap; align-content: start; gap: 12px 20px; }
+.admin-autofill-rules__target-options label { flex: 1 1 180px; min-width: 0; }
+.admin-autofill-rules__targets { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.admin-autofill-rules__targets li { display: block; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }
+.admin-autofill-rules__table table { min-width: 760px; table-layout: fixed; }
+.admin-autofill-rules__table th:first-child { width: 24%; }
+.admin-autofill-rules__table th:nth-child(2) { width: 46%; }
+.admin-autofill-rules__table th:nth-child(3) { width: 20%; }
+.admin-autofill-rules__table th:nth-child(4) { width: 10%; }
+@media (max-width: 699px) {
+  .admin-autofill-dialog .admin-autofill-rules__editor-grid { grid-template-columns: minmax(0, 1fr); }
+}

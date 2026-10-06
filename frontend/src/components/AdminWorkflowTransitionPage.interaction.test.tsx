@@ -73,6 +73,27 @@ describe('Status Management interactions', () => {
     expect(find(dialog, (element) => element.props['aria-label'] === 'CC addresses')).not.toBeNull()
   })
 
+  it('keeps both recipient input groups before selected lists as To grows', async () => {
+    await openEmailEditor(enabledConfig)
+    add('To', 'one@example.com,two@example.com,three@example.com')
+    const order: string[] = []
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) { node.forEach(visit); return }
+      if (!node || typeof node !== 'object' || !('props' in node)) return
+      const props = (node as { props: Record<string, unknown> }).props
+      if (typeof props['aria-label'] === 'string') order.push(props['aria-label'])
+      visit(props.children)
+    }
+    visit(render())
+    for (const input of ['To addresses', 'CC addresses', 'Add system user to To', 'Add system user to CC']) {
+      expect(order.indexOf(input)).toBeLessThan(order.indexOf('To recipients'))
+      expect(order.indexOf(input)).toBeLessThan(order.indexOf('CC recipients'))
+    }
+    expect(control('Remove three@example.com from To')).not.toBeNull()
+    ;(control('Remove three@example.com from To').props.onClick as () => void)()
+    expect(control('CC addresses').props.value).toBe('')
+  })
+
   it('adds and removes recipient chips, then saves name and policy in one request', async () => {
     render(); hookState.effect(); await flush()
     ;(control(`Edit ${config.entries[1].name}`).props.onClick as () => void)(); await flush()

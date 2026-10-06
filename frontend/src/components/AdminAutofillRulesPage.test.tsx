@@ -11,12 +11,12 @@ describe('AdminAutofillRulesPage', () => {
   it('offers unflagged schema fields as triggers and lets admins remove deleted targets', () => {
     const html = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, {
       disabled: false, isEditing: true, fields,
-      draft: { formKey: 'psf-request', triggerCanonicalKey: 'deleted_trigger', targetCanonicalKeys: ['deleted_target'] },
-      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onSave() {},
+      draft: { formKey: 'psf-request', triggerCanonicalKey: 'deleted_trigger', targetCanonicalKeys: ['deleted_target'], status: 'active' },
+      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onSave() {},
     }))
     expect(html).toContain('<option value="product">')
-    expect(html).toContain('Removed field (deleted_trigger)')
-    expect(html).toContain('Removed field (deleted_target)')
+    expect(html).toContain('Removed trigger field')
+    expect(html).toContain('Removed target field 1')
     expect(html).toContain('admin-autofill-target-deleted_target')
   })
 
@@ -28,6 +28,25 @@ describe('AdminAutofillRulesPage', () => {
     expect(html).toContain('Inactive')
     expect(html).toContain('Trigger field was removed from the published form.')
     expect(html).toContain('admin-autofill-edit-rule-1')
+  })
+
+  it('shows only labels in rule cells and offers status selection without Source column', () => {
+    const schemaFields: FormSchemaField[] = [
+      { fieldKey: 'trigger_key', canonicalKey: 'trigger_key', label: 'Reference', type: 'text', required: false },
+      { fieldKey: 'target_key', canonicalKey: 'target_key', label: 'Product label', type: 'text', required: false },
+    ]
+    const rule = { id: 'r', formKey: 'psf-request', triggerCanonicalKey: 'trigger_key', targetCanonicalKeys: ['target_key'], lookupSource: 'previous_completed_submission' as const, status: 'inactive' as const, createdAt: '', updatedAt: '' }
+    const table = renderToStaticMarkup(createElement(AdminAutofillRulesTable, { disabled: false, fields: schemaFields, rules: [rule], onEdit() {} }))
+    expect(table).toContain('Reference')
+    expect(table).toContain('Product label')
+    expect(table).not.toContain('trigger_key')
+    expect(table).not.toContain('target_key')
+    expect(table).not.toContain('>Source<')
+    const editor = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, { disabled: false, isEditing: true, fields: schemaFields, draft: { formKey: 'psf-request', triggerCanonicalKey: 'trigger_key', targetCanonicalKeys: ['target_key'], status: 'inactive' }, onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onSave() {} }))
+    expect(editor).toContain('Rule status')
+    expect(editor).toContain('<option value="inactive" selected="">Inactive</option>')
+    expect(editor).not.toContain('Reference (trigger_key)')
+    expect(editor).not.toContain('Canonical keys')
   })
   it('wires the admin autofill route to a focused rule-management page', () => {
     const routeOptions = Reflect.get(AdminAutofillRoute.Route, 'options') as {

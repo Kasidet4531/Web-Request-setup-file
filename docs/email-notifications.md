@@ -8,6 +8,11 @@ Each work status has `emailPolicy = { enabled, to, cc }`. Existing statuses with
 
 Admins choose **Edit** on a status row to open one modal containing its name and To/CC policy. Enter an individual/group address and choose **Add To** or **Add CC** (Enter also adds); each added address has an X button to remove it. Selecting a system user adds their current address directly. **Save changes** persists the name and policy together in one revision-checked transaction. A rejected database write rolls back the catalog, affected request names and search index together. Recipient-only edits do not rewrite request statuses, and catalog editing never sends a request notification.
 
+The Edit Status modal keeps both To/CC input and user-picker groups above the
+added recipient lists. Recipients wrap below the controls; the edit dialog keeps
+a stable viewport-constrained height so adding or removing recipients does not
+move either input.
+
 **Do not send email on entry** disables recipient controls while retaining added addresses. To is required when enabled; CC is optional. Invalid directory addresses cannot be selected. Addresses are normalized and deduplicated, with To taking precedence over CC. Typed addresses must be added or cleared before saving an enabled policy. Cancel, X or Escape discards local edits and returns focus to the row; closing is blocked during saving. The modal scrolls its body when needed and keeps its action footer visible.
 
 Selecting a user stores their current email address. It is an address picker, not a dynamic role subscription: changing a user's email later does not rewrite status policies or queued jobs. Update the policy when recipients change.

@@ -26,12 +26,20 @@ describe('admin autofill rule state helpers', () => {
       formKey: 'psf-request',
       triggerCanonicalKey: '',
       targetCanonicalKeys: [],
+      status: 'active',
     })
     expect(toAdminAutofillRuleDraft(savedRule)).toEqual({
       formKey: 'psf-request',
       triggerCanonicalKey: 'reference_psf_name',
       targetCanonicalKeys: ['product', 'wafer_fab'],
+      status: 'active',
     })
+  })
+
+  it('preserves inactive status when editing its mappings', () => {
+    const draft = toAdminAutofillRuleDraft({ ...savedRule, status: 'inactive' })
+    expect(draft.status).toBe('inactive')
+    expect(setAdminAutofillRuleDraftTrigger(draft, 'product').status).toBe('inactive')
   })
 
   it('keeps targets unique and removes a newly selected trigger from the target draft', () => {
@@ -42,6 +50,7 @@ describe('admin autofill rule state helpers', () => {
       formKey: 'psf-request',
       triggerCanonicalKey: 'product',
       targetCanonicalKeys: ['wafer_fab'],
+      status: 'active',
     })
     expect(
       toggleAdminAutofillRuleDraftTarget(changedTrigger, 'wafer_fab', true),
