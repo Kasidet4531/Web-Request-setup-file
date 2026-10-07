@@ -205,12 +205,11 @@ describe('verbatim catalog status filter production paths', () => {
       ) as [string, unknown[]][];
       expect(queries).toHaveLength(2);
       for (const [sql, params] of queries) {
-        expect(params.slice(0, 3)).toEqual([ACTOR.id, STATUS, ACTOR.id]);
+        expect(params.slice(0, 2)).toEqual([ACTOR.id, STATUS]);
         expect(sql).toContain('LOWER(request.status) = LOWER($2)');
         expect(sql).toContain(
           "request.status <> 'Draft' OR request.requester_user_id = $1::uuid",
         );
-        expect(sql).toContain('request.requester_user_id = $3');
       }
       const content = queued ? storedJob?.content : end.mock.calls[0]?.[0];
       expect(content).toBeInstanceOf(Buffer);
@@ -321,6 +320,6 @@ describe('verbatim catalog status filter production paths', () => {
   it('keeps export blank-status omission', async () => {
     await exports.exportRequests({ status: '   ' }, request as never, response);
     const [, params] = pool.query.mock.calls[0] as [string, unknown[]];
-    expect(params).toEqual([ACTOR.id, ACTOR.id]);
+    expect(params).toEqual([ACTOR.id]);
   });
 });

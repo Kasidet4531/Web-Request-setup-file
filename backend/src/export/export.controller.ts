@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -32,9 +31,7 @@ const EXPORT_JOB_NOT_READY_MESSAGE = 'Export job is not ready for download.';
 const EXPORT_JOB_FAILURE_MESSAGE =
   'Unable to prepare this export. Please try again.';
 
-type ExportActor = AuthenticatedUserProfile & {
-  role: 'admin' | 'requester';
-};
+type ExportActor = AuthenticatedUserProfile;
 
 interface ExportJobStatusResponse {
   id: string;
@@ -225,15 +222,7 @@ export class ExportController {
   private async getExportActor(
     request: AuthenticatedRequest,
   ): Promise<ExportActor> {
-    const actor = await this.getAuthenticatedActor(request);
-
-    if (actor.role !== 'admin' && actor.role !== 'requester') {
-      throw new ForbiddenException(
-        'Only admins and requesters can export requests.',
-      );
-    }
-
-    return actor as ExportActor;
+    return this.getAuthenticatedActor(request);
   }
 
   private getSynchronousExportThreshold(): number {

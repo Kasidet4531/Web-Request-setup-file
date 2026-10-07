@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ExportController } from './export.controller';
 
 const adminActor = {
@@ -316,7 +312,7 @@ describe('ExportController async lifecycle', () => {
     expect(response.end).toHaveBeenCalledWith(completedJob.content);
   });
 
-  it('keeps setup owners out of every lifecycle endpoint', async () => {
+  it('hides another user job from a setup owner on the lifecycle endpoints', async () => {
     authService.getProfile.mockResolvedValueOnce({
       id: 'setup-owner-1',
       username: 'setup.owner',
@@ -324,6 +320,7 @@ describe('ExportController async lifecycle', () => {
       role: 'setup_owner',
       setupOwnerDepartment: 'GNTC',
     });
+    exportJobRepository.findOwned.mockResolvedValueOnce(null);
     const exportController = controller as unknown as {
       getExportJob: (
         jobId: string,
@@ -335,7 +332,10 @@ describe('ExportController async lifecycle', () => {
       exportController.getExportJob(queuedJob.id, {
         session: { userId: 'setup-owner-1' },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(exportJobRepository.findOwned).not.toHaveBeenCalled();
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(exportJobRepository.findOwned).toHaveBeenCalledWith(
+      queuedJob.id,
+      'setup-owner-1',
+    );
   });
 });

@@ -943,9 +943,6 @@ export class SearchIndexService implements OnModuleInit {
       filters.status,
       true,
     );
-    if (actor.role === 'requester') {
-      this.addExactFilter(where, params, 'request.requester_user_id', actor.id);
-    }
     this.addDateFilter(
       where,
       params,

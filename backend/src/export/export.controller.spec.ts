@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { ExportController } from './export.controller';
 
 describe('ExportController', () => {
@@ -31,35 +31,39 @@ describe('ExportController', () => {
     ]) as ExportController;
   });
 
-  it.each([['setup_owner', 'GNTC']] as const)(
-    'rejects a %s before querying requests for an export',
-    async (role, setupOwnerDepartment) => {
-      authService.getProfile.mockResolvedValue({
-        id: `${role}-1`,
-        username: `${role}.demo`,
-        displayName: `${role} Demo`,
-        role,
-        setupOwnerDepartment,
-      });
-      const exportController = controller as unknown as {
-        exportRequests: (
-          query: Record<string, unknown>,
-          request: { session: { userId?: string } },
-          response: { end: jest.Mock; setHeader: jest.Mock },
-        ) => Promise<void>;
-      };
+  it('allows a setup_owner and passes the authenticated actor to the export service', async () => {
+    const actor = {
+      id: 'setup_owner-1',
+      username: 'setup_owner.demo',
+      displayName: 'setup_owner Demo',
+      role: 'setup_owner' as const,
+      setupOwnerDepartment: 'GNTC' as const,
+    };
+    authService.getProfile.mockResolvedValue(actor);
+    excelExportService.exportRequests.mockResolvedValue({
+      content: Buffer.from('xlsx-content'),
+      filename: 'psf_requests_20260619_000506.xlsx',
+    });
+    const exportController = controller as unknown as {
+      exportRequests: (
+        query: Record<string, unknown>,
+        request: { session: { userId?: string } },
+        response: { end: jest.Mock; setHeader: jest.Mock },
+      ) => Promise<void>;
+    };
 
-      await expect(
-        exportController.exportRequests(
-          {},
-          { session: { userId: `${role}-1` } },
-          response,
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+    await exportController.exportRequests(
+      {},
+      { session: { userId: actor.id } },
+      response,
+    );
 
-      expect(excelExportService.exportRequests).not.toHaveBeenCalled();
-    },
-  );
+    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+      {},
+      actor,
+      2000,
+    );
+  });
 
   it('allows a requester and passes the authenticated actor to the export service', async () => {
     const actor = {

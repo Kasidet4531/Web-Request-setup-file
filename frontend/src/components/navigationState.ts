@@ -32,7 +32,7 @@ export type NavSection = {
  */
 export function navSectionsForRole(role: UserRole | null): NavSection[] {
   const canCreateRequest = role !== null
-  const canExport = role === 'requester' || role === 'admin'
+  const canExport = role !== null
   const isAdmin = role === 'admin'
 
   const sections: NavSection[] = [

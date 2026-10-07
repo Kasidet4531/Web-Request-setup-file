@@ -13,9 +13,7 @@ export const STALE_EXPORT_FAILURE_MESSAGE =
 
 export type ExportJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
-export type ExportJobActor = Pick<AuthenticatedUserProfile, 'id'> & {
-  role: 'admin' | 'requester';
-};
+export type ExportJobActor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
 export interface ExportJob {
   id: string;
@@ -62,7 +60,7 @@ export class ExportJobRepository implements OnModuleInit {
       CREATE TABLE IF NOT EXISTS psf_export_jobs (
         id UUID PRIMARY KEY,
         owner_user_id UUID NOT NULL,
-        owner_role TEXT NOT NULL CHECK (owner_role IN ('admin', 'requester')),
+        owner_role TEXT NOT NULL CHECK (owner_role IN ('admin', 'requester', 'setup_owner')),
         filters_json JSONB NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
         attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -76,6 +74,14 @@ export class ExportJobRepository implements OnModuleInit {
         content BYTEA,
         failure_message TEXT
       )
+    `);
+    // Tables created before every role could export only allow admin/requester.
+    await this.pool.query(
+      'ALTER TABLE psf_export_jobs DROP CONSTRAINT IF EXISTS psf_export_jobs_owner_role_check',
+    );
+    await this.pool.query(`
+      ALTER TABLE psf_export_jobs ADD CONSTRAINT psf_export_jobs_owner_role_check
+        CHECK (owner_role IN ('admin', 'requester', 'setup_owner'))
     `);
     await this.pool.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_export_jobs_queued
