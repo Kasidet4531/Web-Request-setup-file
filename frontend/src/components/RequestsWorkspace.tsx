@@ -593,7 +593,7 @@ export function DashboardPage() {
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
-      {hasResults ? <div className="request-results" inert={pending} aria-busy={pending}>
+      {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, 71)}>
         <RequestsTable compact statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
       {hasResults ? <div className="table-footer" aria-label="Dashboard pagination" aria-busy={pending}><span>{state.data.items.length ? `${state.data.offset + 1}–${Math.min(state.data.offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
@@ -606,6 +606,11 @@ export function DashboardPage() {
       </div>
     </article>
   )
+}
+
+// Keep the pagination footer in place on the last, shorter page. Rows are estimates (header + rows) in px.
+function pagedMinHeight(total: number, limit: number, rowPx: number) {
+  return total > limit ? { minHeight: 44 + limit * rowPx } : undefined
 }
 
 export function QueueFilterPanel({ active, children }: { active: boolean; children: ReactNode }) {
@@ -767,7 +772,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
           </p>
         ) : null}
         {!state.loading && state.error ? <button className="btn-secondary" onClick={() => { setState((current) => ({ ...current, loading: true })); setRetry((current) => current + 1) }} type="button">Retry requests</button> : null}
-        {hasResults ? <div className="request-results" inert={pending} aria-busy={pending}><RequestsTable
+        {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, 89)}><RequestsTable
           items={state.data.items}
           drafts={scope === 'my-drafts'}
           onDeleteItem={scope === 'my-drafts' ? setDeleting : undefined}

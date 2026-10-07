@@ -157,7 +157,7 @@ export function GlobalAuditLogTable({
   return (
     <>
     <p className="sr-only" role="status">{loading ? 'Updating global audit history…' : ''}</p>
-        <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
+        <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading} style={total > pageSize ? { minHeight: 44 + pageSize * 52 } : undefined}>
       <table>
         <thead>
           <tr>
@@ -179,10 +179,7 @@ export function GlobalAuditLogTable({
                   </Link>
                 ) : entry.requestNo ?? 'Workflow configuration'}
               </td>
-              <td className="history-user">
-                <strong>{entry.actorDisplayName}</strong>
-                <span className="history-role">{entry.actorRole.replace('_', ' ')}</span>
-              </td>
+              <td>{entry.actorDisplayName}</td>
               <td>{actionLabel(entry.actionType)}</td>
               <td><HistoryChanges metadata={entry.metadata} /></td>
             </tr>

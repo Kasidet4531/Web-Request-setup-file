@@ -77,7 +77,7 @@ export function AdminDraftTable({
               <td data-label="Actions">
                 <div className="toolbar__actions">
                   <button
-                    className="table-action"
+                    className="btn-secondary ui-button--danger"
                     type="button"
                     aria-label={`Delete ${item.requestNo}`}
                     onClick={(event) => {
@@ -249,21 +249,6 @@ export function AdminDraftManagementPage() {
           action={<button type="button" className="btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry reminders</button>}
         />
       ) : null}
-
-      <section className="workflow-section" aria-label="Reminder recipient issues">
-        <h2>Reminder recipient issues</h2>
-        {reminders?.some(reminder => reminder.skippedRecipients.length || reminder.state === 'unresolved') ? (
-          <ul>
-            {reminders.filter(reminder => reminder.skippedRecipients.length || reminder.state === 'unresolved').map(reminder => (
-              <li key={reminder.requestId}>
-                <Link to="/admin/drafts/$requestId" params={{ requestId: reminder.requestId }}>{reminder.requestNo}</Link> — <ReminderStatus reminder={reminder} />
-              </li>
-            ))}
-          </ul>
-        ) : reminders !== null && !reminderError ? (
-          <p>No unresolved recipient issues.</p>
-        ) : null}
-      </section>
 
       {deleting ? (
         <DraftDeleteDialog
