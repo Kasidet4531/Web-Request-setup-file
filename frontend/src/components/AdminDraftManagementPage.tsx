@@ -211,7 +211,7 @@ export function AdminDraftManagementPage() {
         ) : null}
 
         {data ? (
-          <div aria-busy={loading} inert={loading}>
+          <div className="queue-surface request-browser__results" aria-busy={loading} inert={loading}>
             {data.items.length ? (
               <AdminDraftTable items={data.items} reminders={reminders} onDelete={setDeleting} />
             ) : (
