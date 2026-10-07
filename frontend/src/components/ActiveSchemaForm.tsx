@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
@@ -50,6 +50,7 @@ export interface ActiveSchemaFormProps {
   headerTitle?: string
   requestId?: string
   disabled?: boolean
+  deleteAction?: ReactNode
   explicitEdit?: boolean
   requesterIdentity?: string
   onDirtyChange?: (dirty: boolean) => void
@@ -156,7 +157,7 @@ export function DraftSchemaUpgradeDecision({
 
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
-export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
+export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, deleteAction, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
   const savedValuesRef = useRef<DynamicFormValues>({})
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
@@ -932,16 +933,11 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         ) : null}
       </div>
       <DynamicFormRenderer
+        deleteAction={deleteAction}
         errors={errors}
-        footerActions={!formReadOnly && (usesExplicitEdit || currentRequest) ? <>
-          {usesExplicitEdit ? <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button> : null}
-          {currentRequest ? (
-            <div className="active-schema-form__footer">
-              <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
-              <p className="ui-help">Requester information is saved separately from PSF information.</p>
-            </div>
-          ) : null}
-        </> : undefined}
+        footerActions={!formReadOnly && usesExplicitEdit ? (
+          <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button>
+        ) : undefined}
         headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}
         onChange={!formReadOnly ? updateField : undefined}

@@ -135,7 +135,21 @@ export function findRenderedElement(
     return element
   }
 
-  return findRenderedElement(element.props.children, matches)
+  const childMatch = findRenderedElement(element.props.children, matches)
+  if (childMatch) {
+    return childMatch
+  }
+
+  for (const [key, value] of Object.entries(element.props)) {
+    if (key !== 'children' && value && typeof value === 'object') {
+      const propMatch = findRenderedElement(value, matches)
+      if (propMatch) {
+        return propMatch
+      }
+    }
+  }
+
+  return null
 }
 
 export function requireRenderedElement(

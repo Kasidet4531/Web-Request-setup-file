@@ -85,7 +85,7 @@ export function AdminAutofillRulesTable({
             <th scope="col">Trigger field</th>
             <th scope="col">Fill target fields</th>
             <th scope="col">Status</th>
-            <th scope="col">Action</th>
+            <th scope="col"><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>

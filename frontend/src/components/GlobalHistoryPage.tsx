@@ -6,6 +6,8 @@ import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
   api,
+  fetchCurrentUser,
+  type DraftDeletion,
   type GlobalAuditLogEntry,
   type GlobalAuditLogQuery,
   type PsfRequestHistoryAction,
@@ -180,7 +182,92 @@ export function GlobalAuditLogTable({
   )
 }
 
+export function DraftDeletionsTable({
+  deletions,
+  loading,
+  error,
+  offset,
+  onOffsetChange,
+  onRetry,
+}: {
+  deletions: { items: DraftDeletion[]; total: number; limit: number; offset: number } | null
+  loading: boolean
+  error: string | null
+  offset: number
+  onOffsetChange: (newOffset: number) => void
+  onRetry: () => void
+}) {
+  if (loading && (!deletions || deletions.items.length === 0)) {
+    return <AsyncNotice kind="loading" title="Loading draft deletion records…" />
+  }
+
+  if (error) {
+    return (
+      <AsyncNotice
+        kind="error"
+        title={`Unable to load draft deletions: ${error}`}
+        action={<button type="button" className="btn-secondary" onClick={onRetry}>Retry draft deletions</button>}
+      />
+    )
+  }
+
+  if (!deletions || deletions.items.length === 0) {
+    return <AsyncNotice kind="empty" title="No draft deletions recorded." />
+  }
+
+  return (
+    <>
+      <p className="sr-only" role="status">{loading ? 'Updating draft deletions…' : ''}</p>
+      <div className="data-table" role="region" aria-label="Draft deletion records" tabIndex={0} aria-busy={loading} inert={loading}>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Draft number</th>
+              <th scope="col">Deleted by</th>
+              <th scope="col">Role</th>
+              <th scope="col">Deleted at</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deletions.items.map((event, index) => (
+              <tr key={`${event.draftNo}-${event.deletedAt}-${index}`}>
+                <td data-label="Draft number"><span className="font-mono-code">{event.draftNo}</span></td>
+                <td data-label="Deleted by">{event.actorDisplayName}</td>
+                <td data-label="Role">{event.actorRole}</td>
+                <td data-label="Deleted at"><time dateTime={event.deletedAt}>{formatHistoryDateTime(event.deletedAt)}</time></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-footer" aria-label="Draft deletion pagination">
+        <span>{deletions.total} deletion records</span>
+        <div className="toolbar__actions">
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={loading || !offset}
+            onClick={() => onOffsetChange(Math.max(0, offset - deletions.limit))}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={loading || offset + deletions.limit >= deletions.total}
+            onClick={() => onOffsetChange(offset + deletions.limit)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function GlobalHistoryPage() {
+  const [activeTab, setActiveTab] = useState<'system' | 'deletions'>('system')
+  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
   const [filters, setFilters] = useState<GlobalAuditLogFilterValues>({
     ...EMPTY_GLOBAL_AUDIT_LOG_FILTERS,
   })
@@ -190,6 +277,28 @@ export function GlobalHistoryPage() {
     error: null,
     data: [],
   })
+
+  const [deletionOffset, setDeletionOffset] = useState(0)
+  const [deletionRetry, setDeletionRetry] = useState(0)
+  const [deletions, setDeletions] = useState<{ items: DraftDeletion[]; total: number; limit: number; offset: number } | null>(null)
+  const [deletionLoading, setDeletionLoading] = useState(false)
+  const [deletionError, setDeletionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    async function checkUser() {
+      try {
+        const response = await fetchCurrentUser()
+        if (mounted) setCurrentUser(response.user)
+      } catch {
+        if (mounted) setCurrentUser(null)
+      }
+    }
+    void checkUser()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -221,6 +330,34 @@ export function GlobalHistoryPage() {
     }
   }, [appliedFilters])
 
+  useEffect(() => {
+    if (activeTab !== 'deletions' || currentUser?.role !== 'admin') return
+    let mounted = true
+
+    async function loadDeletions() {
+      setDeletionLoading(true)
+      setDeletionError(null)
+
+      try {
+        const result = await api.fetchDraftDeletions({ limit: 25, offset: deletionOffset })
+        if (mounted) setDeletions(result)
+      } catch (loadError) {
+        if (mounted) {
+          setDeletions(null)
+          setDeletionError(loadError instanceof Error ? loadError.message : 'Unable to load draft deletions')
+        }
+      } finally {
+        if (mounted) setDeletionLoading(false)
+      }
+    }
+
+    void loadDeletions()
+
+    return () => {
+      mounted = false
+    }
+  }, [activeTab, currentUser?.role, deletionOffset, deletionRetry])
+
   function updateFilter(field: keyof GlobalAuditLogFilterValues, value: string) {
     setFilters((currentFilters) => ({ ...currentFilters, [field]: value }))
   }
@@ -234,33 +371,87 @@ export function GlobalHistoryPage() {
     setAppliedFilters({})
   }
 
+  const isAdmin = currentUser?.role === 'admin'
+
   return (
     <article className="page-card workflow-page global-history-page">
       <PageHeader title="Audit History" description="Review authorized request and configuration activity. Edit filters, then choose Apply to update the results." />
 
-      <section className="workflow-section global-history-page__filters" aria-labelledby="global-history-filters-heading">
-        <div className="section-heading">
-          <h2 id="global-history-filters-heading">Filters</h2>
+      {isAdmin ? (
+        <div className="detail-tabs" role="tablist" aria-label="Audit history sections">
+          <button
+            type="button"
+            id="history-tab-system"
+            role="tab"
+            aria-selected={activeTab === 'system'}
+            aria-controls="history-panel-system"
+            tabIndex={activeTab === 'system' ? 0 : -1}
+            onClick={() => setActiveTab('system')}
+          >
+            System Audit Trail
+          </button>
+          <button
+            type="button"
+            id="history-tab-deletions"
+            role="tab"
+            aria-selected={activeTab === 'deletions'}
+            aria-controls="history-panel-deletions"
+            tabIndex={activeTab === 'deletions' ? 0 : -1}
+            onClick={() => setActiveTab('deletions')}
+          >
+            Draft Deletions
+          </button>
         </div>
-        <GlobalAuditLogFilters
-          filters={filters}
-          onApply={applyFilters}
-          onChange={updateFilter}
-          onClear={clearFilters}
-        />
-      </section>
+      ) : null}
 
-      <section className="workflow-section global-history-page__results" aria-labelledby="global-history-results-heading">
-        <div className="section-heading">
-          <h2 id="global-history-results-heading">Audit entries</h2>
-          <p>Displayed times: Asia/Bangkok (UTC+07:00). Date filters use UTC.</p>
+      {activeTab === 'system' || !isAdmin ? (
+        <div
+          id={isAdmin ? 'history-panel-system' : undefined}
+          role={isAdmin ? 'tabpanel' : undefined}
+          aria-labelledby={isAdmin ? 'history-tab-system' : undefined}
+        >
+          <section className="workflow-section global-history-page__filters" aria-labelledby="global-history-filters-heading">
+            <div className="section-heading">
+              <h2 id="global-history-filters-heading">Filters</h2>
+            </div>
+            <GlobalAuditLogFilters
+              filters={filters}
+              onApply={applyFilters}
+              onChange={updateFilter}
+              onClear={clearFilters}
+            />
+          </section>
+
+          <section className="workflow-section global-history-page__results" aria-labelledby="global-history-results-heading">
+            <div className="section-heading">
+              <h2 id="global-history-results-heading">Audit entries</h2>
+              <p>Displayed times: Asia/Bangkok (UTC+07:00). Date filters use UTC.</p>
+            </div>
+            <GlobalAuditLogTable
+              entries={history.data}
+              error={history.error}
+              loading={history.loading}
+            />
+          </section>
         </div>
-        <GlobalAuditLogTable
-          entries={history.data}
-          error={history.error}
-          loading={history.loading}
-        />
-      </section>
+      ) : (
+        <div id="history-panel-deletions" role="tabpanel" aria-labelledby="history-tab-deletions">
+          <section className="workflow-section global-history-page__results" aria-labelledby="draft-deletions-heading">
+            <div className="section-heading">
+              <h2 id="draft-deletions-heading">Draft Deletions</h2>
+              <p>Only the Draft number, deleting account and time remain. Displayed times: Asia/Bangkok (UTC+07:00).</p>
+            </div>
+            <DraftDeletionsTable
+              deletions={deletions}
+              loading={deletionLoading}
+              error={deletionError}
+              offset={deletionOffset}
+              onOffsetChange={setDeletionOffset}
+              onRetry={() => setDeletionRetry(r => r + 1)}
+            />
+          </section>
+        </div>
+      )}
     </article>
   )
 }

@@ -382,7 +382,7 @@ export function RequestsTable({
             <th scope="col">{drafts ? 'Product Type' : 'Status'}</th>
             <th scope="col">{drafts ? 'Visibility' : compact ? 'Due date' : 'Schedule'}</th>
             <th scope="col">{drafts ? 'Updated' : 'Requester'}</th>
-            {drafts || !interactiveRows ? <th scope="col">Action</th> : null}
+            {drafts || !interactiveRows ? <th scope="col"><span className="sr-only">Actions</span></th> : null}
           </tr>
         </thead>
         <tbody>
@@ -629,16 +629,16 @@ export function QueueFilterPanel({ active, children }: { active: boolean; childr
 export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts' }) {
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState<PsfRequestListItem | null>(null)
-  const [filters, setFilters] = useState({ keyword: '', status: '', productType: '' })
+  const [filters, setFilters] = useState({ keyword: '', status: '' })
   const [catalog, setCatalog] = useState<AsyncState<string[]>>({ loading: true, error: null, data: [] })
   const [catalogRetry, setCatalogRetry] = useState(0)
   const [retry, setRetry] = useState(0)
   const [offset, setOffset] = useState(0)
   const resetOffset = useCallback(() => setOffset(0), [])
-  const debouncedText = useDebouncedQueueText(JSON.stringify([filters.keyword.trim(), filters.productType.trim()]), resetOffset)
-  const [debouncedKeyword, debouncedProductType] = JSON.parse(debouncedText) as [string, string]
+  const debouncedText = useDebouncedQueueText(JSON.stringify([filters.keyword.trim()]), resetOffset)
+  const [debouncedKeyword] = JSON.parse(debouncedText) as [string]
   const requestGeneration = useRef(0)
-  const queryKey = JSON.stringify([debouncedKeyword, debouncedProductType, filters.status, offset, scope])
+  const queryKey = JSON.stringify([debouncedKeyword, filters.status, offset, scope])
   const [state, setState] = useState<AsyncState<{ user: AuthenticatedUserProfile | null; items: PsfRequestListItem[]; total: number; limit: number; offset: number; scope: typeof scope | null; queryKey: string | null }>>({
     loading: true,
     error: null,
@@ -675,7 +675,6 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
             scope,
             keyword: debouncedKeyword || undefined,
             status: scope === 'all' ? filters.status || undefined : undefined,
-            productType: debouncedProductType || undefined,
             limit: 100,
             offset,
           }),
@@ -702,14 +701,14 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
     return () => {
       mounted = false
     }
-  }, [debouncedKeyword, debouncedProductType, filters.status, offset, queryKey, retry, scope])
+  }, [debouncedKeyword, filters.status, offset, queryKey, retry, scope])
 
   const hasActiveFilters = Boolean(
-    filters.keyword.trim() || filters.status || filters.productType.trim(),
+    filters.keyword.trim() || filters.status,
   )
-  const pending = state.loading || filters.keyword.trim() !== debouncedKeyword || filters.productType.trim() !== debouncedProductType || state.data.queryKey !== queryKey
+  const pending = state.loading || filters.keyword.trim() !== debouncedKeyword || state.data.queryKey !== queryKey
   const hasResults = !state.error && state.data.user !== null && state.data.scope === scope
-  const clearFilters = () => { setFilters({ keyword: '', status: '', productType: '' }); setOffset(0) }
+  const clearFilters = () => { setFilters({ keyword: '', status: '' }); setOffset(0) }
 
   return (
     <article className="workflow-page requests-page">
@@ -742,10 +741,6 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
                 ))}
               </select>
             </label> : null}
-            <label>
-              Product Type
-              <input value={filters.productType} onChange={(event) => { setFilters((current) => ({ ...current, productType: event.target.value })) }} placeholder="Search product type…" />
-            </label>
           </form>
           <div className="toolbar__actions">
             <button
@@ -780,7 +775,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
           onDeleteItem={scope === 'my-drafts' ? setDeleting : undefined}
           statusKinds={catalog.statusKinds}
           emptyTitle={hasActiveFilters ? 'No requests match these filters' : scope === 'my-drafts' ? 'No private drafts yet' : 'No submitted requests yet'}
-          emptyDescription={hasActiveFilters ? 'Try another keyword, product type, or status, or clear the filters.' : scope === 'my-drafts' ? 'Save a new request as a draft to find it here.' : 'Submitted requests will appear here for shared work.'}
+          emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : scope === 'my-drafts' ? 'Save a new request as a draft to find it here.' : 'Submitted requests will appear here for shared work.'}
           onClearFilters={hasActiveFilters ? clearFilters : undefined}
           onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })}
         /></div> : null}
@@ -1111,7 +1106,6 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       {request ? (
         <>
         <RequestHeaderSummary request={request} kind={statusKinds[request.status]} />
-        {request.status === 'Draft' && request.canEditRequesterData ? <button type="button" className="ui-button ui-button--danger" disabled={mutationPending || dirty} onClick={() => setDeletingDraft(true)}>Delete Draft</button> : null}
         {deletingDraft && request.status === 'Draft' && request.canEditRequesterData ? <DraftDeleteDialog draft={request} onCancel={() => setDeletingDraft(false)} onDeleted={() => void navigate({ to: '/my-drafts' })} /> : null}
         <div className="detail-layout">
           <aside className="detail-layout__actions" aria-label="Request actions">
@@ -1145,6 +1139,16 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
             <section className="workflow-section detail-layout__requester" id="detail-panel-requester" role={request.status === 'Draft' ? undefined : 'tabpanel'} aria-labelledby={request.status === 'Draft' ? undefined : 'detail-tab-requester'} hidden={request.status !== 'Draft' && selectedTab !== 'requester'}>
               <ActiveSchemaForm
                 explicitEdit
+                deleteAction={request.status === 'Draft' && request.canEditRequesterData ? (
+                  <button
+                    type="button"
+                    className="ui-button ui-button--danger"
+                    disabled={mutationPending || dirty}
+                    onClick={() => setDeletingDraft(true)}
+                  >
+                    Delete Draft
+                  </button>
+                ) : undefined}
                 disabled={mutationPending}
                 headerTitle="Requester Information"
                 mode="request"

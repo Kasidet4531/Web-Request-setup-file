@@ -25,7 +25,6 @@ describe('accessible presentation boundaries', () => {
   })
 })
 
-
 it('does not render removed request assignment metadata', () => {
   const markup = renderToStaticMarkup(<HistoryChanges metadata={{ before: { setupOwnerUserId: 'owner-1', setupOwner: 'Same name', setupOwnerRole: 'GNTC' }, after: { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null } }} />)
   expect(markup).not.toContain('Owner / Dept')

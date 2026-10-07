@@ -178,7 +178,21 @@ function findRenderedElement(
     return element
   }
 
-  return findRenderedElement(element.props.children, matches)
+  const childMatch = findRenderedElement(element.props.children, matches)
+  if (childMatch) {
+    return childMatch
+  }
+
+  for (const [key, value] of Object.entries(element.props)) {
+    if (key !== 'children' && value && typeof value === 'object') {
+      const propMatch = findRenderedElement(value, matches)
+      if (propMatch) {
+        return propMatch
+      }
+    }
+  }
+
+  return null
 }
 
 function requireRenderedElement(
@@ -801,7 +815,7 @@ describe('Request list pagination', () => {
     requestDetailApi.queryPsfRequests.mockReset().mockResolvedValue({ items: [], total: 201, limit: 100, offset: 0 })
   })
 
-  it.each(['Keyword', 'Status', 'Product Type'])('resets offset100 to zero when %s narrows the result to one row', async (name) => {
+  it.each(['Keyword', 'Status'])('resets offset100 to zero when %s narrows the result to one row', async (name) => {
     render(); let page = await settle()
     ;(button(page, 'Next').props.onClick as () => void)()
     render(); page = await settle()
@@ -813,20 +827,20 @@ describe('Request list pagination', () => {
     expect(renderToStaticMarkup(<>{requireRenderedElement(page, (element) => element.props.className === 'table-footer').props.children}</>)).toContain('0 requests')
   })
 
-  it('keeps My draft owner scope and keyword/product/pagination without exposing business-only status choices', async () => {
+  it('keeps My draft owner scope and keyword pagination without product filter or business-only status choices', async () => {
     const renderDrafts = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestsListPage({ scope: 'my-drafts' }) }
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     let page = renderDrafts()
     expect(findRenderedElement(page, (element) => element.type === 'select')).toBeNull()
+    expect(findRenderedElement(page, (element) => element.type === 'input' && element.props.placeholder === 'Search product type…')).toBeNull()
     ;(field(page, 'Keyword').props.onChange as (event: unknown) => void)({ target: { value: 'my probe' } })
-    ;(field(page, 'Product Type').props.onChange as (event: unknown) => void)({ target: { value: 'Existing Product' } })
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     await new Promise((resolve) => setTimeout(resolve, 310))
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     page = renderDrafts()
     ;(button(page, 'Next').props.onClick as () => void)()
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'my-drafts', keyword: 'my probe', productType: 'Existing Product', status: undefined, offset: 100 }))
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'my-drafts', keyword: 'my probe', status: undefined, offset: 100 }))
     expect(requestDetailApi.fetchWorkflowStatuses).not.toHaveBeenCalled()
   })
 
@@ -889,16 +903,16 @@ describe('Queue filtering and retained results', () => {
     expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'Completed' }))
   })
 
-  it('settles keyword and product filters on page two before querying offset zero', async () => {
+  it('settles keyword filter on page two before querying offset zero', async () => {
     render(); let page = await settle()
     const next = requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Next')
     ;(next.props.onClick as () => void)(); render(); page = await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 100 }))
-    change(page, 'Keyword', 'probe'); change(page, 'Product Type', 'Transfer Product'); render(); await settle()
+    change(page, 'Keyword', 'probe'); render(); await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(300); render(); await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(3)
-    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: 'probe', productType: 'Transfer Product', offset: 0 }))
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: 'probe', offset: 0 }))
   })
 
   it.each([true, false])('retains rows and disabled pagination while updating, and clears rows on failure (dashboard=%s)', async (dashboard) => {
@@ -2276,6 +2290,12 @@ describe('Draft detail deletion access', () => {
   requestDetailApi.fetchPsfRequest.mockResolvedValue(buildSubmittedRequest())
   renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
   expect(findRenderedElement(renderRequestDetailShell(), element => element.type === 'button' && element.props.children === 'Delete Draft')).toBeNull()
+ })
+ it('does not render obsolete separately-saved helper text in draft detail', async () => {
+  requestDetailApi.fetchPsfRequest.mockResolvedValue(buildDraftRequest({ canEditRequesterData: true, canSubmitDraft: true }))
+  renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  const page = renderRequestDetailShell()
+  expect(JSON.stringify(page)).not.toContain('Requester information is saved separately from PSF information.')
  })
 })
 

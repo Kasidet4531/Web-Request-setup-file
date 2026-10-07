@@ -16,6 +16,7 @@ export type {
 export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
 
 export interface DynamicFormRendererProps {
+  deleteAction?: ReactNode
   footerActions?: ReactNode
   headerTitle?: string
   fieldStatuses?: Partial<Record<string, DynamicFormFieldStatus>>
@@ -33,6 +34,7 @@ export interface DynamicFormRendererProps {
 const PRODUCT_TYPE_FIELD_KEY = 'product_type'
 
 export function DynamicFormRenderer({
+  deleteAction,
   errors = {},
   fieldStatuses = {},
   footerActions,
@@ -118,6 +120,7 @@ export function DynamicFormRenderer({
 
       {!readOnly ? (
         <div className="dynamic-form__actions">
+          {deleteAction}
           <button className="ui-button ui-button--primary" type="submit">
             {submitLabel}
           </button>

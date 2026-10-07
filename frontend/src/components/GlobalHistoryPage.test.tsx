@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement, type ReactNode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   GlobalAuditLogFilters,
   GlobalAuditLogTable,
+  DraftDeletionsTable,
   GlobalHistoryPage,
 } from './GlobalHistoryPage'
 import {
@@ -13,14 +14,45 @@ import {
 import { Route as HistoryRoute } from '../routes/history'
 import { formatHistoryDateTime } from './ui/historyDateTime'
 import { HistoryChanges } from './ui/HistoryChanges'
+import { createHookHarness, requireRenderedElement } from '../test-utils/componentHarness'
+
+const hooks = vi.hoisted(() => ({ current: null as ReturnType<typeof createHookHarness> | null }))
+const service = vi.hoisted(() => ({
+  fetchCurrentUser: vi.fn(),
+  fetchDraftDeletions: vi.fn(),
+  fetchGlobalAuditLogs: vi.fn(),
+}))
+
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api')>()
+  return {
+    ...actual,
+    fetchCurrentUser: service.fetchCurrentUser,
+    api: {
+      ...actual.api,
+      fetchDraftDeletions: service.fetchDraftDeletions,
+      fetchGlobalAuditLogs: service.fetchGlobalAuditLogs,
+    },
+  }
+})
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
-
   return {
     ...actual,
     Link: ({ children, params }: { children: ReactNode; params: { requestId: string } }) =>
       createElement('a', { href: `/requests/${params.requestId}` }, children),
+  }
+})
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>()
+  return {
+    ...actual,
+    useState: (value: unknown) => (hooks.current ? hooks.current.useState(value) : actual.useState(value)),
+    useEffect: (effect: () => void, deps: unknown[]) =>
+      hooks.current ? hooks.current.useEffect(effect, deps) : actual.useEffect(effect, deps),
+    useRef: <T,>(value: T) => (hooks.current ? hooks.current.useRef(value) : actual.useRef(value)),
   }
 })
 
@@ -246,6 +278,81 @@ describe('GlobalAuditLogTable', () => {
   })
 })
 
+describe('DraftDeletionsTable', () => {
+  it('renders deletion details including draft number, deleted by, role, and formatted time', () => {
+    const html = renderToStaticMarkup(
+      <DraftDeletionsTable
+        deletions={{
+          items: [{ draftNo: 'PSF-DRAFT-1', actorDisplayName: 'Admin User', actorRole: 'admin', deletedAt: '2026-10-06T08:00:00Z' }],
+          total: 1,
+          limit: 25,
+          offset: 0,
+        }}
+        loading={false}
+        error={null}
+        offset={0}
+        onOffsetChange={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+    expect(html).toContain('PSF-DRAFT-1')
+    expect(html).toContain('Admin User')
+    expect(html).toContain('admin')
+    expect(html).toContain('06 Oct 2026')
+    expect(html).toContain('1 deletion records')
+  })
+
+  it('renders loading, error, and empty states appropriately', () => {
+    expect(renderToStaticMarkup(
+      <DraftDeletionsTable deletions={null} loading={true} error={null} offset={0} onOffsetChange={vi.fn()} onRetry={vi.fn()} />
+    )).toContain('Loading draft deletion records…')
+
+    expect(renderToStaticMarkup(
+      <DraftDeletionsTable deletions={{ items: [], total: 0, limit: 25, offset: 0 }} loading={false} error={null} offset={0} onOffsetChange={vi.fn()} onRetry={vi.fn()} />
+    )).toContain('No draft deletions recorded.')
+
+    const errorHtml = renderToStaticMarkup(
+      <DraftDeletionsTable deletions={null} loading={false} error="Failed to fetch" offset={0} onOffsetChange={vi.fn()} onRetry={vi.fn()} />
+    )
+    expect(errorHtml).toContain('Unable to load draft deletions: Failed to fetch')
+  })
+})
+
+describe('GlobalHistoryPage tabs and role access', () => {
+  beforeEach(() => {
+    hooks.current = createHookHarness()
+    service.fetchCurrentUser.mockResolvedValue({ user: { role: 'admin' } })
+    service.fetchGlobalAuditLogs.mockResolvedValue([])
+    service.fetchDraftDeletions.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
+  })
+
+  it('shows System Audit Trail and Draft Deletions tabs for admin users', async () => {
+    function renderPage() { hooks.current!.beginRender(); return GlobalHistoryPage() }
+    renderPage(); hooks.current!.runEffects(); await new Promise(r => setTimeout(r, 0)); const page = renderPage()
+    const markup = renderToStaticMarkup(page)
+    expect(markup).toContain('System Audit Trail')
+    expect(markup).toContain('Draft Deletions')
+  })
+
+  it('hides tabs for non-admin users', async () => {
+    service.fetchCurrentUser.mockResolvedValue({ user: { role: 'requester' } })
+    function renderPage() { hooks.current!.beginRender(); return GlobalHistoryPage() }
+    renderPage(); hooks.current!.runEffects(); await new Promise(r => setTimeout(r, 0)); const page = renderPage()
+    const markup = renderToStaticMarkup(page)
+    expect(markup).not.toContain('Draft Deletions')
+  })
+
+  it('loads draft deletions when switching to Draft Deletions tab', async () => {
+    function renderPage() { hooks.current!.beginRender(); return GlobalHistoryPage() }
+    renderPage(); hooks.current!.runEffects(); await new Promise(r => setTimeout(r, 0)); let page = renderPage()
+    const tab = requireRenderedElement(page, el => el.type === 'button' && el.props.children === 'Draft Deletions')
+    ;(tab.props.onClick as () => void)()
+    page = renderPage()
+    hooks.current!.runEffects()
+    await new Promise(r => setTimeout(r, 0))
+    expect(service.fetchDraftDeletions).toHaveBeenCalledWith(expect.objectContaining({ limit: 25, offset: 0 }))
+  })
+})
 
 it('removes request assignment from the audit action filter', () => {
   const filters = renderToStaticMarkup(<GlobalAuditLogFilters filters={EMPTY_GLOBAL_AUDIT_LOG_FILTERS} onApply={vi.fn()} onChange={vi.fn()} onClear={vi.fn()} />)

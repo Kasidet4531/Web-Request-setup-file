@@ -83,7 +83,7 @@ export function AdminUserManagementUsersTable({
               <th scope="col">Email</th>
               <th scope="col">Role</th>
               <th scope="col">Setup File Owner department</th>
-              <th scope="col">Action</th>
+              <th scope="col"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

@@ -48,6 +48,21 @@ describe('AdminAutofillRulesPage', () => {
     expect(editor).not.toContain('Reference (trigger_key)')
     expect(editor).not.toContain('Canonical keys')
   })
+
+  it('renders table action header with sr-only and structures the dialog with source column', () => {
+    const schemaFields: FormSchemaField[] = [{ fieldKey: 'trigger_key', canonicalKey: 'trigger_key', label: 'Reference', type: 'text', required: false }]
+    const table = renderToStaticMarkup(createElement(AdminAutofillRulesTable, { disabled: false, fields: schemaFields, rules: [], onEdit() {} }))
+    expect(table).toContain('<th scope="col"><span class="sr-only">Actions</span></th>')
+
+    const editor = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, {
+      disabled: false, isEditing: true, fields: schemaFields,
+      draft: { formKey: 'psf-request', triggerCanonicalKey: 'trigger_key', targetCanonicalKeys: [], status: 'active' },
+      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onSave() {},
+    }))
+    expect(editor).toContain('admin-autofill-rules__source')
+    expect(editor).toContain('admin-autofill-rules__editor-grid')
+  })
+
   it('wires the admin autofill route to a focused rule-management page', () => {
     const routeOptions = Reflect.get(AdminAutofillRoute.Route, 'options') as {
       component: unknown

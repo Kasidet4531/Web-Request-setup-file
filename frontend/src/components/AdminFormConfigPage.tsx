@@ -63,7 +63,7 @@ export function AdminFormConfigVersionSelector({
     <section className="admin-form-config__versions">
       <div className="data-table admin-form-config__version-table" role="region" aria-label="Form versions" tabIndex={0}>
         <table>
-          <thead><tr><th scope="col">Version</th><th scope="col">Title / Description</th><th scope="col">State</th><th scope="col">Created</th><th scope="col">Published</th><th scope="col">Actions</th></tr></thead>
+          <thead><tr><th scope="col">Version</th><th scope="col">Title / Description</th><th scope="col">State</th><th scope="col">Created</th><th scope="col">Published</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>{versions.map((version) => (
             <tr className={`admin-form-config__version-record admin-form-config__version-record--${version.status}`} key={version.version}>
               <td><div className="admin-form-config__version-stamp">{disabled ? `v${version.version}` : formKey === 'psf-request'

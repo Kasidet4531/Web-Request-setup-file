@@ -214,7 +214,7 @@ export function AdminWorkflowTransitionPage() {
           <div className="admin-workflow-transition__catalog">
           <p className="table-scroll__hint">Scroll horizontally to see request counts and status actions.</p>
           <div className="data-table admin-workflow-transition__table" ref={catalogRegion} role="region" aria-label="Status catalog" tabIndex={0}><table>
-            <thead><tr><th scope="col">Status</th><th scope="col">Status type</th><th scope="col">Requests</th><th scope="col">Email on entry</th><th scope="col">PSF access trigger</th><th scope="col">Actions</th></tr></thead>
+            <thead><tr><th scope="col">Status</th><th scope="col">Status type</th><th scope="col">Requests</th><th scope="col">Email on entry</th><th scope="col">PSF access trigger</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{configuration.entries.map((entry) => <tr key={entry.id}>
               <td><StatusLabel status={entry.name} kind={entry.kind} /></td>
               <td>{entry.kind === 'cancelled' ? 'Cancel' : entry.kind === 'open' ? 'Open work' : entry.kind === 'completed' ? 'Completed' : 'Draft'}</td><td>{entry.requestCount ?? '—'}</td>
