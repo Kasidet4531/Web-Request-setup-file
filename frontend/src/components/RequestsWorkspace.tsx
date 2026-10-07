@@ -429,10 +429,9 @@ export function RequestsTable({
               </>}
               {drafts || !interactiveRows ? (
                 <td data-label="Action">
-                  <Link className="table-action" to="/requests/$requestId" params={{ requestId: item.requestId }}>
-                    {drafts ? 'Continue' : 'Open detail'}
-                  </Link>
-                  {drafts && onDeleteItem ? <button type="button" className="table-action" aria-label={`Delete ${item.requestNo}`} onClick={() => onDeleteItem(item)}>Delete</button> : null}
+                  {drafts ? (onDeleteItem ? <button type="button" className="btn-secondary ui-button--danger" aria-label={`Delete ${item.requestNo}`} onClick={() => onDeleteItem(item)}>Delete</button> : null) : (
+                    <Link className="table-action" to="/requests/$requestId" params={{ requestId: item.requestId }}>Open detail</Link>
+                  )}
                 </td>
               ) : null}
             </tr>
