@@ -322,7 +322,7 @@ describe('GlobalHistoryPage tabs and role access', () => {
   beforeEach(() => {
     hooks.current = createHookHarness()
     service.fetchCurrentUser.mockResolvedValue({ user: { role: 'admin' } })
-    service.fetchGlobalAuditLogs.mockResolvedValue([])
+    service.fetchGlobalAuditLogs.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
     service.fetchDraftDeletions.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
   })
 

@@ -45,6 +45,8 @@ export interface GlobalAuditLogFilters {
   actionType?: string;
   from?: string;
   to?: string;
+  limit?: unknown;
+  offset?: unknown;
 }
 
 export interface GlobalAuditLogEntry {
@@ -150,11 +152,85 @@ export class AuditLogService implements OnModuleInit {
       }));
   }
 
-  // ponytail: unpaged global audit list; add cursor pagination when audit volume is measured.
+  parsePage(filters: GlobalAuditLogFilters): { limit: number; offset: number } {
+    const read = (value: unknown, fallback: number): number => {
+      if (value === undefined) return fallback;
+      if (typeof value !== 'string' || !/^\d+$/.test(value))
+        throw new BadRequestException('Invalid pagination.');
+      return Number(value);
+    };
+    const limit = read(filters.limit, 25);
+    const offset = read(filters.offset, 0);
+    if (limit < 1 || limit > 100)
+      throw new BadRequestException('Invalid pagination.');
+    return { limit, offset };
+  }
+
+  async countGlobalAuditLogs(
+    filters: GlobalAuditLogFilters = {},
+    actor?: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  ): Promise<number> {
+    const { whereSql, values } = this.buildGlobalWhere(filters, actor);
+    const result = await this.pool.query<{ total: number }>(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM psf_request_audit_logs AS audit_log
+        LEFT JOIN psf_requests AS psf_request ON psf_request.id = audit_log.request_id
+        ${whereSql}
+      `,
+      values,
+    );
+    return result.rows[0]?.total ?? 0;
+  }
+
   async findGlobalAuditLogs(
     filters: GlobalAuditLogFilters = {},
     actor?: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+    page?: { limit: number; offset: number },
   ): Promise<GlobalAuditLogEntry[]> {
+    const { whereSql, values } = this.buildGlobalWhere(filters, actor);
+    const paging = page
+      ? `LIMIT $${values.push(page.limit)} OFFSET $${values.push(page.offset)}`
+      : '';
+
+    const result = await this.pool.query<GlobalAuditLogRow>(
+      `
+        SELECT
+          audit_log.request_id,
+          psf_request.request_no,
+          audit_log.action_type,
+          audit_log.actor_display_name,
+          audit_log.actor_role,
+          audit_log.created_at,
+          audit_log.metadata_json
+        FROM psf_request_audit_logs AS audit_log
+        LEFT JOIN psf_requests AS psf_request ON psf_request.id = audit_log.request_id
+        ${whereSql}
+        ORDER BY audit_log.created_at DESC, audit_log.id DESC
+        ${paging}
+      `,
+      values,
+    );
+
+    return result.rows.map((row) => ({
+      requestId: row.request_id,
+      requestNo: row.request_no,
+      actionType: row.action_type,
+      actorDisplayName: row.actor_display_name,
+      actorRole: row.actor_role,
+      createdAt: this.serializeTimestamp(row.created_at),
+      metadata:
+        row.action_type === REQUEST_AUDIT_ACTION.WORKFLOW_CATALOG_UPDATED &&
+        actor?.role !== 'admin'
+          ? this.publicCatalogMetadata(row.metadata_json)
+          : row.metadata_json,
+    }));
+  }
+
+  private buildGlobalWhere(
+    filters: GlobalAuditLogFilters,
+    actor?: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  ): { whereSql: string; values: unknown[] } {
     const requestId = this.parseOptionalUuid(filters.requestId);
     const user = this.normalizeOptionalString(filters.user);
     const actionType = this.normalizeOptionalString(filters.actionType);
@@ -217,37 +293,10 @@ export class AuditLogService implements OnModuleInit {
       where.push(`audit_log.created_at < ${addParameter(this.nextUtcDay(to))}`);
     }
 
-    const result = await this.pool.query<GlobalAuditLogRow>(
-      `
-        SELECT
-          audit_log.request_id,
-          psf_request.request_no,
-          audit_log.action_type,
-          audit_log.actor_display_name,
-          audit_log.actor_role,
-          audit_log.created_at,
-          audit_log.metadata_json
-        FROM psf_request_audit_logs AS audit_log
-        LEFT JOIN psf_requests AS psf_request ON psf_request.id = audit_log.request_id
-        ${where.length > 0 ? `WHERE ${where.join('\n          AND ')}` : ''}
-        ORDER BY audit_log.created_at DESC, audit_log.id DESC
-      `,
+    return {
+      whereSql: where.length > 0 ? `WHERE ${where.join('\n          AND ')}` : '',
       values,
-    );
-
-    return result.rows.map((row) => ({
-      requestId: row.request_id,
-      requestNo: row.request_no,
-      actionType: row.action_type,
-      actorDisplayName: row.actor_display_name,
-      actorRole: row.actor_role,
-      createdAt: this.serializeTimestamp(row.created_at),
-      metadata:
-        row.action_type === REQUEST_AUDIT_ACTION.WORKFLOW_CATALOG_UPDATED &&
-        actor?.role !== 'admin'
-          ? this.publicCatalogMetadata(row.metadata_json)
-          : row.metadata_json,
-    }));
+    };
   }
 
   private publicCatalogMetadata(

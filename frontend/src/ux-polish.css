@@ -1,0 +1,78 @@
+/* Audit History + Form Management polish and shared table header. Loaded after index.css. */
+
+/* One table-header style for the whole app; dark mode gets a lifted slate, not an inverted bright strip. */
+:root { --table-head-bg: #e4eff4; --table-head-fg: #0b4a63; --table-head-line: #006f95; }
+.dark { --table-head-bg: #1d3844; --table-head-fg: #bfe7f4; --table-head-line: #73d5ee; }
+.data-table > table > thead > tr > th, .admin-form-config__version-table > table > thead > tr > th {
+  background: var(--table-head-bg); color: var(--table-head-fg); padding: 12px 16px; text-transform: uppercase;
+  letter-spacing: .06em; font-size: 12px; font-weight: 700; border-bottom: 2px solid var(--table-head-line);
+}
+
+/* ---------- Audit History ---------- */
+.global-history-page > .workflow-section { padding: 0; border: 0; background: transparent; }
+.global-history-page > .workflow-section + .workflow-section,
+.global-history-page [role="tabpanel"] > .workflow-section + .workflow-section { margin-top: 12px; }
+.global-history-page .detail-tabs { margin-bottom: 16px; }
+.global-history-page .global-history-page__filters { padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.global-history-page .global-history-filters {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 0;
+}
+.global-history-filters > label, .global-history-filters__dates > label { flex: 1 1 140px; min-width: 120px; }
+.global-history-filters__dates { display: flex; gap: 12px; flex: 2 1 280px; }
+.global-history-filters .global-history-filters__request-id { flex: 1 1 130px; }
+.global-history-filters .global-history-filters__action { flex: 1.4 1 190px; }
+.global-history-filters input, .global-history-filters select { height: 36px; width: 100%; }
+.global-history-filters__actions { margin-left: auto; }
+.global-history-page__results .data-table { border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
+.global-history-page__results .data-table table { min-width: 0; width: 100%; border-collapse: collapse; }
+.global-history-page__results .data-table td { padding: 10px 16px; vertical-align: middle; border-top: 1px solid var(--border); }
+.global-history-page__results .data-table td:first-child { width: 190px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.history-user { display: flex; align-items: baseline; gap: 8px; }
+.history-user strong { font-weight: 500; }
+.history-role { font-size: 11px; color: var(--muted-foreground); background: var(--secondary); border-radius: 999px; padding: 1px 8px; text-transform: capitalize; }
+.dark .global-history-page__results .data-table tbody tr:hover { background: var(--background); }
+
+/* ---------- Form Management: catalog ---------- */
+.admin-form-config--catalog .admin-form-config__catalog { padding: 0; border: 0; background: transparent; display: grid; gap: 12px; }
+.admin-form-config__family-context { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.admin-form-config__family-context .page-card__eyebrow { display: none; }
+.admin-form-config__family-context h2 { font-size: 18px; }
+.admin-form-config__versions { display: flex; flex-direction: column; gap: 12px; }
+.admin-form-config__versions > .page-card__description { order: -1; padding: 8px 12px; border-left: 3px solid var(--primary); background: var(--accent-light); border-radius: 0 6px 6px 0; font-size: 12px; }
+.admin-form-config__version-table { border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
+.admin-form-config__version-table table { min-width: 0; width: 100%; }
+.admin-form-config__version-table td { padding: 12px 16px; vertical-align: middle !important; border-top: 1px solid var(--border); }
+.admin-form-config__version-stamp { font: 600 13px/18px var(--font-mono); }
+.admin-form-config__version-link { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--secondary); border: 1px solid var(--border); }
+.admin-form-config__version-record--active { background: transparent; box-shadow: inset 3px 0 0 var(--success); }
+.admin-form-config__version-record--draft { box-shadow: inset 3px 0 0 var(--warning); }
+.admin-form-config__version-content p { margin-top: 2px; }
+.admin-form-config__version-table .admin-form-config__controls { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+.admin-form-config__version-table .admin-form-config__controls > * { min-height: 30px; padding: 3px 10px; font-size: 13px; }
+.admin-form-config__version-table .admin-form-config__danger { border-color: transparent; background: transparent; }
+
+/* ---------- Form Management: editor ---------- */
+.form-editor-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.form-editor-head .secondary-button, .form-editor-head .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px solid var(--input-border); border-radius: 6px; background: var(--card); color: var(--foreground); }
+.form-editor-head__row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.form-editor-head h1 { font-size: 22px; line-height: 30px; }
+.form-editor-head .admin-form-config__version-stamp { font: 500 13px/20px var(--font-mono); padding: 1px 8px; border-radius: 6px; background: var(--secondary); border: 1px solid var(--border); }
+.admin-form-config__editor-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 12px; }
+.admin-form-config__draft-actions { order: -1; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; box-shadow: var(--shadow-md); }
+.admin-form-config__draft-actions > h2 { display: none; }
+.admin-form-config__draft-actions .admin-form-config__toolbar { flex: 1; }
+.admin-form-config__draft-actions .admin-form-config__actions { flex-direction: row !important; }
+.admin-form-config__draft-actions > .secondary-button { order: 3; }
+.admin-form-config__editor { padding: 8px 24px 24px; }
+.admin-form-config__section { padding: 16px 0 8px; }
+.admin-form-config__item { padding: 8px 0; flex-wrap: nowrap; }
+.admin-form-config__item .admin-form-config__controls > * { min-height: 30px; padding: 3px 10px; }
+.admin-form-config__item .admin-form-config__controls > .icon-button, .admin-form-config__item .admin-form-config__controls > button:not(:first-child) { padding: 3px 7px; }
+.admin-form-config__item-summary > strong { font-weight: 500; }
+.admin-form-config__add-field, .admin-form-config__add-section { border-style: dashed; background: transparent; color: var(--muted-foreground); min-height: 32px; }
+
+/* ---------- Audit History: pagination ---------- */
+.global-history-page__results .table-footer { padding: 10px 4px; }
+
+.page-size { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); margin-right: 8px; }
+.page-size select { height: 32px; }

@@ -248,7 +248,7 @@ query parameters. This table lists routes, not full payload schemas.
 | Admin forms        | `GET/PUT /api/admin/form-config`, `POST /api/admin/form-config/publish`, `POST /api/admin/form-config/duplicate`, `DELETE /api/admin/form-config/draft/:version` | [FormSchemaController](../backend/src/admin/form_schema.controller.ts)                 |
 | Admin autofill     | `GET/POST /api/admin/autofill`, `PUT /api/admin/autofill/:ruleId`                                                                                                | [AutofillRuleController](../backend/src/admin/autofill_rule.controller.ts)             |
 | Autofill lookup    | `GET /api/autofill`                                                                                                                                              | [AutofillController](../backend/src/requests/autofill.controller.ts)                   |
-| Global audit       | `GET /api/audit-logs`                                                                                                                                            | [AuditLogController](../backend/src/audit/audit_log.controller.ts)                     |
+| Global audit       | `GET /api/audit-logs?limit&offset` (default 25, max 100) returns `{items,total,limit,offset}`                                                                     | [AuditLogController](../backend/src/audit/audit_log.controller.ts)                     |
 | XLSX/jobs          | `GET /api/requests/export.xlsx`, `GET /api/requests/export-jobs/:jobId`, `GET /api/requests/export-jobs/:jobId/download`                                         | [ExportController](../backend/src/export/export.controller.ts)                         |
 
 ## Persistence and startup
@@ -345,7 +345,7 @@ are available for historical reproduction; they do not replace the missing origi
   secret. Mock auth being blocked in production is not a production readiness audit.
 - LDAP login does not currently regenerate the session; mock login does. This
   document reports the difference without changing the implementation.
-- Background XLSX rendering retains records/rows in memory; global audit is unpaged.
+- Background XLSX rendering retains records/rows in memory.
 - The [earlier Status verification](verification/2026-10-02-status-management.md)
   reports a deferred read-snapshot/count inconsistency (Q3). This documentation
   audit did not reproduce it or establish that it is fixed.

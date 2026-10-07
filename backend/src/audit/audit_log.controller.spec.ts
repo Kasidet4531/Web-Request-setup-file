@@ -6,11 +6,19 @@ import { AuditLogService } from './audit_log.service';
 
 describe('AuditLogController', () => {
   let controller: AuditLogController;
-  let auditLogService: { findGlobalAuditLogs: jest.Mock };
+  let auditLogService: {
+    findGlobalAuditLogs: jest.Mock;
+    countGlobalAuditLogs: jest.Mock;
+    parsePage: jest.Mock;
+  };
   let authService: { getProfile: jest.Mock };
 
   beforeEach(async () => {
-    auditLogService = { findGlobalAuditLogs: jest.fn() };
+    auditLogService = {
+      findGlobalAuditLogs: jest.fn(),
+      countGlobalAuditLogs: jest.fn().mockResolvedValue(0),
+      parsePage: jest.fn().mockReturnValue({ limit: 25, offset: 0 }),
+    };
     authService = { getProfile: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -51,17 +59,19 @@ describe('AuditLogController', () => {
     ];
     authService.getProfile.mockResolvedValue(admin);
     auditLogService.findGlobalAuditLogs.mockResolvedValue(entries);
+    auditLogService.countGlobalAuditLogs.mockResolvedValue(1);
 
     await expect(
       controller.getAuditLogs(filters, {
         session: { userId: 'admin-1' },
       } as never),
-    ).resolves.toEqual(entries);
+    ).resolves.toEqual({ items: entries, total: 1, limit: 25, offset: 0 });
 
     expect(authService.getProfile).toHaveBeenCalledWith('admin-1');
     expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(
       filters,
       admin,
+      { limit: 25, offset: 0 },
     );
   });
 
@@ -85,10 +95,11 @@ describe('AuditLogController', () => {
         controller.getAuditLogs({}, {
           session: { userId: actor.id, role: 'admin' },
         } as never),
-      ).resolves.toEqual([]);
+      ).resolves.toEqual({ items: [], total: 0, limit: 25, offset: 0 });
       expect(auditLogService.findGlobalAuditLogs).toHaveBeenCalledWith(
         {},
         actor,
+        { limit: 25, offset: 0 },
       );
     },
   );
