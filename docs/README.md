@@ -24,6 +24,7 @@ into documentation or version control.
 | [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and dated offline/LAN verification scope; merged into main |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
 | [docs/audit-history-access.md](audit-history-access.md) | Implemented Audit History access for every authenticated role, superseding older Admin-only requirements; dated verification scope |
+| [docs/initial-data-load.md](initial-data-load.md) | One-time workbook reset: usage, clearing scope, mapping rules and known consequences |
 | [CONTEXT.md](../CONTEXT.md) | Current domain glossary |
 | [README.md](../README.md) | Project entry point and development scope |
 | [backend/README.md](../backend/README.md) | Backend environment, startup writes and commands |

@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Initial Data Load, number fields and export scope, 8 October 2026:** the [Initial Data Load script](initial-data-load.md) reloads forms, the Status catalog and requests from the PSF form detail workbook. Form fields may be `number` (validated as plain decimals, exported as numeric cells), Dashboard Team Group also reads the Request To options, and every authenticated role exports all non-Draft requests. Verified by unit and disposable-database tests only; the script has not been run against the configured database.
+
 > **Draft lifecycle update, 7 October 2026:** Admin/My Draft deletion, seven-day reminders and Product Type team filtering replace request assignment. See [the implementation guide](draft-management-and-reminders.md) and [verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md).
 
 > **Admin rule dialogs update, 7 October 2026:** Auto-fill Rules now supports explicit Active/Inactive selection, modal Create/Edit and label-only wrapping targets. Edit Status keeps added recipients below both input groups. See [the approved spec](specs/2026-10-07-autofill-admin-dialogs-design.md) and [fresh verification](verification/2026-10-07-admin-autofill-dialogs.md).
@@ -136,7 +138,7 @@ New requests capture both active schemas. Requester Draft schema upgrades are
 explicit and do not upgrade the captured PSF schema. Legacy PSF records resolve
 through the fixed original descriptor. Required fields may be incomplete on
 Draft saves; non-Draft saves validate the captured schema. Supported field types
-are text, textarea, date, select and radio. Configurable section-role access is
+are text, textarea, number, date, select and radio. Configurable section-role access is
 absent from current schema types; restricted legacy section metadata is rejected
 for reuse/publishing rather than silently exposed.
 Sources: [schema constants](../backend/src/admin/form_schema.constants.ts),
@@ -207,9 +209,10 @@ Sources: [admin rule editor](../frontend/src/components/AdminAutofillRulesPage.t
 [audit controller](../backend/src/audit/audit_log.controller.ts),
 [edit diffs](../backend/src/requests/requests.service.ts).
 
-Export is backend-generated XLSX, available to Admin and Requester, excluding
-Setup File Owners. Requester exports are creator-owned; Admin exports exclude
-foreign Drafts. Filters include status/from/to. Counts strictly greater than
+Export is backend-generated XLSX, available to every authenticated role and
+covering all requests except other creators' Drafts. Requester actors still get
+blank PSF cells for requests without a PSF Visibility Release. The Export page
+preview list keeps the Dashboard's creator scope for Requesters. Filters include status/from/to. Counts strictly greater than
 `EXPORT_SYNC_THRESHOLD` queue a job; the default is 2000, so exactly 2000 remains
 synchronous. Jobs are owner-scoped and their content is stored as BYTEA.
 Background jobs poll and renew claims; async export fetches pages but accumulates

@@ -78,6 +78,12 @@ package scripts. See the [source map](../docs/current-implementation.md#persiste
 other routes use the `/api` prefix. HTTP session state uses the default in-memory
 store in `main.ts`, so restarting the process discards sessions.
 
+## Initial Data Load
+
+`npm run db:initialize -- <workbook.xlsx> [--yes]` clears request data and form
+configuration and reloads them from the PSF form detail workbook. It is a dry run
+without `--yes`. See [Initial Data Load](../docs/initial-data-load.md) before using it.
+
 ## Checks
 
 ```sh
