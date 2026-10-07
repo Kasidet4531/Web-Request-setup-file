@@ -407,7 +407,7 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
 
   return (
     <article className={`page-card admin-form-config${isEditor ? ' admin-form-config--editor' : ' admin-form-config--catalog'}`}>
-      {!isEditor ? <PageHeader title="Form Management" description="Manage requester and PSF forms independently. Duplicate a saved version to prepare a draft." /> : null}
+      {!isEditor ? <PageHeader title="Form Management" description="Duplicate a saved version to prepare a draft." /> : null}
 
       <div className="page-card__body admin-form-config__body">
         <div className={`admin-form-config__workspace${isEditor ? ' admin-form-config__workspace--editor' : ''}`}>

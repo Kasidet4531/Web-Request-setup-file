@@ -167,10 +167,7 @@ export function AdminDraftManagementPage() {
 
   return (
     <article className="workflow-page requests-page">
-      <PageHeader
-        title="Draft Management"
-        description="Inspect unfinished Drafts and reminder recipient issues. Times: Asia/Bangkok."
-      />
+      <PageHeader title="Draft Management" />
       <section className="request-browser" aria-label="Draft Management">
         <form className="filter-bar draft-management-filters" onSubmit={event => event.preventDefault()}>
           <label>

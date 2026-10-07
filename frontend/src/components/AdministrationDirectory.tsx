@@ -12,11 +12,9 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   '/admin/form-config': 'Review form versions and edit or publish draft definitions.',
   '/admin/workflow': 'Configure request statuses and PSF information visibility.',
   '/admin/autofill': 'Configure field suggestions from completed requests.',
-  '/admin/export-profile': 'Download requests permitted for your account.',
-  '/history': 'Review request and configuration activity.',
 }
 
-const TOOL_PATHS = ['/admin/drafts', '/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history']
+const TOOL_PATHS = ['/admin/drafts', '/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users']
 
 export function AdministrationDirectory() {
   const [role, setRole] = useState<UserRole | null>(null)
@@ -29,14 +27,14 @@ export function AdministrationDirectory() {
     return () => { active = false }
   }, [retry])
   return <article className="workflow-page">
-    <PageHeader title="Administration" description="Manage request configuration, access and reporting." />
+    <PageHeader title="Administration" />
     {loading ? <AsyncNotice kind="loading" title="Loading available tools…" /> : error ? <AsyncNotice kind="error" title={error} action={<button type="button" className="btn-secondary" onClick={() => { setLoading(true); setError(null); setRetry((value) => value + 1) }}>Retry</button>} /> : <AdministrationTools role={role} />}
   </article>
 }
 
 export function AdministrationTools({ role }: { role: UserRole | null }) {
   const navigation = navSectionsForRole(role).flatMap((section) => section.items)
-  const items = TOOL_PATHS.flatMap((path) => navigation.filter((item) => item.to === path && (path !== '/history' || role === 'admin')))
+  const items = TOOL_PATHS.flatMap((path) => navigation.filter((item) => item.to === path))
   return <>
     {role !== 'admin' ? <AsyncNotice kind="info" title="Administration settings require administrator access." /> : null}
     <ul className="tool-directory administration-directory__tools">{items.map(({ to, label, icon: Icon }) => (

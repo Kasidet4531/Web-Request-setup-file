@@ -201,7 +201,7 @@ export function AdminWorkflowTransitionPage() {
 
   return (
     <article className="page-card admin-workflow-transition">
-      <PageHeader title="Status Management" description="Manage exact status names and types. Draft is protected. Statuses form a catalog, with no fixed process sequence." />
+      <PageHeader title="Status Management" description="Draft is protected. Statuses form a catalog, with no fixed process sequence." />
       <div className="page-card__body admin-workflow-transition__body">
         {loading ? <AsyncNotice kind="loading" title="Loading status catalog…" /> : null}
         {feedback && !dialogMode ? <AsyncNotice kind={feedback.kind} title={feedback.message} /> : null}
