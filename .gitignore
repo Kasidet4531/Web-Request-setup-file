@@ -49,3 +49,18 @@ uploads/
 .hime-review-runtime/
 .codegraph/
 .worktrees/
+
+# Stitch generated verification / mockup artifacts
+.stitch/*.png
+.stitch/*.html
+.stitch/*.txt
+.stitch/*-upload.json
+.stitch/*-url.json
+.stitch/*-verification.json
+.stitch/*-capture.json
+.stitch/*-result.json
+.stitch/*-snapshot.json
+.stitch/*-metadata.json
+.stitch/*-dom.json
+.stitch/*-sync.json
+
