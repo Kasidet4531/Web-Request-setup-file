@@ -168,6 +168,12 @@ interface CanonicalValueRow {
 
 type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
+// Dashboard Team Group: the original Product Type options and the Request To options.
+const GNTC_PRODUCT_TYPES =
+  "(product_type = 'New Product' OR product_type LIKE 'Create new PSF%')";
+const MFG_PRODUCT_TYPES =
+  "(product_type IN ('Transfer Product','Existing Product') OR product_type LIKE 'Revise from old PSF%' OR product_type LIKE 'Product Transfer%')";
+
 @Injectable()
 export class SearchIndexService implements OnModuleInit {
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
@@ -352,12 +358,11 @@ export class SearchIndexService implements OnModuleInit {
     ) {
       where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
     }
-    if (filters.team === 'GNTC') where.push("product_type = 'New Product'");
-    else if (filters.team === 'MFG')
-      where.push("product_type IN ('Transfer Product','Existing Product')");
+    if (filters.team === 'GNTC') where.push(GNTC_PRODUCT_TYPES);
+    else if (filters.team === 'MFG') where.push(MFG_PRODUCT_TYPES);
     else if (filters.team === 'unclassified')
       where.push(
-        "(product_type IS NULL OR product_type NOT IN ('New Product','Transfer Product','Existing Product'))",
+        `(product_type IS NULL OR NOT (${GNTC_PRODUCT_TYPES} OR ${MFG_PRODUCT_TYPES}))`,
       );
 
     if (filters.keyword?.trim()) {

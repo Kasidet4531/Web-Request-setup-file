@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
 import type { FormControlType, FormSchemaDraft, FormSchemaField } from '../types/forms'
 
 const FIELD_TYPE_LABELS: Record<FormControlType, string> = {
-  text: 'Short text', textarea: 'Long text', date: 'Date', select: 'Dropdown', radio: 'Multiple choice',
+  text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', select: 'Dropdown', radio: 'Multiple choice',
 }
 
 interface AdminFormConfigEditorProps {

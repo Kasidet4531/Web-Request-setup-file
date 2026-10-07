@@ -578,7 +578,7 @@ export function DashboardPage() {
         <div className="workspace-section-heading"><h2>Your related work</h2></div>
       {state.data.user?.role === 'setup_owner' ? <label>Team
         <select aria-label="Team" value={team ?? 'all'} onChange={(event) => { setTeam(event.target.value as typeof team); setOffset(0) }}>
-          <option value="all">All shared work</option><option value="GNTC">GNTC — New Product</option><option value="MFG">MFG — Transfer / Existing Product</option><option value="unclassified">รอระบุ Product Type</option>
+          <option value="all">All shared work</option><option value="GNTC">GNTC — New Product / Create new PSF</option><option value="MFG">MFG — Transfer / Existing / Revise</option><option value="unclassified">รอระบุ Product Type</option>
         </select>
       </label> : null}
       {summary ? <div className="summary-grid dashboard-summary-grid" aria-busy={pending}>

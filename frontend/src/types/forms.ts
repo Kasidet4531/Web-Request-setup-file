@@ -1,4 +1,4 @@
-export type FormControlType = 'text' | 'textarea' | 'date' | 'select' | 'radio'
+export type FormControlType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'radio'
 
 export const FORM_KEYS = ['psf-request', 'psf-created-information'] as const
 export type FormKey = typeof FORM_KEYS[number]

@@ -37,6 +37,7 @@ import {
 } from './search-index.service';
 import {
   assertValidRequiredFormData,
+  isNumericText,
   validateAndNormalizeFormData,
 } from './form-data-validation';
 
@@ -1630,6 +1631,9 @@ export class RequestsService implements OnModuleInit {
 
       const value = rawValue.trim();
       if (!value) continue;
+      if (field.type === 'number' && !isNumericText(value)) {
+        throw new BadRequestException(`${field.label} must be a number.`);
+      }
       if (field.type === 'date' && !this.isValidPsfCreatedCalendarDate(value)) {
         throw new BadRequestException(
           `${field.label} must be a valid ISO calendar date.`,
@@ -1715,6 +1719,7 @@ export class RequestsService implements OnModuleInit {
               value.trim().length === 0 ||
               ((field.type === 'select' || field.type === 'radio') &&
                 !field.options?.includes(value.trim())) ||
+              (field.type === 'number' && !isNumericText(value.trim())) ||
               (field.type === 'date' &&
                 !this.isValidPsfCreatedCalendarDate(value.trim())))
           );

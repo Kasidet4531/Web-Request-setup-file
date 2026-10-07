@@ -11,6 +11,7 @@ import {
   resolvePsfCreatedInformationSchema,
 } from '../admin/form_schema.constants';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
+import { isNumericText } from '../requests/form-data-validation';
 import { canActorViewPsfCreatedData } from '../requests/requests.service';
 import {
   SearchIndexService,
@@ -49,6 +50,8 @@ const EXPORT_WORKBOOK_WORKER_SOURCE = `
     }
   });
 `;
+
+type ExportCell = string | number;
 
 interface ExportWorksheetColumn {
   header: string;
@@ -188,7 +191,7 @@ export class ExcelExportService {
         key: `psf-created-${index}`,
       })),
     ];
-    const rows: string[][] = [];
+    const rows: ExportCell[][] = [];
 
     for (const [index, item] of items.entries()) {
       const canonicalValues =
@@ -213,13 +216,12 @@ export class ExcelExportService {
               ),
         ),
         ...requesterFields.map((field) =>
-          this.searchIndexService.serializeCanonicalValue(
-            canonicalValues[field.canonicalKey],
-          ),
+          this.exportCell(field, canonicalValues[field.canonicalKey]),
         ),
         ...psfCreatedFields.map((field) =>
           psfCreatedDataVisible
-            ? this.searchIndexService.serializeCanonicalValue(
+            ? this.exportCell(
+                field,
                 psfCreatedCanonicalValues.get(field.canonicalKey),
               )
             : '',
@@ -245,7 +247,7 @@ export class ExcelExportService {
 
   private async renderWorkbookInProcess(
     columns: ExportWorksheetColumn[],
-    rows: string[][],
+    rows: ExportCell[][],
   ): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('PSF Requests');
@@ -257,7 +259,7 @@ export class ExcelExportService {
 
   private renderWorkbookInWorker(
     columns: ExportWorksheetColumn[],
-    rows: string[][],
+    rows: ExportCell[][],
   ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       const worker = new Worker(EXPORT_WORKBOOK_WORKER_SOURCE, {
@@ -298,6 +300,12 @@ export class ExcelExportService {
       });
       worker.postMessage({ columns, rows });
     });
+  }
+
+  // Number fields export as numeric cells; unparseable legacy text stays text.
+  private exportCell(field: FormSchemaField, value: unknown): ExportCell {
+    const text = this.searchIndexService.serializeCanonicalValue(value);
+    return field.type === 'number' && isNumericText(text) ? Number(text) : text;
   }
 
   private getExportableFields(schema: FormSchemaJson): FormSchemaField[] {

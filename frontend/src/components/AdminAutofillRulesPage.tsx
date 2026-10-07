@@ -149,7 +149,7 @@ export function AdminAutofillRuleEditor({
   onChangeTrigger,
   onSave,
 }: AdminAutofillRuleEditorProps) {
-  const triggerFields = fields.filter((field) => ['text', 'textarea', 'date', 'select', 'radio'].includes(field.type))
+  const triggerFields = fields.filter((field) => ['text', 'textarea', 'number', 'date', 'select', 'radio'].includes(field.type))
   const targetFields = fields.filter(
     (field) => field.canonicalKey !== draft.triggerCanonicalKey,
   )
