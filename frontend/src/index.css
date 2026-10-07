@@ -472,7 +472,6 @@ dialog::backdrop { background: #10182066; }
 .app-sidebar--collapsed .sidebar__footer { margin-inline: 10px; }
 .app-header { min-height: 64px; height: 64px; background: var(--background); border: 0; padding-inline: 32px; }
 .app-header .icon-button { border: 1px solid var(--border); background: var(--card); border-radius: 6px; }
-.header-back { white-space: nowrap; font-size: 12px; padding-inline: 4px; }
 .breadcrumbs > ol { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; min-width: 0; }
 .breadcrumbs li { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .breadcrumbs__current { max-width: 32ch; }
@@ -641,7 +640,6 @@ dialog::backdrop { background: #10182066; }
   .queue-filters[open] > summary { margin-bottom: 16px; }
   .detail-layout__actions > .workflow-section { grid-template-columns: minmax(0,1fr); gap: 12px; }
   .breadcrumbs { overflow: hidden; }
-  .header-back span { display: none; }
   .admin-form-config__draft-actions { position: static; }
 }
 @media (max-width: 599px) {

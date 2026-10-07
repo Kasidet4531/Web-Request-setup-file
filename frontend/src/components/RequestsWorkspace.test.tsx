@@ -389,6 +389,7 @@ describe('RequestHeaderSummary', () => {
 
     expect(html.match(/PSF-0001/g)).toHaveLength(1)
     expect(html).toContain('PSF-0001')
+    expect(renderToStaticMarkup(<RequestHeaderSummary request={request} showRequestNo={false} />)).not.toContain('PSF-0001')
     expect(html).toContain('Production probe card setup')
     expect(html).not.toContain('<span>Product Type</span>')
     expect(html).not.toContain('status-badge--submitted')
@@ -1403,6 +1404,7 @@ describe('RequestDetailShell workflow actions', () => {
     requestDetailHookHarness.runEffects()
     await flushRequestDetailAsyncWork()
     const summary = requireRenderedElement(renderRequestDetailShell(), (element) => element.type === RequestHeaderSummary)
+    expect(summary.props.showRequestNo).toBe(false)
     const header = renderToStaticMarkup(<RequestHeaderSummary request={summary.props.request as PsfRequestResponse} includeMetadata={false} />)
     expect(header).toContain('PSF-0001')
     expect(header).toContain('Custom review')

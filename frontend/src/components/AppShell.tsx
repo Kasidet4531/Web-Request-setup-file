@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { ArrowLeft, ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
+import { ChevronRight, Layers, LogOut, Menu, Moon, Plus, Shield, Sun, UserCheck, X } from 'lucide-react'
 import { RequestBreadcrumbContext, requestDocumentTitle, requestParent, type RequestBreadcrumb } from './requestBreadcrumb'
 import { NavSidebar } from './NavSidebar'
 import { FormVersionBreadcrumbContext, type FormVersionBreadcrumb } from './formVersionBreadcrumb'
@@ -21,7 +21,7 @@ type AuthState =
   | { status: 'anonymous' }
   | { status: 'error'; error: string }
 
-type Crumb = { label: string; to?: string; backLabel?: string; search?: { formKey: FormVersionBreadcrumb['formKey'] } }
+type Crumb = { label: string; to?: string; search?: { formKey: FormVersionBreadcrumb['formKey'] } }
 
 /**
  * Request crumbs use route paths only; form versions use the version already
@@ -46,7 +46,7 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
     else {
       const isHistory = segments[2] === 'history'
       if (isHistory && request?.isDraft && request.requestId === segments[1]) crumbs[0] = { label: 'My Drafts', to: '/my-drafts' }
-      crumbs.push({ label: request?.requestId === segments[1] ? request.requestNo : 'Request detail', ...(isHistory ? { to: parent.to, backLabel: 'request' } : {}) })
+      crumbs.push({ label: request?.requestId === segments[1] ? request.requestNo : 'Request detail', ...(isHistory ? { to: parent.to } : {}) })
       if (isHistory) crumbs.push({ label: 'Request History' })
     }
     return crumbs
@@ -285,7 +285,6 @@ export function AppShell() {
 
   const role = authState.status === 'authenticated' ? authState.user.role : null
   const breadcrumbs = breadcrumbsForPath(pathname, formVersionBreadcrumb, requestBreadcrumb)
-  const parent = breadcrumbs.findLast((crumb) => crumb.to)
   const canCreateRequest = authState.status === 'authenticated'
   const isFormVersion = pathname.startsWith('/admin/form-config/')
 
@@ -347,7 +346,6 @@ export function AppShell() {
               {mobileDrawerOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
 
-            {parent?.to ? <Link className="btn-ghost header-back" aria-label={`Back to ${parent.backLabel ?? parent.label}`} to={parent.to} search={parent.search}><ArrowLeft size={15} /><span>Back to {parent.backLabel ?? parent.label}</span></Link> : null}
             <nav aria-label="Breadcrumbs" className="breadcrumbs">
               <ol>
               {breadcrumbs.map((crumb, index) => (

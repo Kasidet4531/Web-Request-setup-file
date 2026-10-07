@@ -107,12 +107,13 @@ describe('AppShell form version navigation', () => {
     ['/requests/real-uuid/history', '/requests/real-uuid', 'Back to request'],
     ['/admin/users', '/admin', 'Back to Administration'],
     ['/admin/form-config/psf-created-information/7', '/admin/form-config?formKey=psf-created-information', 'Back to Form Management'],
-  ])('links %s to its stable parent beside the breadcrumb', (pathname, href, label) => {
+  ])('links %s to its stable parent through the breadcrumb only', (pathname, href, label) => {
     routerStateHarness.pathname = pathname
     const html = renderToStaticMarkup(<AppShell />)
     const header = html.match(/<header[^>]*>(.*?)<\/header>/s)?.[1]
     expect(header).toContain(`href="${href}"`)
-    expect(header).toContain(label)
+    expect(header).not.toContain(label)
+    expect(header).not.toContain('header-back')
     expect(header).toContain('<ol>')
     expect(header).toContain('aria-current="page"')
   })
@@ -136,13 +137,14 @@ describe('AppShell form version navigation', () => {
     routerStateHarness.request = { requestId: 'real-uuid', requestNo: 'DRAFT-0042', isDraft: true }
     routerStateHarness.pathname = '/requests/real-uuid'
     let header = renderToStaticMarkup(<AppShell />).match(/<header[^>]*>(.*?)<\/header>/s)?.[1]
-    expect(header).toContain('Back to My Drafts')
+    expect(header).toContain('href="/my-drafts"')
+    expect(header).not.toContain('Back to')
     expect(header).toContain('DRAFT-0042')
     routerStateHarness.pathname = '/requests/real-uuid/history'
     header = renderToStaticMarkup(<AppShell />).match(/<header[^>]*>(.*?)<\/header>/s)?.[1]
     expect(header).toContain('href="/my-drafts"')
     expect(header).toContain('href="/requests/real-uuid"')
-    expect(header).toContain('Back to request')
+    expect(header).not.toContain('Back to')
   })
 })
 

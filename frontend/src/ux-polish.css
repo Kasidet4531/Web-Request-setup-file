@@ -94,3 +94,4 @@
 .requests-table--drafts th:nth-child(5) { width: auto; }
 .dashboard-filters, .request-browser__toolbar { padding-top: 16px; }
 .requests-table--drafts td:nth-child(2) { padding-left: 16px; }
+.detail-layout__actions .section-heading { border-bottom: 0; padding-bottom: 0; }

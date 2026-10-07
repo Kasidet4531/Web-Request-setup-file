@@ -148,11 +148,11 @@ function RequestMetadata({ request }: { request: PsfRequestResponse }) {
   </section>
 }
 
-export function RequestHeaderSummary({ request, includeMetadata = true, kind }: { request: PsfRequestResponse; includeMetadata?: boolean; kind?: WorkflowStatusKind }) {
+export function RequestHeaderSummary({ request, includeMetadata = true, kind, showRequestNo = true }: { request: PsfRequestResponse; includeMetadata?: boolean; kind?: WorkflowStatusKind; showRequestNo?: boolean }) {
   const summary = buildRequestDetailSummary(request)
   return <section className="detail-summary" aria-label="Request header">
     <div className="detail-summary__heading">
-      <div><span className="detail-masthead__number font-mono-code">{summary.requestNo}</span><h1>{summary.title}</h1></div>
+      <div>{showRequestNo ? <span className="detail-masthead__number font-mono-code">{summary.requestNo}</span> : null}<h1>{summary.title}</h1></div>
       <StatusLabel status={request.status} kind={kind ?? (request.status === 'Draft' ? 'draft' : 'neutral')} />
     </div>
     {includeMetadata ? <RequestMetadata request={request} /> : null}
@@ -296,7 +296,7 @@ export function RequestHistoryPanel({
   return (
     <section className="workflow-section request-history" aria-labelledby="request-history-heading">
       <div className="section-heading">
-        <h2 id="request-history-heading">History</h2><span className="page-card__description">Times: Asia/Bangkok</span>
+        <h2 id="request-history-heading">History</h2>
       </div>
       {loading ? <AsyncNotice kind="loading" title="Loading request history…" /> : null}
       {error ? <AsyncNotice kind="error" title={`Unable to load request history: ${error}`} action={onRetry ? <button className="btn-secondary" onClick={onRetry} type="button">Retry history</button> : undefined} /> : null}
@@ -1103,7 +1103,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
 
       {request ? (
         <>
-        <RequestHeaderSummary request={request} kind={statusKinds[request.status]} />
+        <RequestHeaderSummary request={request} kind={statusKinds[request.status]} showRequestNo={false} />
         {deletingDraft && request.status === 'Draft' && request.canEditRequesterData ? <DraftDeleteDialog draft={request} onCancel={() => setDeletingDraft(false)} onDeleted={() => void navigate({ to: '/my-drafts' })} /> : null}
         <div className="detail-layout">
           <aside className="detail-layout__actions" aria-label="Request actions">
