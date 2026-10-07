@@ -16,7 +16,7 @@
           "frontend/src/index.css"
         ],
         "createdAt": "2026-10-05T05:29:54.279Z",
-        "reason": "Agent: .stitch/DESIGN.md sections 2 and 4 explicitly prescribe semantic summary-card edges; this incumbent styling predates the loading fix in commits f7759dd and 5453c0a."
+        "reason": "Agent triage: .stitch/DESIGN.md sections 2 and 4 specify semantic Open/Overdue/Completed summary edges; this 4px rule is unchanged from baseline 43f6d6a."
       },
       {
         "rule": "overused-font",
@@ -25,7 +25,7 @@
           "frontend/src/index.css"
         ],
         "createdAt": "2026-10-05T05:29:54.360Z",
-        "reason": "Agent: .stitch/DESIGN.md section 3 specifies Inter for English UI; preserve the approved existing typography while fixing loading behavior."
+        "reason": "Agent triage: .stitch/DESIGN.md section 3 explicitly prescribes Inter for this existing operations UI; unchanged from baseline 43f6d6a."
       }
     ]
   }
