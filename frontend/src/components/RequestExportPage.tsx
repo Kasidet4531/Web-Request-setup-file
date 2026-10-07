@@ -363,7 +363,7 @@ export function RequestExportPage() {
       <PageHeader title="Export to Excel" description="Larger exports are prepared in the background." />
       <div className="page-card__body request-export">
         <section className="page-card__section request-export__filter-panel">
-          <h2>Export filters</h2>
+          <h2 className="sr-only">Export filters</h2>
           {catalog.loading ? <AsyncNotice kind="loading" title="Loading workflow statuses…" /> : null}
           {catalog.error ? <AsyncNotice kind="error" title={`Unable to load workflow statuses: ${catalog.error}`} /> : null}
           <div className="request-export__filter-layout">
