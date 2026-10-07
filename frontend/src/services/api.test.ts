@@ -505,7 +505,7 @@ describe('createApiClient', () => {
       },
     ]
     globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify(history), {
+      new Response(JSON.stringify({ items: history, total: 1, limit: 25, offset: 0 }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -521,7 +521,9 @@ describe('createApiClient', () => {
       actionType?: string
       from?: string
       to?: string
-    }) => Promise<typeof history>)
+      limit?: number
+      offset?: number
+    }) => Promise<{ items: typeof history; total: number; limit: number; offset: number }>)
 
     expect(fetchGlobalAuditLogs).toBeTypeOf('function')
     if (!fetchGlobalAuditLogs) {
@@ -534,9 +536,11 @@ describe('createApiClient', () => {
       actionType: 'REQUEST_STATUS_CHANGED',
       from: '2026-06-18',
       to: '2026-06-19',
-    })).resolves.toEqual(history)
+      limit: 25,
+      offset: 50,
+    })).resolves.toEqual({ items: history, total: 1, limit: 25, offset: 0 })
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/audit-logs?requestId=request-1&user=setup.gntc&actionType=REQUEST_STATUS_CHANGED&from=2026-06-18&to=2026-06-19',
+      '/api/audit-logs?requestId=request-1&user=setup.gntc&actionType=REQUEST_STATUS_CHANGED&from=2026-06-18&to=2026-06-19&limit=25&offset=50',
       expect.objectContaining({ credentials: 'include', method: 'GET' }),
     )
   })

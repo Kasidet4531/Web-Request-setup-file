@@ -27,10 +27,20 @@ export class AuditLogController {
   async getAuditLogs(
     @Query() filters: GlobalAuditLogFilters,
     @Req() request: AuthenticatedRequest,
-  ): Promise<GlobalAuditLogEntry[]> {
+  ): Promise<{
+    items: GlobalAuditLogEntry[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const actor = await this.getAuthenticatedActor(request);
+    const page = this.auditLogService.parsePage(filters);
+    const [items, total] = await Promise.all([
+      this.auditLogService.findGlobalAuditLogs(filters, actor, page),
+      this.auditLogService.countGlobalAuditLogs(filters, actor),
+    ]);
 
-    return this.auditLogService.findGlobalAuditLogs(filters, actor);
+    return { items, total, ...page };
   }
 
   private async getAuthenticatedActor(

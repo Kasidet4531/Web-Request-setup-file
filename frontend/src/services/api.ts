@@ -318,6 +318,15 @@ export interface GlobalAuditLogQuery {
   actionType?: PsfRequestHistoryAction
   from?: string
   to?: string
+  limit?: number
+  offset?: number
+}
+
+export interface GlobalAuditLogPage {
+  items: GlobalAuditLogEntry[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface GlobalAuditLogEntry {
@@ -490,7 +499,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
         method: 'GET',
       }),
     fetchGlobalAuditLogs: (query: GlobalAuditLogQuery = {}) =>
-      request<GlobalAuditLogEntry[]>(buildQueryPath('/audit-logs', query), {
+      request<GlobalAuditLogPage>(buildQueryPath('/audit-logs', query), {
         method: 'GET',
       }),
     fetchPsfRequestStatusOptions: (requestId: string) =>

@@ -120,14 +120,27 @@ export function GlobalAuditLogFilters({
   )
 }
 
+const PAGE_SIZES = [10, 25, 50, 100]
+const PAGE_SIZE = 25
+
 export function GlobalAuditLogTable({
   entries,
   error,
   loading,
+  offset = 0,
+  onOffsetChange,
+  onPageSizeChange,
+  pageSize = PAGE_SIZE,
+  total = entries.length,
 }: {
   entries: GlobalAuditLogEntry[]
   error: string | null
   loading: boolean
+  offset?: number
+  onOffsetChange?: (offset: number) => void
+  onPageSizeChange?: (size: number) => void
+  pageSize?: number
+  total?: number
 }) {
   if (loading && entries.length === 0) {
     return <AsyncNotice kind="loading" title="Loading global audit history…" />
@@ -144,8 +157,7 @@ export function GlobalAuditLogTable({
   return (
     <>
     <p className="sr-only" role="status">{loading ? 'Updating global audit history…' : ''}</p>
-    <p className="table-scroll__hint">Scroll horizontally to see audit actors, actions, and details.</p>
-    <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
+        <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
       <table>
         <thead>
           <tr>
@@ -167,9 +179,9 @@ export function GlobalAuditLogTable({
                   </Link>
                 ) : entry.requestNo ?? 'Workflow configuration'}
               </td>
-              <td>
+              <td className="history-user">
                 <strong>{entry.actorDisplayName}</strong>
-                <span>{entry.actorRole}</span>
+                <span className="history-role">{entry.actorRole.replace('_', ' ')}</span>
               </td>
               <td>{actionLabel(entry.actionType)}</td>
               <td><HistoryChanges metadata={entry.metadata} /></td>
@@ -178,6 +190,23 @@ export function GlobalAuditLogTable({
         </tbody>
       </table>
     </div>
+    {onOffsetChange ? (
+      <div className="table-footer" aria-label="Audit history pagination">
+        <span>{offset + 1}–{offset + entries.length} of {total} entries</span>
+        <div className="toolbar__actions">
+          {onPageSizeChange ? (
+            <label className="page-size">
+              Rows per page
+              <select value={pageSize} disabled={loading} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
+                {PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </label>
+          ) : null}
+          <button type="button" className="btn-secondary" disabled={loading || !offset} onClick={() => onOffsetChange(Math.max(0, offset - pageSize))}>Previous</button>
+          <button type="button" className="btn-secondary" disabled={loading || offset + pageSize >= total} onClick={() => onOffsetChange(offset + pageSize)}>Next</button>
+        </div>
+      </div>
+    ) : null}
     </>
   )
 }
@@ -272,6 +301,9 @@ export function GlobalHistoryPage() {
     ...EMPTY_GLOBAL_AUDIT_LOG_FILTERS,
   })
   const [appliedFilters, setAppliedFilters] = useState<GlobalAuditLogQuery>({})
+  const [historyOffset, setHistoryOffset] = useState(0)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE)
+  const [historyTotal, setHistoryTotal] = useState(0)
   const [history, setHistory] = useState<AsyncState<GlobalAuditLogEntry[]>>({
     loading: true,
     error: null,
@@ -307,10 +339,11 @@ export function GlobalHistoryPage() {
       setHistory((current) => ({ ...current, loading: true, error: null }))
 
       try {
-        const entries = await api.fetchGlobalAuditLogs(appliedFilters)
+        const page = await api.fetchGlobalAuditLogs({ ...appliedFilters, limit: pageSize, offset: historyOffset })
 
         if (mounted) {
-          setHistory({ loading: false, error: null, data: entries })
+          setHistoryTotal(page.total)
+          setHistory({ loading: false, error: null, data: page.items })
         }
       } catch (loadError) {
         if (mounted) {
@@ -328,7 +361,7 @@ export function GlobalHistoryPage() {
     return () => {
       mounted = false
     }
-  }, [appliedFilters])
+  }, [appliedFilters, historyOffset, pageSize])
 
   useEffect(() => {
     if (activeTab !== 'deletions' || currentUser?.role !== 'admin') return
@@ -363,11 +396,13 @@ export function GlobalHistoryPage() {
   }
 
   function applyFilters() {
+    setHistoryOffset(0)
     setAppliedFilters(buildGlobalAuditLogQuery(filters))
   }
 
   function clearFilters() {
     setFilters({ ...EMPTY_GLOBAL_AUDIT_LOG_FILTERS })
+    setHistoryOffset(0)
     setAppliedFilters({})
   }
 
@@ -411,9 +446,7 @@ export function GlobalHistoryPage() {
           aria-labelledby={isAdmin ? 'history-tab-system' : undefined}
         >
           <section className="workflow-section global-history-page__filters" aria-labelledby="global-history-filters-heading">
-            <div className="section-heading">
-              <h2 id="global-history-filters-heading">Filters</h2>
-            </div>
+            <h2 className="sr-only" id="global-history-filters-heading">Filters</h2>
             <GlobalAuditLogFilters
               filters={filters}
               onApply={applyFilters}
@@ -423,14 +456,16 @@ export function GlobalHistoryPage() {
           </section>
 
           <section className="workflow-section global-history-page__results" aria-labelledby="global-history-results-heading">
-            <div className="section-heading">
-              <h2 id="global-history-results-heading">Audit entries</h2>
-              <p>Displayed times: Asia/Bangkok (UTC+07:00). Date filters use UTC.</p>
-            </div>
+            <h2 className="sr-only" id="global-history-results-heading">Audit entries</h2>
             <GlobalAuditLogTable
               entries={history.data}
               error={history.error}
               loading={history.loading}
+              offset={historyOffset}
+              onOffsetChange={setHistoryOffset}
+              onPageSizeChange={(size) => { setHistoryOffset(0); setPageSize(size) }}
+              pageSize={pageSize}
+              total={historyTotal}
             />
           </section>
         </div>

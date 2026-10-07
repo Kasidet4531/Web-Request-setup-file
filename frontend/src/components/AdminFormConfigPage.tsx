@@ -431,15 +431,18 @@ export function AdminFormConfigPage({ formKey = 'psf-request', version }: { form
         /> : null}
         {!loading && isEditor && selectedVersion ? (
           <>
-            <div className="admin-form-config__section-header">
-              <Link className="secondary-button" search={{ formKey }} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={15} /> Back to Form management</Link>
-              <div className="admin-form-config__version-heading"><span className="admin-form-config__version-stamp">v{selectedVersion.version}</span><div><p className="page-card__eyebrow">{familyLabel}</p><h1 id="form-config-editor-heading">{selectedVersion.title}</h1></div></div>
-            </div>
-            <div className="admin-form-config__identity">
-              <StatusLabel status={selectedVersion.status === 'active' ? 'Active' : selectedVersion.status === 'draft' ? 'Draft' : 'Inactive'} kind={selectedVersion.status === 'active' ? 'completed' : selectedVersion.status === 'draft' ? 'draft' : 'neutral'} />
-              <span>Created by {selectedVersion.createdBy} · <time dateTime={selectedVersion.createdAt}>{new Date(selectedVersion.createdAt).toLocaleDateString()}</time></span>
-              {visibleDescription(selectedVersion.description) ? <span>{selectedVersion.description}</span> : null}
-            </div>
+            <header className="form-editor-head">
+              <Link aria-label="Back to Form management" className="secondary-button" search={{ formKey }} to="/admin/form-config"><ArrowLeft aria-hidden="true" size={16} /></Link>
+              <div className="form-editor-head__title">
+                <p className="page-card__eyebrow">{familyLabel}</p>
+                <div className="form-editor-head__row">
+                  <h1 id="form-config-editor-heading">{selectedVersion.title}</h1>
+                  <span className="admin-form-config__version-stamp">v{selectedVersion.version}</span>
+                  <StatusLabel status={selectedVersion.status === 'active' ? 'Active' : selectedVersion.status === 'draft' ? 'Draft' : 'Inactive'} kind={selectedVersion.status === 'active' ? 'completed' : selectedVersion.status === 'draft' ? 'draft' : 'neutral'} />
+                </div>
+                <p className="page-card__description">Created by {selectedVersion.createdBy} · <time dateTime={selectedVersion.createdAt}>{new Date(selectedVersion.createdAt).toLocaleDateString()}</time>{visibleDescription(selectedVersion.description) ? ` · ${selectedVersion.description}` : ''}</p>
+              </div>
+            </header>
             <div className="admin-form-config__editor-layout">
             <div className="admin-form-config__editor" aria-labelledby="form-config-editor-heading">
               {visualSchema ? (
