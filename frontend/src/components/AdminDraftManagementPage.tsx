@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from '@tanstack/react-router'
 import { api, type AdminDraftListItem, type AdminDraftListResponse, type DraftReminder, type PsfRequestResponse } from '../services/api'
 import { PageHeader } from './ui/PageHeader'
+import { DANGER_BUTTON_CLASS } from './ui/tableLayout'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { RequestHeaderSummary } from './RequestsWorkspace'
@@ -77,7 +78,7 @@ export function AdminDraftTable({
               <td data-label="Actions">
                 <div className="toolbar__actions">
                   <button
-                    className="btn-secondary ui-button--danger"
+                    className={DANGER_BUTTON_CLASS}
                     type="button"
                     aria-label={`Delete ${item.requestNo}`}
                     onClick={(event) => {
