@@ -106,3 +106,36 @@
 .draft-management .draft-management-filters { padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
 .draft-management .data-table { border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
 .draft-management .table-footer { padding: 10px 4px; margin: 0; border: 0; }
+
+/* ===== One list layout everywhere: filters card, table card, footer below ===== */
+:root { --list-gap: 16px; }
+
+/* Remove the outer card that used to wrap table (and footer). */
+.request-browser, .queue-surface, .request-browser__results, .request-export__preview,
+.admin-workflow-transition__catalog, .admin-autofill-rules__catalog {
+  background: transparent; border: 0; border-radius: 0; padding: 0; box-shadow: none;
+}
+.request-browser { display: grid; gap: var(--list-gap); }
+.queue-surface { display: grid; gap: var(--list-gap); }
+.request-export__preview { display: grid; gap: var(--list-gap); }
+
+/* The table itself is the card. */
+.queue-surface .data-table, .request-export__preview .data-table,
+.admin-workflow-transition__table, .admin-autofill-rules__table {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+
+/* Filters are a separate card. */
+.queue-filters, .dashboard-filters {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 0;
+}
+.dashboard-filters { padding-top: 12px; }
+.queue-filters .toolbar, .queue-filters .request-browser__toolbar { margin: 0; padding: 0; }
+
+/* Footer sits below the table card, outside it. */
+.queue-surface .table-footer { padding: 10px 4px; margin: 0; border: 0; }
+
+/* Headings above a card need no inner padding. */
+.queue-surface__heading { padding: 0 0 10px; }
+.admin-workflow-transition__body, .admin-autofill-rules__body, .request-export { gap: var(--list-gap); }
+.request-export__preview-header { margin-bottom: 0; }
