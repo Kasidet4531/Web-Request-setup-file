@@ -490,9 +490,6 @@ describe('RequestsService draft flow', () => {
         },
         activeSchema.schema,
         requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
-        null,
-        null,
-        null,
       ],
     );
     expect(draft).toMatchObject({
@@ -887,8 +884,6 @@ describe('RequestsService draft flow', () => {
       }),
     ).resolves.toMatchObject({
       status: updated.status,
-      setupOwner: null,
-      setupOwnerRole: null,
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.not.stringMatching(/SET[\s\S]*setup_owner\s*=/),
@@ -897,9 +892,6 @@ describe('RequestsService draft flow', () => {
     expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
       expect.objectContaining({
         requesterUserId: requesterActor.id,
-        setupOwnerUserId: null,
-        setupOwner: null,
-        setupOwnerRole: null,
       }),
       { product_type: 'Existing Product', requester: 'Fook' },
       dbClient,
@@ -931,8 +923,6 @@ describe('RequestsService draft flow', () => {
         expectedUpdatedAt: revision,
       }),
     ).resolves.toMatchObject({
-      setupOwner: 'Original owner',
-      setupOwnerRole: 'MFG',
       requesterUserId: requesterActor.id,
     });
     expect(pool.query).toHaveBeenLastCalledWith(
@@ -986,7 +976,6 @@ describe('RequestsService draft flow', () => {
       }),
     ).resolves.toMatchObject({
       requesterUserId: 'foreign-creator',
-      setupOwner: 'Original owner',
       psfCreatedDataVisible: false,
     });
     expect(pool.query).toHaveBeenLastCalledWith(
@@ -2179,8 +2168,6 @@ describe('RequestsService draft flow', () => {
 
     await expect(invokeUpdate()).resolves.toMatchObject({
       status: 'Setup In Progress',
-      setupOwner: 'Setup Owner GNTC Demo',
-      setupOwnerRole: 'GNTC',
       psfCreatedData: {
         psf_setup_file_name: 'final-setup.psf',
         attachment_reference: 'https://files.example/final-layout.pdf',
@@ -2447,8 +2434,6 @@ describe('RequestsService draft flow', () => {
     ).resolves.toMatchObject({
       status: 'Completed',
       canEditPsfCreatedData: true,
-      setupOwner: 'Original owner',
-      setupOwnerRole: 'MFG',
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('SET psf_created_data_json = $2::jsonb'),
@@ -2535,8 +2520,6 @@ describe('RequestsService draft flow', () => {
 
     await expect(invokeUpdate()).resolves.toMatchObject({
       status: 'Completed',
-      setupOwner: 'Setup Owner GNTC Demo',
-      setupOwnerRole: 'GNTC',
       psfCreatedData: { psf_setup_file_name: 'admin-corrected.psf' },
       psfCreatedDataVisible: true,
       canEditPsfCreatedData: true,
@@ -2761,9 +2744,6 @@ describe('RequestsService draft flow', () => {
         status: 'Submitted',
         requester: 'Fook',
         requesterUserId: requesterActor.id,
-        setupOwnerUserId: null,
-        setupOwner: null,
-        setupOwnerRole: null,
         productType: 'Existing Product',
         requestDate: new Date('2026-06-18T01:02:03.000Z'),
         updatedAt: new Date('2026-06-18T01:05:03.000Z'),
@@ -3297,7 +3277,6 @@ describe('RequestsService draft flow', () => {
         status: 'Submitted',
         psfReleasedAt: revision,
         requesterUserId: requesterActor.id,
-        setupOwner: 'Original owner',
       });
       expect(pool.query).toHaveBeenLastCalledWith(
         expect.stringContaining('COALESCE(psf_released_at, NOW())'),
@@ -3587,13 +3566,13 @@ describe('RequestsService draft flow', () => {
     },
   );
 
-  it('denies requester department relation even if they spoof ordinary setup filters', async () => {
+  it('rejects removed department relation and assignment filters', async () => {
     await expect(
       service.queryRequests(
         { scope: 'related', relation: 'department', setupOwnerRole: 'GNTC' },
         requesterActor,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(searchIndexService.queryRequests).not.toHaveBeenCalled();
   });
 

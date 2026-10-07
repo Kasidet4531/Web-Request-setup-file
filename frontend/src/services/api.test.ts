@@ -969,13 +969,17 @@ describe('createApiClient', () => {
       method: 'POST',
     }))
   })
-  it('fetches the safe assignee directory and updates assignment with an encoded id and revision', async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+
+
+  it('sends authenticated Draft management filters and opaque revision deletion', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ deleted: true, items: [], total: 0, limit: 25, offset: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     const client = createApiClient()
-    await expect(client.fetchRequestAssignees()).resolves.toEqual({ items: [] })
-    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/assignees', expect.objectContaining({ method: 'GET', credentials: 'include' }))
-    await client.updatePsfRequestAssignment('request /1', { setupOwnerUserId: null, expectedUpdatedAt: 'r2' })
-    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/request%20%2F1/assignment', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ setupOwnerUserId: null, expectedUpdatedAt: 'r2' }) }))
+    await client.fetchAdminDrafts({ keyword: 'PSF 1', creator: 'Alex', productType: 'New Product', limit: 25, offset: 50 })
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/admin/drafts?keyword=PSF+1&creator=Alex&productType=New+Product&limit=25&offset=50', expect.objectContaining({ credentials: 'include', method: 'GET' }))
+    await client.fetchAdminDraft('draft /1')
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/admin/drafts/draft%20%2F1', expect.objectContaining({ method: 'GET' }))
+    await client.deleteDraft('draft /1', 'opaque-revision')
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/api/requests/draft%20%2F1', expect.objectContaining({ credentials: 'include', method: 'DELETE', body: JSON.stringify({ expectedUpdatedAt: 'opaque-revision' }) }))
   })
 
 })

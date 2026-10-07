@@ -25,7 +25,8 @@ export interface OutboxJob {
   event_type:
     | RequestNotificationEvent['eventType']
     | 'ADMIN_ALERT'
-    | 'ADMIN_TEST';
+    | 'ADMIN_TEST'
+    | 'DRAFT_REMINDER';
   request_id: string | null;
   from_address: string;
   to_recipients: string;

@@ -85,19 +85,7 @@ function adminFormConfigPath(path: string, formKey?: FormKey): string {
   return formKey === 'psf-created-information' ? buildQueryPath(path, { formKey }) : path
 }
 
-export interface AssignableSetupOwner {
-  id: string
-  displayName: string
-  setupOwnerDepartment: SetupOwnerDepartment
-}
-
-export interface UpdateRequestAssignmentPayload {
-  setupOwnerUserId: string | null
-  expectedUpdatedAt: string
-}
-
 export interface PsfRequestPayload {
-  setupOwnerUserId?: string | null
   requester?: string
   requesterData: DynamicFormValues
 }
@@ -142,15 +130,13 @@ export type WorkflowConfigurationOperation =
 
 export interface PsfRequestQuery {
   scope?: 'all' | 'related' | 'my-drafts'
-  relation?: 'all' | 'created' | 'assigned' | 'department'
+  team?: 'all' | 'GNTC' | 'MFG' | 'unclassified'
   workState?: 'all' | 'open' | 'overdue' | 'completed'
   keyword?: string
   status?: string
   priority?: string
   productType?: string
   requester?: string
-  setupOwner?: string
-  setupOwnerRole?: string
   dueDateFrom?: string
   dueDateTo?: string
   requestDateFrom?: string
@@ -169,15 +155,27 @@ export interface PsfRequestListItem {
   status: string
   priority: string | null
   requester: string | null
-  setupOwnerUserId: string | null
-  setupOwner: string | null
-  setupOwnerRole: string | null
   productType: string | null
   requestDate: string | null
   dueDate: string | null
   updatedAt: string
   requesterUserId?: string | null
 }
+
+export interface AdminDraftListItem {
+  requestId: string
+  requestNo: string
+  title: string | null
+  requester: string | null
+  requesterUserId: string | null
+  productType: string | null
+  createdAt: string
+  updatedAt: string
+}
+export interface AdminDraftQuery { keyword?: string; creator?: string; productType?: string; limit?: number; offset?: number }
+export interface AdminDraftListResponse { items: AdminDraftListItem[]; total: number; limit: number; offset: number }
+export interface DraftReminder { requestId: string; requestNo: string; state: string; queuedAt: string | null; skippedRecipients: Array<{ userId: string | null; displayName: string; reason: string }> }
+export interface DraftDeletion { draftNo: string; actorDisplayName: string; actorRole: string; deletedAt: string }
 
 export interface PsfRequestListSummary {
   open: number
@@ -279,9 +277,6 @@ export interface PsfRequestResponse {
   formVersion: number
   status: string
   requester: string | null
-  setupOwnerUserId: string | null
-  setupOwner: string | null
-  setupOwnerRole: string | null
   productType: string | null
   requesterData: DynamicFormValues
   psfCreatedData: Record<string, unknown>
@@ -305,7 +300,6 @@ export type PsfRequestHistoryAction =
   | 'DRAFT_REQUESTER_DATA_UPDATED'
   | 'REQUEST_SUBMITTED'
   | 'REQUEST_STATUS_CHANGED'
-  | 'REQUEST_ASSIGNEE_CHANGED'
   | 'REQUESTER_INFORMATION_UPDATED'
   | 'PSF_CREATED_INFORMATION_UPDATED'
   | 'WORKFLOW_CATALOG_UPDATED'
@@ -477,9 +471,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       request<PsfRequestListResponse>(buildQueryPath('/requests', query), {
         method: 'GET',
       }),
-    fetchRequestAssignees: () => request<{ items: AssignableSetupOwner[] }>('/requests/assignees', { method: 'GET' }),
-    updatePsfRequestAssignment: (requestId: string, payload: UpdateRequestAssignmentPayload) =>
-      request<PsfRequestResponse>(`/requests/${encodeURIComponent(requestId)}/assignment`, { method: 'PUT', body: payload }),
+    fetchAdminDrafts: (query: AdminDraftQuery = {}) => request<AdminDraftListResponse>(buildQueryPath('/admin/drafts', query), { method: 'GET' }),
+    fetchAdminDraft: (id: string) => request<PsfRequestResponse>(`/admin/drafts/${encodeURIComponent(id)}`, { method: 'GET' }),
+    deleteDraft: (id: string, expectedUpdatedAt: string) => request<{ deleted: true }>(`/requests/${encodeURIComponent(id)}`, { method: 'DELETE', body: { expectedUpdatedAt } }),
+    fetchDraftReminders: () => request<{ items: DraftReminder[] }>('/admin/draft-reminders', { method: 'GET' }),
+    fetchDraftDeletions: (query: { limit?: number; offset?: number } = {}) => request<{ items: DraftDeletion[]; total: number; limit: number; offset: number }>(buildQueryPath('/admin/draft-deletions', query), { method: 'GET' }),
     createDraftRequest: (payload: PsfRequestPayload) =>
       request<PsfRequestResponse>('/requests', {
         body: payload,

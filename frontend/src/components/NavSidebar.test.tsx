@@ -41,7 +41,7 @@ describe('NavSidebar', () => {
   it('groups every authorized tool contextually without exposing admin tools to other roles', () => {
     const sections = contextualAdminSections('admin')
     expect(sections.map((section) => section.label)).toEqual(['Request configuration', 'Access', 'Reporting'])
-    expect(sections.flatMap((section) => section.items).map((item) => item.to)).toEqual(['/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history'])
+    expect(sections.flatMap((section) => section.items).map((item) => item.to)).toEqual(['/admin/drafts', '/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history'])
     expect(contextualAdminSections('requester')).toEqual([])
     expect(contextualAdminSections('setup_owner')).toEqual([])
     expect(resolveActivePath('/admin/form-config/2', sections)).toBe('/admin/form-config')

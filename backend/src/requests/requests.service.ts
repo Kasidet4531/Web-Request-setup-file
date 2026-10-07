@@ -28,6 +28,7 @@ import {
 import { WorkflowTransitionService } from '../admin/workflow_transition.service';
 import { DATABASE_POOL } from '../database/database.service';
 import { NotificationService } from '../notifications/notification.service';
+import { escapeHtml } from '../notifications/notification.template';
 import {
   RequestSearchFilters,
   RequestSearchResult,
@@ -72,28 +73,10 @@ export type RequesterData = Record<string, unknown>;
 export interface CreateDraftRequestDto {
   requester?: string;
   requesterData: RequesterData;
-  setupOwnerUserId?: string | null;
 }
-
-export interface AssignableSetupOwner {
-  id: string;
-  displayName: string;
-  setupOwnerDepartment: 'GNTC' | 'MFG';
-}
-
-export interface UpdateRequestAssignmentDto {
-  setupOwnerUserId: string | null;
-  expectedUpdatedAt: string;
-}
-
-type AssignmentSnapshot = Pick<
-  PsfRequestResponse,
-  'setupOwnerUserId' | 'setupOwner' | 'setupOwnerRole'
->;
 
 export interface UpdateDraftRequesterDataDto {
   formVersion: number;
-  setupOwnerUserId?: string | null;
   requesterData: RequesterData;
   expectedUpdatedAt: unknown;
 }
@@ -134,7 +117,7 @@ export interface RequestStatusOptionsResponse {
 
 export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'> & {
   scope?: 'all' | 'related' | 'my-drafts';
-  relation?: 'all' | 'created' | 'assigned' | 'department';
+  relation?: 'all' | 'created';
   workState?: 'all' | 'open' | 'overdue' | 'completed';
 };
 
@@ -145,9 +128,6 @@ export interface PsfRequestResponse {
   formVersion: number;
   status: string;
   requester: string | null;
-  setupOwnerUserId: string | null;
-  setupOwner: string | null;
-  setupOwnerRole: string | null;
   productType: string | null;
   requesterData: RequesterData;
   psfCreatedData: RequesterData;
@@ -206,6 +186,7 @@ export class RequestsService implements OnModuleInit {
     await this.withTransaction(async (client) => {
       await this.ensureRequestsStorage(client);
       await this.searchIndexService.ensureRequestSearchIndexStorage(client);
+      await this.ensureDraftManagementStorage(client);
     });
   }
 
@@ -213,6 +194,7 @@ export class RequestsService implements OnModuleInit {
     dto: CreateDraftRequestDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
+    this.assertNoAssignment(dto);
     const activeSchema =
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
     const requester = actor.displayName;
@@ -229,10 +211,6 @@ export class RequestsService implements OnModuleInit {
           PSF_CREATED_INFORMATION_FORM_KEY,
           client,
         );
-      const assignment =
-        dto.setupOwnerUserId === undefined
-          ? this.emptyAssignment()
-          : await this.resolveAssignment(dto.setupOwnerUserId, client);
       const requestNo = await this.nextDraftRequestNo(client);
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -250,11 +228,10 @@ export class RequestsService implements OnModuleInit {
             psf_created_data_json,
             schema_snapshot_json,
             psf_created_schema_snapshot_json,
-            setup_owner_user_id, setup_owner, setup_owner_role,
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, $12::uuid, $13, $14, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -269,9 +246,6 @@ export class RequestsService implements OnModuleInit {
           requesterData,
           activeSchema.schema,
           psfCreatedSchema.schema,
-          assignment.setupOwnerUserId,
-          assignment.setupOwner,
-          assignment.setupOwnerRole,
         ],
       );
 
@@ -290,181 +264,325 @@ export class RequestsService implements OnModuleInit {
     });
   }
 
-  async listAssignableSetupOwners(): Promise<{
-    items: AssignableSetupOwner[];
-  }> {
-    const result = await this.pool.query<{
-      id: string;
-      display_name: string;
-      setup_owner_department: 'GNTC' | 'MFG';
-    }>(
-      `SELECT id, display_name, setup_owner_department FROM app_users
-       WHERE role = 'setup_owner' AND setup_owner_department IN ('GNTC', 'MFG')
-       ORDER BY display_name, id`,
+  private assertNoAssignment(dto: unknown): void {
+    if (
+      dto &&
+      typeof dto === 'object' &&
+      ['setupOwnerUserId', 'setupOwner', 'setupOwnerRole'].some((key) =>
+        Object.hasOwn(dto, key),
+      )
+    ) {
+      throw new BadRequestException(
+        'Request assignment is no longer supported.',
+      );
+    }
+  }
+
+  private assertAdmin(actor: AuthenticatedUserProfile): void {
+    if (actor.role !== 'admin')
+      throw new ForbiddenException('Only admins can manage Drafts.');
+  }
+
+  async getAdminDraft(
+    id: string,
+    actor: AuthenticatedUserProfile,
+  ): Promise<PsfRequestResponse> {
+    this.assertAdmin(actor);
+    const result = await this.pool.query<PsfRequestRow>(
+      `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id=$1 AND status='Draft'`,
+      [id],
+    );
+    const row = result.rows[0];
+    if (!row) throw new NotFoundException('Draft not found.');
+    const response = this.mapRequestRow(row, actor);
+    if (row.requester_user_id !== actor.id) {
+      response.canEditRequesterData = false;
+      response.canEditPsfCreatedData = false;
+      response.canSubmitDraft = false;
+    }
+    return response;
+  }
+
+  async listAdminDrafts(
+    query: Record<string, unknown>,
+    actor: AuthenticatedUserProfile,
+  ) {
+    this.assertAdmin(actor);
+    if (
+      Object.keys(query).some(
+        (key) =>
+          !['keyword', 'creator', 'productType', 'limit', 'offset'].includes(
+            key,
+          ),
+      )
+    )
+      throw new BadRequestException('Unsupported Draft query filter.');
+    const { limit, offset } = this.managementPage(query);
+    const params: unknown[] = [];
+    const where = ["status='Draft'"];
+    for (const [key, column] of [
+      ['creator', 'requester'],
+      ['productType', 'product_type'],
+    ] as const) {
+      if (query[key] !== undefined && typeof query[key] !== 'string')
+        throw new BadRequestException(`${key} must be text.`);
+      if (typeof query[key] === 'string' && query[key].trim()) {
+        params.push(
+          key === 'creator' ? `%${query[key].trim()}%` : query[key].trim(),
+        );
+        where.push(`${column} ILIKE $${params.length}`);
+      }
+    }
+    if (query.keyword !== undefined && typeof query.keyword !== 'string')
+      throw new BadRequestException('keyword must be text.');
+    if (typeof query.keyword === 'string' && query.keyword.trim()) {
+      params.push(`%${query.keyword.trim()}%`);
+      where.push(
+        `(request_no ILIKE $${params.length} OR requester ILIKE $${params.length} OR requester_data_json::text ILIKE $${params.length})`,
+      );
+    }
+    const result = await this.pool.query<PsfRequestRow & { total: number }>(
+      `WITH filtered AS (SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE ${where.join(' AND ')}), page AS (SELECT * FROM filtered ORDER BY updated_at DESC,id LIMIT $${params.length + 1} OFFSET $${params.length + 2}) SELECT page.*, counts.total FROM (SELECT COUNT(*)::int AS total FROM filtered) counts LEFT JOIN page ON TRUE`,
+      [...params, limit, offset],
     );
     return {
-      items: result.rows.map((row) => ({
-        id: row.id,
-        displayName: row.display_name,
-        setupOwnerDepartment: row.setup_owner_department,
-      })),
+      items: result.rows
+        .filter((row) => row.id)
+        .map((row) => ({
+          requestId: row.id,
+          requestNo: row.request_no,
+          title:
+            this.searchIndexService.extractCanonicalValues(
+              row.schema_snapshot_json,
+              row.requester_data_json,
+            ).title ?? null,
+          requester: row.requester,
+          requesterUserId: row.requester_user_id,
+          productType: row.product_type,
+          createdAt: this.serializeTimestamp(row.created_at),
+          updatedAt:
+            row.updated_at_version ?? this.serializeTimestamp(row.updated_at),
+        })),
+      total: result.rows[0]?.total ?? 0,
+      limit,
+      offset,
     };
   }
 
-  async updateAssignment(
-    id: string,
-    dto: UpdateRequestAssignmentDto,
-    actor: AuthenticatedUserProfile,
-  ): Promise<PsfRequestResponse> {
-    this.assertExpectedUpdatedAt(dto?.expectedUpdatedAt);
-    if (!dto || !Object.hasOwn(dto, 'setupOwnerUserId')) {
-      throw new BadRequestException('setupOwnerUserId is required.');
+  private managementPage(query: Record<string, unknown>) {
+    for (const value of [query.limit, query.offset]) {
+      if (
+        value !== undefined &&
+        !(
+          typeof value === 'number' ||
+          (typeof value === 'string' && /^\d+$/.test(value))
+        )
+      )
+        throw new BadRequestException('Invalid pagination.');
     }
+    const limit = query.limit === undefined ? 25 : Number(query.limit);
+    const offset = query.offset === undefined ? 0 : Number(query.offset);
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      !Number.isInteger(offset) ||
+      offset < 0
+    )
+      throw new BadRequestException('Invalid pagination.');
+    return { limit, offset };
+  }
+
+  async listDraftDeletions(
+    query: Record<string, unknown>,
+    actor: AuthenticatedUserProfile,
+  ) {
+    this.assertAdmin(actor);
+    const { limit, offset } = this.managementPage(query);
+    const result = await this.pool.query<{
+      draft_no: string;
+      actor_display_name: string;
+      actor_role: string;
+      deleted_at: Date | string;
+      total: number;
+    }>(
+      `WITH page AS (SELECT * FROM draft_deletion_logs ORDER BY deleted_at DESC,id DESC LIMIT $1 OFFSET $2) SELECT page.*, counts.total FROM (SELECT COUNT(*)::int AS total FROM draft_deletion_logs) counts LEFT JOIN page ON TRUE`,
+      [limit, offset],
+    );
+    return {
+      items: result.rows
+        .filter((row) => row.draft_no)
+        .map((row) => ({
+          draftNo: row.draft_no,
+          actorDisplayName: row.actor_display_name,
+          actorRole: row.actor_role,
+          deletedAt: this.serializeTimestamp(row.deleted_at),
+        })),
+      total: result.rows[0]?.total ?? 0,
+      limit,
+      offset,
+    };
+  }
+
+  async deleteDraft(
+    id: string,
+    expectedUpdatedAt: unknown,
+    actor: AuthenticatedUserProfile,
+  ): Promise<{ deleted: true }> {
+    this.assertExpectedUpdatedAt(expectedUpdatedAt);
     return this.withTransaction(async (client) => {
-      const current = await client.query<PsfRequestRow>(
-        `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id = $1 FOR UPDATE`,
+      const result = await client.query<PsfRequestRow>(
+        `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id=$1 FOR UPDATE`,
         [id],
       );
-      const request = current.rows[0];
-      if (!request)
-        throw new NotFoundException(`PSF request ${id} was not found`);
-      this.assertCanAccessRequest(request, actor);
-      if (request.updated_at_version !== dto.expectedUpdatedAt) {
-        throw new ConflictException(
-          'The request changed before assignment. Reload and try again.',
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException('Draft not found.');
+      if (row.status !== DRAFT_STATUS)
+        throw new ConflictException('Submitted requests cannot be deleted.');
+      if (row.requester_user_id !== actor.id && actor.role !== 'admin')
+        throw new ForbiddenException(
+          'Only the Draft creator or Admin can delete it.',
         );
-      }
-      const before = this.assignmentSnapshot(request);
-      const after = await this.resolveAssignment(dto.setupOwnerUserId, client);
-      if (this.sameAssignment(before, after))
-        return this.mapRequestRow(request, actor);
-      const result = await client.query<PsfRequestRow>(
-        `UPDATE psf_requests SET setup_owner_user_id = $2::uuid, setup_owner = $3, setup_owner_role = $4,
-          updated_at = GREATEST(clock_timestamp() AT TIME ZONE current_setting('TIMEZONE'), updated_at + INTERVAL '1 microsecond')
-         WHERE id = $1 AND updated_at = ($5::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
-         RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version`,
-        [
-          id,
-          after.setupOwnerUserId,
-          after.setupOwner,
-          after.setupOwnerRole,
-          dto.expectedUpdatedAt,
-        ],
+      if (row.updated_at_version !== expectedUpdatedAt)
+        throw new ConflictException(
+          'The Draft changed. Reload before deleting.',
+        );
+      await client.query(
+        'DELETE FROM canonical_submission_values WHERE request_id=$1',
+        [id],
       );
-      const updated = result.rows[0];
-      if (!updated)
-        throw new ConflictException(
-          'The request changed during assignment. Reload and try again.',
+      await client.query(
+        'DELETE FROM psf_request_search_index WHERE request_id=$1',
+        [id],
+      );
+      await client.query(
+        'DELETE FROM psf_request_audit_logs WHERE request_id=$1',
+        [id],
+      );
+      if (
+        (
+          await client.query<{ exists: boolean }>(
+            "SELECT to_regclass('public.email_outbox') IS NOT NULL AS exists",
+          )
+        ).rows[0]?.exists
+      )
+        await client.query(
+          `DELETE FROM email_outbox WHERE request_id=$1 OR
+          (event_type='ADMIN_ALERT' AND body_html LIKE '%<td>DRAFT_REMINDER</td>%'
+          AND POSITION($2 IN body_html)>0)`,
+          [id, `<td>${escapeHtml(row.request_no)}</td>`],
         );
-      if (updated.status !== DRAFT_STATUS) {
-        await this.searchIndexService.upsertRequestSearchIndex(
-          {
-            requestId: updated.id,
-            requestNo: updated.request_no,
-            status: updated.status,
-            requester: updated.requester,
-            requesterUserId: updated.requester_user_id,
-            setupOwnerUserId: updated.setup_owner_user_id ?? null,
-            setupOwner: updated.setup_owner,
-            setupOwnerRole: updated.setup_owner_role,
-            productType: updated.product_type,
-            requestDate: updated.created_at,
-            updatedAt: updated.updated_at_version ?? updated.updated_at,
-          },
-          this.searchIndexService.extractCanonicalValues(
-            updated.schema_snapshot_json,
-            updated.requester_data_json ?? {},
-          ),
-          client,
+      if (
+        (
+          await client.query<{ exists: boolean }>(
+            "SELECT to_regclass('public.psf_export_jobs') IS NOT NULL AS exists",
+          )
+        ).rows[0]?.exists
+      )
+        await client.query(
+          "UPDATE psf_export_jobs SET status='failed', content=NULL, filename=NULL, claim_token=NULL, failed_at=NOW(), failure_message='Export invalidated after permanent Draft deletion.' WHERE owner_user_id=$1",
+          [row.requester_user_id],
         );
-      }
-      await this.recordAssignmentChange(id, before, after, actor, client);
-      return this.mapRequestRow(updated, actor);
+      await client.query(
+        'INSERT INTO draft_deletion_logs(id,draft_no,actor_id,actor_display_name,actor_role,deleted_at) VALUES($1,$2,$3,$4,$5,NOW())',
+        [randomUUID(), row.request_no, actor.id, actor.displayName, actor.role],
+      );
+      await client.query('DELETE FROM psf_requests WHERE id=$1', [id]);
+      return { deleted: true };
     });
   }
 
-  private emptyAssignment(): AssignmentSnapshot {
-    return { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null };
-  }
-
-  private assignmentSnapshot(row: PsfRequestRow): AssignmentSnapshot {
-    return {
-      setupOwnerUserId: row.setup_owner_user_id ?? null,
-      setupOwner: row.setup_owner,
-      setupOwnerRole: row.setup_owner_role,
-    };
-  }
-
-  private sameAssignment(
-    before: AssignmentSnapshot,
-    after: AssignmentSnapshot,
-  ): boolean {
-    if (before.setupOwnerUserId !== after.setupOwnerUserId) return false;
-    // The person identifies an assignment; profile changes never refresh its snapshots.
-    if (before.setupOwnerUserId !== null) return true;
-    // Legacy null-UUID ownership must still clear its stored name and department.
-    return (
-      before.setupOwner === after.setupOwner &&
-      before.setupOwnerRole === after.setupOwnerRole
-    );
-  }
-
-  private async resolveAssignment(
-    value: unknown,
-    client: QueryRunner,
-  ): Promise<AssignmentSnapshot> {
-    if (value === null) return this.emptyAssignment();
-    if (
-      typeof value !== 'string' ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        value,
-      )
-    ) {
-      throw new BadRequestException('setupOwnerUserId must be a UUID or null.');
-    }
-    // FOR SHARE blocks role/department updates until this request mutation commits.
-    const result = await client.query<{
-      id: string;
-      display_name: string;
-      role: string;
-      setup_owner_department: string | null;
-    }>(
-      `SELECT id, display_name, role, setup_owner_department FROM app_users WHERE id = $1::uuid FOR SHARE`,
-      [value],
-    );
-    const user = result.rows[0];
-    if (
-      !user ||
-      user.role !== 'setup_owner' ||
-      (user.setup_owner_department !== 'GNTC' &&
-        user.setup_owner_department !== 'MFG')
-    ) {
-      throw new BadRequestException(
-        'The assignee must be an eligible Setup File Owner. Select another user or clear the assignment.',
-      );
-    }
-    return {
-      setupOwnerUserId: user.id,
-      setupOwner: user.display_name,
-      setupOwnerRole: user.setup_owner_department,
-    };
-  }
-
-  private async recordAssignmentChange(
-    id: string,
-    before: AssignmentSnapshot,
-    after: AssignmentSnapshot,
-    actor: AuthenticatedUserProfile,
+  private async ensureDraftManagementStorage(
     client: QueryRunner,
   ): Promise<void> {
-    await this.auditLogService.record(
-      {
-        requestId: id,
-        actionType: REQUEST_AUDIT_ACTION.REQUEST_ASSIGNEE_CHANGED,
-        actor,
-        metadata: { before, after },
-      },
-      client,
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS draft_deletion_logs(id UUID PRIMARY KEY,draft_no TEXT NOT NULL,actor_id UUID NOT NULL,actor_display_name TEXT NOT NULL,actor_role TEXT NOT NULL,deleted_at TIMESTAMPTZ NOT NULL)`,
+    );
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS request_data_migrations(key TEXT PRIMARY KEY)`,
+    );
+    await client.query('LOCK TABLE request_data_migrations IN EXCLUSIVE MODE');
+    const migrated = await client.query(
+      "SELECT key FROM request_data_migrations WHERE key='remove-request-assignment-v1'",
+    );
+    if (migrated.rows.length) return;
+    await client.query(
+      'UPDATE psf_requests SET setup_owner_user_id=NULL,setup_owner=NULL,setup_owner_role=NULL',
+    );
+    await client.query(
+      'UPDATE psf_request_search_index SET setup_owner_user_id=NULL,setup_owner=NULL,setup_owner_role=NULL',
+    );
+    if (
+      (
+        await client.query<{ exists: boolean }>(
+          "SELECT to_regclass('public.psf_request_audit_logs') IS NOT NULL AS exists",
+        )
+      ).rows[0]?.exists
+    ) {
+      await client.query(
+        "DELETE FROM psf_request_audit_logs WHERE action_type='REQUEST_ASSIGNEE_CHANGED'",
+      );
+      const assignmentKeys = new Set([
+        'assignment',
+        'beforeAssignment',
+        'afterAssignment',
+        'setupOwnerUserId',
+        'setupOwner',
+        'setupOwnerRole',
+        'setup_owner_user_id',
+        'setup_owner',
+        'setup_owner_role',
+      ]);
+      const stripAssignment = (value: unknown): unknown => {
+        if (Array.isArray(value))
+          return value
+            .filter(
+              (item) =>
+                !(
+                  item &&
+                  typeof item === 'object' &&
+                  assignmentKeys.has(
+                    String(
+                      (item as Record<string, unknown>).fieldKey ??
+                        (item as Record<string, unknown>).canonicalKey,
+                    ),
+                  )
+                ),
+            )
+            .map(stripAssignment);
+        if (value && typeof value === 'object')
+          return Object.fromEntries(
+            Object.entries(value)
+              .filter(([key]) => !assignmentKeys.has(key))
+              .map(([key, item]) => [key, stripAssignment(item)]),
+          );
+        return value;
+      };
+      const events = await client.query<{
+        id: string;
+        metadata_json: Record<string, unknown>;
+      }>('SELECT id,metadata_json FROM psf_request_audit_logs');
+      for (const event of events.rows) {
+        const cleaned = stripAssignment(event.metadata_json);
+        if (JSON.stringify(cleaned) !== JSON.stringify(event.metadata_json))
+          await client.query(
+            'UPDATE psf_request_audit_logs SET metadata_json=$2::jsonb WHERE id=$1',
+            [event.id, JSON.stringify(cleaned)],
+          );
+      }
+    }
+    if (
+      (
+        await client.query<{ exists: boolean }>(
+          "SELECT to_regclass('public.psf_export_jobs') IS NOT NULL AS exists",
+        )
+      ).rows[0]?.exists
+    )
+      await client.query(
+        "UPDATE psf_export_jobs SET status='failed',content=NULL,filename=NULL,claim_token=NULL,failed_at=NOW(),failure_message='Export invalidated after request assignment removal.'",
+      );
+    await client.query(
+      "INSERT INTO request_data_migrations(key) VALUES('remove-request-assignment-v1') ON CONFLICT DO NOTHING",
     );
   }
 
@@ -472,6 +590,12 @@ export class RequestsService implements OnModuleInit {
     query: RequestQueryDto,
     actor: AuthenticatedUserProfile,
   ): Promise<RequestSearchResult> {
+    this.assertNoAssignment(query);
+    if (
+      query.relation !== undefined &&
+      !['all', 'created'].includes(query.relation)
+    )
+      throw new BadRequestException('Unsupported relationship filter.');
     const filters = { ...(query as RequestSearchFilters) };
     delete filters.requesterUserId;
 
@@ -498,15 +622,6 @@ export class RequestsService implements OnModuleInit {
     if (scope === 'all' && relation !== 'all') {
       throw new BadRequestException(
         'Relationship filters are only supported for related work.',
-      );
-    }
-    if (
-      scope === 'related' &&
-      relation === 'department' &&
-      actor.role !== 'setup_owner'
-    ) {
-      throw new ForbiddenException(
-        'Only Setup File Owners can view PSF department work.',
       );
     }
     const configuration = await this.workflowTransitionService.getConfiguration(
@@ -605,6 +720,7 @@ export class RequestsService implements OnModuleInit {
     dto: UpdateDraftRequesterDataDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
+    this.assertNoAssignment(dto);
     this.assertExpectedFormVersion(dto.formVersion);
     this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
@@ -636,25 +752,6 @@ export class RequestsService implements OnModuleInit {
         );
       }
 
-      if (
-        request.status !== DRAFT_STATUS &&
-        dto.setupOwnerUserId !== undefined
-      ) {
-        throw new BadRequestException(
-          'Use the assignment endpoint for submitted requests.',
-        );
-      }
-      const beforeAssignment = this.assignmentSnapshot(request);
-      const candidateAssignment =
-        dto.setupOwnerUserId === undefined
-          ? beforeAssignment
-          : await this.resolveAssignment(dto.setupOwnerUserId, client);
-      const assignment = this.sameAssignment(
-        beforeAssignment,
-        candidateAssignment,
-      )
-        ? beforeAssignment
-        : candidateAssignment;
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
       const requesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(
@@ -672,7 +769,6 @@ export class RequestsService implements OnModuleInit {
           UPDATE psf_requests
           SET product_type = $2,
               requester_data_json = $3::jsonb,
-              ${dto.setupOwnerUserId === undefined ? '' : 'setup_owner_user_id = $6::uuid, setup_owner = $7, setup_owner_role = $8,'}
               updated_at = NOW()
           WHERE id = $1
             AND form_version = $4
@@ -685,13 +781,6 @@ export class RequestsService implements OnModuleInit {
           requesterData,
           dto.formVersion,
           dto.expectedUpdatedAt,
-          ...(dto.setupOwnerUserId === undefined
-            ? []
-            : [
-                assignment.setupOwnerUserId,
-                assignment.setupOwner,
-                assignment.setupOwnerRole,
-              ]),
         ],
       );
 
@@ -716,9 +805,6 @@ export class RequestsService implements OnModuleInit {
             status: updatedRow.status,
             requester: updatedRow.requester,
             requesterUserId: updatedRow.requester_user_id,
-            setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
-            setupOwner: updatedRow.setup_owner,
-            setupOwnerRole: updatedRow.setup_owner_role,
             productType: updatedRow.product_type,
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
@@ -746,15 +832,6 @@ export class RequestsService implements OnModuleInit {
         client,
       );
 
-      if (!this.sameAssignment(beforeAssignment, assignment)) {
-        await this.recordAssignmentChange(
-          updatedRow.id,
-          beforeAssignment,
-          assignment,
-          actor,
-          client,
-        );
-      }
       return this.mapRequestRow(updatedRow, actor);
     });
   }
@@ -961,9 +1038,6 @@ export class RequestsService implements OnModuleInit {
             status: updatedRow.status,
             requester: updatedRow.requester,
             requesterUserId: updatedRow.requester_user_id,
-            setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
-            setupOwner: updatedRow.setup_owner,
-            setupOwnerRole: updatedRow.setup_owner_role,
             productType: updatedRow.product_type,
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
@@ -1090,9 +1164,6 @@ export class RequestsService implements OnModuleInit {
           status: updatedRow.status,
           requester: updatedRow.requester,
           requesterUserId: updatedRow.requester_user_id,
-          setupOwnerUserId: updatedRow.setup_owner_user_id ?? null,
-          setupOwner: updatedRow.setup_owner,
-          setupOwnerRole: updatedRow.setup_owner_role,
           productType: updatedRow.product_type,
           requestDate: updatedRow.created_at,
           updatedAt: updatedRow.updated_at,
@@ -1134,6 +1205,7 @@ export class RequestsService implements OnModuleInit {
     dto: SubmitDraftRequestDto,
     actor: AuthenticatedUserProfile,
   ): Promise<PsfRequestResponse> {
+    this.assertNoAssignment(dto);
     this.assertExpectedFormVersion(dto.formVersion);
     this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
@@ -1173,10 +1245,6 @@ export class RequestsService implements OnModuleInit {
         throw new ConflictException(
           'The request changed before submission. Reload and try again.',
         );
-      }
-
-      if (request.setup_owner_user_id) {
-        await this.resolveAssignment(request.setup_owner_user_id, client);
       }
 
       if (!this.requestSchemaSnapshotMatchesVersion(request)) {
@@ -1276,9 +1344,6 @@ export class RequestsService implements OnModuleInit {
           status: submittedRow.status,
           requester: submittedRow.requester,
           requesterUserId: submittedRow.requester_user_id,
-          setupOwnerUserId: submittedRow.setup_owner_user_id ?? null,
-          setupOwner: submittedRow.setup_owner,
-          setupOwnerRole: submittedRow.setup_owner_role,
           productType: submittedRow.product_type,
           requestDate: submittedRow.created_at,
           updatedAt: submittedRow.updated_at,
@@ -1506,9 +1571,9 @@ export class RequestsService implements OnModuleInit {
   ): Promise<string> {
     const result = await queryRunner.query<{ next: string }>(`
       SELECT 'DRAFT-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' ||
-             LPAD((COUNT(*) + 1)::TEXT, 4, '0') AS next
-      FROM psf_requests
-      WHERE request_no LIKE 'DRAFT-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-%'
+             LPAD((COALESCE(MAX(SUBSTRING(request_no FROM 16)::INT),0) + 1)::TEXT, 4, '0') AS next
+      FROM (SELECT request_no FROM psf_requests UNION ALL SELECT draft_no AS request_no FROM draft_deletion_logs) identifiers
+      WHERE request_no ~ ('^DRAFT-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-[0-9]+$')
     `);
 
     return result.rows[0]?.next ?? `DRAFT-${Date.now()}`;
@@ -1715,9 +1780,6 @@ export class RequestsService implements OnModuleInit {
       formVersion: row.form_version,
       status: row.status,
       requester: row.requester,
-      setupOwnerUserId: row.setup_owner_user_id ?? null,
-      setupOwner: row.setup_owner,
-      setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,
       requesterData: row.requester_data_json ?? {},
       psfCreatedData: psfCreatedDataVisible

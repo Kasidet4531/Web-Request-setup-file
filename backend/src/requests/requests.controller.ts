@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -18,8 +19,6 @@ import type {
 } from '../auth/session.types';
 import { RequestsService } from './requests.service';
 import type {
-  AssignableSetupOwner,
-  UpdateRequestAssignmentDto,
   CreateDraftRequestDto,
   PsfRequestResponse,
   RequestQueryDto,
@@ -60,22 +59,25 @@ export class RequestsController {
     return this.requestsService.queryRequests(parsedQuery, actor);
   }
 
-  @Get('assignees')
-  async listAssignableSetupOwners(
+  @Delete(':requestId')
+  async deleteDraft(
+    @Param('requestId') id: string,
+    @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
-  ): Promise<{ items: AssignableSetupOwner[] }> {
-    await this.getAuthenticatedActor(request);
-    return this.requestsService.listAssignableSetupOwners();
-  }
-
-  @Put(':requestId/assignment')
-  async updateAssignment(
-    @Param('requestId') requestId: string,
-    @Body() body: UpdateRequestAssignmentDto,
-    @Req() request: AuthenticatedRequest,
-  ): Promise<PsfRequestResponse> {
+  ): Promise<{ deleted: true }> {
     const actor = await this.getAuthenticatedActor(request);
-    return this.requestsService.updateAssignment(requestId, body, actor);
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      Object.keys(body).some((key) => key !== 'expectedUpdatedAt')
+    )
+      throw new BadRequestException('Expected revision is required.');
+    return this.requestsService.deleteDraft(
+      id,
+      (body as { expectedUpdatedAt?: unknown }).expectedUpdatedAt,
+      actor,
+    );
   }
 
   @Get(':requestId/status-options')
@@ -201,8 +203,6 @@ export class RequestsController {
       'keyword',
       'status',
       'priority',
-      'setupOwner',
-      'setupOwnerRole',
       'productType',
       'requester',
       'requestDateFrom',
@@ -214,6 +214,7 @@ export class RequestsController {
       'scope',
       'relation',
       'workState',
+      'team',
     ]);
     const unsupportedKey = Object.keys(rawQuery).find(
       (key) => !allowedKeys.has(key),
@@ -247,14 +248,6 @@ export class RequestsController {
       keyword: this.parseOptionalTextFilter(rawQuery.keyword, 'keyword'),
       status: this.parseOptionalTextFilter(rawQuery.status, 'status'),
       priority: this.parseOptionalTextFilter(rawQuery.priority, 'priority'),
-      setupOwner: this.parseOptionalTextFilter(
-        rawQuery.setupOwner,
-        'setupOwner',
-      ),
-      setupOwnerRole: this.parseOptionalTextFilter(
-        rawQuery.setupOwnerRole,
-        'setupOwnerRole',
-      ),
       productType: this.parseOptionalTextFilter(
         rawQuery.productType,
         'productType',
@@ -274,8 +267,12 @@ export class RequestsController {
       relation: this.parseOptionalEnum(rawQuery.relation, 'relation', [
         'all',
         'created',
-        'assigned',
-        'department',
+      ] as const),
+      team: this.parseOptionalEnum(rawQuery.team, 'team', [
+        'all',
+        'GNTC',
+        'MFG',
+        'unclassified',
       ] as const),
       workState: this.parseOptionalEnum(rawQuery.workState, 'workState', [
         'all',

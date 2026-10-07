@@ -1,3 +1,5 @@
+import { DraftReminderService } from './draft-reminder.service';
+import { DraftRemindersController } from './draft-reminders.controller';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
@@ -37,8 +39,9 @@ import { NotificationsController } from './notifications.controller';
     NotificationService,
     NotificationDispatcher,
     NotificationWorker,
+    DraftReminderService,
   ],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, DraftRemindersController],
   exports: [NotificationService],
 })
 export class NotificationsModule {}

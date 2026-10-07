@@ -1,7 +1,7 @@
 # Current system diagrams
 
 Scope: logical flows for `main` at `745ae99`. The original diagrams were
-audited on 2026-10-02; the assignment overview was added on 2026-10-06. These
+audited on 2026-10-02; Draft/reminder and team-filter overviews were updated on 2026-10-07. These
 show local development and logical flows, not a verified production deployment
 or database foreign-key model. See [current implementation](current-implementation.md)
 for route, policy and persistence source references. The original target diagrams
@@ -74,27 +74,52 @@ Catalog kinds are draft/open/completed/cancelled; percentage labels do not impos
 progression. The initial release trigger is unconfigured. Once released,
 requester PSF visibility persists through later status changes.
 
-## Request assignment and Dashboard relationships
+## Draft management and reminder lifecycle
 
 ```mermaid
 flowchart TD
-  Draft[Creator edits private Draft] --> Select[Select eligible owner by UUID or Unassigned]
-  Shared[Authenticated actor accesses shared request] --> Select
-  Select --> Save[Revision-checked save of assignment snapshots]
-  Save --> Privacy[Draft remains creator-private]
-  Save --> Related[Shared Related work: creator UUID OR owner UUID]
-  Related --> Dedup[One request counted once]
-  Save --> Department[Separate Department work: saved owner department]
+  Creator[Creator creates and edits own Draft] --> Draft[Unsubmitted Draft]
+  Admin[Admin Draft Management] --> Read[Read-only inspection]
+  Read --> Draft
+  Draft --> Submit[Creator explicit Submit]
+  Submit --> Shared[Shared work]
+  Draft --> Delete[Creator or Admin confirms permanent Delete]
+  Delete --> Gate[Transaction: Draft state + revision + role]
+  Gate --> Purge[Remove form/history/mail and invalidate cached exports]
+  Purge --> Log[Minimal Admin-only deletion log]
+  Draft --> Age[Created at least 168 hours ago]
+  Age --> Once[One durable reminder identity]
+  Once --> Recipients[Creator To + current Admins CC]
+  Recipients --> Dispatch[Current claim and still-Draft lifecycle gate]
+  Dispatch --> Mail[External email acceptance]
 ```
 
-Sources: [assignment and PSF saves](../backend/src/requests/requests.service.ts),
-[relationship predicates](../backend/src/requests/search-index.service.ts),
-[assignment dialog](../frontend/src/components/RequestAssignmentDialog.tsx).
-PSF saves preserve assignment. Assignment changes neither Status, PSF release
-nor edit rights, and queues no email. Shared lists and dashboard totals exclude
-Drafts. Requester/Admin dashboards remain creator-scoped. Legacy name/department
-snapshots can appear in Department work without being inferred as a personal
-UUID assignment.
+Sources: [Draft lifecycle](../backend/src/requests/requests.service.ts),
+[Admin management](../backend/src/requests/admin-drafts.controller.ts),
+[reminder module](../backend/src/notifications/draft-reminder.service.ts).
+The lifecycle gate coordinates dispatch with Submit/Delete. Already accepted
+external mail cannot be recalled; unsent/deleted payloads are removed. Missing
+recipient addresses are visible in Admin management.
+
+## Product Type team filtering
+
+```mermaid
+flowchart LR
+  Product[Latest saved Product Type] --> New[New Product]
+  Product --> Transfer[Transfer Product / Existing Product]
+  Product --> Other[Missing / custom value]
+  New --> GNTC[GNTC Dashboard group]
+  Transfer --> MFG[MFG Dashboard group]
+  Other --> Unknown[รอระบุ Product Type]
+  GNTC --> Filter[Selectable Dashboard filter]
+  MFG --> Filter
+  Unknown --> Filter
+```
+
+Source: [query predicates](../backend/src/requests/search-index.service.ts).
+Rows/totals/cards share the same filter. Both Setup File Owner departments retain
+cross-team PSF editing; account roles/departments remain intact. No individual
+owner is captured by PSF saves or Product Type changes.
 
 ## Persistence and mutation flow
 

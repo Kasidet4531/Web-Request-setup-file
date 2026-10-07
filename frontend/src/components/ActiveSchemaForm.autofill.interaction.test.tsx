@@ -176,9 +176,9 @@ function buildDraft(overrides: Partial<PsfRequestResponse> = {}): PsfRequestResp
     formVersion: 1,
     status: 'Draft',
     requester: 'Requester Demo',
-    setupOwnerUserId: null,
-    setupOwner: null,
-    setupOwnerRole: null,
+
+
+
     productType: null,
     requesterData: {
       product_input: '',

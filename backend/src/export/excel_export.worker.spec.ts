@@ -90,9 +90,10 @@ describe('ExcelExportService large export rendering', () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
 
-    expect(workerConstructor).toHaveBeenCalledWith(expect.any(String), {
-      eval: true,
-    });
+    expect(workerConstructor).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ eval: true }),
+    );
     expect(worker.postMessage).toHaveBeenCalledTimes(1);
 
     const ordinaryApiResponse = await Promise.resolve({ status: 'ok' });

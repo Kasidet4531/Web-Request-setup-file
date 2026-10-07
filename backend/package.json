@@ -22,7 +22,8 @@
     "test:notifications:postgres": "node --require ts-node/register --test test/notifications.postgres.test.ts",
     "test:email:system": "npm run build && npm --prefix ../frontend run build && node --test --test-concurrency=1 test/email-system.e2e.mjs test/email-system.fixture.test.mjs test/psf-trigger-system.e2e.mjs",
     "test:ui:system": "npm run build && npm --prefix ../frontend run build && node --test test/loading-system.e2e.mjs",
-    "test:forms:system": "npm run build && npm --prefix ../frontend run build && node --test --test-concurrency=1 test/form-management-system.e2e.mjs test/request-assignment-system.e2e.mjs"
+    "test:forms:system": "npm run build && npm --prefix ../frontend run build && node --test --test-concurrency=1 test/form-management-system.e2e.mjs",
+    "test:drafts:system": "npm run build && npm --prefix ../frontend run build && node --test test/email-system.draft-lifecycle.e2e.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

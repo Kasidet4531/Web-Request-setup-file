@@ -41,9 +41,9 @@ describe('Request list rows', () => {
       status: 'Submitted',
       priority: 'High',
       requester: 'Requester',
-      setupOwnerUserId: null,
-      setupOwner: 'Owner',
-      setupOwnerRole: 'GNTC',
+
+
+
       productType: 'Existing Product',
       dueDate: null,
       requestDate: '2026-01-01',
@@ -77,3 +77,11 @@ describe('Request list rows', () => {
     expect(onOpenItem).toHaveBeenNthCalledWith(1, 'request-42')
   })
 })
+
+ it('removes assignment metadata and offers permanent deletion for own drafts', () => {
+  const item = { requestId: 'draft-1', requestNo: 'PSF-1', title: 'Draft title', productType: null, updatedAt: '2026-10-07T00:00:00Z', requester: 'Creator' } as PsfRequestListItem
+  const table = RequestsTable({ items: [item], drafts: true, onDeleteItem: () => {} })
+  expect(JSON.stringify(table)).toContain('Delete')
+  expect(JSON.stringify(RequestsTable({ items: [item] }))).not.toContain('Owner / Dept')
+  expect(JSON.stringify(table)).toContain('รอระบุ Product Type')
+ })

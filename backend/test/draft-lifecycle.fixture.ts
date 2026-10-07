@@ -89,22 +89,7 @@ export const psfSchema: FormSchemaJson = {
     },
   ],
 };
-// The intersection lets RED execute against the current service before its contract exists.
-export type AssignmentApi = RequestsService & {
-  listAssignableSetupOwners(): Promise<{
-    items: Array<{
-      id: string;
-      displayName: string;
-      setupOwnerDepartment: 'GNTC' | 'MFG';
-    }>;
-  }>;
-  updateAssignment(
-    id: string,
-    dto: { setupOwnerUserId: string | null; expectedUpdatedAt: string },
-    actor: AuthenticatedUserProfile,
-  ): Promise<PsfRequestResponse & { setupOwnerUserId: string | null }>;
-};
-export async function assignmentFixture(pool: Pool) {
+export async function lifecycleFixture(pool: Pool) {
   const audit = new AuditLogService(pool);
   const forms = new FormSchemaService(pool);
   const workflow = new WorkflowTransitionService(pool, audit);
@@ -123,7 +108,7 @@ export async function assignmentFixture(pool: Pool) {
     index,
     audit,
     notifications,
-  ) as AssignmentApi;
+  );
   await pool.query(
     `CREATE TABLE app_users (id uuid PRIMARY KEY, username text, display_name text, role text, setup_owner_department text, updated_at timestamp, password_hash text)`,
   );
@@ -148,11 +133,10 @@ export async function assignmentFixture(pool: Pool) {
       "UPDATE form_definitions SET schema_json=$2, version=1 WHERE form_key=$1 AND status='active'",
       [form.formKey, form],
     );
-  async function draft(owner?: string | null, actor = requester) {
+  async function draft(actor = requester) {
     return service.createDraft(
       {
         requesterData: { title: 'Test request' },
-        ...(owner === undefined ? {} : { setupOwnerUserId: owner }),
       },
       actor,
     );
@@ -170,7 +154,7 @@ export async function assignmentFixture(pool: Pool) {
   }
   async function reset() {
     await pool.query(
-      'TRUNCATE psf_requests, psf_request_search_index, psf_request_audit_logs, canonical_submission_values',
+      'TRUNCATE psf_requests, psf_request_search_index, psf_request_audit_logs, canonical_submission_values CASCADE',
     );
     await pool.query(
       "UPDATE app_users SET role='setup_owner', display_name='Same Name', setup_owner_department=CASE WHEN id=$1 THEN 'GNTC' ELSE 'MFG' END WHERE id=ANY($2::uuid[])",

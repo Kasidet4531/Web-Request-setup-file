@@ -7,8 +7,9 @@ not generate the physical PSF Setup Files. The documentation baseline is `main`
 at commit `745ae99`, which merged `feat/email-notification` on 6 October 2026.
 It includes removable local development authentication, status notifications,
 interactive form previews and explicit request assignment. Subsequent 7 October
-updates add explicit Auto-fill activation, modal rule editing and stable To/CC
-recipient controls. Use
+updates add explicit Auto-fill activation, modal rule editing, stable To/CC
+recipient controls, Draft reminders/management and Product Type team filtering.
+Request assignment has been removed. Use
 [current implementation](docs/current-implementation.md) for the resulting behavior.
 
 ## Start here

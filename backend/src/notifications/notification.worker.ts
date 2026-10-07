@@ -1,5 +1,7 @@
+import { DraftReminderService } from './draft-reminder.service';
 import {
   Injectable,
+  Optional,
   Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
@@ -20,10 +22,13 @@ export class NotificationWorker
     private readonly storage: NotificationStorage,
     private readonly dispatcher: NotificationDispatcher,
     private readonly config: MailConfig,
+    @Optional() private readonly reminders?: DraftReminderService,
   ) {}
   async onApplicationBootstrap(): Promise<void> {
     await this.storage.initialize();
-    if (this.config.enabled && !this.stopped) this.schedule(0);
+    await this.reminders?.initialize();
+    if ((this.config.enabled || this.reminders) && !this.stopped)
+      this.schedule(0);
   }
   onModuleDestroy(): Promise<void> {
     return this.onApplicationShutdown();
@@ -41,7 +46,11 @@ export class NotificationWorker
     }
   }
   poll(): Promise<void> {
-    if (this.stopped || this.active || !this.config.enabled)
+    if (
+      this.stopped ||
+      this.active ||
+      (!this.config.enabled && !this.reminders)
+    )
       return Promise.resolve();
     this.active = this.processBatch().finally(() => {
       this.active = undefined;
@@ -65,10 +74,23 @@ export class NotificationWorker
   }
   private async processBatch(): Promise<void> {
     try {
+      if (this.reminders) await this.reminders.scan();
+      if (!this.config.enabled) return;
       await this.storage.recover();
       const jobs = await this.storage.claim(10);
       const results = await Promise.allSettled(
         jobs.map(async (job) => {
+          if (
+            job.event_type === 'DRAFT_REMINDER' ||
+            job.event_type === 'ADMIN_ALERT'
+          ) {
+            if (!this.reminders)
+              throw new Error('Notification dispatch gate unavailable');
+            await this.reminders.dispatch(job, (current) =>
+              this.dispatcher.send(current),
+            );
+            return;
+          }
           let sentTo: string;
           try {
             sentTo = await this.dispatcher.send(job);
@@ -94,7 +116,8 @@ export class NotificationWorker
           );
     } finally {
       // Failed rows retain this obligation through poll errors and process restarts.
-      await this.storage.enqueueFailureAlert(this.config.defaultTo.join(','));
+      if (this.config.enabled)
+        await this.storage.enqueueFailureAlert(this.config.defaultTo.join(','));
     }
   }
 }

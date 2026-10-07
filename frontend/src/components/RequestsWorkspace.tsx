@@ -11,7 +11,8 @@ import {
   RotateCcw,
   Search,
 } from 'lucide-react'
-import { RequestAssignmentDialog } from './RequestAssignmentDialog'
+import { DraftDeleteDialog } from './DraftDeleteDialog'
+import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
@@ -65,8 +66,6 @@ function historyActionSummary(entry: PsfRequestHistoryEntry): string {
       return 'Draft requester information updated'
     case 'REQUEST_SUBMITTED':
       return 'Request submitted'
-    case 'REQUEST_ASSIGNEE_CHANGED':
-      return 'Request assignee changed'
     case 'REQUEST_STATUS_CHANGED': {
       const fromStatus = entry.metadata.fromStatus
       const toStatus = entry.metadata.toStatus
@@ -120,12 +119,6 @@ function getRequestTitle(request: PsfRequestListItem | PsfRequestResponse): stri
   return productType ? `${productType} PSF request` : 'Untitled PSF request'
 }
 
-function getOwnerLabel(request: PsfRequestListItem | PsfRequestResponse): string {
-  const owner = request.setupOwner ?? 'Unassigned'
-  const dept = request.setupOwnerRole ? ` / ${request.setupOwnerRole}` : ''
-  return `${owner}${dept}`
-}
-
 interface RequestDetailSummary {
   requestNo: string
   title: string
@@ -133,18 +126,16 @@ interface RequestDetailSummary {
   priority: string
   dueDate: string | null
   requester: string
-  owner: string
 }
 
 function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSummary {
   return {
     requestNo: request.requestNo,
     title: getRequestTitle(request),
-    productType: request.productType ?? requesterValueForCanonicalKey(request, 'product_type') ?? '—',
+    productType: productTypeLabel(request.productType ?? requesterValueForCanonicalKey(request, 'product_type')),
     priority: requesterValueForCanonicalKey(request, 'priority') ?? 'Normal',
     dueDate: requesterValueForCanonicalKey(request, 'due_date'),
     requester: request.requester ?? requesterValueForCanonicalKey(request, 'requester') ?? '—',
-    owner: getOwnerLabel(request),
   }
 }
 
@@ -154,7 +145,6 @@ function RequestMetadata({ request }: { request: PsfRequestResponse }) {
     <div><span>Priority</span><strong className={priorityClassName(summary.priority)}>{summary.priority}</strong></div>
     <div><span>Due Date</span><strong>{formatDate(summary.dueDate)}</strong></div>
     <div><span>Requester</span><strong>{summary.requester}</strong></div>
-    <div><span>Owner / Dept</span><strong>{summary.owner}</strong></div>
   </section>
 }
 
@@ -351,6 +341,7 @@ export function RequestsTable({
   compact = false,
   drafts = false,
   onOpenItem,
+  onDeleteItem,
   statusKinds = {},
   emptyTitle = 'No PSF requests found',
   emptyDescription = 'No PSF requests match the current view.',
@@ -364,6 +355,7 @@ export function RequestsTable({
   compact?: boolean
   drafts?: boolean
   onOpenItem?: (requestId: string) => void
+  onDeleteItem?: (item: PsfRequestListItem) => void
 }) {
   const interactiveRows = Boolean(onOpenItem)
 
@@ -389,7 +381,7 @@ export function RequestsTable({
             <th scope="col">Request</th>
             <th scope="col">{drafts ? 'Product Type' : 'Status'}</th>
             <th scope="col">{drafts ? 'Visibility' : compact ? 'Due date' : 'Schedule'}</th>
-            <th scope="col">{drafts ? 'Updated' : compact ? 'Owner / Dept' : 'Responsibility'}</th>
+            <th scope="col">{drafts ? 'Updated' : 'Requester'}</th>
             {drafts || !interactiveRows ? <th scope="col">Action</th> : null}
           </tr>
         </thead>
@@ -416,10 +408,10 @@ export function RequestsTable({
                     <span className="request-identity__title">{getRequestTitle(item)}</span>
                     <span className="font-mono-code">{item.requestNo}{compact && item.probecardName ? ` · ${item.probecardName}` : ''}</span>
                   </Link>
-                  {!compact && !drafts ? <span className="request-identity__type">{item.productType ?? 'No product type'}</span> : null}
+                  {!compact && !drafts ? <span className="request-identity__type">{productTypeLabel(item.productType)}</span> : null}
                 </div>
               </td>
-              {drafts ? <><td data-label="Product Type">{item.productType ?? '—'}</td>
+              {drafts ? <><td data-label="Product Type">{productTypeLabel(item.productType)}</td>
                 <td data-label="Visibility">Only you</td>
                 <td data-label="Updated">{formatDateTime(item.updatedAt)}</td></> : <><td data-label="Status">
                 <StatusLabel kind={statusKinds[item.status]} status={item.status} />
@@ -432,8 +424,7 @@ export function RequestsTable({
               </td>
               <td data-label="Responsibility">
                 <div className="request-cell-stack">
-                  {!compact ? <span className="cell-meta"><span className="request-cell-label">Requester </span>{item.requester ?? '—'}</span> : null}
-                  <span><span className="request-cell-label">Owner / Dept </span>{getOwnerLabel(item)}</span>
+                  <span>{item.requester ?? '—'}</span>
                 </div>
               </td>
               </>}
@@ -442,6 +433,7 @@ export function RequestsTable({
                   <Link className="table-action" to="/requests/$requestId" params={{ requestId: item.requestId }}>
                     {drafts ? 'Continue' : 'Open detail'}
                   </Link>
+                  {drafts && onDeleteItem ? <button type="button" className="table-action" aria-label={`Delete ${item.requestNo}`} onClick={() => onDeleteItem(item)}>Delete</button> : null}
                 </td>
               ) : null}
             </tr>
@@ -486,7 +478,7 @@ function useDebouncedQueueText(value: string, resetOffset: () => void): string {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const [relation, setRelation] = useState<'all' | 'created' | 'assigned' | 'department'>('all')
+  const [team, setTeam] = useState<'all' | 'GNTC' | 'MFG' | 'unclassified' | null>(null)
   const [workState, setWorkState] = useState<'all' | 'open' | 'overdue' | 'completed'>('open')
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('')
@@ -495,7 +487,7 @@ export function DashboardPage() {
   const debouncedKeyword = useDebouncedQueueText(keyword.trim(), resetOffset)
   const requestGeneration = useRef(0)
   const dashboardIdentity = useRef<string | null>(null)
-  const queryKey = JSON.stringify([debouncedKeyword, offset, relation, status, workState])
+  const queryKey = JSON.stringify([debouncedKeyword, offset, team, status, workState])
   const [catalog, setCatalog] = useState<AsyncState<string[]>>({ loading: true, error: null, data: [] })
   const [catalogRetry, setCatalogRetry] = useState(0)
   const [retry, setRetry] = useState(0)
@@ -536,16 +528,18 @@ export function DashboardPage() {
         const identityChanged = dashboardIdentity.current !== null && dashboardIdentity.current !== identity
         dashboardIdentity.current = identity
         if (identityChanged) {
-          setRelation('all')
+          setTeam(user.role === 'setup_owner' ? user.setupOwnerDepartment ?? 'all' : 'all')
           setKeyword('')
           setStatus('')
           setWorkState('open')
           setOffset(0)
         }
-        const nextQueryKey = identityChanged ? JSON.stringify(['', 0, 'all', '', 'open']) : queryKey
+        const selectedTeam = user.role === 'setup_owner' ? (identityChanged || team === null ? user.setupOwnerDepartment ?? 'all' : team) : 'all'
+        if (team === null && user.role === 'setup_owner' && user.setupOwnerDepartment) setTeam(selectedTeam)
+        const nextQueryKey = identityChanged ? JSON.stringify(['', 0, selectedTeam, '', 'open']) : queryKey
         const response = await api.queryPsfRequests({
           scope: 'related',
-          relation: user.role === 'setup_owner' && !identityChanged ? relation : 'all',
+          team: selectedTeam,
           workState: identityChanged ? 'open' : workState,
           keyword: identityChanged ? undefined : debouncedKeyword || undefined,
           status: identityChanged ? undefined : status || undefined,
@@ -560,13 +554,13 @@ export function DashboardPage() {
     }
     void loadDashboard()
     return () => { mounted = false }
-  }, [debouncedKeyword, offset, queryKey, relation, retry, status, workState])
+  }, [debouncedKeyword, offset, queryKey, team, retry, status, workState])
 
   const pending = state.loading || keyword.trim() !== debouncedKeyword || state.data.queryKey !== queryKey
   const hasResults = !state.error && state.data.user !== null
   const summary = state.error ? null : state.data.summary
-  const hasActiveFilters = Boolean(keyword.trim() || status || relation !== 'all' || workState !== 'open')
-  const resetFilters = () => { setKeyword(''); setStatus(''); setRelation('all'); setWorkState('open'); setOffset(0) }
+  const hasActiveFilters = Boolean(keyword.trim() || status || team !== 'all' || workState !== 'open')
+  const resetFilters = () => { setKeyword(''); setStatus(''); setTeam('all'); setWorkState('open'); setOffset(0) }
   return (
     <article className="workflow-page dashboard-page">
       <PageHeader title="Dashboard" description="Your related work, at a glance." actions={<Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link>} />
@@ -583,9 +577,9 @@ export function DashboardPage() {
       <div className="dashboard-workspace">
       <aside className="dashboard-overview" aria-label="Work overview">
         <div className="workspace-section-heading"><h2>Your related work</h2></div>
-      {state.data.user?.role === 'setup_owner' ? <label>Relationship
-        <select aria-label="Relationship" value={relation} onChange={(event) => { setRelation(event.target.value as typeof relation); setOffset(0) }}>
-          <option value="all">Related to me</option><option value="created">Created by me</option><option value="assigned">Assigned to me</option><option value="department">Department work</option>
+      {state.data.user?.role === 'setup_owner' ? <label>Team
+        <select aria-label="Team" value={team ?? 'all'} onChange={(event) => { setTeam(event.target.value as typeof team); setOffset(0) }}>
+          <option value="all">All shared work</option><option value="GNTC">GNTC — New Product</option><option value="MFG">MFG — Transfer / Existing Product</option><option value="unclassified">รอระบุ Product Type</option>
         </select>
       </label> : null}
       {summary ? <div className="summary-grid dashboard-summary-grid" aria-busy={pending}>
@@ -634,6 +628,7 @@ export function QueueFilterPanel({ active, children }: { active: boolean; childr
 
 export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts' }) {
   const navigate = useNavigate()
+  const [deleting, setDeleting] = useState<PsfRequestListItem | null>(null)
   const [filters, setFilters] = useState({ keyword: '', status: '', productType: '' })
   const [catalog, setCatalog] = useState<AsyncState<string[]>>({ loading: true, error: null, data: [] })
   const [catalogRetry, setCatalogRetry] = useState(0)
@@ -719,7 +714,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
   return (
     <article className="workflow-page requests-page">
       <PageHeader title={scope === 'my-drafts' ? 'My Drafts' : 'Requests'} description={scope === 'my-drafts' ? 'Private drafts you created. Save and review before submitting.' : 'Browse submitted requests and track engineering work.'}
-        actions={hasResults ? <Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link> : undefined} />
+        actions={hasResults ? <><Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link>{scope === 'my-drafts' ? <button type="button" className="btn-secondary" disabled={pending} onClick={() => setRetry(value => value + 1)}>Refresh Drafts</button> : null}</> : undefined} />
 
       <section className="request-browser" aria-label="PSF request browser">
         <div className="queue-surface__heading"><h2>{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span>{hasActiveFilters ? 'Filtered results' : 'All results'}</span><span className="sr-only" role="status">{pending && hasResults ? 'Updating PSF requests…' : ''}</span></div>
@@ -782,6 +777,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
         {hasResults ? <div className="request-results" inert={pending} aria-busy={pending}><RequestsTable
           items={state.data.items}
           drafts={scope === 'my-drafts'}
+          onDeleteItem={scope === 'my-drafts' ? setDeleting : undefined}
           statusKinds={catalog.statusKinds}
           emptyTitle={hasActiveFilters ? 'No requests match these filters' : scope === 'my-drafts' ? 'No private drafts yet' : 'No submitted requests yet'}
           emptyDescription={hasActiveFilters ? 'Try another keyword, product type, or status, or clear the filters.' : scope === 'my-drafts' ? 'Save a new request as a draft to find it here.' : 'Submitted requests will appear here for shared work.'}
@@ -796,6 +792,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
         </div> : null}
         </div>
       </section>
+      {deleting ? <DraftDeleteDialog draft={deleting} onCancel={() => setDeleting(null)} onDeleted={() => { setDeleting(null); setRetry(value => value + 1); setOffset(0) }} /> : null}
     </article>
   )
 }
@@ -832,6 +829,8 @@ export function RequestDetailRoutePage() {
 }
 
 export function RequestDetailShell({ requestId, onIdentityResolved }: { requestId: string; onIdentityResolved?: (value: RequestBreadcrumb | null) => void }) {
+  const navigate = useNavigate()
+  const [deletingDraft, setDeletingDraft] = useState(false)
   const [loadedRequest, setRequest] = useState<PsfRequestResponse | null>(null)
   const request = loadedRequest?.id === requestId ? loadedRequest : null
   const [history, setHistory] = useState<AsyncState<PsfRequestHistoryEntry[]>>({
@@ -839,8 +838,6 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     error: null,
     data: [],
   })
-  const [assignmentOpen, setAssignmentOpen] = useState(false)
-  const [savingAssignment, setSavingAssignment] = useState(false)
   const [requesterDirty, setRequesterDirty] = useState(false)
   const [draftSchemaSubmitAllowed, setDraftSchemaSubmitAllowed] = useState(false)
   const [psfCreatedValues, setPsfCreatedValues] = useState<DynamicFormValues>({})
@@ -964,8 +961,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       psfCreatedDirty ||
       savingStatus ||
       savingPsfCreatedData ||
-      savingRequesterData ||
-      savingAssignment
+      savingRequesterData
     ) {
       return
     }
@@ -1054,8 +1050,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       !request.canEditPsfCreatedData ||
       savingStatus ||
       savingPsfCreatedData ||
-      savingRequesterData ||
-      savingAssignment
+      savingRequesterData
     ) {
       return
     }
@@ -1095,7 +1090,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     }
   }
 
-  const mutationPending = savingStatus || savingPsfCreatedData || savingRequesterData || savingAssignment
+  const mutationPending = savingStatus || savingPsfCreatedData || savingRequesterData
   const disabledReason = requesterDirty || psfCreatedDirty
     ? `Save ${requesterDirty ? 'requester information' : 'PSF Created Information'} before changing status or submitting.`
     : request?.status === 'Draft' && (!request.canSubmitDraft || !draftSchemaSubmitAllowed)
@@ -1116,11 +1111,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       {request ? (
         <>
         <RequestHeaderSummary request={request} kind={statusKinds[request.status]} />
-        <div className="detail-assignment-action"><button type="button" className="btn-secondary" disabled={mutationPending} onClick={() => setAssignmentOpen(true)}>{request.setupOwner ? 'Change owner' : 'Assign owner'}</button></div>
-        {assignmentOpen ? <RequestAssignmentDialog key={request.id} request={request} open={assignmentOpen} disabled={requesterDirty || psfCreatedDirty || savingStatus || savingPsfCreatedData || savingRequesterData} onSavingChange={setSavingAssignment} onClose={() => setAssignmentOpen(false)} onSaved={snapshot => {
-          acceptRequesterSnapshot(snapshot)
-          setHistoryRetry(value => value + 1)
-        }} /> : null}
+        {request.status === 'Draft' && request.canEditRequesterData ? <button type="button" className="ui-button ui-button--danger" disabled={mutationPending || dirty} onClick={() => setDeletingDraft(true)}>Delete Draft</button> : null}
+        {deletingDraft && request.status === 'Draft' && request.canEditRequesterData ? <DraftDeleteDialog draft={request} onCancel={() => setDeletingDraft(false)} onDeleted={() => void navigate({ to: '/my-drafts' })} /> : null}
         <div className="detail-layout">
           <aside className="detail-layout__actions" aria-label="Request actions">
             <section className="workflow-section">

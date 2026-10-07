@@ -8,10 +8,9 @@ import {
 } from './RequestsWorkspace'
 import * as RequestsWorkspace from './RequestsWorkspace'
 import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
-import { ApiError, type PsfRequestResponse, type PsfRequestListItem } from '../services/api'
+import { ApiError, type PsfRequestResponse } from '../services/api'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
-import { RequestAssignmentDialog } from './RequestAssignmentDialog'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { AsyncNotice } from './ui/AsyncNotice'
 
@@ -220,9 +219,9 @@ function buildSubmittedRequest(): PsfRequestResponse {
     formVersion: 4,
     status: 'Submitted',
     requester: null,
-    setupOwnerUserId: null,
-    setupOwner: 'Lin',
-    setupOwnerRole: 'GNTC',
+
+
+
     productType: null,
     requesterData: {
       request_title_v4: 'Production probe card setup',
@@ -382,7 +381,7 @@ describe('RequestHeaderSummary', () => {
     expect(html).toContain('Urgent')
     expect(html).toContain('05/08/2026')
     expect(html).toContain('Fook')
-    expect(html).toContain('Lin / GNTC')
+    expect(html).not.toContain('Owner / Dept')
     expect(requesterFieldsAreReadOnly('request', request)).toBe(true)
   })
 
@@ -747,7 +746,7 @@ describe('Dashboard and request list loading and recovery', () => {
     render(true); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     page = render(true)
     expect(findRenderedElement(page, (element) => element.props.label === 'Open work')?.props.value).toBe(500)
-    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'related', relation: 'all', workState: 'open', limit: 25 }))
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'related', team: 'all', workState: 'open', limit: 25 }))
   })
 
   it.each([true, false])('exposes list failure retry without confusing text401 with auth expiry (dashboard=%s)', async (dashboard) => {
@@ -1538,9 +1537,9 @@ describe('RequestDetailShell workflow actions', () => {
     const updatedRequest = {
       ...submittedRequest,
       status: 'Setup In Progress',
-      setupOwnerUserId: null,
-      setupOwner: 'Setup Owner GNTC Demo',
-      setupOwnerRole: 'GNTC',
+
+
+
     }
     requestDetailApi.fetchPsfRequest.mockResolvedValue(submittedRequest)
     requestDetailApi.fetchPsfRequestStatusOptions
@@ -2244,7 +2243,7 @@ describe('Private draft table presentation', () => {
     requestDetailHookHarness.beginRender()
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
       referencePsfName: null, psfSetupFileName: null, probecardName: null, status: 'Draft',
-      priority: 'Normal', requester: 'Engineer', setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null,
+      priority: 'Normal', requester: 'Engineer',
       productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
     const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true })
     expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Visibility')).toBeTruthy()
@@ -2260,141 +2259,38 @@ describe('Private draft table presentation', () => {
 })
 
 
-describe('Assignment Detail integration and relationship query', () => {
-  beforeEach(() => {
-    requestDetailHookHarness.reset()
-    Object.values(requestDetailApi).forEach(method => method.mockReset())
-    requestDetailApi.fetchPsfRequest.mockResolvedValue(buildSubmittedRequest())
-    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
-    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
-    requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Submitted'] })
-    requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner-1', role: 'setup_owner', setupOwnerDepartment: 'GNTC' } })
-    requestDetailApi.queryPsfRequests.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0, summary: { open: 0, overdue: 0, completed: 0 } })
-  })
-  it.each(['requester', 'setup_owner', 'admin'])('offers assignment to a readable submitted request for %s and blocks Save for requester/PSF edits', async role => {
-    requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { role } })
-    renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    let page = renderRequestDetailShell()
-    const action = requireRenderedElement(page, e => e.type === 'button' && e.props.children === 'Change owner')
-    ;(action.props.onClick as () => void)()
-    page = renderRequestDetailShell()
-    const dialog = () => requireRenderedElement(page, e => e.type === RequestAssignmentDialog)
-    expect(dialog().props.disabled).toBe(false)
-    const requester = requireRenderedElement(page, e => e.type === ActiveSchemaForm)
-    ;(requester.props.onDirtyChange as (dirty: boolean) => void)(true)
-    page = renderRequestDetailShell(); expect(dialog().props.disabled).toBe(true)
-    ;(requester.props.onDirtyChange as (dirty: boolean) => void)(false)
-    const psf = requireRenderedElement(page, e => e.type === RequestsWorkspace.PsfCreatedInformationPanel)
-    ;(psf.props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'Local.psf')
-    page = renderRequestDetailShell(); expect(dialog().props.disabled).toBe(true)
-    expect(navigation.blocker?.enableBeforeUnload).toBe(true)
-  })
-  it('rebases workflow selection/options after assignment conflict snapshots without discarding dirty form edits', async () => {
-    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValueOnce({ allowedNextStatuses: ['Old next status'] })
-    renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    let page = renderRequestDetailShell()
-    ;(requireRenderedElement(page, e => e.type === 'button' && e.props.children === 'Change owner').props.onClick as () => void)()
-    page = renderRequestDetailShell()
-    const requester = requireRenderedElement(page, e => e.type === ActiveSchemaForm)
-    ;(requester.props.onDirtyChange as (dirty: boolean) => void)(true)
-    ;(requireRenderedElement(page, e => e.type === RequestsWorkspace.PsfCreatedInformationPanel).props.onChange as (key: string, value: string) => void)('psf_setup_file_name', 'LOCAL.psf')
-    page = renderRequestDetailShell()
-    const recovered = { ...buildSubmittedRequest(), status: 'In progress', updatedAt: 'conflict-revision', setupOwnerUserId: 'owner-2' }
-    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValueOnce({ allowedNextStatuses: ['Completed'] })
-    ;(requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.onSaved as (snapshot: PsfRequestResponse) => void)(recovered)
-    await flushRequestDetailAsyncWork()
-    page = renderRequestDetailShell()
-    const workflow = requireRenderedElement(page, e => e.type === WorkflowStatusActions)
-    expect(workflow.props.currentStatus).toBe('In progress')
-    expect(workflow.props.selectedStatus).toBe('In progress')
-    expect(workflow.props.allowedNextStatuses).toEqual(['Completed'])
-    expect(requireRenderedElement(page, e => e.type === RequestHeaderSummary).props.request).toEqual(recovered)
-    expect(requireRenderedElement(page, e => e.type === RequestsWorkspace.PsfCreatedInformationPanel).props.values).toEqual({ psf_setup_file_name: 'LOCAL.psf' })
-    expect(requireRenderedElement(page, e => e.type === ActiveSchemaForm).props.requestSnapshot).toEqual(recovered)
-    expect(requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.disabled).toBe(true)
-    expect(navigation.blocker?.enableBeforeUnload).toBe(true)
-    const retried = { ...recovered, setupOwnerUserId: 'chosen-owner', updatedAt: 'retry-revision' }
-    ;(requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.onSaved as (snapshot: PsfRequestResponse) => void)(retried)
-    page = renderRequestDetailShell()
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.selectedStatus).toBe('In progress')
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.allowedNextStatuses).toEqual(['Completed'])
-    expect(requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.request).toEqual(retried)
-  })
-  it('ignores older workflow option responses after a newer accepted assignment context or request navigation', async () => {
-    renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    let page = renderRequestDetailShell()
-    ;(requireRenderedElement(page, e => e.type === 'button' && e.props.children === 'Change owner').props.onClick as () => void)()
-    page = renderRequestDetailShell()
-    let finishOlder!: (value: { allowedNextStatuses: string[] }) => void
-    requestDetailApi.fetchPsfRequestStatusOptions.mockReturnValueOnce(new Promise(resolve => { finishOlder = resolve }))
-    const accept = requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.onSaved as (snapshot: PsfRequestResponse) => void
-    accept({ ...buildSubmittedRequest(), status: 'In progress', updatedAt: 'older' })
-    page = renderRequestDetailShell()
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.allowedNextStatuses).toEqual([])
-    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValueOnce({ allowedNextStatuses: ['Reopen'] })
-    ;(requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.onSaved as (snapshot: PsfRequestResponse) => void)({ ...buildSubmittedRequest(), status: 'Completed', updatedAt: 'newer' })
-    await flushRequestDetailAsyncWork()
-    finishOlder({ allowedNextStatuses: ['Obsolete next status'] })
-    await flushRequestDetailAsyncWork()
-    page = renderRequestDetailShell()
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.selectedStatus).toBe('Completed')
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.allowedNextStatuses).toEqual(['Reopen'])
-    let finishPreviousRequest!: (value: { allowedNextStatuses: string[] }) => void
-    requestDetailApi.fetchPsfRequestStatusOptions.mockReturnValueOnce(new Promise(resolve => { finishPreviousRequest = resolve }))
-    ;(requireRenderedElement(page, e => e.type === RequestAssignmentDialog).props.onSaved as (snapshot: PsfRequestResponse) => void)({ ...buildSubmittedRequest(), status: 'Reopened' })
-    requestDetailApi.fetchPsfRequest.mockResolvedValueOnce({ ...buildSubmittedRequest(), id: 'request-2', status: 'Other request' })
-    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValueOnce({ allowedNextStatuses: ['Other next status'] })
-    renderRequestDetailShell('request-2'); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    finishPreviousRequest({ allowedNextStatuses: ['Wrong request options'] })
-    await flushRequestDetailAsyncWork()
-    page = renderRequestDetailShell('request-2')
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.selectedStatus).toBe('Other request')
-    expect(requireRenderedElement(page, e => e.type === WorkflowStatusActions).props.allowedNextStatuses).toEqual(['Other next status'])
-  })
-  it('uses all four relationships and resets pagination while retaining rows and cards until assigned results settle', async () => {
-    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.DashboardPage() }
-    const item: PsfRequestListItem = { requestId: 'old', requestNo: 'OLD', status: 'Submitted', title: 'Previous row', setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null, requester: 'Requester', productType: null, priority: 'Normal', dueDate: null, requestDate: '2026-10-06', updatedAt: '2026-10-06T00:00:00Z', referencePsfName: null, psfSetupFileName: null, probecardName: null }
-    requestDetailApi.queryPsfRequests.mockResolvedValue({ items: [item], total: 30, limit: 25, offset: 0, summary: { open: 30, overdue: 2, completed: 3 } })
-    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    let page = render()
-    const relationship = requireRenderedElement(page, e => e.type === 'select' && e.props['aria-label'] === 'Relationship')
-    expect((relationship.props.children as RenderedElement[]).map(e => [e.props.value, e.props.children])).toEqual([['all', 'Related to me'], ['created', 'Created by me'], ['assigned', 'Assigned to me'], ['department', 'Department work']])
-    ;(requireRenderedElement(page, e => e.type === 'button' && e.props.children === 'Next').props.onClick as () => void)()
-    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    let settle!: (v: unknown) => void
-    requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise(resolve => { settle = resolve }))
-    ;(relationship.props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'assigned' } })
-    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    page = render()
-    expect(requireRenderedElement(page, e => e.type === RequestsWorkspace.RequestsTable).props.items).toEqual([item])
-    expect(requireRenderedElement(page, e => e.props.label === 'Open work').props.value).toBe(30)
-    expect(requireRenderedElement(page, e => e.props.className === 'summary-grid dashboard-summary-grid').props['aria-busy']).toBe(true)
-    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'related', relation: 'assigned', offset: 0 }))
-    settle({ items: [{ ...item, requestId: 'assigned', title: 'Assigned row' }], total: 1, limit: 25, offset: 0, summary: { open: 1, overdue: 0, completed: 0 } })
-    await flushRequestDetailAsyncWork(); page = render()
-    expect(requireRenderedElement(page, e => e.type === RequestsWorkspace.RequestsTable).props.items).toEqual([expect.objectContaining({ requestId: 'assigned' })])
-    expect(requireRenderedElement(page, e => e.props.label === 'Open work').props.value).toBe(1)
-  })
-  it.each(['requester', 'admin'])('hides the relationship dropdown for %s and queries relation all', async role => {
-    requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: role, role } })
-    requestDetailHookHarness.beginRender(); RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    requestDetailHookHarness.beginRender(); const page = RequestsWorkspace.DashboardPage()
-    expect(findRenderedElement(page, e => e.props['aria-label'] === 'Relationship')).toBeNull()
-    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ relation: 'all' }))
-  })
-  it('resets relationship and pagination when the signed-in identity changes', async () => {
-    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.DashboardPage() }
-    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    let page = render()
-    ;(requireRenderedElement(page, e => e.props['aria-label'] === 'Relationship').props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'assigned' } })
-    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner-2', role: 'setup_owner', setupOwnerDepartment: 'MFG' } })
-    page = render()
-    ;(requireRenderedElement(page, e => e.type === 'select' && !e.props['aria-label']).props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'Submitted' } })
-    render(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
-    page = render()
-    expect(requireRenderedElement(page, e => e.props['aria-label'] === 'Relationship').props.value).toBe('all')
-    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ relation: 'all', offset: 0, status: undefined }))
-  })
 
+describe('Draft detail deletion access', () => {
+ beforeEach(() => {
+  requestDetailHookHarness.reset()
+  requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
+  requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
+ })
+ it.each([true, false])('offers Delete only when own editable Draft (own=%s)', async own => {
+  requestDetailApi.fetchPsfRequest.mockResolvedValue(buildDraftRequest({ canEditRequesterData: own, canSubmitDraft: own }))
+  renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  const page = renderRequestDetailShell()
+  expect(Boolean(findRenderedElement(page, element => element.type === 'button' && element.props.children === 'Delete Draft'))).toBe(own)
+ })
+ it('never offers Delete on a submitted request', async () => {
+  requestDetailApi.fetchPsfRequest.mockResolvedValue(buildSubmittedRequest())
+  renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  expect(findRenderedElement(renderRequestDetailShell(), element => element.type === 'button' && element.props.children === 'Delete Draft')).toBeNull()
+ })
+})
+
+describe('Product Type team Dashboard', () => {
+ beforeEach(() => { requestDetailHookHarness.reset(); requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Submitted'] }); requestDetailApi.queryPsfRequests.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0, summary: { open: 0, overdue: 0, completed: 0 } }) })
+ it.each(['GNTC', 'MFG'] as const)('defaults to %s account team and permits all shared work', async setupOwnerDepartment => {
+  requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner', role: 'setup_owner', setupOwnerDepartment } })
+  requestDetailHookHarness.beginRender(); RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  requestDetailHookHarness.beginRender(); let page = RequestsWorkspace.DashboardPage()
+  const select = requireRenderedElement(page, element => element.type === 'select' && element.props['aria-label'] === 'Team')
+  expect(select.props.value).toBe(setupOwnerDepartment)
+  expect(JSON.stringify(page)).not.toContain('Assigned to me')
+  ;(select.props.onChange as (event: unknown) => void)({ target: { value: 'all' } })
+  requestDetailHookHarness.beginRender(); page = RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  expect(requestDetailApi.queryPsfRequests.mock.lastCall?.[0]).toMatchObject({ team: 'all', offset: 0 })
+  expect(JSON.stringify(page)).toContain('รอระบุ Product Type')
+ })
 })

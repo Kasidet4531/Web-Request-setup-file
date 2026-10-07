@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { RequestAssigneePicker } from './RequestAssigneePicker'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
@@ -159,9 +158,6 @@ type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
 export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
   const savedValuesRef = useRef<DynamicFormValues>({})
-  const savedOwnerRef = useRef<string | null | undefined>(null)
-  const ownerRef = useRef<string | null | undefined>(null)
-  const [owner, setOwner] = useState<string | null | undefined>(null)
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [currentRequest, setCurrentRequest] = useState<PsfRequestResponse | null>(null)
@@ -195,18 +191,10 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const onRequestSavedRef = useRef(onRequestSaved)
   const loadKey = `${mode}:${requestId ?? 'new'}:${reloadKey}`
 
-  function syncOwner(snapshot: PsfRequestResponse | null, preserveLocal = false) {
-    const nextSavedOwner = snapshot?.setupOwnerUserId ?? (snapshot?.setupOwner ? undefined : null)
-    const nextOwner = preserveLocal && ownerRef.current !== savedOwnerRef.current ? ownerRef.current : nextSavedOwner
-    savedOwnerRef.current = nextSavedOwner
-    ownerRef.current = nextOwner
-    setOwner(nextOwner)
-  }
-
   function replaceValues(nextValues: DynamicFormValues) {
     valuesRef.current = nextValues
     setValues(nextValues)
-    setHasUnsavedChanges(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current)
+    setHasUnsavedChanges(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current))
   }
 
   function invalidateRuntimeAutofill() {
@@ -267,7 +255,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
             isDraftSchemaDecisionRequired(classification) ? 'unresolved' : 'not-needed',
           )
           const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, request.requesterData)
-          syncOwner(request)
+
           savedValuesRef.current = nextValues
           onDirtyChange?.(false)
           invalidateRuntimeAutofill()
@@ -298,7 +286,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         onDraftSchemaSubmitAllowedChange?.(false)
         setActiveSchema(response)
         const nextValues = buildInitialValues(response.schema)
-        syncOwner(null)
+
         savedValuesRef.current = nextValues
         onDirtyChange?.(false)
         invalidateRuntimeAutofill()
@@ -341,7 +329,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     savedValuesRef.current = nextBaseline
     // Account data can arrive after schema loading and must preserve typed fields.
     replaceValues(nextValues)
-    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(nextBaseline) || ownerRef.current !== savedOwnerRef.current)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(nextBaseline))
   }, [activeSchema, currentRequest, loadedSchemaKey, loadKey, mode, onDirtyChange, requestId, requesterIdentity])
 
   useEffect(() => {
@@ -387,10 +375,10 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           ? 'unresolved'
           : draftSchemaDecision,
     )
-    syncOwner(requestSnapshot, true)
+
     savedValuesRef.current = latestSavedValues
     replaceValues(nextValues)
-    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues) || ownerRef.current !== savedOwnerRef.current)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues))
     setErrors({})
     invalidateRuntimeAutofill()
   }, [
@@ -457,10 +445,10 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         setDraftSchemaDecision(
           isDraftSchemaDecisionRequired(classification) ? 'unresolved' : 'not-needed',
         )
-        syncOwner(latestRequest, true)
+
         savedValuesRef.current = latestSavedValues
         replaceValues(nextValues)
-        onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues) || ownerRef.current !== savedOwnerRef.current)
+        onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues))
         setErrors({})
 
         if (isDraftSchemaDecisionRequired(classification)) {
@@ -596,7 +584,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     }
 
     replaceValues(applied.values)
-    onDirtyChange?.(JSON.stringify(applied.values) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current)
+    onDirtyChange?.(JSON.stringify(applied.values) !== JSON.stringify(savedValuesRef.current))
     setAutofillStatuses((currentStatuses) => {
       const nextStatuses = { ...currentStatuses }
       applied.appliedFieldKeys.forEach((fieldKey) => {
@@ -618,7 +606,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       [fieldKey]: nextEditVersion,
     }
     replaceValues(nextValues)
-    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current)
+    onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current))
     setErrors((currentErrors) => {
       const nextErrors = { ...currentErrors }
       delete nextErrors[fieldKey]
@@ -675,7 +663,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
 
   function reloadDraftSchema() {
     if (disabled || saving || upgradePending || loadedSchemaKey !== loadKey) return
-    if ((JSON.stringify(valuesRef.current) !== JSON.stringify(savedValuesRef.current) || ownerRef.current !== savedOwnerRef.current) &&
+    if ((JSON.stringify(valuesRef.current) !== JSON.stringify(savedValuesRef.current)) &&
       !window.confirm('Discard unsaved requester changes and reload this request?')) return
     invalidateRuntimeAutofill()
     onDraftSchemaSubmitAllowedChange?.(false)
@@ -708,9 +696,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
             formVersion: currentRequest.formVersion,
             expectedUpdatedAt: currentRequest.updatedAt,
             requesterData: currentValues,
-            ...(currentRequest.status === DRAFT_STATUS && ownerRef.current !== savedOwnerRef.current ? { setupOwnerUserId: ownerRef.current } : {}),
           })
-        : await api.createDraftRequest({ requesterData: currentValues, ...(ownerRef.current !== savedOwnerRef.current ? { setupOwnerUserId: ownerRef.current } : {}) })
+        : await api.createDraftRequest({ requesterData: currentValues })
       const nextActiveRequestSchema =
         currentRequest && activeRequestSchema
           ? activeRequestSchema
@@ -730,7 +717,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setSubmissionConflictError(null)
       fieldEditVersions.current = {}
       const savedValues = buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData)
-      syncOwner(savedRequest)
+
       savedValuesRef.current = savedValues
       onDirtyChange?.(false)
       setAutofillError(null)
@@ -771,10 +758,10 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
               ? schemaChanged ? 'unresolved' : draftSchemaDecision
               : 'not-needed',
           )
-          syncOwner(latestRequest, true)
+
           savedValuesRef.current = latestSavedValues
           replaceValues(nextValues)
-          onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues) || ownerRef.current !== savedOwnerRef.current)
+          onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(latestSavedValues))
           setErrors({})
           setUpgradeError(
             isDraftSchemaDecisionRequired(classification)
@@ -837,10 +824,10 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       onDraftSchemaSubmitAllowedChange?.(classification === 'equal')
       setDraftSchemaDecision('not-needed')
       const savedValues = buildRequestValuesForSchema(upgradedSchema.schema, upgradedRequest.requesterData)
-      syncOwner(upgradedRequest, true)
+
       savedValuesRef.current = savedValues
       const nextValues = buildRequestValuesForSchema(upgradedSchema.schema, valuesRef.current)
-      onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(savedValues) || ownerRef.current !== savedOwnerRef.current)
+      onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(savedValues))
       setSubmissionConflictError(null)
       setErrors({})
       fieldEditVersions.current = {}
@@ -944,21 +931,6 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           </button>
         ) : null}
       </div>
-      {mode === 'request' && (!currentRequest || currentRequest.status === DRAFT_STATUS) ? <RequestAssigneePicker
-        value={owner}
-        disabled={formReadOnly}
-        recordedOwner={currentRequest?.setupOwner ? `${currentRequest.setupOwner}${currentRequest.setupOwnerRole ? ` / ${currentRequest.setupOwnerRole}` : ''}` : undefined}
-        onChange={nextOwner => {
-          if (formReadOnly) return
-          ownerRef.current = nextOwner
-          setOwner(nextOwner)
-          const dirty = JSON.stringify(valuesRef.current) !== JSON.stringify(savedValuesRef.current) || nextOwner !== savedOwnerRef.current
-          setHasUnsavedChanges(dirty)
-          onDirtyChange?.(dirty)
-          setSaveError(null)
-          setSaveMessage(null)
-        }}
-      /> : null}
       <DynamicFormRenderer
         errors={errors}
         footerActions={!formReadOnly && (usesExplicitEdit || currentRequest) ? <>

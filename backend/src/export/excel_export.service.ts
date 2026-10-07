@@ -33,8 +33,8 @@ const ASYNCHRONOUS_EXPORT_PAGE_SIZE = 500;
 const ASYNCHRONOUS_EXPORT_YIELD_INTERVAL = 100;
 
 const EXPORT_WORKBOOK_WORKER_SOURCE = `
-  const { parentPort } = require('node:worker_threads');
-  const ExcelJS = require('exceljs');
+  const { parentPort, workerData } = require('node:worker_threads');
+  const ExcelJS = require(workerData.exceljsPath);
 
   parentPort.once('message', async ({ columns, rows }) => {
     try {
@@ -62,16 +62,6 @@ const REQUEST_METADATA_COLUMNS: Array<{
 }> = [
   { header: 'Request No', key: 'requestNo', read: (item) => item.requestNo },
   { header: 'Status', key: 'status', read: (item) => item.status },
-  {
-    header: 'Setup File Owner',
-    key: 'setupOwner',
-    read: (item) => item.setupOwner,
-  },
-  {
-    header: 'Setup File Owner Role',
-    key: 'setupOwnerRole',
-    read: (item) => item.setupOwnerRole,
-  },
   {
     header: 'Request Date',
     key: 'requestDate',
@@ -270,7 +260,10 @@ export class ExcelExportService {
     rows: string[][],
   ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
-      const worker = new Worker(EXPORT_WORKBOOK_WORKER_SOURCE, { eval: true });
+      const worker = new Worker(EXPORT_WORKBOOK_WORKER_SOURCE, {
+        eval: true,
+        workerData: { exceljsPath: require.resolve('exceljs') },
+      });
       let settled = false;
       const fail = () => {
         if (!settled) {

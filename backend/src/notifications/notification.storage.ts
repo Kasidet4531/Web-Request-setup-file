@@ -23,7 +23,7 @@ export const RETRY_MINUTES = [1, 5, 15, 60] as const;
 export const OUTBOX_SCHEMA = `
 CREATE TABLE IF NOT EXISTS email_outbox (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- event_type TEXT NOT NULL CHECK (event_type IN ('REQUEST_SUBMITTED','REQUEST_STATUS_CHANGED','ADMIN_ALERT','ADMIN_TEST')),
+ event_type TEXT NOT NULL CHECK (event_type IN ('REQUEST_SUBMITTED','REQUEST_STATUS_CHANGED','ADMIN_ALERT','ADMIN_TEST','DRAFT_REMINDER')),
  request_id UUID REFERENCES psf_requests(id) ON DELETE SET NULL,
  from_address TEXT NOT NULL CHECK (from_address = 'noreply-psf@nxp.com'),
  to_recipients TEXT NOT NULL CHECK (length(trim(to_recipients)) > 0),
@@ -38,8 +38,11 @@ CREATE TABLE IF NOT EXISTS email_outbox (
  claim_token UUID, last_error TEXT, sent_at TIMESTAMPTZ,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE email_outbox DROP CONSTRAINT IF EXISTS email_outbox_event_type_check;
+ALTER TABLE email_outbox ADD CONSTRAINT email_outbox_event_type_check CHECK (event_type IN ('REQUEST_SUBMITTED','REQUEST_STATUS_CHANGED','ADMIN_ALERT','ADMIN_TEST','DRAFT_REMINDER'));
+DELETE FROM email_outbox WHERE event_type='ADMIN_ALERT' AND body_html LIKE '%<td>DRAFT_REMINDER</td>%';
 ALTER TABLE email_outbox ADD COLUMN IF NOT EXISTS failure_alerted BOOLEAN NOT NULL DEFAULT FALSE;
-CREATE INDEX IF NOT EXISTS idx_email_outbox_unreported_failures ON email_outbox (created_at,id) WHERE status='failed' AND attempts>=5 AND event_type<>'ADMIN_ALERT' AND NOT failure_alerted;
+CREATE INDEX IF NOT EXISTS idx_email_outbox_unreported_failures ON email_outbox (created_at,id) WHERE status='failed' AND attempts>=5 AND event_type NOT IN ('ADMIN_ALERT','DRAFT_REMINDER') AND NOT failure_alerted;
 CREATE INDEX IF NOT EXISTS idx_email_outbox_polling ON email_outbox (next_attempt_at,created_at) WHERE status='pending';
 CREATE INDEX IF NOT EXISTS idx_email_outbox_stuck_recovery ON email_outbox (locked_at) WHERE status='sending';
 CREATE INDEX IF NOT EXISTS idx_email_outbox_request_id ON email_outbox (request_id);
@@ -132,8 +135,12 @@ export class NotificationStorage {
       RETURNING *`);
     return result.rows.filter((job) => job.status === 'failed');
   }
-  async markSent(job: OutboxJob, sentTo: string): Promise<boolean> {
-    const result = await this.pool.query(
+  async markSent(
+    job: OutboxJob,
+    sentTo: string,
+    client: NotificationClient = this.pool,
+  ): Promise<boolean> {
+    const result = await client.query(
       `UPDATE email_outbox SET status='sent',sent_to=$3,sent_at=NOW(),last_error=NULL,
       locked_at=NULL,claim_token=NULL,updated_at=NOW() WHERE id=$1 AND status='sending' AND claim_token=$2`,
       [job.id, job.claim_token, sentTo],
@@ -144,10 +151,11 @@ export class NotificationStorage {
     job: OutboxJob,
     error: unknown,
     terminal = false,
+    client: NotificationClient = this.pool,
   ): Promise<'pending' | 'failed' | null> {
     const status = terminal || job.attempts >= 5 ? 'failed' : 'pending';
     const delay = RETRY_MINUTES[Math.min(Math.max(job.attempts - 1, 0), 3)];
-    const result = await this.pool.query(
+    const result = await client.query(
       `UPDATE email_outbox SET status=$3,last_error=$4,
       next_attempt_at=NOW()+$5*INTERVAL '1 minute',locked_at=NULL,claim_token=NULL,updated_at=NOW()
       WHERE id=$1 AND status='sending' AND claim_token=$2`,
@@ -162,7 +170,7 @@ export class NotificationStorage {
       const failures = await client.query<FailureAlertJob>(
         `SELECT id,event_type,request_id,request_no,to_recipients,cc_recipients,attempts,last_error
         FROM email_outbox WHERE status='failed' AND attempts>=5
-        AND event_type<>'ADMIN_ALERT' AND NOT failure_alerted
+        AND event_type NOT IN ('ADMIN_ALERT','DRAFT_REMINDER') AND NOT failure_alerted
         ORDER BY created_at,id LIMIT 10 FOR UPDATE SKIP LOCKED`,
       );
       if (!failures.rows.length) {

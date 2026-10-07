@@ -7,6 +7,7 @@ import { navSectionsForRole, type UserRole } from './navigationState'
 import { fetchCurrentUser } from '../services/api'
 
 const TOOL_DESCRIPTIONS: Record<string, string> = {
+  '/admin/drafts': 'Inspect private Drafts, reminders and permanent deletions.',
   '/admin/users': 'Manage user roles and setup-owner departments.',
   '/admin/form-config': 'Review form versions and edit or publish draft definitions.',
   '/admin/workflow': 'Configure request statuses and PSF information visibility.',
@@ -15,7 +16,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   '/history': 'Review request and configuration activity.',
 }
 
-const TOOL_PATHS = ['/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history']
+const TOOL_PATHS = ['/admin/drafts', '/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history']
 
 export function AdministrationDirectory() {
   const [role, setRole] = useState<UserRole | null>(null)

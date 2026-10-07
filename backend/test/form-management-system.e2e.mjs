@@ -713,7 +713,7 @@ test(
     ).toBeVisible();
     await expect(
       page.getByRole('region', { name: 'Request metadata' }),
-    ).toContainText('Owner / Dept');
+    ).not.toContainText('Owner / Dept');
     await visualMatrix(page, 'detail-labels');
     await page.goto(
       `${system.origin}${editorPath('psf-created-information', draft.version)}`,

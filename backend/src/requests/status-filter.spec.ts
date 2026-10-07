@@ -261,7 +261,6 @@ describe('verbatim catalog status filter production paths', () => {
         {
           scope: 'my-drafts',
           priority: ' Urgent ',
-          setupOwnerRole: ' GNTC ',
           dueDateFrom: '2026-10-01',
           dueDateTo: '2026-10-02',
           limit: '1',
@@ -283,7 +282,6 @@ describe('verbatim catalog status filter production paths', () => {
       expect(params).toEqual([
         actor.id,
         'Urgent',
-        'GNTC',
         '2026-10-01',
         '2026-10-02',
         1,
@@ -294,7 +292,6 @@ describe('verbatim catalog status filter production paths', () => {
       );
       expect(sql).toContain("field.value->>'canonicalKey' = 'priority'");
       expect(sql).toContain("field.value->>'canonicalKey' = 'due_date'");
-      expect(sql).toContain('LOWER(setup_owner_role) = LOWER($3)');
       expect(sql).not.toContain('psf_request_search_index');
       expect(draftPool.query).toHaveBeenCalledTimes(1);
     },

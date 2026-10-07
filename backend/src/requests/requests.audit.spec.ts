@@ -558,8 +558,6 @@ describe('RequestsService audit baseline', () => {
       updatedAt: NEXT_REVISION,
       requester: draftRow.requester,
       requesterUserId: draftRow.requester_user_id,
-      setupOwner: existingAssignment.setup_owner,
-      setupOwnerRole: existingAssignment.setup_owner_role,
     });
 
     expect(auditLogService.record).toHaveBeenCalledWith(
@@ -580,8 +578,6 @@ describe('RequestsService audit baseline', () => {
         status: 'Setup In Progress',
         requester: draftRow.requester,
         requesterUserId: draftRow.requester_user_id,
-        setupOwner: existingAssignment.setup_owner,
-        setupOwnerRole: existingAssignment.setup_owner_role,
       }),
       { product_type: 'New Product', requester: 'Fook' },
       dbClient,
@@ -647,8 +643,6 @@ describe('RequestsService audit baseline', () => {
         status: 'PSF Created',
         requester: draftRow.requester,
         requesterUserId: draftRow.requester_user_id,
-        setupOwner: existingAssignment.setup_owner,
-        setupOwnerRole: existingAssignment.setup_owner_role,
       }),
       { product_type: 'New Product', requester: 'Fook' },
       dbClient,

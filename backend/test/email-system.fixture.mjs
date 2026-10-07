@@ -89,6 +89,7 @@ export async function startEmailSystem({ users = [] } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'psf-email-system-'));
   const mail = [];
   const failOnce = new Set();
+  const mailGates = new Map();
   const serviceErrors = [];
   const unexpectedServices = [];
   let postgres, database, backend, browser, frontend, services;
@@ -99,6 +100,8 @@ export async function startEmailSystem({ users = [] } = {}) {
   await mkdir(evidence, { recursive: true });
 
   async function close() {
+    for (const gate of mailGates.values()) gate.release();
+    mailGates.clear();
     const errors = [];
     async function cleanup(action) {
       try {
@@ -173,6 +176,15 @@ export async function startEmailSystem({ users = [] } = {}) {
         } else if (req.url === '/soap' && req.method === 'POST') {
           assert.equal(req.headers.soapaction, '"http://tempuri.org/SendMail"');
           const fields = parseMail(body);
+          const gateEntry = [...mailGates.entries()].find(([draftNo]) =>
+            fields.i_strBody.includes(draftNo),
+          );
+          if (gateEntry) {
+            const [draftNo, gate] = gateEntry;
+            gate.enter(fields);
+            await gate.released;
+            mailGates.delete(draftNo);
+          }
           const failedId = [...failOnce].find((id) =>
             fields.i_strBody.includes(id),
           );
@@ -348,6 +360,17 @@ export async function startEmailSystem({ users = [] } = {}) {
       browser,
       mail,
       failOnce,
+      pauseMail(draftNo) {
+        let enter, release;
+        const entered = new Promise((resolve) => {
+          enter = resolve;
+        });
+        const released = new Promise((resolve) => {
+          release = resolve;
+        });
+        mailGates.set(draftNo, { enter, release, released });
+        return { entered, release };
+      },
       evidence,
       close,
       assertHealthy() {

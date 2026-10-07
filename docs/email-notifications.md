@@ -2,6 +2,16 @@
 
 Included in `main` at baseline `745ae99` through the 6 October 2026 merge of `feat/email-notification`, based on the reviewed destination-status design. This guide describes local source behavior, not a company deployment or evidence of delivery to a real inbox.
 
+## Draft reminders
+
+Drafts use a separate creation-age trigger and current creator/Admin recipients,
+not destination-status recipient policies. See [Draft management and reminders](draft-management-and-reminders.md).
+There is one logical reminder after 168 hours; transport/retry controls remain
+shared. Draft failures remain inspectable in Admin management and are excluded
+from aggregate failure-alert emails to avoid retaining copied private Draft
+metadata. Legacy aggregate copies are purged and current alert claims are fenced
+before delivery. Ordinary submitted-request failure summaries remain unchanged.
+
 ## Status Management
 
 Each work status has `emailPolicy = { enabled, to, cc }`. Existing statuses without a policy and newly created statuses default to off; Draft always stays off.

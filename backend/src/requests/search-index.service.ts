@@ -16,20 +16,16 @@ export interface RequestSearchIndexSource {
   status: string;
   requester: string | null;
   requesterUserId: string | null;
-  setupOwnerUserId?: string | null;
-  setupOwner: string | null;
-  setupOwnerRole: string | null;
   productType: string | null;
   requestDate: Date | string | null;
   updatedAt: Date | string;
 }
 
 export interface RequestSearchFilters {
+  team?: 'all' | 'GNTC' | 'MFG' | 'unclassified';
   keyword?: string;
   status?: string;
   priority?: string;
-  setupOwner?: string;
-  setupOwnerRole?: string;
   productType?: string;
   requester?: string;
   requesterUserId?: string;
@@ -52,9 +48,6 @@ export interface RequestSearchIndexItem {
   priority: string | null;
   requester: string | null;
   requesterUserId?: string | null;
-  setupOwnerUserId?: string | null;
-  setupOwner: string | null;
-  setupOwnerRole: string | null;
   productType: string | null;
   requestDate: string | null;
   dueDate: string | null;
@@ -71,7 +64,7 @@ export interface RequestSearchResult {
 
 export interface RequestScopeFilters {
   scope: 'all' | 'related';
-  relation: 'all' | 'created' | 'assigned' | 'department';
+  relation: 'all' | 'created';
   workState: 'all' | 'open' | 'overdue' | 'completed';
   actorId: string;
   actorRole: AuthenticatedUserProfile['role'];
@@ -85,8 +78,6 @@ export interface RequestExportItem {
   requestNo: string;
   status: string;
   requester: string | null;
-  setupOwner: string | null;
-  setupOwnerRole: string | null;
   productType: string | null;
   requestDate: string;
   updatedAt: string;
@@ -267,8 +258,8 @@ export class SearchIndexService implements OnModuleInit {
         this.stringFromCanonical(canonicalValues.priority),
         source.requester ?? this.stringFromCanonical(canonicalValues.requester),
         source.requesterUserId,
-        source.setupOwner,
-        source.setupOwnerRole,
+        null,
+        null,
         source.productType ??
           this.stringFromCanonical(canonicalValues.product_type),
         this.serializeDateForQuery(source.requestDate),
@@ -276,7 +267,7 @@ export class SearchIndexService implements OnModuleInit {
           ? dueDate
           : null,
         this.serializeDateForQuery(source.updatedAt),
-        source.setupOwnerUserId ?? null,
+        null,
       ],
     );
   }
@@ -323,18 +314,6 @@ export class SearchIndexService implements OnModuleInit {
     this.addCaseInsensitiveFilter(
       where,
       params,
-      'setup_owner',
-      filters.setupOwner,
-    );
-    this.addCaseInsensitiveFilter(
-      where,
-      params,
-      'setup_owner_role',
-      filters.setupOwnerRole,
-    );
-    this.addCaseInsensitiveFilter(
-      where,
-      params,
       'product_type',
       filters.productType,
     );
@@ -367,25 +346,19 @@ export class SearchIndexService implements OnModuleInit {
     this.addDateFilter(where, params, 'due_date', '>=', filters.dueDateFrom);
     this.addDateFilter(where, params, 'due_date', '<=', filters.dueDateTo);
 
-    if (scope.scope === 'related') {
-      if (scope.relation === 'created') {
-        where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
-      } else if (
-        scope.relation === 'assigned' &&
-        scope.actorRole === 'setup_owner'
-      ) {
-        where.push(`setup_owner_user_id = ${add(scope.actorId)}::uuid`);
-      } else if (scope.relation === 'department') {
-        where.push(`setup_owner_role = ${add(scope.department)}`);
-      } else if (scope.actorRole === 'setup_owner') {
-        const actorId = add(scope.actorId);
-        where.push(
-          `(requester_user_id = ${actorId}::uuid OR setup_owner_user_id = ${actorId}::uuid)`,
-        );
-      } else {
-        where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
-      }
+    if (
+      scope.scope === 'related' &&
+      (scope.relation === 'created' || scope.actorRole !== 'setup_owner')
+    ) {
+      where.push(`requester_user_id = ${add(scope.actorId)}::uuid`);
     }
+    if (filters.team === 'GNTC') where.push("product_type = 'New Product'");
+    else if (filters.team === 'MFG')
+      where.push("product_type IN ('Transfer Product','Existing Product')");
+    else if (filters.team === 'unclassified')
+      where.push(
+        "(product_type IS NULL OR product_type NOT IN ('New Product','Transfer Product','Existing Product'))",
+      );
 
     if (filters.keyword?.trim()) {
       params.push(`%${filters.keyword.trim()}%`);
@@ -473,20 +446,8 @@ export class SearchIndexService implements OnModuleInit {
     this.addCaseInsensitiveFilter(
       where,
       params,
-      'setup_owner',
-      filters.setupOwner,
-    );
-    this.addCaseInsensitiveFilter(
-      where,
-      params,
       this.draftCanonicalText('priority'),
       filters.priority,
-    );
-    this.addCaseInsensitiveFilter(
-      where,
-      params,
-      'setup_owner_role',
-      filters.setupOwnerRole,
     );
     this.addCaseInsensitiveFilter(
       where,
@@ -560,9 +521,6 @@ export class SearchIndexService implements OnModuleInit {
           priority: this.stringFromCanonical(canonical.priority),
           requester: row.requester,
           requesterUserId: row.requester_user_id,
-          setupOwnerUserId: row.setup_owner_user_id ?? null,
-          setupOwner: row.setup_owner,
-          setupOwnerRole: row.setup_owner_role,
           productType: row.product_type,
           requestDate: this.serializeNullableTimestamp(row.created_at),
           dueDate: this.stringFromCanonical(canonical.due_date),
@@ -1018,9 +976,6 @@ export class SearchIndexService implements OnModuleInit {
       priority: row.priority,
       requester: row.requester,
       requesterUserId: row.requester_user_id,
-      setupOwnerUserId: row.setup_owner_user_id ?? null,
-      setupOwner: row.setup_owner,
-      setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,
       requestDate: this.serializeNullableTimestamp(row.request_date),
       dueDate: this.serializeNullableTimestamp(row.due_date),
@@ -1040,8 +995,6 @@ export class SearchIndexService implements OnModuleInit {
       requestNo: row.request_no,
       status: row.status,
       requester: row.requester,
-      setupOwner: row.setup_owner,
-      setupOwnerRole: row.setup_owner_role,
       productType: row.product_type,
       requestDate: this.serializeTimestamp(row.request_date),
       updatedAt: this.serializeTimestamp(row.updated_at),

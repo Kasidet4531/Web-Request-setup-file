@@ -5,9 +5,11 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Draft lifecycle update, 7 October 2026:** Admin/My Draft deletion, seven-day reminders and Product Type team filtering replace request assignment. See [the implementation guide](draft-management-and-reminders.md) and [verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md).
+
 > **Admin rule dialogs update, 7 October 2026:** Auto-fill Rules now supports explicit Active/Inactive selection, modal Create/Edit and label-only wrapping targets. Edit Status keeps added recipients below both input groups. See [the approved spec](specs/2026-10-07-autofill-admin-dialogs-design.md) and [fresh verification](verification/2026-10-07-admin-autofill-dialogs.md).
 
-> **Forms and assignment update, 6 October 2026:** The feature update, now merged into `main`, implements
+> **Historical forms and assignment update, 6 October 2026 (assignment superseded by 7 October Draft lifecycle changes):** The feature update, now merged into `main`, implements
 > [the approved form management and request assignment design](superpowers/specs/2026-10-06-form-management-and-request-assignment-design.md).
 > Form previews use temporary interactive values and assignment uses a setup
 > owner's UUID. The sections below describe the resulting behavior; disposable
@@ -82,53 +84,39 @@ Sources: [guards](../backend/src/auth/local-auth.guard.ts),
 
 ## Requests, forms and workflow
 
-Every authenticated role can create a PSF Request as a creator-private Draft.
-Foreign Drafts remain inaccessible even to Admin. Shared work is available
-through all/related views; a Setup File Owner's default related view combines
-actor-created requests and requests assigned to that exact user UUID, counting
-overlap once. My draft is creator-only. All authenticated actors may edit
-shared requester data; the original creator remains the requester. Setup File
-Owners/Admin may edit PSF data on accessible work, including their own Drafts
-and completed work. PSF saves do not claim or replace the setup owner.
-Source: [request service](../backend/src/requests/requests.service.ts).
+Every authenticated role can create and edit their own Draft. Other ordinary
+actors cannot access it. Admin Draft Management provides a separate read-only
+list/detail capability for Admins; it does not permit editing or submitting a
+foreign Draft. Creator/Admin may permanently delete a current Draft using its
+opaque revision. Submitted work is never deletable through these operations.
+All authenticated actors may edit shared requester information. Setup File
+Owners/Admin may edit accessible shared PSF information across departments,
+including completed work. Requester-only actors retain their PSF restrictions.
+Sources: [request lifecycle](../backend/src/requests/requests.service.ts),
+[Admin management](../backend/src/requests/admin-drafts.controller.ts).
 
-Assignment is optional: a request can be saved and submitted as Unassigned.
-The creator can choose a setup owner while creating/editing a private Draft;
-assignment never makes that Draft accessible to another user. After Submit,
-every authenticated role able to access the request can assign, change or clear
-its owner. Assignment changes no workflow status, PSF release or edit rights
-and queues no notification job. Server-owned profile data supplies the owner
-name/department snapshot, and assignment, revision, search index and history
-commit in one transaction. Detail assignment uses `expectedUpdatedAt`; a stale
-revision conflicts and the dialog preserves the chosen owner for review.
-If the latest snapshot changes workflow status, Detail rebases the selected
-status and refreshes allowed transitions without discarding pending form edits;
-obsolete option responses cannot overwrite a newer request context.
-Unrelated requester/PSF saves preserve the assignment. Pending form edits block
-assignment saving. Selecting the existing UUID is a no-op, including after the
-user's profile changes.
+Request assignment has been removed from inputs, endpoints, responses, screens,
+Excel metadata and stored assignment history. Account roles/departments remain.
+Startup performs an idempotent, scoped cleanup of legacy assignment values and
+metadata and invalidates cached exports that could retain them. Ordinary request
+content/history is preserved. PSF saves do not capture an individual owner.
 
-The authenticated assignee directory exposes only ID, display name and GNTC/MFG
-department for eligible setup owners. When names and departments collide, the
-picker prefixes a labeled Account ID derived from the existing UUID, extending
-its prefix until it distinguishes the returned accounts. Labels stay stable
-while searching, and the ID qualifier is searchable. Submit revalidates a saved nonempty
-assignee; a user who lost eligibility must be replaced or explicitly cleared.
-Profile name/department/role changes leave existing request snapshots intact.
-Legacy name/department-only records retain their display values with a null
-owner UUID; no name matching or PSF save backfills their identity. Department
-work includes those records. A new explicit assignment replaces the snapshot;
-Unassigned clears ID, name and department together.
+Setup File Owner Dashboard defaults to a Product Type-derived Team filter:
+New Product is GNTC; Transfer Product/Existing Product is MFG. All teams and
+unclassified work remain selectable. Missing/custom Product Type values display
+“รอระบุ Product Type”. Team filtering does not restrict cross-team PSF editing.
+Rows, totals and summaries use the same query; changes follow the latest saved
+Product Type without modifying existing PSF information. Requester/Admin
+Dashboard remains creator-scoped. Drafts stay outside shared work totals.
+Source: [query scope](../backend/src/requests/search-index.service.ts),
+[Dashboard](../frontend/src/components/RequestsWorkspace.tsx).
 
-Only Setup File Owners see the Dashboard Relationship dropdown: Related to me,
-Created by me, Assigned to me and Department work. Personal assignment uses
-UUIDs, including when owners have identical names/departments. Summary cards
-and the request table apply the same committed filter. Requester/Admin dashboards
-remain creator-scoped. Assigned Drafts are excluded from shared listings/indexes
-and owner dashboard totals until Submit succeeds.
-Sources: [assignment picker](../frontend/src/components/RequestAssigneePicker.tsx),
-[assignment dialog](../frontend/src/components/RequestAssignmentDialog.tsx),
-[dashboard/query scope](../backend/src/requests/search-index.service.ts).
+Permanent deletion removes Draft form/schema content, prior audit metadata,
+projections and request-linked mail. Only minimal actor/Draft-number/time deletion
+logs remain, visible to Admins. Existing creator-owned export jobs are conservatively
+invalidated: their content and claim tokens are cleared so a running worker cannot
+publish stale Draft contents afterward. New exports read remaining current records.
+See [Draft management and reminders](draft-management-and-reminders.md).
 
 Form Management supports separate versioned `psf-request` and
 `psf-created-information` families, with draft/save/duplicate/discard/publish.
@@ -143,7 +131,7 @@ request writes nor runtime autofill/mail. Required-field checking is local;
 requester identity uses clearly marked locked sample data. New Request and
 Detail editors use the same configured order without automatic Additional
 details grouping. Detail alone uses bold 14px field labels, thin read-mode
-separators and 16px section headings; Owner / Dept remains visible.
+separators and 16px section headings. Request Owner / Dept metadata has been removed.
 New requests capture both active schemas. Requester Draft schema upgrades are
 explicit and do not upgrade the captured PSF schema. Legacy PSF records resolve
 through the fixed original descriptor. Required fields may be incomplete on
@@ -249,8 +237,9 @@ query parameters. This table lists routes, not full payload schemas.
 | Development auth   | `POST /api/dev/login`                                                                                                                                            | [DevelopmentAuthController](../backend/src/auth/development-auth.controller.ts)        |
 | Active schema      | `GET /api/forms/:formKey/schema`                                                                                                                                 | [FormsController](../backend/src/forms/forms.controller.ts)                            |
 | Requests           | `POST/GET /api/requests`, `GET /api/requests/:requestId`                                                                                                         | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
-| Assignment         | `GET /api/requests/assignees`, `PUT /api/requests/:requestId/assignment`                                                                                         | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Request reads      | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/status-options`                                                                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Draft management | `GET /api/admin/drafts`, `GET /api/admin/drafts/:id`, `GET /api/admin/draft-deletions`, `DELETE /api/requests/:id` | [Admin controller](../backend/src/requests/admin-drafts.controller.ts), [request controller](../backend/src/requests/requests.controller.ts) |
+| Draft reminders | `GET /api/admin/draft-reminders` | [reminder inspection](../backend/src/notifications/draft-reminders.controller.ts) |
 | Request edits      | `PUT /api/requests/:requestId/requester-data`, `PUT /api/requests/:requestId/psf-created-data`, `PUT /api/requests/:requestId/status`                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Submission/upgrade | `POST /api/requests/:requestId/submit`, `POST /api/requests/:requestId/upgrade-schema`                                                                           | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Status reads       | `GET /api/workflow/statuses`                                                                                                                                     | [WorkflowStatusController](../backend/src/admin/workflow_transition.controller.ts)     |
@@ -280,7 +269,7 @@ standalone migration command in the backend package scripts.
 | `psf_export_jobs`                                         | [ExportJobRepository](../backend/src/export/export-job.repository.ts)            |
 
 Requests hold requester/PSF data and independent schema snapshots in JSONB,
-creator and owner association, release and other timestamps. The deployed
+creator, release and other timestamps. Request assignment columns are cleared for legacy storage compatibility and are not part of current request contracts. The deployed
 contents/schema/version are not established by the source audit. The supplied
 development endpoint `10.0.20.6:5432/psf_setup_db` passed a read-only connection
 check through `pg.Pool`; this did not run application initializers or feature writes.
@@ -347,8 +336,8 @@ and mobile validation actions were reachable by keyboard. Background admin
 breadcrumbs overlap at mobile width in Preview frames; this shell limitation
 remains visible outside the modal. The tracked [Task 4 verification plan](superpowers/plans/2026-10-06-form-management-and-request-assignment.md#task-4-real-system-flows-visual-checks-and-final-review)
 and the [form-management](../backend/test/form-management-system.e2e.mjs) /
-[request-assignment](../backend/test/request-assignment-system.e2e.mjs) test sources
-are available for reproduction; they do not replace the missing original run report.
+[historical request-assignment](https://github.com/Kasidet4531/Web-Request-setup-file/blob/43f6d6abe3245662300e17b25742f71e68fe739c/backend/test/request-assignment-system.e2e.mjs) test sources (the assignment source is pinned to its pre-removal commit)
+are available for historical reproduction; they do not replace the missing original run report.
 
 - No attachment runtime, export-profile CRUD, tracked Nginx deployment configuration,
   or advanced third-party schema editor is implemented in this checkout.

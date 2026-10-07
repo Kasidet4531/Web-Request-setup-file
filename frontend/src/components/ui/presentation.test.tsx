@@ -26,10 +26,10 @@ describe('accessible presentation boundaries', () => {
 })
 
 
-it('renders assignment before/after snapshots as Owner / Dept without exposing raw UUID metadata', () => {
+it('does not render removed request assignment metadata', () => {
   const markup = renderToStaticMarkup(<HistoryChanges metadata={{ before: { setupOwnerUserId: 'owner-1', setupOwner: 'Same name', setupOwnerRole: 'GNTC' }, after: { setupOwnerUserId: null, setupOwner: null, setupOwnerRole: null } }} />)
-  expect(markup).toContain('Owner / Dept')
-  expect(markup).toContain('Same name / GNTC')
-  expect(markup).toContain('Unassigned')
+  expect(markup).not.toContain('Owner / Dept')
+  expect(markup).not.toContain('Same name / GNTC')
+  expect(markup).not.toContain('Unassigned')
   expect(markup).not.toContain('owner-1')
 })

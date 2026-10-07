@@ -20,7 +20,6 @@ const AUDIT_ACTIONS: Array<{ label: string; value: PsfRequestHistoryAction }> = 
   { label: 'Draft created', value: 'DRAFT_CREATED' },
   { label: 'Draft requester information updated', value: 'DRAFT_REQUESTER_DATA_UPDATED' },
   { label: 'Request submitted', value: 'REQUEST_SUBMITTED' },
-  { label: 'Request assignee changed', value: 'REQUEST_ASSIGNEE_CHANGED' },
   { label: 'Request status changed', value: 'REQUEST_STATUS_CHANGED' },
   { label: 'Requester information updated', value: 'REQUESTER_INFORMATION_UPDATED' },
   { label: 'PSF Created Information updated', value: 'PSF_CREATED_INFORMATION_UPDATED' },

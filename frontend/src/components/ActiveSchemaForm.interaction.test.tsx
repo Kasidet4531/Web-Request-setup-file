@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type PsfRequestResponse } from '../services/api'
 import type { ActiveFormSchemaResponse, FormSchema } from '../types/forms'
 import { ActiveSchemaForm, DraftSchemaUpgradeDecision, type ActiveSchemaFormProps } from './ActiveSchemaForm'
-import { RequestAssigneePicker } from './RequestAssigneePicker'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 
 const requestApi = vi.hoisted(() => ({
@@ -207,9 +206,9 @@ function buildDraft(overrides: Partial<PsfRequestResponse> = {}): PsfRequestResp
     formVersion: 1,
     status: 'Draft',
     requester: 'Requester Demo',
-    setupOwnerUserId: null,
-    setupOwner: null,
-    setupOwnerRole: null,
+
+
+
     productType: 'New Product',
     requesterData: { product_type: 'New Product' },
     psfCreatedData: {},
@@ -1310,65 +1309,5 @@ describe('ActiveSchemaForm explicit submitted editing', () => {
     ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', '')
     expect(onDirtyChange).toHaveBeenLastCalledWith(false)
     expect(requestApi.fetchActiveFormSchema).toHaveBeenCalledOnce()
-  })
-})
-
-
-describe('Draft setup owner metadata', () => {
-  beforeEach(() => {
-    hookHarness.reset()
-    Object.values(requestApi).forEach(method => method.mockReset())
-    requestApi.fetchActiveFormSchema.mockResolvedValue(currentActiveRequestSchema)
-    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ setupOwnerUserId: 'owner-1', setupOwner: 'Same name', setupOwnerRole: 'GNTC' }))
-  })
-  const picker = (page: unknown) => requireRenderedElement(page, e => e.type === RequestAssigneePicker)
-  it('saves a selected UUID separately from new Draft form values and marks owner-only changes dirty', async () => {
-    const dirty = vi.fn()
-    const render = () => { hookHarness.beginRender(); return ActiveSchemaForm({ mode: 'request', onDirtyChange: dirty }) }
-    render(); hookHarness.runEffects(); await flushAsyncWork()
-    let page = render()
-    ;(picker(page).props.onChange as (id: string | null) => void)('owner-2')
-    page = render()
-    expect(dirty).toHaveBeenLastCalledWith(true)
-    expect(picker(page).props.value).toBe('owner-2')
-    requestApi.createDraftRequest.mockResolvedValue(buildDraft({ setupOwnerUserId: 'owner-2' }))
-    await (getFormRenderer(page).props.onSubmit as (v: Record<string, string>) => Promise<void>)({ product_type: '', legacy_note: '' })
-    expect(requestApi.createDraftRequest).toHaveBeenCalledWith({ setupOwnerUserId: 'owner-2', requesterData: { product_type: '', legacy_note: '' } })
-    expect(dirty).toHaveBeenLastCalledWith(false)
-  })
-  it('loads, changes, and explicitly clears a Draft owner; ordinary data edits omit assignment', async () => {
-    let page = await loadOlderDraft()
-    expect(picker(page).props.value).toBe('owner-1')
-    requestApi.updateDraftRequesterData.mockResolvedValue(buildDraft({ setupOwnerUserId: 'owner-1' }))
-    await (getFormRenderer(page).props.onSubmit as (v: Record<string, string>) => Promise<void>)({ product_type: 'New Product' })
-    expect(requestApi.updateDraftRequesterData.mock.lastCall?.[1]).not.toHaveProperty('setupOwnerUserId')
-    page = renderDraftForm()
-    ;(picker(page).props.onChange as (id: string | null) => void)(null)
-    page = renderDraftForm()
-    requestApi.updateDraftRequesterData.mockResolvedValue(buildDraft({ setupOwnerUserId: null }))
-    await (getFormRenderer(page).props.onSubmit as (v: Record<string, string>) => Promise<void>)({ product_type: 'New Product' })
-    expect(requestApi.updateDraftRequesterData.mock.lastCall?.[1]).toMatchObject({ setupOwnerUserId: null })
-  })
-  it('preserves legacy ownership on save and the intended choice plus requester edits after conflict', async () => {
-    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ setupOwnerUserId: null, setupOwner: 'Legacy owner', setupOwnerRole: 'MFG' }))
-    let page = await loadOlderDraft()
-    expect(picker(page).props.value).toBeUndefined()
-    expect(picker(page).props.recordedOwner).toBe('Legacy owner / MFG')
-    requestApi.updateDraftRequesterData.mockResolvedValueOnce(buildDraft({ setupOwnerUserId: null, setupOwner: 'Legacy owner' }))
-    await (getFormRenderer(page).props.onSubmit as (v: Record<string, string>) => Promise<void>)({ product_type: 'New Product' })
-    expect(requestApi.updateDraftRequesterData.mock.lastCall?.[1]).not.toHaveProperty('setupOwnerUserId')
-    page = renderDraftForm()
-    ;(picker(page).props.onChange as (id: string | null) => void)('owner-2')
-    ;(getFormRenderer(page).props.onChange as (k: string, v: string) => void)('legacy_note', 'Local edit')
-    page = renderDraftForm()
-    requestApi.updateDraftRequesterData.mockRejectedValueOnce(new ApiError('Conflict', 409, 'Conflict', null))
-    requestApi.fetchPsfRequest.mockResolvedValueOnce(buildDraft({ setupOwnerUserId: 'owner-3', updatedAt: 'latest-revision' }))
-    await (getFormRenderer(page).props.onSubmit as (v: Record<string, string>) => Promise<void>)({ product_type: 'New Product', legacy_note: 'Local edit' })
-    page = renderDraftForm()
-    expect(picker(page).props.value).toBe('owner-2')
-    expect(getFormRenderer(page).props.values).toMatchObject({ legacy_note: 'Local edit' })
-    requestApi.updateDraftRequesterData.mockResolvedValue(buildDraft())
-    await (getFormRenderer(page).props.onSubmit as (v: Record<string, string>) => Promise<void>)({ product_type: 'New Product', legacy_note: 'Local edit' })
-    expect(requestApi.updateDraftRequesterData.mock.lastCall?.[1]).toMatchObject({ expectedUpdatedAt: 'latest-revision', setupOwnerUserId: 'owner-2' })
   })
 })

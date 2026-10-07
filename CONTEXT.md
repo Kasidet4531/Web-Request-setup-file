@@ -4,8 +4,7 @@
 
 This context manages the request lifecycle for creating and updating PSF Setup Files, enforcing role-based visibility and dynamic form configurations.
 
-Scope: `main` at `745ae99`. Assignment and relationship definitions were aligned
-with source on 2026-10-06; the original glossary audit was 2026-10-02. Use this glossary with
+Scope: current `main`, including the 7 October Draft lifecycle and Product Type grouping changes. The original glossary audit was 2026-10-02. Use this glossary with
 [current implementation](docs/current-implementation.md); historical specifications
 and ADR bodies do not override the current source.
 
@@ -26,17 +25,11 @@ A user role providing request information. Every authenticated role may create a
 _Avoid_: Requester Role, Applicant
 
 **Setup File Owner**:
-An engineer or user role responsible for shared PSF work and setup details, belonging to **GNTC** or **MFG**. This role and Admin may edit PSF information in every work status, including Completed, and their own Drafts; foreign Drafts remain inaccessible. Assignment identifies a responsible person and does not change these edit rights. Saving PSF information preserves the existing assignment; an unassigned request remains unassigned.
+An engineer or user role responsible for shared PSF work and setup details, belonging to **GNTC** or **MFG**. This role and Admin may edit accessible shared PSF information, including Completed work, across both departments. Ordinary foreign Drafts remain inaccessible; Admin Draft Management grants read-only inspection without transferring Draft editing rights. No individual owner is assigned or automatically captured by a PSF save.
 _Avoid_: Engineer, Owner, Setup Owner
 
-**Request Assignment**:
-An explicit selection of an eligible Setup File Owner by UUID, or Unassigned. The saved name and department are snapshots of that selection. Assignment is optional and changes neither Work Status, PSF Visibility Release nor editing rights. A creator may select an owner for a private Draft; after submission, any authenticated actor with access may assign, change or clear its owner. Assignment does not grant access to a foreign Draft. Legacy name/department-only assignments retain their display values until explicitly replaced or cleared; names are not used to infer a person's UUID. See [current assignment behavior](docs/current-implementation.md#requests-forms-and-workflow).
-
 **Related Work**:
-For a Setup File Owner, shared PSF Requests created by that person OR assigned to that person's UUID, counting each request once. Requester and Admin dashboards remain creator-scoped. Drafts are excluded from shared work and dashboard totals.
-
-**Department Work**:
-Shared PSF Requests whose saved owner department matches the Setup File Owner's department. This separate Dashboard relationship includes legacy name/department-only assignments; it does not define personal Related Work.
+Shared PSF Requests available to a Setup File Owner, optionally filtered by Product Type-derived Dashboard Team Group. Requester and Admin Dashboard views remain creator-scoped. Drafts are excluded from shared work and operational totals.
 
 **Product Type**:
 The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in the request table's title/product-type column. XLSX places metadata columns before requester-form fields; Product Type is not its first column.
@@ -49,7 +42,7 @@ The section containing setup details, editable by backend-authorized Setup File 
 _Avoid_: Setup Information, Completed Info
 
 **Draft**:
-A saved, creator-private PSF Request not yet explicitly submitted. Every authenticated role has `My draft`; even Admin/PSF actors cannot access a foreign Draft. Drafts are excluded from shared lists and operational totals. The detail Action center submits the same record to an explicitly selected work status; ordinary status updates cannot submit a Draft or return shared work to Draft.
+A saved PSF Request not yet explicitly submitted. Every authenticated role has `My draft` and can edit/delete their own Drafts. Admin can inspect other creators' Drafts read-only and permanently delete them through Draft Management; ordinary foreign-Draft access remains private. Drafts are excluded from shared lists and operational totals. The detail Action center submits the same record to an explicitly selected work status; ordinary status updates cannot submit a Draft or return shared work to Draft.
 _Avoid_: In-progress request, unsaved request
 
 **Work Status**:
@@ -93,6 +86,18 @@ _Avoid_: File upload, document
 The standardized reference values (e.g., list of Products, Wafer FABs, or Machines) embedded directly within the Form Schema to populate selection dropdowns, ensuring data consistency.
 _Avoid_: Lookup tables, static lists
 
+## Draft lifecycle vocabulary
+
+These terms follow the [Draft lifecycle specification](docs/specs/2026-10-07-draft-lifecycle-and-product-team-filtering.md) and current implementation.
+
+**Draft Reminder**:
+A one-time reminder about a PSF Request still in Draft seven days after creation, addressed to its creator and current Admin accounts. Editing the Draft does not reset its age. Unusable recipient addresses are reported for Admin inspection.
+
+**Draft Management**:
+The Admin capability to list and read Drafts and permanently delete them before submission. Management read access does not transfer a Draft's editing or submission rights. Creators can permanently delete their own Drafts through My Drafts.
+
+**Dashboard Team Group**:
+A Product Type-derived grouping: New Product belongs to GNTC; Transfer Product and Existing Product belong to MFG. It is used for Dashboard filtering while preserving cross-team PSF editing rights. Missing or unrecognized Product Type is displayed as “รอระบุ Product Type” and belongs to neither team group.
 
 
 

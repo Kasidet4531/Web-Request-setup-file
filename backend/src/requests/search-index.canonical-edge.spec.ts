@@ -316,7 +316,6 @@ describe('private Draft captured canonical edge production paths', () => {
         priority: 'Urgent',
         dueDateFrom: '2026-10-01',
         dueDateTo: '2026-10-02',
-        setupOwnerRole: 'GNTC',
         limit: 1,
         offset: 900,
       });
@@ -328,7 +327,6 @@ describe('private Draft captured canonical edge production paths', () => {
       expect(params).toEqual([
         actor.id,
         'Urgent',
-        'GNTC',
         '2026-10-01',
         '2026-10-02',
         1,
@@ -347,11 +345,10 @@ describe('private Draft captured canonical edge production paths', () => {
       expect(filtered).toContain(
         "'^[[:space:]]+|[[:space:]]+$', '', 'g'), '')",
       );
-      expect(filtered).toContain('LOWER(setup_owner_role) = LOWER($3)');
       expect(sql).toContain(
         'totals AS (SELECT COUNT(*)::int AS total_count FROM filtered)',
       );
-      expect(sql).toContain('LIMIT $6 OFFSET $7');
+      expect(sql).toContain('LIMIT $5 OFFSET $6');
       expect(sql).not.toContain('form_definitions');
       expect(sql).not.toContain('psf_request_search_index');
       expect(pool.query).toHaveBeenCalledTimes(1);

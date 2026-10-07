@@ -162,8 +162,6 @@ describe('SearchIndexService canonical extraction', () => {
         status: 'Submitted',
         requester: 'Fook',
         requesterUserId: '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
-        setupOwner: null,
-        setupOwnerRole: 'GNTC',
         productType: 'New Product',
         requestDate: new Date('2026-06-18T01:02:03.000Z'),
         updatedAt: new Date('2026-06-18T01:05:03.000Z'),
@@ -192,7 +190,7 @@ describe('SearchIndexService canonical extraction', () => {
         'Fook',
         '9a704ed6-3e0f-4501-a0bc-3a0e8d5f7a0e',
         null,
-        'GNTC',
+        null,
         'New Product',
         '2026-06-18T01:02:03.000Z',
         '2026-07-01',
@@ -235,7 +233,6 @@ describe('SearchIndexService canonical extraction', () => {
         keyword: 'probe',
         status: 'Submitted',
         priority: 'High',
-        setupOwnerRole: 'GNTC',
         productType: 'New Product',
         dueDateFrom: '2026-07-01',
         dueDateTo: '2026-07-31',
@@ -255,9 +252,6 @@ describe('SearchIndexService canonical extraction', () => {
           priority: 'High',
           requester: 'Fook',
           requesterUserId: 'requester-1',
-          setupOwnerUserId: null,
-          setupOwner: null,
-          setupOwnerRole: 'GNTC',
           productType: 'New Product',
           requestDate: '2026-06-18T01:02:03.000Z',
           dueDate: '2026-07-01T00:00:00.000Z',
@@ -275,7 +269,6 @@ describe('SearchIndexService canonical extraction', () => {
       [
         'Submitted',
         'High',
-        'GNTC',
         'New Product',
         '2026-07-01',
         '2026-07-31',
@@ -512,86 +505,6 @@ describe('SearchIndexService canonical extraction', () => {
     expect(query).not.toContain('LIMIT');
   });
 
-  it.each(['all', 'created', 'department'] as const)(
-    'builds authorized related %s summaries as one SQL aggregate with exact actor identity',
-    async (relation) => {
-      pool.query.mockResolvedValueOnce({
-        rows: [
-          {
-            request_id: null,
-            total_count: 7,
-            open_count: 230,
-            overdue_count: 11,
-            completed_count: 41,
-          },
-        ],
-      });
-      const result = await service.queryRequests(
-        {
-          requester: 'Former Name',
-          setupOwner: 'Different editor',
-          keyword: 'probe',
-          limit: 5,
-          offset: 900,
-        },
-        {
-          scope: 'related',
-          relation,
-          workState: 'overdue',
-          actorId: 'immutable-creator',
-          actorRole: 'setup_owner',
-          department: 'GNTC',
-          openStatuses: ['Reject is still open', 'Renamed active'],
-          completedStatuses: ['Renamed finished'],
-        },
-      );
-      expect(result).toEqual({
-        items: [],
-        total: 7,
-        limit: 5,
-        offset: 900,
-        summary: { open: 230, overdue: 11, completed: 41 },
-      });
-      const [sql, params] = pool.query.mock.calls[0] as [string, unknown[]];
-      const identity =
-        relation === 'all'
-          ? ['immutable-creator']
-          : relation === 'created'
-            ? ['immutable-creator']
-            : ['GNTC'];
-      expect(params).toEqual([
-        'Different editor',
-        'Former Name',
-        ...identity,
-        '%probe%',
-        ['Reject is still open', 'Renamed active'],
-        ['Renamed finished'],
-        5,
-        900,
-      ]);
-      expect(sql).toContain("status <> 'Draft'");
-      expect(sql).toContain('LOWER(setup_owner) = LOWER($1)');
-      expect(sql).toContain('LOWER(requester) = LOWER($2)');
-      expect(sql).toContain(
-        relation === 'all'
-          ? '(requester_user_id = $3::uuid OR setup_owner_user_id = $3::uuid)'
-          : relation === 'created'
-            ? 'requester_user_id = $3::uuid'
-            : 'setup_owner_role = $3',
-      );
-      expect(sql).not.toContain('UNION ALL');
-      const summary = sql.split('summary AS (')[1].split('visible AS')[0];
-      expect(summary).toContain('FROM filtered');
-      expect(summary).not.toContain('LIMIT');
-      expect(sql).toMatch(
-        /visible AS \(SELECT \* FROM filtered WHERE status = ANY\([\s\S]*due_date IS NOT NULL/,
-      );
-      expect(sql).toContain("(NOW() AT TIME ZONE 'Asia/Bangkok')::date");
-      expect(sql).toContain('LEFT JOIN page ON TRUE');
-      expect(pool.query).toHaveBeenCalledTimes(1);
-    },
-  );
-
   it.each(['all', 'open', 'overdue', 'completed'] as const)(
     'keeps summary cards independent of %s work-state and pagination on an empty page',
     async (workState) => {
@@ -725,7 +638,6 @@ describe('SearchIndexService canonical extraction', () => {
 
   it.each([
     { priority: '  Urgent  ' },
-    { setupOwnerRole: '  GNTC  ' },
     { dueDateFrom: '2026-10-01' },
     { dueDateTo: '2026-10-02' },
   ])(
@@ -845,9 +757,7 @@ describe('SearchIndexService canonical extraction', () => {
     const result = await service.queryOwnDrafts('server-actor', {
       requesterUserId: 'foreign-id',
       requester: ' Owner ',
-      setupOwner: ' Engineer ',
       priority: ' Urgent ',
-      setupOwnerRole: ' GNTC ',
       productType: ' Product ',
       requestDateFrom: '2026-09-01',
       requestDateTo: '2026-09-30',
@@ -869,9 +779,7 @@ describe('SearchIndexService canonical extraction', () => {
     expect(params).toEqual([
       'server-actor',
       'Owner',
-      'Engineer',
       'Urgent',
-      'GNTC',
       'Product',
       '2026-09-01',
       '2026-09-30',
@@ -884,10 +792,9 @@ describe('SearchIndexService canonical extraction', () => {
     expect(sql).toContain(
       "FROM psf_requests WHERE status = 'Draft' AND requester_user_id = $1::uuid",
     );
-    expect(sql).toContain('LOWER(setup_owner_role) = LOWER($5)');
-    expect(sql).toContain('>= $9::date');
-    expect(sql).toContain("< ($10::date + INTERVAL '1 day')");
-    expect(sql).toContain('LIMIT $12 OFFSET $13');
+    expect(sql).toContain('>= $7::date');
+    expect(sql).toContain("< ($8::date + INTERVAL '1 day')");
+    expect(sql).toContain('LIMIT $10 OFFSET $11');
     expect(sql).toContain('totals LEFT JOIN page ON TRUE');
     expect(params).not.toContain('foreign-id');
     expect(pool.query).toHaveBeenCalledTimes(1);

@@ -37,9 +37,7 @@ export default tseslint.config(
       'test/email-system*.mjs',
       'test/loading-system.e2e.mjs',
       'test/psf-trigger-system.e2e.mjs',
-      'test/request-assignment.cluster.mjs',
       'test/form-management-system.e2e.mjs',
-      'test/request-assignment-system.e2e.mjs',
     ],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {

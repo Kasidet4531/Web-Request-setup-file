@@ -7,10 +7,10 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 describe('AdministrationTools', () => {
-  it('links each of the six authorized administration and reporting tools once', () => {
+  it('links each of the seven authorized administration and reporting tools once', () => {
     const html = renderToStaticMarkup(<AdministrationTools role="admin" />)
     expect(html).toContain('Audit History')
-    for (const path of ['/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history']) {
+    for (const path of ['/admin/drafts', '/admin/form-config', '/admin/workflow', '/admin/autofill', '/admin/users', '/admin/export-profile', '/history']) {
       expect(html.match(new RegExp(`href="${path}"`, 'g'))).toHaveLength(1)
     }
   })

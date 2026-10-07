@@ -59,6 +59,7 @@ export function navSectionsForRole(role: UserRole | null): NavSection[] {
       items: [
         { to: '/admin', label: 'Administration', icon: Settings },
         { to: '/admin/users', label: 'Users & Roles', icon: Users },
+        { to: '/admin/drafts', label: 'Draft Management', icon: DraftFileText },
         { to: '/admin/form-config', label: 'Form Management', icon: Sliders },
         { to: '/admin/workflow', label: 'Status Management', icon: ListChecks },
         { to: '/admin/autofill', label: 'Auto-fill Rules', icon: Wand2 },

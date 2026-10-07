@@ -60,6 +60,7 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
     const crumbs: Crumb[] = [{ label: 'Administration', ...(segments[1] ? { to: '/admin' } : {}) }]
     const labels: Record<string, string> = {
       users: 'Users & Roles',
+      drafts: 'Draft Management',
       'form-config': 'Form Management',
       workflow: 'Status Management',
       autofill: 'Auto-fill Rules',
@@ -67,7 +68,9 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
       'master-data': 'Master Data',
     }
 
-    if (segments[1] === 'form-config' && segments[2]) {
+    if (segments[1] === 'drafts' && segments[2]) {
+      crumbs.push({ label: 'Draft Management', to: '/admin/drafts' }, { label: 'Draft detail' })
+    } else if (segments[1] === 'form-config' && segments[2]) {
       const explicitFormKey = segments.length > 3 ? segments[2] : null
       const formKey = explicitFormKey === 'psf-created-information' ? explicitFormKey : 'psf-request'
       const version = explicitFormKey ? segments[3] : segments[2]
@@ -344,7 +347,7 @@ export function AppShell() {
               {mobileDrawerOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
 
-            {parent?.to ? <Link className="btn-ghost header-back" to={parent.to} search={parent.search}><ArrowLeft size={15} /><span>Back to {parent.backLabel ?? parent.label}</span></Link> : null}
+            {parent?.to ? <Link className="btn-ghost header-back" aria-label={`Back to ${parent.backLabel ?? parent.label}`} to={parent.to} search={parent.search}><ArrowLeft size={15} /><span>Back to {parent.backLabel ?? parent.label}</span></Link> : null}
             <nav aria-label="Breadcrumbs" className="breadcrumbs">
               <ol>
               {breadcrumbs.map((crumb, index) => (

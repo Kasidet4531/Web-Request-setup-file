@@ -7,8 +7,6 @@ import { RequestsService } from './requests.service';
 describe('RequestsController draft flow', () => {
   let controller: RequestsController;
   let service: {
-    listAssignableSetupOwners: jest.Mock;
-    updateAssignment: jest.Mock;
     createDraft: jest.Mock;
     getAllowedStatusTransitions: jest.Mock;
     getRequestHistory: jest.Mock;
@@ -24,8 +22,6 @@ describe('RequestsController draft flow', () => {
 
   beforeEach(async () => {
     service = {
-      listAssignableSetupOwners: jest.fn(),
-      updateAssignment: jest.fn(),
       createDraft: jest.fn(),
       getAllowedStatusTransitions: jest.fn(),
       getRequestHistory: jest.fn(),
@@ -50,44 +46,19 @@ describe('RequestsController draft flow', () => {
     controller = module.get(RequestsController);
   });
 
-  it('requires authentication for the assignee directory and assignment mutation', async () => {
-    const request = { session: {} } as Parameters<
-      RequestsController['listAssignableSetupOwners']
-    >[0];
+  it('requires authentication before Draft deletion', async () => {
     await expect(
-      controller.listAssignableSetupOwners(request),
+      controller.deleteDraft('request', { expectedUpdatedAt: 'revision' }, {
+        session: {},
+      } as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(
-      controller.updateAssignment(
-        'request',
-        { setupOwnerUserId: null, expectedUpdatedAt: 'revision' },
-        request,
-      ),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(service.listAssignableSetupOwners).not.toHaveBeenCalled();
-    expect(service.updateAssignment).not.toHaveBeenCalled();
   });
-
-  it('accepts assigned relationship queries for authenticated work', async () => {
-    authService.getProfile.mockResolvedValue({
-      id: 'owner',
-      username: 'owner',
-      displayName: 'Owner',
-      role: 'setup_owner',
-      setupOwnerDepartment: 'GNTC',
-    });
-    service.queryRequests.mockResolvedValue({ items: [], total: 0 });
-    const result = await controller.queryRequests(
-      { scope: 'related', relation: 'assigned' },
-      { session: { userId: 'owner' } } as Parameters<
-        RequestsController['queryRequests']
-      >[1],
-    );
-    expect(result).toEqual({ items: [], total: 0 });
-    expect(service.queryRequests).toHaveBeenCalledWith(
-      expect.objectContaining({ relation: 'assigned' }),
-      expect.objectContaining({ id: 'owner' }),
-    );
+  it('rejects removed assignment relationship queries', async () => {
+    await expect(
+      controller.queryRequests({ scope: 'related', relation: 'assigned' }, {
+        session: { userId: 'owner' },
+      } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('creates a draft request with the authenticated server profile rather than client-supplied identity', async () => {
