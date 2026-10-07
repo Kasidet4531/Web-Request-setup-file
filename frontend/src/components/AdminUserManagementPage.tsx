@@ -309,7 +309,7 @@ export function AdminUserManagementPage() {
 
   return (
     <article className="page-card admin-user-management">
-      <PageHeader title="Users & Roles" description="Review company identities and manage roles and Setup File Owner departments." />
+      <PageHeader title="Users & Roles" />
 
       <div className="page-card__body admin-user-management__body">
         <AdminUserManagementFeedback feedback={editingUserId ? null : feedback} loading={loading} />

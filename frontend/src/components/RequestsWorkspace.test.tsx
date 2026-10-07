@@ -389,6 +389,7 @@ describe('RequestHeaderSummary', () => {
 
     expect(html.match(/PSF-0001/g)).toHaveLength(1)
     expect(html).toContain('PSF-0001')
+    expect(renderToStaticMarkup(<RequestHeaderSummary request={request} showRequestNo={false} />)).not.toContain('PSF-0001')
     expect(html).toContain('Production probe card setup')
     expect(html).not.toContain('<span>Product Type</span>')
     expect(html).not.toContain('status-badge--submitted')
@@ -1403,6 +1404,7 @@ describe('RequestDetailShell workflow actions', () => {
     requestDetailHookHarness.runEffects()
     await flushRequestDetailAsyncWork()
     const summary = requireRenderedElement(renderRequestDetailShell(), (element) => element.type === RequestHeaderSummary)
+    expect(summary.props.showRequestNo).toBe(false)
     const header = renderToStaticMarkup(<RequestHeaderSummary request={summary.props.request as PsfRequestResponse} includeMetadata={false} />)
     expect(header).toContain('PSF-0001')
     expect(header).toContain('Custom review')
@@ -2253,21 +2255,29 @@ describe('Tabbed Detail and PSF edit lifecycle', () => {
 
 
 describe('Private draft table presentation', () => {
-  it('shows creator-only visibility and the persisted update timestamp with a Continue link', () => {
+  it('shows the persisted update timestamp, opens a draft from its row, and offers Delete as a button', () => {
     requestDetailHookHarness.beginRender()
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
       referencePsfName: null, psfSetupFileName: null, probecardName: null, status: 'Draft',
       priority: 'Normal', requester: 'Engineer',
       productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
-    const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true })
-    expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Visibility')).toBeTruthy()
+    const onOpenItem = vi.fn()
+    const onDeleteItem = vi.fn()
+    const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true, onOpenItem, onDeleteItem })
+    expect(findRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Visibility')).toBeNull()
+    expect(findRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Visibility')).toBeNull()
     expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Updated')).toBeTruthy()
-    const visibility = requireRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Visibility')
-    expect(visibility.props.children).toBe('Only you')
     const updated = requireRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Updated')
     expect(updated.props.children).toContain('11:00')
-    const link = requireRenderedElement(rendered, element => element.props.children === 'Continue')
-    expect(link.props.params).toEqual({ requestId: 'draft-uuid' })
+    expect(findRenderedElement(rendered, element => element.props.children === 'Continue')).toBeNull()
+    const draftRow = requireRenderedElement(rendered, element => element.type === 'tr' && element.props['aria-label'] === 'Open PSF-DRAFT-9 details')
+    vi.stubGlobal('Element', class { closest() { return null } })
+    try { ;(draftRow.props.onClick as (event: unknown) => void)({ target: new (globalThis as { Element: new () => object }).Element() }) } finally { vi.unstubAllGlobals() }
+    expect(onOpenItem).toHaveBeenCalledWith('draft-uuid')
+    const del = requireRenderedElement(rendered, element => element.type === 'button' && element.props['aria-label'] === 'Delete PSF-DRAFT-9')
+    expect(del.props.className).toContain('btn-secondary')
+    ;(del.props.onClick as () => void)()
+    expect(onDeleteItem).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'draft-uuid' }))
     expect(findRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Responsibility')).toBeNull()
   })
 })
