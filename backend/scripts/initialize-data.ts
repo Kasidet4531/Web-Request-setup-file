@@ -42,7 +42,10 @@ export interface Report {
   imported: number;
   skippedDraft: number;
   outsideCatalog: Record<string, number>;
-  mismatches: Record<string, number>;
+  mismatches: Record<
+    string,
+    { rows: number; distinct: number; top?: Record<string, number> }
+  >;
   missingColumns: string[];
 }
 
@@ -108,6 +111,10 @@ const slug = (value: string) =>
 const wallClock = (date: Date) =>
   date.toISOString().slice(0, 19).replace('T', ' ');
 
+// Merged ranges repeat the master's value in every cell; only the master counts.
+const own = (cell: ExcelJS.Cell): ExcelJS.CellValue =>
+  cell.isMerged && cell.master.address !== cell.address ? null : cell.value;
+
 function cellText(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return value.toISOString();
@@ -128,18 +135,18 @@ function readMapping(ws: ExcelJS.Worksheet) {
 
   for (let r = 2; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
-    const name = cellText(row.getCell(2).value).trim();
-    const option = cellText(row.getCell(5).value).trim();
+    const name = cellText(own(row.getCell(2))).trim();
+    const option = cellText(own(row.getCell(5))).trim();
     if (name) {
       inStatus = norm(name) === 'status';
       current = undefined;
       if (!inStatus) {
-        const audience = norm(cellText(row.getCell(1).value));
-        const type = TYPES[norm(cellText(row.getCell(4).value))];
+        const audience = norm(cellText(own(row.getCell(1))));
+        const type = TYPES[norm(cellText(own(row.getCell(4))))];
         if (!type) throw new Error(`Column_Mapping row ${r}: unknown Type.`);
         current = {
           name,
-          label: cellText(row.getCell(3).value).trim() || name,
+          label: cellText(own(row.getCell(3))).trim() || name,
           key: KEY_OVERRIDES[norm(name)] ?? slug(name),
           side: /requ/.test(audience)
             ? 'requester'
@@ -262,7 +269,7 @@ function buildCatalog(names: string[]) {
 function convert(
   column: Column,
   raw: ExcelJS.CellValue,
-  mismatches: Map<string, number>,
+  mismatches: Map<string, Map<string, number>>,
 ): string {
   if (column.type === 'date' && raw instanceof Date)
     return raw.toISOString().slice(0, 10);
@@ -277,12 +284,19 @@ function convert(
     fits = false;
   } else if (column.type === 'number') fits = isNumericText(value);
   else if (column.type === 'date') fits = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  if (!fits)
-    mismatches.set(column.name, (mismatches.get(column.name) ?? 0) + 1);
+  if (!fits) {
+    const seen = mismatches.get(column.name) ?? new Map<string, number>();
+    seen.set(value, (seen.get(value) ?? 0) + 1);
+    mismatches.set(column.name, seen);
+  }
   return value;
 }
 
-export async function initialize(db: Db, file: string): Promise<Report> {
+export async function initialize(
+  db: Db,
+  file: string,
+  options: { showValues?: boolean } = {},
+): Promise<Report> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(file);
   const mapping = workbook.getWorksheet('Column_Mapping');
@@ -376,7 +390,7 @@ export async function initialize(db: Db, file: string): Promise<Report> {
 
   // Requests.
   const searchIndex = new SearchIndexService(db as unknown as Pool);
-  const mismatches = new Map<string, number>();
+  const mismatches = new Map<string, Map<string, number>>();
   const outsideCatalog = new Map<string, number>();
   const inCatalog = new Set(statuses);
   let imported = 0;
@@ -385,10 +399,10 @@ export async function initialize(db: Db, file: string): Promise<Report> {
   for (let r = 2; r <= data.rowCount; r++) {
     const row = data.getRow(r);
     if (!row.hasValues) continue;
-    const id = cellText(row.getCell(idCol).value).trim();
-    const status = cellText(row.getCell(statusCol).value).trim();
-    const created = row.getCell(createdCol).value;
-    const modified = row.getCell(modifiedCol).value;
+    const id = cellText(own(row.getCell(idCol))).trim();
+    const status = cellText(own(row.getCell(statusCol))).trim();
+    const created = own(row.getCell(createdCol));
+    const modified = own(row.getCell(modifiedCol));
     if (!/^\d+$/.test(id))
       throw new Error(`Data row ${r}: ID is not an integer.`);
     if (!status) throw new Error(`Data row ${r}: Status is blank.`);
@@ -406,7 +420,7 @@ export async function initialize(db: Db, file: string): Promise<Report> {
     for (const column of columns) {
       const cell = index.get(column);
       const value = cell
-        ? convert(column, row.getCell(cell).value, mismatches)
+        ? convert(column, own(row.getCell(cell)), mismatches)
         : '';
       (column.side === 'created' ? createdData : requesterData)[column.key] =
         value;
@@ -471,7 +485,22 @@ export async function initialize(db: Db, file: string): Promise<Report> {
     imported,
     skippedDraft,
     outsideCatalog: Object.fromEntries(outsideCatalog),
-    mismatches: Object.fromEntries(mismatches),
+    mismatches: Object.fromEntries(
+      [...mismatches].map(([column, values]) => [
+        column,
+        {
+          rows: [...values.values()].reduce((a, b) => a + b, 0),
+          distinct: values.size,
+          ...(options.showValues
+            ? {
+                top: Object.fromEntries(
+                  [...values].sort((a, b) => b[1] - a[1]).slice(0, 10),
+                ),
+              }
+            : {}),
+        },
+      ]),
+    ),
     missingColumns,
   };
 }
@@ -479,7 +508,9 @@ export async function initialize(db: Db, file: string): Promise<Report> {
 async function main() {
   const [file, ...flags] = process.argv.slice(2);
   if (!file) {
-    console.error('Usage: npm run db:initialize -- <workbook.xlsx> [--yes]');
+    console.error(
+      'Usage: npm run db:initialize -- <workbook.xlsx> [--yes] [--show-values]',
+    );
     process.exit(1);
   }
   try {
@@ -502,7 +533,9 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const report = await initialize(client, file);
+    const report = await initialize(client, file, {
+      showValues: flags.includes('--show-values'),
+    });
     await client.query(apply ? 'COMMIT' : 'ROLLBACK');
     console.log(JSON.stringify(report, null, 2));
     console.log(

@@ -16,6 +16,8 @@ npm run db:initialize -- /path/to/workbook.xlsx          # dry run
 npm run db:initialize -- /path/to/workbook.xlsx --yes    # apply
 ```
 
+Add `--show-values` to a dry run to see which values do not fit.
+
 Connection settings come from `backend/.env` (`DB_HOST`, `DB_PORT`, `DB_NAME`,
 `DB_USER`, `DB_PASSWORD`); the target is printed first. Without `--yes` the whole load
 runs inside a transaction and is rolled back, so the printed report is real. The load
@@ -24,8 +26,9 @@ database backup before applying. Everything is one transaction: any error rolls 
 
 The report lists tables cleared, forms written, Status count, requests imported, Draft
 rows skipped, Statuses outside the catalog (with counts), per-column counts of values
-that did not fit their field, and mapped columns missing from `Data`. It prints counts and
-Status names only, never other cell values.
+that did not fit their field (rows and distinct values), and mapped columns missing from `Data`.
+It prints counts and Status names only. With `--show-values` it also lists the ten most frequent
+non-fitting values per column, which are real data: use it only in your own terminal.
 
 ## What it does
 

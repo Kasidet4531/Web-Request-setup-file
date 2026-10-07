@@ -167,7 +167,9 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
   assert.deepEqual(report.outsideCatalog, {
     '30% -- Compare Old and New layout': 1,
   });
-  assert.deepEqual(report.mismatches, { 'Touch down per wafer': 1 });
+  assert.deepEqual(report.mismatches, {
+    'Touch down per wafer': { rows: 1, distinct: 1 },
+  });
   assert.deepEqual(report.missingColumns, ['Workflow Name']);
 
   const rows = (
