@@ -33,6 +33,17 @@ describe('Draft Management public UI', () => {
     expect(markup).toContain('Creator'); expect(markup).toContain('รอระบุ Product Type'); expect(markup).toContain('Missing email'); expect(markup).toContain('unresolved'); expect(markup).not.toContain('Owner / Dept')
   })
 
+  it('shows recipient issues inside the table and no separate reminder section, with Delete as a regular button', async () => {
+    service.fetchDraftReminders.mockResolvedValue({ items: [{ requestId: 'draft-1', requestNo: 'PSF-1', state: 'unresolved', queuedAt: null, skippedRecipients: [{ userId: 'creator', displayName: 'Creator', reason: 'Missing email' }] }] })
+    renderList(); hooks.current!.runEffects(); await settle(); const page = renderList()
+    expect(findRenderedElement(page, element => element.props['aria-label'] === 'Reminder recipient issues')).toBeNull()
+    expect(renderToStaticMarkup(page)).not.toContain('Reminder recipient issues')
+    const table = requireRenderedElement(page, element => element.type === AdminDraftTable)
+    const html = renderToStaticMarkup(<AdminDraftTable items={[item]} reminders={table.props.reminders as never} onDelete={() => {}} />)
+    expect(html).toContain('Missing email')
+    expect(html).toMatch(/<button[^>]*class="btn-secondary[^"]*"[^>]*aria-label="Delete PSF-1"/)
+  })
+
   it('keeps management detail read only even if a response incorrectly advertises mutation access', async () => {
     renderDetail(); hooks.current!.runEffects(); await settle(); const page = renderDetail()
     const form = requireRenderedElement(page, element => element.type === DynamicFormRenderer)

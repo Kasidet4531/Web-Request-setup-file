@@ -27,9 +27,6 @@
 .global-history-page__results .data-table table { min-width: 0; width: 100%; border-collapse: collapse; }
 .global-history-page__results .data-table td { padding: 10px 16px; vertical-align: middle; border-top: 1px solid var(--border); }
 .global-history-page__results .data-table td:first-child { width: 190px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
-.history-user { display: flex; align-items: baseline; gap: 8px; }
-.history-user strong { font-weight: 500; }
-.history-role { font-size: 11px; color: var(--muted-foreground); background: var(--secondary); border-radius: 999px; padding: 1px 8px; text-transform: capitalize; }
 .dark .global-history-page__results .data-table tbody tr:hover { background: var(--background); }
 
 /* ---------- Form Management: catalog ---------- */
@@ -97,6 +94,58 @@
 .detail-layout__actions .section-heading { border-bottom: 0; padding-bottom: 0; }
 
 /* Draft Management: breathing room under the table and before the reminder section. */
-.requests-page .request-browser .table-footer { padding: 12px 16px; }
 .requests-page > .workflow-section { margin-top: 24px; }
 .requests-page > .workflow-section > h2 { padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--border); font-size: 18px; line-height: 26px; font-weight: 700; }
+
+/* Audit History: uniform collapsed row height. */
+.global-history-page__results .data-table td { height: 52px; vertical-align: middle; }
+.global-history-page__results .data-table td > .history-changes { margin: 0; }
+
+/* Draft Management: separate cards for filters and table, footer below (same as Audit History). */
+.draft-management > .request-browser { border: 0; background: transparent; box-shadow: none; display: grid; gap: 16px; }
+.draft-management .draft-management-filters { padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.draft-management .data-table { border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
+.draft-management .table-footer { padding: 10px 4px; margin: 0; border: 0; }
+
+/* ===== One list layout everywhere: filters card, table card, footer below ===== */
+:root { --list-gap: 16px; }
+
+/* Remove the outer card that used to wrap table (and footer). */
+.request-browser, .queue-surface, .request-browser__results, .request-export__preview,
+.admin-workflow-transition__catalog, .admin-autofill-rules__catalog {
+  background: transparent; border: 0; border-radius: 0; padding: 0; box-shadow: none;
+}
+.request-browser { display: grid; gap: var(--list-gap); }
+.queue-surface { display: grid; gap: var(--list-gap); }
+.request-export__preview { display: grid; gap: var(--list-gap); }
+
+/* The table itself is the card. */
+.queue-surface .data-table, .request-export__preview .data-table,
+.admin-workflow-transition__table, .admin-autofill-rules__table {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+
+/* Filters are a separate card. */
+.queue-filters, .dashboard-filters {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 0;
+}
+.dashboard-filters { padding-top: 12px; }
+.queue-filters .toolbar, .queue-filters .request-browser__toolbar { margin: 0; padding: 0; }
+
+/* Footer sits below the table card, outside it. */
+.queue-surface .table-footer { padding: 10px 4px; margin: 0; border: 0; }
+
+/* Headings above a card need no inner padding. */
+.queue-surface__heading { padding: 0 0 10px; }
+.admin-workflow-transition__body, .admin-autofill-rules__body, .request-export { gap: var(--list-gap); }
+.request-export__preview-header { margin-bottom: 0; }
+
+/* Export to Excel: all filters and the export button on one row. */
+.request-export__filter-panel { padding: 12px 16px; }
+.request-export__filter-layout { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; }
+.request-export__filter-layout .request-export__filters { grid-template-columns: minmax(200px, 1.6fr) minmax(140px, 1fr) minmax(140px, 1fr); gap: 12px; }
+.request-export__action { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+/* Status is plain text (icon + colour), no box. */
+.ui-status__trigger { background: transparent; border-color: transparent; padding: 0; min-height: 0; }
+.ui-status__trigger:hover { border-color: transparent; text-decoration: underline; }

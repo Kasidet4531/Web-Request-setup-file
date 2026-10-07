@@ -3,6 +3,7 @@ import { formatHistoryDateTime } from './ui/historyDateTime'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { PageHeader } from './ui/PageHeader'
+import { ROW_PX, pagedMinHeight } from './ui/tableLayout'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
   api,
@@ -157,7 +158,7 @@ export function GlobalAuditLogTable({
   return (
     <>
     <p className="sr-only" role="status">{loading ? 'Updating global audit history…' : ''}</p>
-        <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading}>
+        <div className="data-table" role="region" aria-label="Global audit history" tabIndex={0} aria-busy={loading} inert={loading} style={pagedMinHeight(total, pageSize, ROW_PX.audit)}>
       <table>
         <thead>
           <tr>
@@ -179,10 +180,7 @@ export function GlobalAuditLogTable({
                   </Link>
                 ) : entry.requestNo ?? 'Workflow configuration'}
               </td>
-              <td className="history-user">
-                <strong>{entry.actorDisplayName}</strong>
-                <span className="history-role">{entry.actorRole.replace('_', ' ')}</span>
-              </td>
+              <td>{entry.actorDisplayName}</td>
               <td>{actionLabel(entry.actionType)}</td>
               <td><HistoryChanges metadata={entry.metadata} /></td>
             </tr>

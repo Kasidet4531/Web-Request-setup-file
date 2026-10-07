@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from '@tanstack/react-router'
 import { api, type AdminDraftListItem, type AdminDraftListResponse, type DraftReminder, type PsfRequestResponse } from '../services/api'
 import { PageHeader } from './ui/PageHeader'
+import { DANGER_BUTTON_CLASS } from './ui/tableLayout'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { RequestHeaderSummary } from './RequestsWorkspace'
@@ -77,7 +78,7 @@ export function AdminDraftTable({
               <td data-label="Actions">
                 <div className="toolbar__actions">
                   <button
-                    className="table-action"
+                    className={DANGER_BUTTON_CLASS}
                     type="button"
                     aria-label={`Delete ${item.requestNo}`}
                     onClick={(event) => {
@@ -166,7 +167,7 @@ export function AdminDraftManagementPage() {
   const hasFilters = Boolean(filters.keyword.trim() || filters.creator.trim())
 
   return (
-    <article className="workflow-page requests-page">
+    <article className="workflow-page requests-page draft-management">
       <PageHeader title="Draft Management" />
       <section className="request-browser" aria-label="Draft Management">
         <form className="filter-bar draft-management-filters" onSubmit={event => event.preventDefault()}>
@@ -211,7 +212,7 @@ export function AdminDraftManagementPage() {
         ) : null}
 
         {data ? (
-          <div aria-busy={loading} inert={loading}>
+          <div className="draft-management__results" aria-busy={loading} inert={loading}>
             {data.items.length ? (
               <AdminDraftTable items={data.items} reminders={reminders} onDelete={setDeleting} />
             ) : (
@@ -249,21 +250,6 @@ export function AdminDraftManagementPage() {
           action={<button type="button" className="btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry reminders</button>}
         />
       ) : null}
-
-      <section className="workflow-section" aria-label="Reminder recipient issues">
-        <h2>Reminder recipient issues</h2>
-        {reminders?.some(reminder => reminder.skippedRecipients.length || reminder.state === 'unresolved') ? (
-          <ul>
-            {reminders.filter(reminder => reminder.skippedRecipients.length || reminder.state === 'unresolved').map(reminder => (
-              <li key={reminder.requestId}>
-                <Link to="/admin/drafts/$requestId" params={{ requestId: reminder.requestId }}>{reminder.requestNo}</Link> — <ReminderStatus reminder={reminder} />
-              </li>
-            ))}
-          </ul>
-        ) : reminders !== null && !reminderError ? (
-          <p>No unresolved recipient issues.</p>
-        ) : null}
-      </section>
 
       {deleting ? (
         <DraftDeleteDialog
