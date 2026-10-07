@@ -380,7 +380,7 @@ export function RequestsTable({
           <tr>
             <th scope="col">Request</th>
             <th scope="col">{drafts ? 'Product Type' : 'Status'}</th>
-            <th scope="col">{drafts ? 'Visibility' : compact ? 'Due date' : 'Schedule'}</th>
+            {drafts ? null : <th scope="col">{compact ? 'Due date' : 'Schedule'}</th>}
             <th scope="col">{drafts ? 'Updated' : 'Requester'}</th>
             {drafts || !interactiveRows ? <th scope="col"><span className="sr-only">Actions</span></th> : null}
           </tr>
@@ -412,7 +412,6 @@ export function RequestsTable({
                 </div>
               </td>
               {drafts ? <><td data-label="Product Type">{productTypeLabel(item.productType)}</td>
-                <td data-label="Visibility">Only you</td>
                 <td data-label="Updated">{formatDateTime(item.updatedAt)}</td></> : <><td data-label="Status">
                 <StatusLabel kind={statusKinds[item.status]} status={item.status} />
               </td>
@@ -563,7 +562,7 @@ export function DashboardPage() {
   const resetFilters = () => { setKeyword(''); setStatus(''); setTeam('all'); setWorkState('open'); setOffset(0) }
   return (
     <article className="workflow-page dashboard-page">
-      <PageHeader title="Dashboard" description="Your related work, at a glance." actions={<Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link>} />
+      <PageHeader title="Dashboard" actions={<Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link>} />
       {pending && !hasResults && !state.error ? <p className="page-card__description" role="status">Loading dashboard queue…</p> : null}
       {state.error ? <p className="status-pill status-pill--error" role="alert">{state.error}{state.errorStatus === 401 ? <> <Link to="/login">Sign in again</Link></> : null}</p> : null}
       {!state.loading && !state.error && state.data.summaryError ? <p className="status-pill status-pill--error" role="alert">{state.data.summaryError}</p> : null}
@@ -589,7 +588,7 @@ export function DashboardPage() {
       </div> : null}
       </aside>
       <section className="queue-surface" aria-label="Related request queue">
-      <div className="queue-surface__heading"><h2>Related request queue</h2><span>{workState === 'all' ? 'All work' : workState === 'open' ? 'Open work' : workState === 'overdue' ? 'Overdue work' : 'Completed work'}</span><span className="sr-only" role="status">{pending && hasResults ? 'Updating dashboard queue…' : ''}</span></div>
+      <div className="queue-surface__heading"><h2>Related request queue</h2><span className="sr-only" role="status">{pending && hasResults ? 'Updating dashboard queue…' : ''}</span></div>
       <div className="filter-bar dashboard-filters" aria-label="Dashboard filters">
         <label>Keyword<span className="filter-bar__control"><Search size={16} /><input className="input-with-icon" placeholder="Request no, title, PSF name…" value={keyword} onChange={(event) => { setKeyword(event.target.value) }} /></span></label>
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
@@ -712,11 +711,11 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
 
   return (
     <article className="workflow-page requests-page">
-      <PageHeader title={scope === 'my-drafts' ? 'My Drafts' : 'Requests'} description={scope === 'my-drafts' ? 'Private drafts you created. Save and review before submitting.' : 'Browse submitted requests and track engineering work.'}
+      <PageHeader title={scope === 'my-drafts' ? 'My Drafts' : 'Requests'}
         actions={hasResults ? <><Link className="btn-primary" to="/requests/new"><Plus size={16} /> New Request</Link>{scope === 'my-drafts' ? <button type="button" className="btn-secondary" disabled={pending} onClick={() => setRetry(value => value + 1)}>Refresh Drafts</button> : null}</> : undefined} />
 
       <section className="request-browser" aria-label="PSF request browser">
-        <div className="queue-surface__heading"><h2>{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span>{hasActiveFilters ? 'Filtered results' : 'All results'}</span><span className="sr-only" role="status">{pending && hasResults ? 'Updating PSF requests…' : ''}</span></div>
+        <h2 className="sr-only">{scope === 'my-drafts' ? 'Private drafts' : 'Request records'}</h2><span className="sr-only" role="status">{pending && hasResults ? 'Updating PSF requests…' : ''}</span>
         <QueueFilterPanel active={hasActiveFilters}>
         <div className="toolbar request-browser__toolbar" aria-label="Request filters">
           <form className={`filter-bar request-list-filters${scope === 'my-drafts' ? ' request-list-filters--drafts' : ''}`} onSubmit={(event) => event.preventDefault()}>

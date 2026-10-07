@@ -360,7 +360,7 @@ export function RequestExportPage() {
 
   return (
     <article className="page-card workflow-page">
-      <PageHeader title="Export to Excel" description="Filter requests and download an XLSX workbook. Larger exports are prepared in the background." />
+      <PageHeader title="Export to Excel" description="Larger exports are prepared in the background." />
       <div className="page-card__body request-export">
         <section className="page-card__section request-export__filter-panel">
           <h2>Export filters</h2>

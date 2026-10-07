@@ -2253,17 +2253,16 @@ describe('Tabbed Detail and PSF edit lifecycle', () => {
 
 
 describe('Private draft table presentation', () => {
-  it('shows creator-only visibility and the persisted update timestamp with a Continue link', () => {
+  it('shows the persisted update timestamp with a Continue link and no repeated Visibility column', () => {
     requestDetailHookHarness.beginRender()
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
       referencePsfName: null, psfSetupFileName: null, probecardName: null, status: 'Draft',
       priority: 'Normal', requester: 'Engineer',
       productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
     const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true })
-    expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Visibility')).toBeTruthy()
+    expect(findRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Visibility')).toBeNull()
+    expect(findRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Visibility')).toBeNull()
     expect(requireRenderedElement(rendered, element => element.type === 'th' && element.props.children === 'Updated')).toBeTruthy()
-    const visibility = requireRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Visibility')
-    expect(visibility.props.children).toBe('Only you')
     const updated = requireRenderedElement(rendered, element => element.type === 'td' && element.props['data-label'] === 'Updated')
     expect(updated.props.children).toContain('11:00')
     const link = requireRenderedElement(rendered, element => element.props.children === 'Continue')

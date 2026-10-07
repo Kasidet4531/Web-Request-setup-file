@@ -76,3 +76,21 @@
 
 .page-size { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); margin-right: 8px; }
 .page-size select { height: 32px; }
+
+/* ---------- Shared section headings: clearly stronger than labels and content ---------- */
+.queue-surface__heading h2, .section-heading h2, .page-card__section > h2, .request-export__preview-header h2,
+.psf-created-panel__header h2, .admin-form-config__family-context h2 {
+  font-size: 18px; line-height: 26px; font-weight: 700; letter-spacing: -.01em; color: var(--foreground);
+}
+.queue-surface__heading, .section-heading, .request-export__preview-header { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.page-card__section > h2 { padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.filter-bar label, .request-export label { font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+
+/* My Drafts now has four columns. */
+.requests-table--drafts th:nth-child(1) { width: 42%; }
+.requests-table--drafts th:nth-child(2) { width: 22%; }
+.requests-table--drafts th:nth-child(3) { width: 24%; }
+.requests-table--drafts th:nth-child(4) { width: 12%; }
+.requests-table--drafts th:nth-child(5) { width: auto; }
+.dashboard-filters, .request-browser__toolbar { padding-top: 16px; }
+.requests-table--drafts td:nth-child(2) { padding-left: 16px; }
