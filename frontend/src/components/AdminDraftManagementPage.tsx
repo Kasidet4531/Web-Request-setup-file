@@ -166,7 +166,7 @@ export function AdminDraftManagementPage() {
   const hasFilters = Boolean(filters.keyword.trim() || filters.creator.trim())
 
   return (
-    <article className="workflow-page requests-page">
+    <article className="workflow-page requests-page draft-management">
       <PageHeader title="Draft Management" />
       <section className="request-browser" aria-label="Draft Management">
         <form className="filter-bar draft-management-filters" onSubmit={event => event.preventDefault()}>
@@ -211,7 +211,7 @@ export function AdminDraftManagementPage() {
         ) : null}
 
         {data ? (
-          <div className="queue-surface request-browser__results" aria-busy={loading} inert={loading}>
+          <div className="draft-management__results" aria-busy={loading} inert={loading}>
             {data.items.length ? (
               <AdminDraftTable items={data.items} reminders={reminders} onDelete={setDeleting} />
             ) : (
