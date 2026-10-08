@@ -149,3 +149,24 @@
 /* Status is plain text (icon + colour), no box. */
 .ui-status__trigger { background: transparent; border-color: transparent; padding: 0; min-height: 0; }
 .ui-status__trigger:hover { border-color: transparent; text-decoration: underline; }
+
+/* Login: card centred on the page with a visible frame; the dev-login panel hangs below without moving it. */
+.login-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--background); }
+.login-page__content { position: relative; }
+.login-page__content > .development-login { position: absolute; top: calc(100% + 20px); left: 0; right: 0; }
+.login-card { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+@media (max-width: 599px) { .login-page { padding: 16px; } }
+
+/* Export: progress lives on the button, so keep its width steady and put errors under the whole filter row. */
+.request-export__action .primary-button { min-width: 8.5rem; }
+.request-export__filter-panel > .ui-notice { margin-top: 12px; }
+
+/* Sidebar brand: one lockup (chip beside a two-line title), centred on the 64px header row. */
+.sidebar__brand { height: 64px; padding: 0 16px; align-items: center; margin-bottom: 8px; }
+.sidebar__brand > div:first-child { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; min-width: 0; }
+.sidebar__title { display: contents; }
+.sidebar__title > span:first-child { grid-row: 1 / span 2; display: grid; place-items: center; height: 32px; padding: 0 8px; border-radius: 8px; font-size: 13px; letter-spacing: .02em; }
+.sidebar__title > span:last-child { align-self: end; font-size: 13px; line-height: 16px; font-weight: 600; }
+.sidebar__subtitle { align-self: start; margin: 0; font-size: 11px; line-height: 14px; }
+.app-sidebar--collapsed .sidebar__brand { justify-content: center; padding: 0 14px; }
+.app-sidebar--mobile .sidebar__brand { padding-right: 8px; }

@@ -12,6 +12,7 @@ import {
 
 export const EXPORT_JOB_POLL_INTERVAL_MS = 2_000;
 const EXPORT_JOB_FAILURE_MESSAGE = "Unable to prepare this export. Please try again.";
+const JOB_BUTTON_LABEL = { queued: "Queued…", running: "Running…" } as const;
 
 type PendingRequestExportJob = {
   id: string;
@@ -77,7 +78,6 @@ export function RequestExportFiltersForm({
 }
 
 export interface RequestExportFeedbackValue {
-  kind: "success" | "error";
   message: string;
 }
 
@@ -90,15 +90,12 @@ export function RequestExportFeedback({
   feedback: RequestExportFeedbackValue | null;
   jobStatus: "queued" | "running" | null;
 }) {
+  // Progress is shown on the button; screen readers still get it here.
   if (downloading) {
-    return <AsyncNotice kind="loading" title={jobStatus ? `Request export ${jobStatus}…` : "Preparing request export…"} />;
+    return <span className="sr-only" role="status">{jobStatus ? `Request export ${jobStatus}…` : "Preparing request export…"}</span>;
   }
 
-  if (!feedback) {
-    return null;
-  }
-
-  return <AsyncNotice kind={feedback.kind} title={feedback.message} />;
+  return feedback ? <AsyncNotice kind="error" title={feedback.message} /> : null;
 }
 
 type RequestExportPreviewState = {
@@ -130,7 +127,7 @@ export function RequestExportPreview({
         <div>
           <h2>Request preview</h2>
           <p>{loading ? "Loading filtered requests…" : `First ${items.length} of ${total} matching request${total === 1 ? "" : "s"}.`}</p>
-          <p>Download includes only requests permitted for your account. This preview may show a broader set; its count is not an exported record count.</p>
+          <p>The download includes submitted requests only, never Drafts. This preview may list fewer for your account; its count is not an exported record count.</p>
         </div>
       </div>
       {error ? <AsyncNotice kind="error" title={error} /> : null}
@@ -278,10 +275,6 @@ export function RequestExportPage() {
           await downloadCompletedRequestExport(job);
 
           if (!cancelled) {
-            setFeedback({
-              kind: "success",
-              message: "Request export downloaded.",
-            });
             setPendingJob(null);
             setDownloading(false);
           }
@@ -289,10 +282,7 @@ export function RequestExportPage() {
         }
 
         if (job.status === "failed") {
-          setFeedback({
-            kind: "error",
-            message: job.failureMessage ?? EXPORT_JOB_FAILURE_MESSAGE,
-          });
+          setFeedback({ message: job.failureMessage ?? EXPORT_JOB_FAILURE_MESSAGE });
           setPendingJob(null);
           setDownloading(false);
           return;
@@ -310,7 +300,6 @@ export function RequestExportPage() {
       } catch (error) {
         if (!cancelled) {
           setFeedback({
-            kind: "error",
             message:
               error instanceof Error ? error.message : "Unable to export requests.",
           });
@@ -339,10 +328,6 @@ export function RequestExportPage() {
       const result = await startRequestExport(filters);
 
       if (result.kind === "downloaded") {
-        setFeedback({
-          kind: "success",
-          message: "Request export downloaded.",
-        });
         setDownloading(false);
         return;
       }
@@ -350,7 +335,6 @@ export function RequestExportPage() {
       setPendingJob(result.job);
     } catch (error) {
       setFeedback({
-        kind: "error",
         message:
           error instanceof Error ? error.message : "Unable to export requests.",
       });
@@ -376,15 +360,15 @@ export function RequestExportPage() {
           />
         <div className="request-export__action">
           <button className="primary-button" disabled={downloading} onClick={exportRequests} type="button">
-            {downloading ? "Preparing…" : "Export XLSX"}
+            {downloading ? (pendingJob ? JOB_BUTTON_LABEL[pendingJob.status] : "Preparing…") : "Export XLSX"}
           </button>
+        </div>
+          </div>
           <RequestExportFeedback
             downloading={downloading}
             feedback={feedback}
             jobStatus={pendingJob?.status ?? null}
           />
-        </div>
-          </div>
         </section>
         <RequestExportPreview {...preview} statusKinds={catalog.kinds} />
       </div>
