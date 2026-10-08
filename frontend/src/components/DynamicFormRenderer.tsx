@@ -259,5 +259,5 @@ function FieldInput({ describedBy, error, field, fieldId, onChange, readOnly, va
     )
   }
 
-  return <input {...commonProps} type={field.type} />
+  return <input {...commonProps} step={field.type === 'number' ? 'any' : undefined} type={field.type} />
 }

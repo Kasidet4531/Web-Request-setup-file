@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import ExcelJS from 'exceljs';
@@ -155,10 +151,7 @@ function lifecycle(ownerRole: 'admin' | 'requester' = 'admin') {
 
 async function expectDenied(
   state: ReturnType<typeof lifecycle>,
-  error:
-    | typeof NotFoundException
-    | typeof ForbiddenException
-    | typeof UnauthorizedException,
+  error: typeof NotFoundException | typeof UnauthorizedException,
 ) {
   await expect(state.status()).rejects.toBeInstanceOf(error);
   await expect(state.download()).rejects.toBeInstanceOf(error);
@@ -209,12 +202,12 @@ describe('queued exports current server-profile scope', () => {
   });
 
   it.each(['requester', 'admin'] as const)(
-    'allows own requester-scope workbook with current %s role without expanding its scope',
+    'allows requester-scope workbook with current %s role and keeps unreleased PSF masked',
     async (role) => {
       const state = lifecycle('requester');
       state.setRole(role);
       await state.processor.processNext();
-      expect(await cells(state.stored.content!)).toContain('OWN-REQUEST');
+      expect(await cells(state.stored.content!)).toContain('FOREIGN-WORK');
       expect(await cells(state.stored.content!)).not.toContain(
         'UNRELEASED-PSF',
       );
@@ -240,11 +233,10 @@ describe('queued exports current server-profile scope', () => {
     },
   );
 
-  it('denies SetupOwner on both lifecycle endpoints before storage', async () => {
+  it('denies SetupOwner an admin-scope job on both lifecycle endpoints', async () => {
     const state = lifecycle();
     state.setRole('setup_owner');
-    await expectDenied(state, ForbiddenException);
-    expect(state.pool.query).not.toHaveBeenCalled();
+    await expectDenied(state, NotFoundException);
   });
 
   it('denies missing server profile on both endpoints before storage', async () => {

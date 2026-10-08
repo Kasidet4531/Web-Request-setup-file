@@ -2,7 +2,7 @@ export interface FormSchemaField {
   fieldKey: string;
   canonicalKey: string;
   label: string;
-  type: 'text' | 'textarea' | 'date' | 'select' | 'radio';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'radio';
   required: boolean;
   options?: string[];
   searchable?: boolean;

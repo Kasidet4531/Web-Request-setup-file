@@ -107,7 +107,7 @@ export class AutofillService {
           WHERE historical_request.form_key = $1
             AND historical_request.status = ANY($5::text[])
             AND historical_request.completed_at IS NOT NULL
-            AND field.value->>'type' IN ('text', 'textarea', 'date', 'select', 'radio')
+            AND field.value->>'type' IN ('text', 'textarea', 'number', 'date', 'select', 'radio')
             AND field.value->>'canonicalKey' = ANY(array_append($4::text[], $2::text))
             AND jsonb_typeof(historical_request.requester_data_json->(field.value->>'fieldKey')) = 'string'
             AND NOT EXISTS (

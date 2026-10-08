@@ -27,6 +27,13 @@ const schema: FormSchemaJson = {
           options: ['Ready', 'Hold'],
         },
         {
+          fieldKey: 'count',
+          canonicalKey: 'count',
+          label: 'Count',
+          type: 'number',
+          required: false,
+        },
+        {
           fieldKey: 'date',
           canonicalKey: 'date',
           label: 'Date',
@@ -39,6 +46,19 @@ const schema: FormSchemaJson = {
 };
 
 describe('validateAndNormalizeFormData', () => {
+  it('accepts plain decimal numbers and rejects other text in number fields', () => {
+    const run = (count: string) =>
+      validateAndNormalizeFormData(
+        schema,
+        { count },
+        { allowMissingRequired: true },
+      );
+    expect(run('-12.5')).toEqual({ count: '-12.5' });
+    expect(run('')).toEqual({ count: '' });
+    for (const bad of ['NA', '1e3', '1,000', '12.'])
+      expect(() => run(bad)).toThrow(BadRequestException);
+  });
+
   it('allows required omissions in Draft but still rejects invalid populated values', () => {
     expect(
       validateAndNormalizeFormData(

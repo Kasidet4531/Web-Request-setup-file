@@ -10,7 +10,7 @@ import type {
 } from '../types/forms'
 import { isFormKey } from '../types/forms'
 
-const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'date', 'select', 'radio'])
+const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'number', 'date', 'select', 'radio'])
 
 export interface FormSchemaDraftParseResult {
   error: string | null

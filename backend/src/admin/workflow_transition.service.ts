@@ -112,12 +112,16 @@ interface ReplacementRequestRow {
 
 type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
-const CONFIGURATION_KEY = 'status-catalog-v1';
+export const CONFIGURATION_KEY = 'status-catalog-v1';
 const DRAFT_NAME = 'Draft';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UPDATED_AT_SQL = `TO_CHAR(updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
-const DEFAULT_ENTRIES: Array<Omit<StoredStatus, 'emailPolicy'>> = [
+export const DEFAULT_ENTRIES: Array<{
+  id: string;
+  name: string;
+  kind: StatusKind;
+}> = [
   { id: '00000000-0000-4000-8000-000000000001', name: 'Draft', kind: 'draft' },
   {
     id: '00000000-0000-4000-8000-000000000002',

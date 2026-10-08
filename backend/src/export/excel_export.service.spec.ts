@@ -663,6 +663,18 @@ describe('ExcelExportService', () => {
     );
   });
 
+  it('exports number fields as numeric cells and leaves other text as text', () => {
+    const exportCell = (type: string, value: unknown) =>
+      (
+        service as unknown as {
+          exportCell(field: { type: string }, value: unknown): unknown;
+        }
+      ).exportCell({ type }, value);
+    expect(exportCell('number', '12.5')).toBe(12.5);
+    expect(exportCell('number', 'NA')).toBe('NA');
+    expect(exportCell('text', '12.5')).toBe('12.5');
+  });
+
   it.each(['synchronous', 'queued'] as const)(
     'retains historical requester and PSF sections in a %s workbook while masking unreleased PSF cells',
     async (mode) => {

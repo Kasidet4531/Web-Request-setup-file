@@ -40,6 +40,9 @@ export function validateAndNormalizeFormData(
         `${field.label} must be one of the configured options.`,
       );
     }
+    if (value && field.type === 'number' && !isNumericText(value)) {
+      throw new BadRequestException(`${field.label} must be a number.`);
+    }
     if (value && field.type === 'date' && !isCalendarDate(value)) {
       throw new BadRequestException(
         `${field.label} must be a valid ISO calendar date.`,
@@ -94,6 +97,10 @@ export function assertValidRequiredFormData(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function isNumericText(value: string): boolean {
+  return /^-?\d+(\.\d+)?$/.test(value);
 }
 
 export function isCalendarDate(value: string): boolean {

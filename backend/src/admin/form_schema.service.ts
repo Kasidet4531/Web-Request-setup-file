@@ -82,6 +82,7 @@ const FORM_SCHEMA_STATUSES = new Set<FormSchemaStatus>([
 const SUPPORTED_FIELD_TYPES = new Set<FormSchemaField['type']>([
   'text',
   'textarea',
+  'number',
   'date',
   'select',
   'radio',

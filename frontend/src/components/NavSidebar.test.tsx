@@ -26,7 +26,7 @@ describe('NavSidebar', () => {
     for (const route of ['/dashboard', '/requests', '/my-drafts', '/requests/new']) expect(html).toContain(`href="${route}"`)
     for (const route of ['/admin/users', '/admin/form-config', '/admin/workflow', '/admin/autofill']) expect(html).not.toContain(`href="${route}"`)
     expect(html).toContain('href="/history"')
-    expect(html.includes('href="/admin/export-profile"')).toBe(role === 'requester')
+    expect(html).toContain('href="/admin/export-profile"')
     expect(html).toContain('role="dialog"')
     expect(html).toContain('aria-modal="true"')
     expect(html).toContain('aria-label="Close navigation"')
@@ -90,7 +90,7 @@ describe('NavSidebar', () => {
     expect(html).toContain('>Audit History</span>')
     expect(html).toContain('>My Drafts</span>')
     expect(html).toContain('>Requests</span>')
-    expect(html.includes('href="/admin/export-profile"')).toBe(role !== 'setup_owner')
+    expect(html.includes('href="/admin/export-profile"')).toBe(true)
   })
 })
 

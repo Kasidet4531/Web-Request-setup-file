@@ -298,7 +298,7 @@ describe('SearchIndexService canonical extraction', () => {
     );
   });
 
-  it('enforces requester ownership in one bulk export query regardless of a caller requester filter', async () => {
+  it('exports every non-Draft request to a requester in one bulk query regardless of a caller requester filter', async () => {
     pool.query.mockResolvedValueOnce({
       rows: [
         {
@@ -378,14 +378,14 @@ describe('SearchIndexService canonical extraction', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('FROM psf_requests'),
-      [actor.id, 'Submitted', actor.id, 2000, 0],
+      [actor.id, 'Submitted', 2000, 0],
     );
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).toContain('canonical_submission_values');
     expect(query).toContain('requester_data_json');
     expect(query).toContain('schema_snapshot_json');
     expect(query).toContain('psf_created_schema_snapshot_json');
-    expect(query).toContain('requester_user_id = $3');
+    expect(query).not.toContain('AND request.requester_user_id =');
     expect(query).toContain(
       "request.status <> 'Draft' OR request.requester_user_id = $1::uuid",
     );
@@ -468,7 +468,7 @@ describe('SearchIndexService canonical extraction', () => {
     });
   });
 
-  it('counts an export through the same status, date, and requester ownership scope without loading rows', async () => {
+  it('counts an export through the same status and date scope without loading rows', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
     const requesterActor = {
       id: 'requester-1',
@@ -488,17 +488,11 @@ describe('SearchIndexService canonical extraction', () => {
 
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('SELECT COUNT(*)::int AS total'),
-      [
-        requesterActor.id,
-        'Submitted',
-        requesterActor.id,
-        '2026-06-01',
-        '2026-06-30',
-      ],
+      [requesterActor.id, 'Submitted', '2026-06-01', '2026-06-30'],
     );
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).toContain('FROM psf_requests AS request');
-    expect(query).toContain('request.requester_user_id = $3');
+    expect(query).not.toContain('AND request.requester_user_id =');
     expect(query).toContain(
       "request.status <> 'Draft' OR request.requester_user_id = $1::uuid",
     );
