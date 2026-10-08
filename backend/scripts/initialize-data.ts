@@ -5,6 +5,7 @@
  *
  *   npm run db:initialize -- <workbook.xlsx>          dry run, rolls everything back
  *   npm run db:initialize -- <workbook.xlsx> --yes    apply
+ *   add --lenient to load whatever fits (for testing): blank non-fitting values, skip bad rows
  *
  * The backend must have been started once so its tables exist.
  */
@@ -14,7 +15,6 @@ import { Pool, type PoolClient } from 'pg';
 import {
   CONFIGURATION_KEY,
   DEFAULT_ENTRIES,
-  type StatusKind,
 } from '../src/admin/workflow_transition.service';
 import type {
   FormSchemaField,
@@ -41,6 +41,8 @@ export interface Report {
   statuses: number;
   imported: number;
   skippedDraft: number;
+  /** Lenient mode only: rows that could not be loaded, by reason. */
+  skippedRows: Record<string, number>;
   outsideCatalog: Record<string, number>;
   mismatches: Record<
     string,
@@ -120,8 +122,8 @@ function cellText(value: ExcelJS.CellValue): string {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'object') {
     if ('richText' in value) return value.richText.map((r) => r.text).join('');
-    if ('result' in value) return cellText(value.result as ExcelJS.CellValue);
-    if ('text' in value) return cellText(value.text as ExcelJS.CellValue);
+    if ('result' in value) return cellText(value.result);
+    if ('text' in value) return cellText(value.text);
     return '';
   }
   return String(value);
@@ -258,18 +260,19 @@ function buildCatalog(names: string[]) {
         hit?.id ??
         `00000000-0000-4000-8000-${(++next).toString(16).padStart(12, '0')}`,
       name,
-      kind: (hit?.kind ?? 'open') as StatusKind,
+      kind: hit?.kind ?? ('open' as const),
       emailPolicy: { enabled: false, to: [] as string[], cc: [] as string[] },
     };
   });
   return { entries, completed: entries.find((e) => e.kind === 'completed') };
 }
 
-/** Converts one Data cell to the stored string; counts values that do not fit the field. */
+/** Converts one Data cell to the stored string; counts values that do not fit the field (kept, or blanked when lenient). */
 function convert(
   column: Column,
   raw: ExcelJS.CellValue,
   mismatches: Map<string, Map<string, number>>,
+  lenient: boolean,
 ): string {
   if (column.type === 'date' && raw instanceof Date)
     return raw.toISOString().slice(0, 10);
@@ -288,6 +291,7 @@ function convert(
     const seen = mismatches.get(column.name) ?? new Map<string, number>();
     seen.set(value, (seen.get(value) ?? 0) + 1);
     mismatches.set(column.name, seen);
+    if (lenient) return '';
   }
   return value;
 }
@@ -295,7 +299,7 @@ function convert(
 export async function initialize(
   db: Db,
   file: string,
-  options: { showValues?: boolean } = {},
+  options: { showValues?: boolean; lenient?: boolean } = {},
 ): Promise<Report> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(file);
@@ -332,14 +336,15 @@ export async function initialize(
     .filter((c) => !index.get(c))
     .map((c) => c.name);
   const unexpected = missingColumns.filter((n) => !MISSING_OK.has(norm(n)));
-  if (unexpected.length)
+  if (unexpected.length && !options.lenient)
     throw new Error(`Data has no column for: ${unexpected.join(', ')}`);
 
   // Clear.
   for (const table of REQUIRED_TABLES) {
-    const found = await db.query(`SELECT to_regclass($1) AS t`, [
-      `public.${table}`,
-    ]);
+    const found = await db.query<{ t: string | null }>(
+      `SELECT to_regclass($1) AS t`,
+      [`public.${table}`],
+    );
     if (!found.rows[0].t)
       throw new Error(
         `Table ${table} is missing. Start the backend once first.`,
@@ -394,6 +399,8 @@ export async function initialize(
   const outsideCatalog = new Map<string, number>();
   const inCatalog = new Set(statuses);
   let imported = 0;
+  const skippedRows = new Map<string, number>();
+  const seenNumbers = new Set<string>();
   let skippedDraft = 0;
 
   for (let r = 2; r <= data.rowCount; r++) {
@@ -403,15 +410,25 @@ export async function initialize(
     const status = cellText(own(row.getCell(statusCol))).trim();
     const created = own(row.getCell(createdCol));
     const modified = own(row.getCell(modifiedCol));
-    if (!/^\d+$/.test(id))
-      throw new Error(`Data row ${r}: ID is not an integer.`);
-    if (!status) throw new Error(`Data row ${r}: Status is blank.`);
-    if (!(created instanceof Date) || !(modified instanceof Date))
-      throw new Error(`Data row ${r}: Created or Modified is not a date.`);
+    const problem = !/^\d+$/.test(id)
+      ? 'ID is not an integer'
+      : !status
+        ? 'Status is blank'
+        : !(created instanceof Date) || !(modified instanceof Date)
+          ? 'Created or Modified is not a date'
+          : seenNumbers.has(id.padStart(6, '0'))
+            ? 'ID is duplicated'
+            : null;
+    if (problem) {
+      if (!options.lenient) throw new Error(`Data row ${r}: ${problem}.`);
+      skippedRows.set(problem, (skippedRows.get(problem) ?? 0) + 1);
+      continue;
+    }
     if (status.toLowerCase() === 'draft') {
       skippedDraft++;
       continue;
     }
+    seenNumbers.add(id.padStart(6, '0'));
     if (!inCatalog.has(status))
       outsideCatalog.set(status, (outsideCatalog.get(status) ?? 0) + 1);
 
@@ -420,7 +437,7 @@ export async function initialize(
     for (const column of columns) {
       const cell = index.get(column);
       const value = cell
-        ? convert(column, own(row.getCell(cell)), mismatches)
+        ? convert(column, own(row.getCell(cell)), mismatches, !!options.lenient)
         : '';
       (column.side === 'created' ? createdData : requesterData)[column.key] =
         value;
@@ -428,8 +445,8 @@ export async function initialize(
 
     const requestId = randomUUID();
     const requestNo = `PSF-${id.padStart(6, '0')}`;
-    const createdAt = wallClock(created);
-    const modifiedAt = wallClock(modified);
+    const createdAt = wallClock(created as Date);
+    const modifiedAt = wallClock(modified as Date);
     const productType = requesterData.product_type || null;
     const isCompleted = status === catalog.completed.name;
     await db.query(
@@ -484,6 +501,7 @@ export async function initialize(
     statuses: statuses.length,
     imported,
     skippedDraft,
+    skippedRows: Object.fromEntries(skippedRows),
     outsideCatalog: Object.fromEntries(outsideCatalog),
     mismatches: Object.fromEntries(
       [...mismatches].map(([column, values]) => [
@@ -509,7 +527,7 @@ async function main() {
   const [file, ...flags] = process.argv.slice(2);
   if (!file) {
     console.error(
-      'Usage: npm run db:initialize -- <workbook.xlsx> [--yes] [--show-values]',
+      'Usage: npm run db:initialize -- <workbook.xlsx> [--yes] [--show-values] [--lenient]',
     );
     process.exit(1);
   }
@@ -535,6 +553,7 @@ async function main() {
     await client.query('BEGIN');
     const report = await initialize(client, file, {
       showValues: flags.includes('--show-values'),
+      lenient: flags.includes('--lenient'),
     });
     await client.query(apply ? 'COMMIT' : 'ROLLBACK');
     console.log(JSON.stringify(report, null, 2));

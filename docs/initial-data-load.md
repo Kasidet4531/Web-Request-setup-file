@@ -18,6 +18,15 @@ npm run db:initialize -- /path/to/workbook.xlsx --yes    # apply
 
 Add `--show-values` to a dry run to see which values do not fit.
 
+Add `--lenient` to load whatever fits, for testing. Values that do not fit their field
+(unknown Choice option, non-numeric Number, non-date) are stored empty instead of kept, so
+every loaded request satisfies its form. Rows that cannot be loaded (ID not an integer,
+duplicated ID, blank Status, Created/Modified not a date) are skipped and counted by reason
+in `skippedRows`, and mapped columns missing from `Data` are loaded empty instead of
+stopping the load. Statuses outside the catalog are still kept. Without `--lenient` the same
+rows and columns stop the load with an error. Do not use `--lenient` for the real load unless
+losing those values is intended: the blanked values are not recoverable except by loading again.
+
 Connection settings come from `backend/.env` (`DB_HOST`, `DB_PORT`, `DB_NAME`,
 `DB_USER`, `DB_PASSWORD`); the target is printed first. Without `--yes` the whole load
 runs inside a transaction and is rolled back, so the printed report is real. The load
@@ -26,7 +35,7 @@ database backup before applying. Everything is one transaction: any error rolls 
 
 The report lists tables cleared, forms written, Status count, requests imported, Draft
 rows skipped, Statuses outside the catalog (with counts), per-column counts of values
-that did not fit their field (rows and distinct values), and mapped columns missing from `Data`.
+that did not fit their field (rows and distinct values), `--lenient` skipped rows by reason, and mapped columns missing from `Data`.
 It prints counts and Status names only. With `--show-values` it also lists the ten most frequent
 non-fitting values per column, which are real data: use it only in your own terminal.
 
@@ -59,7 +68,7 @@ non-fitting values per column, which are real data: use it only in your own term
 6. **Values.** Trimmed; `NA` (any case) becomes `NA` in text fields and empty in other types;
    Choice values are matched to the configured option ignoring case/spacing; dates become
    `YYYY-MM-DD`. Values that still do not fit (non-numeric Number, unknown option) are kept and
-   counted; saving such a request requires correcting them.
+   counted (blanked under `--lenient`); saving a request that keeps them requires correcting them.
 
 ## Known consequences
 

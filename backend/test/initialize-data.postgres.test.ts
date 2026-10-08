@@ -22,7 +22,7 @@ const STATUSES = [
 ];
 
 // Fake values only: the real workbook is secret and never used by tests.
-async function fakeWorkbook(): Promise<string> {
+async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
   const workbook = new ExcelJS.Workbook();
   const mapping = workbook.addWorksheet('Column_Mapping');
   mapping.addRow([
@@ -117,6 +117,7 @@ async function fakeWorkbook(): Promise<string> {
     null,
     null,
   ]);
+  for (const row of extraRows) data.addRow(row);
 
   const file = join(
     await mkdtemp(join(tmpdir(), 'initialize-data-')),
@@ -234,4 +235,53 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
 
   const detail = await fixture.service.getRequest(done.id, admin);
   assert.equal(detail.requestNo, 'PSF-000100');
+});
+
+void it('lenient mode blanks non-fitting values and skips unusable rows', async () => {
+  const when = new Date('2024-06-01T00:00:00Z');
+  const row = (id: unknown, status: unknown, created: unknown = when) => [
+    id,
+    'Item',
+    created,
+    when,
+    status,
+    REQUEST_TO[0],
+    'Chip',
+    '',
+    '',
+    '',
+    '',
+    null,
+    null,
+  ];
+  const file = await fakeWorkbook([
+    row('abc', '100% -- Completed'),
+    row(103, ''),
+    row(104, '100% -- Completed', 'yesterday'),
+    row(100, '100% -- Completed'),
+  ]);
+  const db2 = {
+    query: (sql: string, args?: unknown[]) => db.query(sql, args),
+  } as unknown as PoolClient;
+
+  await assert.rejects(
+    initialize(db2, file),
+    /Data row 5: ID is not an integer/,
+  );
+
+  const report = await initialize(db2, file, { lenient: true });
+  assert.equal(report.imported, 2);
+  assert.deepEqual(report.skippedRows, {
+    'ID is not an integer': 1,
+    'Status is blank': 1,
+    'Created or Modified is not a date': 1,
+    'ID is duplicated': 1,
+  });
+  assert.deepEqual(report.mismatches, {
+    'Touch down per wafer': { rows: 1, distinct: 1 },
+  });
+  const { rows } = await db.query<RequestRow>(
+    'SELECT * FROM psf_requests ORDER BY request_no',
+  );
+  assert.equal(rows[1].psf_created_data_json.touch_down_per_wafer, '');
 });
