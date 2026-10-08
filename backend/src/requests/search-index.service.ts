@@ -549,7 +549,7 @@ export class SearchIndexService implements OnModuleInit {
   ): Promise<RequestExportResult> {
     const limit = this.normalizeLimit(filters.limit, maximumLimit);
     const offset = this.normalizeOffset(filters.offset);
-    const { whereClause, params } = this.buildExportWhere(filters, actor);
+    const { whereClause, params } = this.buildExportWhere(filters);
     const result = await this.pool.query<RequestExportRow>(
       `
         SELECT
@@ -592,11 +592,8 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
-  async countExportRequests(
-    filters: RequestSearchFilters,
-    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
-  ): Promise<number> {
-    const { whereClause, params } = this.buildExportWhere(filters, actor);
+  async countExportRequests(filters: RequestSearchFilters): Promise<number> {
+    const { whereClause, params } = this.buildExportWhere(filters);
     const result = await this.pool.query<RequestExportCountRow>(
       `
         SELECT COUNT(*)::int AS total
@@ -925,16 +922,13 @@ export class SearchIndexService implements OnModuleInit {
     );
   }
 
-  private buildExportWhere(
-    filters: RequestSearchFilters,
-    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
-  ): { whereClause: string; params: unknown[] } {
-    const where: string[] = [];
+  // Exports carry submitted requests only: no Draft, not even the actor's own.
+  private buildExportWhere(filters: RequestSearchFilters): {
+    whereClause: string;
+    params: unknown[];
+  } {
+    const where: string[] = [`request.status <> 'Draft'`];
     const params: unknown[] = [];
-    params.push(actor.id);
-    where.push(
-      `(request.status <> 'Draft' OR request.requester_user_id = $${params.length}::uuid)`,
-    );
 
     this.addCaseInsensitiveFilter(
       where,

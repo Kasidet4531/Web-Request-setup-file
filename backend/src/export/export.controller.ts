@@ -63,10 +63,7 @@ export class ExportController {
     const actor = await this.getExportActor(request);
     const filters = this.parseExportFilters(query);
     const synchronousThreshold = this.getSynchronousExportThreshold();
-    const total = await this.searchIndexService.countExportRequests(
-      filters,
-      actor,
-    );
+    const total = await this.searchIndexService.countExportRequests(filters);
 
     if (total > synchronousThreshold) {
       const job = await this.exportJobRepository.enqueue(filters, actor);
