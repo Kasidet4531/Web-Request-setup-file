@@ -33,7 +33,7 @@ Shared PSF Requests available to a Setup File Owner, optionally filtered by Prod
 
 **Product Type**:
 The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in the request table's title/product-type column. XLSX places metadata columns before requester-form fields; Product Type is not its first column.
-Decided 8 October 2026, implemented in source but not yet run against the configured database: after the **Initial Data Load** the Product Type field is the **Request To** field, labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint.
+Decided 8 October 2026, implemented in source and loaded into the configured database on 8 October 2026 (with `--lenient`): after the **Initial Data Load** the Product Type field is the **Request To** field, labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint.
 _Avoid_: Type of product, product category
 
 

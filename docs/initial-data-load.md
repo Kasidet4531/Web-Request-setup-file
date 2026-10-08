@@ -3,9 +3,11 @@
 `backend/scripts/initialize-data.ts` resets the PSF Request data and form configuration
 from the PSF form detail workbook (sheets `Column_Mapping` and `Data`). It is a
 one-time, destructive operation. Source is authoritative; this guide describes the
-script as written on 8 October 2026. It has been exercised only against a disposable
-in-memory database with a fabricated workbook (`backend/test/initialize-data.postgres.test.ts`),
-not against the configured PostgreSQL or the real workbook.
+script as written on 8 October 2026. Automated tests use a disposable in-memory database
+with a fabricated workbook (`backend/test/initialize-data.postgres.test.ts`). The real
+workbook was loaded into the configured PostgreSQL (`psf_setup_db`) on 8 October 2026 with
+`--lenient`: 5,570 requests, 3 form versions and a 12-entry Status catalog (read-back counts
+only; the real data is not reproduced here).
 
 ## Running it
 
