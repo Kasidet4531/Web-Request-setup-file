@@ -378,7 +378,7 @@ describe('SearchIndexService canonical extraction', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('FROM psf_requests'),
-      [actor.id, 'Submitted', 2000, 0],
+      ['Submitted', 2000, 0],
     );
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).toContain('canonical_submission_values');
@@ -386,9 +386,8 @@ describe('SearchIndexService canonical extraction', () => {
     expect(query).toContain('schema_snapshot_json');
     expect(query).toContain('psf_created_schema_snapshot_json');
     expect(query).not.toContain('AND request.requester_user_id =');
-    expect(query).toContain(
-      "request.status <> 'Draft' OR request.requester_user_id = $1::uuid",
-    );
+    expect(query).toContain("WHERE request.status <> 'Draft'");
+    expect(query).not.toContain('OR request.requester_user_id');
   });
 
   it('does not apply requester ownership scoping to an admin export query', async () => {
@@ -405,13 +404,12 @@ describe('SearchIndexService canonical extraction', () => {
     );
 
     expect(pool.query).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "request.status <> 'Draft' OR request.requester_user_id = $1::uuid",
-      ),
-      [adminActor.id, 'Submitted', 2000, 0],
+      expect.stringContaining("WHERE request.status <> 'Draft'"),
+      ['Submitted', 2000, 0],
     );
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).not.toContain('AND request.requester_user_id =');
+    expect(query).not.toContain('OR request.requester_user_id');
   });
 
   it('returns the stored PSF Created Information descriptor in each export record', async () => {
@@ -470,32 +468,23 @@ describe('SearchIndexService canonical extraction', () => {
 
   it('counts an export through the same status and date scope without loading rows', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
-    const requesterActor = {
-      id: 'requester-1',
-      role: 'requester' as const,
-    };
-
     await expect(
-      service.countExportRequests(
-        {
-          status: 'Submitted',
-          requestDateFrom: '2026-06-01',
-          requestDateTo: '2026-06-30',
-        },
-        requesterActor,
-      ),
+      service.countExportRequests({
+        status: 'Submitted',
+        requestDateFrom: '2026-06-01',
+        requestDateTo: '2026-06-30',
+      }),
     ).resolves.toBe(2001);
 
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('SELECT COUNT(*)::int AS total'),
-      [requesterActor.id, 'Submitted', '2026-06-01', '2026-06-30'],
+      ['Submitted', '2026-06-01', '2026-06-30'],
     );
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).toContain('FROM psf_requests AS request');
     expect(query).not.toContain('AND request.requester_user_id =');
-    expect(query).toContain(
-      "request.status <> 'Draft' OR request.requester_user_id = $1::uuid",
-    );
+    expect(query).toContain("WHERE request.status <> 'Draft'");
+    expect(query).not.toContain('OR request.requester_user_id');
     expect(query).not.toContain('LIMIT');
   });
 
