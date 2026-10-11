@@ -630,6 +630,22 @@ describe('RequestHistoryPanel', () => {
     expect(html).toContain('role="status"')
   })
 
+  it('links only the entries that have a Request Snapshot to its page', () => {
+    const entry = { actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester', createdAt: '2026-06-18T01:02:03.000Z', metadata: {} }
+    const render = (hasRequestSnapshot: boolean) => RequestsWorkspace.RequestHistoryPanel({
+      requestId: 'request-1',
+      entries: [{ ...entry, id: 'entry-1', hasRequestSnapshot }] as never,
+      error: null,
+      loading: false,
+    })
+    const isSnapshotLink = (element: { props: Record<string, unknown> }) => element.props.to === '/requests/$requestId/history/$entryId'
+
+    const link = requireRenderedElement(render(true), isSnapshotLink)
+    expect(link.props.params).toEqual({ requestId: 'request-1', entryId: 'entry-1' })
+    expect(link.props.children).toBe('View Request Snapshot')
+    expect(findRenderedElement(render(false), isSnapshotLink)).toBeNull()
+  })
+
   it('surfaces a history loading failure accessibly instead of treating it as empty', () => {
     const panel = getRequestHistoryPanel()
     if (!panel) {
@@ -1866,7 +1882,7 @@ describe('RequestDetailShell workflow actions', () => {
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'LOCAL PSF edit' })
     expect(form.key).toBeNull()
-    expect(form.props.requestSnapshot).toEqual(refreshedRequest)
+    expect(form.props.loadedRequest).toEqual(refreshedRequest)
     expect((requesterRenderer.props.values as Record<string, string>).request_title_v4).toBe('LOCAL requester title')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
@@ -2107,6 +2123,30 @@ describe('Tabbed Detail and PSF edit lifecycle', () => {
   const tab = (page: unknown, label: string) => requireRenderedElement(page, e => e.props.role === 'tab' && e.props.children === label)
   const psf = (page: unknown) => requireRenderedElement(page, e => e.type === RequestsWorkspace.PsfCreatedInformationPanel)
   const load = async () => { renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return renderRequestDetailShell() }
+
+  it('reloads History after a save that changed the request, and not after one that changed nothing', async () => {
+    let page = await load()
+    const initial = psf(page).props.request as PsfRequestResponse
+    const settle = async () => { renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return renderRequestDetailShell() }
+    const acceptSaved = (saved: PsfRequestResponse) => (requireRenderedElement(page, e => e.type === ActiveSchemaForm).props.onRequestSaved as (request: PsfRequestResponse) => void)(saved)
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(1)
+
+    acceptSaved({ ...initial, updatedAt: 'requester-save-r2' })
+    page = await settle()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(2)
+
+    acceptSaved({ ...initial, updatedAt: 'requester-save-r2' })
+    page = await settle()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(2)
+
+    requestDetailApi.updatePsfCreatedData.mockResolvedValueOnce({ ...initial, updatedAt: 'psf-save-r3' })
+    ;(psf(page).props.onEdit as () => void)()
+    page = renderRequestDetailShell()
+    ;(psf(page).props.onSave as (values: Record<string, string>) => void)(psf(page).props.values as Record<string, string>)
+    await flushRequestDetailAsyncWork()
+    await settle()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(3)
+  })
 
   it('rebases clean PSF values from a requester snapshot and saves the current values with its new revision', async () => {
     let page = await load()

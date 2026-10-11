@@ -40,8 +40,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    Link: ({ children, params }: { children: ReactNode; params: { requestId: string } }) =>
-      createElement('a', { href: `/requests/${params.requestId}` }, children),
+    Link: ({ children, params }: { children: ReactNode; params: { requestId: string; entryId?: string } }) =>
+      createElement('a', { href: `/requests/${params.requestId}${params.entryId ? `/history/${params.entryId}` : ''}` }, children),
   }
 })
 
@@ -172,10 +172,23 @@ describe('GlobalAuditLogFilters', () => {
 })
 
 describe('GlobalAuditLogTable', () => {
+  it('links only the entries that have a Request Snapshot to its page', () => {
+    const entry = {
+      id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUESTER_INFORMATION_UPDATED' as const,
+      actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-06T01:00:00Z', metadata: {},
+    }
+    const html = renderToStaticMarkup(GlobalAuditLogTable({
+      entries: [{ ...entry, id: 'entry-old', hasRequestSnapshot: false }, { ...entry, id: 'entry-new', hasRequestSnapshot: true }],
+      error: null, loading: false,
+    }))
+    expect(html).toContain('<a href="/requests/request-1/history/entry-new">View Request Snapshot</a>')
+    expect(html.match(/View Request Snapshot/g)).toHaveLength(1)
+  })
+
   it('keeps loaded audit rows visible and inert while refreshing instead of replacing the table', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [{
-        requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUEST_SUBMITTED',
+        id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUEST_SUBMITTED',
         actorDisplayName: 'Requester', actorRole: 'requester', createdAt: '2026-10-06T01:00:00Z', metadata: {},
       }], error: null, loading: true,
     }))
@@ -187,7 +200,7 @@ describe('GlobalAuditLogTable', () => {
   it('displays Bangkok time and readable server-provided field changes without inventing missing history', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [{
-        requestId: 'request-1', requestNo: 'PSF-0001',
+        id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001',
         actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester',
         createdAt: '2026-10-04T23:30:00Z', metadata: {
           fieldChanges: [{ fieldKey: 'priority', fieldLabel: 'Priority', before: 'Normal', after: 'Urgent' }],
@@ -205,7 +218,7 @@ describe('GlobalAuditLogTable', () => {
 
   it('renders factual catalog metadata and escapes untrusted values', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
-      requestId: null, requestNo: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
+      id: 'entry-1', hasRequestSnapshot: false, requestId: null, requestNo: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
       actorDisplayName: 'Admin', actorRole: 'admin', createdAt: 'invalid-date',
       metadata: { operation: { action: 'rename', name: '<script>new status</script>' } },
     }], error: null, loading: false }))
@@ -239,6 +252,8 @@ describe('GlobalAuditLogTable', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [
         {
+          id: 'entry-2',
+          hasRequestSnapshot: false,
           requestId: 'request-2',
           requestNo: 'PSF-0002',
           actionType: 'REQUEST_STATUS_CHANGED',
@@ -251,6 +266,8 @@ describe('GlobalAuditLogTable', () => {
           },
         },
         {
+          id: 'entry-1',
+          hasRequestSnapshot: false,
           requestId: 'request-1',
           requestNo: 'PSF-0001',
           actionType: 'DRAFT_CREATED',

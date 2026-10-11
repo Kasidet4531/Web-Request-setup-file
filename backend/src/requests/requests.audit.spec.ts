@@ -211,7 +211,22 @@ describe('RequestsService audit baseline', () => {
         requestId: draftRow.id,
         actionType: REQUEST_AUDIT_ACTION.DRAFT_CREATED,
         actor: requesterActor,
-        metadata: {},
+        metadata: {
+          fieldChanges: [
+            {
+              fieldKey: 'product_type',
+              fieldLabel: 'Product Type',
+              before: null,
+              after: 'New Product',
+            },
+            {
+              fieldKey: 'requester_name',
+              fieldLabel: 'Requester Name',
+              before: null,
+              after: 'Fook',
+            },
+          ],
+        },
       },
       dbClient,
     );

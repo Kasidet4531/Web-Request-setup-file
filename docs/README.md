@@ -75,6 +75,7 @@ behavior and test outcomes.
 | [docs/adr/0013-excel-export-schema-alignment.md](adr/0013-excel-export-schema-alignment.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md](adr/0014-current-production-baseline-and-visual-reference-boundary.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0015-initial-data-load-legacy-form-version-and-request-to.md](adr/0015-initial-data-load-legacy-form-version-and-request-to.md) | Accepted 8 October 2026: Legacy Columns kept as Form Version 1; Request To is Product Type |
+| [docs/adr/0016-full-request-snapshot-per-audit-history-entry.md](adr/0016-full-request-snapshot-per-audit-history-entry.md) | Accepted 11 October 2026, implemented in source: every request Audit History entry stores a full Request Snapshot; replaces the no-snapshot choice in ADR 0011 |
 | [docs/github_issues.md](github_issues.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/github_issues_refined.md](github_issues_refined.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/history/diagrams-target-architecture.md](history/diagrams-target-architecture.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
@@ -90,6 +91,7 @@ behavior and test outcomes.
 | [docs/plans/production-ui-integration-execution-plan.md](plans/production-ui-integration-execution-plan.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/psf-created-information-editing.md](plans/psf-created-information-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/superpowers/plans/2026-09-01-ldap-api-login.md](superpowers/plans/2026-09-01-ldap-api-login.md) | Original scoped plan; not a current execution instruction |
+| [Request Snapshot verification](verification/2026-10-11-request-snapshot.md) | Suites against the `main` baseline, real-browser flow, and a run on the configured PostgreSQL inside session-temporary tables; not deployment acceptance |
 | [Draft lifecycle verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md) | Public browser/HTTP/mail, SQL races and regression evidence |
 | [docs/verification/2026-10-07-admin-autofill-dialogs.md](verification/2026-10-07-admin-autofill-dialogs.md) | Rule activation, modal editing and recipient-layout regression tests, browser evidence and two-axis review |
 | [docs/verification/2026-10-06-main-documentation-alignment.md](verification/2026-10-06-main-documentation-alignment.md) | Main documentation baseline, assignment semantics, link checks and original Task 4 evidence availability |

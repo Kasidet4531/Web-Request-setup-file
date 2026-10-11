@@ -17,13 +17,13 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
     database = new PGlite();
     await database.exec(`
       CREATE TABLE psf_requests (id uuid PRIMARY KEY, request_no text, status text, requester_user_id uuid, psf_released_at timestamptz);
-      CREATE TABLE psf_request_audit_logs (id uuid PRIMARY KEY, request_id uuid, action_type text, actor_username text, actor_display_name text, actor_role text, created_at timestamptz, metadata_json jsonb);
+      CREATE TABLE psf_request_audit_logs (id uuid PRIMARY KEY, request_id uuid, action_type text, actor_username text, actor_display_name text, actor_role text, created_at timestamptz, metadata_json jsonb, request_snapshot_json jsonb);
       INSERT INTO psf_requests VALUES ('${privateId}', 'PRIVATE-DRAFT', 'Draft', '${ownerId}', NULL), ('${submittedId}', 'PSF-PUBLIC', '20% -- PSF File Creating', '${ownerId}', NULL);
       INSERT INTO psf_request_audit_logs VALUES
-        ('00000000-0000-4000-8000-000000000010', '${privateId}', 'DRAFT_CREATED', 'company.editor', 'Editor', 'requester', '2026-10-04T00:00:00Z', '{}'),
-        ('00000000-0000-4000-8000-000000000011', '${submittedId}', 'REQUESTER_INFORMATION_UPDATED', 'company.editor', 'Editor', 'requester', '2026-10-04T01:00:00Z', '{"fieldChanges":[{"before":"old public","after":"new public"}]}'),
-        ('00000000-0000-4000-8000-000000000012', '${submittedId}', 'PSF_CREATED_INFORMATION_UPDATED', 'company.editor', 'Editor', 'setup_owner', '2026-10-04T02:00:00Z', '{"fieldChanges":[{"before":"old-secret.psf","after":"new-secret.psf"}]}'),
-        ('00000000-0000-4000-8000-000000000013', NULL, 'WORKFLOW_CATALOG_UPDATED', 'company.admin', 'Admin', 'admin', '2026-10-04T03:00:00Z', '{"action":"rename","name":"exact catalog name"}');
+        ('00000000-0000-4000-8000-000000000010', '${privateId}', 'DRAFT_CREATED', 'company.editor', 'Editor', 'requester', '2026-10-04T00:00:00Z', '{}', NULL),
+        ('00000000-0000-4000-8000-000000000011', '${submittedId}', 'REQUESTER_INFORMATION_UPDATED', 'company.editor', 'Editor', 'requester', '2026-10-04T01:00:00Z', '{"fieldChanges":[{"before":"old public","after":"new public"}]}', '{"status":"20% -- PSF File Creating"}'),
+        ('00000000-0000-4000-8000-000000000012', '${submittedId}', 'PSF_CREATED_INFORMATION_UPDATED', 'company.editor', 'Editor', 'setup_owner', '2026-10-04T02:00:00Z', '{"fieldChanges":[{"before":"old-secret.psf","after":"new-secret.psf"}]}', NULL),
+        ('00000000-0000-4000-8000-000000000013', NULL, 'WORKFLOW_CATALOG_UPDATED', 'company.admin', 'Admin', 'admin', '2026-10-04T03:00:00Z', '{"action":"rename","name":"exact catalog name"}', NULL);
     `);
     service = new AuditLogService({
       query: (sql: string, values?: unknown[]) => database.query(sql, values),
@@ -86,6 +86,18 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
         viewer,
       ),
       [],
+    );
+  });
+
+  void it('tells which entries can be opened as a Request Snapshot', async () => {
+    const result = await service.findGlobalAuditLogs({}, actor('admin'));
+    assert.deepEqual(
+      result.map((entry) => [entry.id.slice(-2), entry.hasRequestSnapshot]),
+      [
+        ['13', false],
+        ['12', false],
+        ['11', true],
+      ],
     );
   });
 

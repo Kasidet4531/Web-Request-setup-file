@@ -508,6 +508,9 @@ export class WorkflowTransitionService implements OnModuleInit {
                     toStatus: change.toStatus,
                     bulkReplacement: true,
                   },
+                  // One replacement can move thousands of requests without
+                  // changing their content (ADR 0016).
+                  requestSnapshot: false,
                 },
                 client,
               );

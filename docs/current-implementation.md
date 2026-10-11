@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Request Snapshot, 11 October 2026:** an Audit History entry tied to a request now stores a Request Snapshot, opened read-only through "View Request Snapshot" in the request's History tab or on the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). Bulk Status replacement entries and entries recorded before this change have none. This is a source change; the dated checks, including a run on the configured PostgreSQL server inside session-temporary tables, are in the [verification record](verification/2026-10-11-request-snapshot.md). The configured tables were not written and no deployment was exercised.
+
 > **Initial Data Load, number fields and export scope, 8 October 2026:** the [Initial Data Load script](initial-data-load.md) reloads forms, the Status catalog and requests from the PSF form detail workbook. Form fields may be `number` (validated as plain decimals, exported as numeric cells), Dashboard Team Group also reads the Request To options, and every authenticated role exports all submitted (non-Draft) requests, never any Draft, not even their own. The load script was run against the configured database on 8 October 2026 with `--lenient` (read-back counts only); see [Initial Data Load](initial-data-load.md).
 
 > **Draft lifecycle update, 7 October 2026:** Admin/My Draft deletion, seven-day reminders and Product Type team filtering replace request assignment. See [the implementation guide](draft-management-and-reminders.md) and [verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md).
@@ -179,6 +181,22 @@ combine fields from multiple historical requests. Global audit now resolves the 
 label, before and after values; these are metadata within action rows, not a
 separate audit row per field.
 
+Each entry tied to a request also stores a Request Snapshot: both forms' values,
+the Work Status and the Form Version numbers, captured in the same transaction as
+the change. Creation records the initial content, and submit and a Draft Form
+Version upgrade record their field changes. A save that changes nothing writes
+nothing: no entry and no new revision. Bulk Status replacement keeps its per-request entries but stores no
+Request Snapshot. Reading one applies the request's access check, hides PSF
+Created Information and PSF update entries from a Requester before release, and
+renders with the Form Version of that time. History entries now carry an `id`
+and `hasRequestSnapshot`; both are additions, and no earlier field changed. The
+request's History tab reloads after a save or Status change that produced a new
+revision.
+Sources: [capture and read](../backend/src/audit/audit_log.service.ts),
+[visibility and Form Version lookup](../backend/src/requests/requests.service.ts),
+[bulk replacement exception](../backend/src/admin/workflow_transition.service.ts),
+[Request Snapshot page](../frontend/src/components/RequestSnapshotPage.tsx).
+
 Admins can choose any supported requester form field as a trigger; each rule
 has one trigger and one or more targets. Runtime trigger metadata comes from
 active rules, including for older drafts using their original field keys.
@@ -240,7 +258,7 @@ query parameters. This table lists routes, not full payload schemas.
 | Development auth   | `POST /api/dev/login`                                                                                                                                            | [DevelopmentAuthController](../backend/src/auth/development-auth.controller.ts)        |
 | Active schema      | `GET /api/forms/:formKey/schema`                                                                                                                                 | [FormsController](../backend/src/forms/forms.controller.ts)                            |
 | Requests           | `POST/GET /api/requests`, `GET /api/requests/:requestId`                                                                                                         | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
-| Request reads      | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/status-options`                                                                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
+| Request reads      | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/history/:entryId` (Request Snapshot), `GET /api/requests/:requestId/status-options`     | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Draft management | `GET /api/admin/drafts`, `GET /api/admin/drafts/:id`, `GET /api/admin/draft-deletions`, `DELETE /api/requests/:id` | [Admin controller](../backend/src/requests/admin-drafts.controller.ts), [request controller](../backend/src/requests/requests.controller.ts) |
 | Draft reminders | `GET /api/admin/draft-reminders` | [reminder inspection](../backend/src/notifications/draft-reminders.controller.ts) |
 | Request edits      | `PUT /api/requests/:requestId/requester-data`, `PUT /api/requests/:requestId/psf-created-data`, `PUT /api/requests/:requestId/status`                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
@@ -292,6 +310,7 @@ Credentials belong in ignored local configuration.
 | `/admin/export-profile`                                                                     | RequestExportPage; no export-profile CRUD       |
 | `/admin/`                                                                                   | Administration directory                        |
 | `/requests/$requestId/history`                                                              | RequestHistoryPage                              |
+| `/requests/$requestId/history/$entryId`                                                     | RequestSnapshotPage (read-only)                 |
 | `/admin/master-data`                                                                        | Placeholder page                                |
 
 Source: [file routes](../frontend/src/routes),

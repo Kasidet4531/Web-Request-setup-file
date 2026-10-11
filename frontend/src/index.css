@@ -203,6 +203,14 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .dynamic-form__section h3 { font-size: 14px; }
 .dynamic-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .dynamic-form__field--textarea { grid-column: 1 / -1; }
+.dynamic-form__field--changed { padding: 8px 12px; background: var(--secondary); border-left: 3px solid var(--warning); border-radius: 4px; }
+.dynamic-form__previous { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.request-snapshot { display: grid; gap: 16px; }
+.request-snapshot__summary dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.request-snapshot__summary dt { color: var(--muted-foreground); font-size: 12px; line-height: 20px; }
+.request-snapshot__summary dd { margin: 0; overflow-wrap: anywhere; }
+.request-snapshot__summary dd .dynamic-form__previous { margin-left: 8px; }
+.request-snapshot-link { display: block; margin-top: 4px; font-size: 12px; }
 .dynamic-form__product-type { display: grid; gap: 8px; grid-column: 1 / -1; margin: 0; }
 .dynamic-form__choice-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 legend.dynamic-form__label { padding: 0; margin-bottom: 6px; }

@@ -305,11 +305,28 @@ export type PsfRequestHistoryAction =
   | 'WORKFLOW_CATALOG_UPDATED'
 
 export interface PsfRequestHistoryEntry {
+  id: string
+  hasRequestSnapshot: boolean
   actionType: PsfRequestHistoryAction
   actorDisplayName: string
   actorRole: UserRole
   createdAt: string
   metadata: Record<string, unknown>
+}
+
+/** A PSF Request as it stood immediately after one Audit History entry. */
+export interface RequestSnapshotResponse {
+  entry: PsfRequestHistoryEntry
+  requestNo: string
+  /** The request's Work Status now; `status` is the one of that time. */
+  currentStatus: string
+  status: string
+  formVersion: number
+  requesterData: Record<string, unknown>
+  psfCreatedData: Record<string, unknown>
+  psfCreatedDataVisible: boolean
+  schemaSnapshot: FormSchema
+  psfCreatedInformationSchema: FormSchema
 }
 
 export interface GlobalAuditLogQuery {
@@ -330,6 +347,8 @@ export interface GlobalAuditLogPage {
 }
 
 export interface GlobalAuditLogEntry {
+  id: string
+  hasRequestSnapshot: boolean
   requestId: string | null
   requestNo: string | null
   actionType: PsfRequestHistoryAction
@@ -496,6 +515,10 @@ export function createApiClient(config: ApiClientConfig = {}) {
       }),
     fetchPsfRequestHistory: (requestId: string) =>
       request<PsfRequestHistoryEntry[]>(`/requests/${encodeURIComponent(requestId)}/history`, {
+        method: 'GET',
+      }),
+    fetchRequestSnapshot: (requestId: string, entryId: string) =>
+      request<RequestSnapshotResponse>(`/requests/${encodeURIComponent(requestId)}/history/${encodeURIComponent(entryId)}`, {
         method: 'GET',
       }),
     fetchGlobalAuditLogs: (query: GlobalAuditLogQuery = {}) =>

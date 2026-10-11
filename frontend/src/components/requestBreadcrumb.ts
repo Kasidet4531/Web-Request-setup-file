@@ -16,7 +16,7 @@ export function requestParent(pathname: string, request: RequestBreadcrumb | nul
 export function requestDocumentTitle(pathname: string, request: RequestBreadcrumb | null, fallback: string): string {
   const segments = pathname.split('/').filter(Boolean)
   const title = request && segments[0] === 'requests' && request.requestId === segments[1]
-    ? `${request.requestNo}${segments[2] === 'history' ? ' history' : ''}`
+    ? `${request.requestNo}${segments[2] === 'history' ? (segments[3] ? ' Request Snapshot' : ' history') : ''}`
     : fallback
   return `${title} · PSF Request Portal`
 }

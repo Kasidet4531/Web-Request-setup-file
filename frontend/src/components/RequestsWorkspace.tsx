@@ -21,6 +21,7 @@ import { DANGER_BUTTON_CLASS, ROW_PX, pagedMinHeight } from './ui/tableLayout'
 import { StatusLabel } from './ui/StatusLabel'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { HistoryChanges } from './ui/HistoryChanges'
+import { historyActionSummary } from './historyActionSummary'
 import { formatHistoryDateTime } from './ui/historyDateTime'
 import {
   ApiError,
@@ -57,30 +58,6 @@ function formatDateTime(value: string): string {
   return Number.isNaN(date.getTime())
     ? value
     : formatHistoryDateTime(value)
-}
-
-function historyActionSummary(entry: PsfRequestHistoryEntry): string {
-  switch (entry.actionType) {
-    case 'DRAFT_CREATED':
-      return 'Draft created'
-    case 'DRAFT_REQUESTER_DATA_UPDATED':
-      return 'Draft requester information updated'
-    case 'REQUEST_SUBMITTED':
-      return 'Request submitted'
-    case 'REQUEST_STATUS_CHANGED': {
-      const fromStatus = entry.metadata.fromStatus
-      const toStatus = entry.metadata.toStatus
-
-      if (typeof fromStatus === 'string' && typeof toStatus === 'string') {
-        return `${fromStatus} → ${toStatus}`
-      }
-
-      return 'Request status changed'
-    }
-    case 'REQUESTER_INFORMATION_UPDATED': return 'Requester information updated'
-    case 'PSF_CREATED_INFORMATION_UPDATED': return 'PSF Created Information updated'
-    case 'WORKFLOW_CATALOG_UPDATED': return 'Workflow catalog updated'
-  }
 }
 
 function requesterValueForCanonicalKey(request: PsfRequestResponse, canonicalKey: string): string | null {
@@ -288,8 +265,10 @@ export function RequestHistoryPanel({
   error,
   loading,
   onRetry,
+  requestId,
 }: {
   onRetry?: () => void
+  requestId: string
   entries: PsfRequestHistoryEntry[]
   error: string | null
   loading: boolean
@@ -315,6 +294,7 @@ export function RequestHistoryPanel({
                 <strong>{historyActionSummary(entry)}</strong>
                 <span>{entry.actorDisplayName} · {entry.actorRole}</span>
                 <HistoryChanges metadata={entry.metadata} />
+                {entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View Request Snapshot</Link> : null}
               </div>
             </li>
           ))}
@@ -981,6 +961,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
             expectedUpdatedAt: request.updatedAt,
           })
       setRequest(updatedRequest)
+      setHistoryRetry((value) => value + 1)
       setPsfCreatedValues(buildPsfCreatedInformationValues(updatedRequest))
       setMessage(request.status === 'Draft'
         ? `Request ${updatedRequest.requestNo} submitted to ${updatedRequest.status}.`
@@ -999,29 +980,31 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     }
   }
 
-  async function refreshWorkflowOptions(snapshot: PsfRequestResponse) {
+  async function refreshWorkflowOptions(savedRequest: PsfRequestResponse) {
     const generation = ++statusOptionsGeneration.current
-    workflowContext.current = { requestId: snapshot.id, status: snapshot.status }
-    setStatus(snapshot.status)
+    workflowContext.current = { requestId: savedRequest.id, status: savedRequest.status }
+    setStatus(savedRequest.status)
     setAllowedNextStatuses([])
-    const isCurrent = () => currentRequestId.current === snapshot.id && statusOptionsGeneration.current === generation
+    const isCurrent = () => currentRequestId.current === savedRequest.id && statusOptionsGeneration.current === generation
     try {
-      const options = await api.fetchPsfRequestStatusOptions(snapshot.id)
+      const options = await api.fetchPsfRequestStatusOptions(savedRequest.id)
       if (isCurrent()) setAllowedNextStatuses(options.allowedNextStatuses)
     } catch (optionsError) {
       if (isCurrent()) setError(`Workflow options could not be refreshed: ${optionsError instanceof Error ? optionsError.message : 'Unable to refresh workflow status options'}`)
     }
   }
 
-  function acceptRequesterSnapshot(snapshot: PsfRequestResponse) {
-    if (snapshot.id !== requestId || currentRequestId.current !== requestId) return
-    const baseline = buildPsfCreatedInformationValues(snapshot)
+  function acceptSavedRequest(savedRequest: PsfRequestResponse) {
+    if (savedRequest.id !== requestId || currentRequestId.current !== requestId) return
+    const baseline = buildPsfCreatedInformationValues(savedRequest)
     const nextValues = psfDraft.current.dirty ? psfDraft.current.values : baseline
     const nextDirty = JSON.stringify(nextValues) !== JSON.stringify(baseline)
     psfDraft.current = { values: nextValues, dirty: nextDirty }
-    setRequest(snapshot)
-    if (workflowContext.current.requestId !== snapshot.id || workflowContext.current.status !== snapshot.status) {
-      void refreshWorkflowOptions(snapshot)
+    // A save that changed nothing keeps its revision and adds no History entry.
+    if (savedRequest.updatedAt !== request?.updatedAt) setHistoryRetry((value) => value + 1)
+    setRequest(savedRequest)
+    if (workflowContext.current.requestId !== savedRequest.id || workflowContext.current.status !== savedRequest.status) {
+      void refreshWorkflowOptions(savedRequest)
     }
     setPsfCreatedValues(nextValues)
     setPsfCreatedDirty(nextDirty)
@@ -1058,6 +1041,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
         expectedUpdatedAt: request.updatedAt,
         psfCreatedData: values,
       })
+      if (savedRequest.updatedAt !== request.updatedAt) setHistoryRetry((value) => value + 1)
       setRequest(savedRequest)
       setPsfCreatedValues(buildPsfCreatedInformationValues(savedRequest))
       setPsfCreatedDirty(false)
@@ -1154,10 +1138,10 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
                 requestId={requestId}
                 onDirtyChange={setRequesterDirty}
                 onDraftSchemaSubmitAllowedChange={setDraftSchemaSubmitAllowed}
-                onRequestSaved={acceptRequesterSnapshot}
+                onRequestSaved={acceptSavedRequest}
                 onSavingChange={setSavingRequesterData}
                 onSubmissionConflictSettled={setSavingStatus}
-                requestSnapshot={request}
+                loadedRequest={request}
                 submissionConflict={submissionConflict}
               />
             </section>
@@ -1179,6 +1163,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           </div>
 
           <div className="detail-layout__history" id="detail-panel-history" role="tabpanel" aria-labelledby="detail-tab-history" hidden={request.status === 'Draft' || selectedTab !== 'history'}><RequestHistoryPanel
+              requestId={requestId}
               onRetry={() => setHistoryRetry((value) => value + 1)}
               entries={history.data}
               error={history.error}
@@ -1226,6 +1211,6 @@ export function RequestHistoryPage({ requestId, onIdentityResolved }: { requestI
   }, [request, requestId, onIdentityResolved])
   return <article className="workflow-page request-history-page">
     <PageHeader title="Request History" description={currentRequest ? `${currentRequest.requestNo} · ${getRequestTitle(currentRequest)}` : 'Activity visible to you for this request.'} />
-    <RequestHistoryPanel entries={currentHistory.data} error={currentHistory.error} loading={currentHistory.loading} onRetry={() => setRetry((value) => value + 1)} />
+    <RequestHistoryPanel requestId={requestId} entries={currentHistory.data} error={currentHistory.error} loading={currentHistory.loading} onRetry={() => setRetry((value) => value + 1)} />
   </article>
 }

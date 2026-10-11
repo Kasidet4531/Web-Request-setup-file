@@ -21,3 +21,9 @@ These are working-tree source changes, not deployment evidence. Local unit, HTTP
 Source pointers: [navigation](../frontend/src/components/navigationState.ts), [History route](../frontend/src/routes/history/index.tsx), [History page](../frontend/src/components/GlobalHistoryPage.tsx), [audit controller](../backend/src/audit/audit_log.controller.ts), [audit service](../backend/src/audit/audit_log.service.ts).
 
 For future work, use this document as the current product requirement. Dated source audits describe observed behavior and remain implementation evidence, not a reason to restore the superseded Admin-only requirement. The History portion of decision D01 is resolved; other role decisions and detailed audit metadata decisions remain separate.
+
+## Request Snapshot, 11 October 2026
+
+A Request Snapshot opened from an entry ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md)) follows the rules above: it needs access to the request, a Requester gets no PSF Created Information in it and cannot open PSF update entries before release, and Draft-period Request Snapshots stay with the creator, including from Admin, until submission. The rule is enforced in [the request service](../backend/src/requests/requests.service.ts) (`getRequestSnapshot`).
+
+This is a source change, not deployment evidence. `backend/test/request-snapshot.postgres.test.ts` covers these rules and passed on 11 October 2026, in memory and on the configured server inside temporary tables; see the [verification record](verification/2026-10-11-request-snapshot.md). The 5 October checks above do not cover it.

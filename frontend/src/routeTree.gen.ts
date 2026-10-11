@@ -30,6 +30,7 @@ import { Route as AdminDraftsIndexRouteImport } from './routes/admin/drafts.inde
 import { Route as RequestsRequestIdHistoryRouteImport } from './routes/requests/$requestId/history'
 import { Route as AdminFormConfigVersionRouteImport } from './routes/admin/form-config.$version'
 import { Route as AdminDraftsRequestIdRouteImport } from './routes/admin/drafts.$requestId'
+import { Route as RequestsRequestIdHistoryEntryIdRouteImport } from './routes/requests/$requestId/history_.$entryId'
 import { Route as AdminFormConfigFormKeyVersionRouteImport } from './routes/admin/form-config.$formKey.$version'
 
 const MyDraftsRoute = MyDraftsRouteImport.update({
@@ -138,6 +139,12 @@ const AdminDraftsRequestIdRoute = AdminDraftsRequestIdRouteImport.update({
   path: '/$requestId',
   getParentRoute: () => AdminDraftsRoute,
 } as any)
+const RequestsRequestIdHistoryEntryIdRoute =
+  RequestsRequestIdHistoryEntryIdRouteImport.update({
+    id: '/requests/$requestId/history_/$entryId',
+    path: '/requests/$requestId/history/$entryId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminFormConfigFormKeyVersionRoute =
   AdminFormConfigFormKeyVersionRouteImport.update({
     id: '/$formKey/$version',
@@ -168,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/admin/form-config/': typeof AdminFormConfigIndexRoute
   '/requests/$requestId/': typeof RequestsRequestIdIndexRoute
   '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
+  '/requests/$requestId/history/$entryId': typeof RequestsRequestIdHistoryEntryIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -190,6 +198,7 @@ export interface FileRoutesByTo {
   '/admin/form-config': typeof AdminFormConfigIndexRoute
   '/requests/$requestId': typeof RequestsRequestIdIndexRoute
   '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
+  '/requests/$requestId/history/$entryId': typeof RequestsRequestIdHistoryEntryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -215,6 +224,7 @@ export interface FileRoutesById {
   '/admin/form-config/': typeof AdminFormConfigIndexRoute
   '/requests/$requestId/': typeof RequestsRequestIdIndexRoute
   '/admin/form-config/$formKey/$version': typeof AdminFormConfigFormKeyVersionRoute
+  '/requests/$requestId/history_/$entryId': typeof RequestsRequestIdHistoryEntryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/admin/form-config/'
     | '/requests/$requestId/'
     | '/admin/form-config/$formKey/$version'
+    | '/requests/$requestId/history/$entryId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -263,6 +274,7 @@ export interface FileRouteTypes {
     | '/admin/form-config'
     | '/requests/$requestId'
     | '/admin/form-config/$formKey/$version'
+    | '/requests/$requestId/history/$entryId'
   id:
     | '__root__'
     | '/'
@@ -287,6 +299,7 @@ export interface FileRouteTypes {
     | '/admin/form-config/'
     | '/requests/$requestId/'
     | '/admin/form-config/$formKey/$version'
+    | '/requests/$requestId/history_/$entryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -307,6 +320,7 @@ export interface RootRouteChildren {
   RequestsIndexRoute: typeof RequestsIndexRoute
   RequestsRequestIdHistoryRoute: typeof RequestsRequestIdHistoryRoute
   RequestsRequestIdIndexRoute: typeof RequestsRequestIdIndexRoute
+  RequestsRequestIdHistoryEntryIdRoute: typeof RequestsRequestIdHistoryEntryIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -458,6 +472,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDraftsRequestIdRouteImport
       parentRoute: typeof AdminDraftsRoute
     }
+    '/requests/$requestId/history_/$entryId': {
+      id: '/requests/$requestId/history_/$entryId'
+      path: '/requests/$requestId/history/$entryId'
+      fullPath: '/requests/$requestId/history/$entryId'
+      preLoaderRoute: typeof RequestsRequestIdHistoryEntryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/form-config/$formKey/$version': {
       id: '/admin/form-config/$formKey/$version'
       path: '/$formKey/$version'
@@ -516,6 +537,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequestsIndexRoute: RequestsIndexRoute,
   RequestsRequestIdHistoryRoute: RequestsRequestIdHistoryRoute,
   RequestsRequestIdIndexRoute: RequestsRequestIdIndexRoute,
+  RequestsRequestIdHistoryEntryIdRoute: RequestsRequestIdHistoryEntryIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -161,6 +161,8 @@ From `backend`, run the real-browser/backend/PostgreSQL regression with the same
 EMAIL_E2E_CHROME=/usr/bin/google-chrome npm run test:ui:system
 ```
 
+Since 11 October 2026 the same script also runs the Request Snapshot system test (`test/request-snapshot-system.e2e.mjs`); see [current implementation](current-implementation.md) for that day's result of both.
+
 The test holds real API requests while checking pending layout, then releases them and checks the updated result. It covers all four pages, including My Drafts at 390px, without mocking application responses. The suite passed alongside all five email system flows and the startup-cleanup regression. Frontend 418 tests, backend 682 tests, both builds and both lint checks passed. Pagination regression tests also verify that the visible page range updates only when its new response arrives. A separate slow-API Chrome check measured dashboard workspace movement changing from 20px before the fix to 0px afterwards; idle/focus checks did not trigger extra requests in that local reproduction. Company connectivity and other causes of loading on route changes were not verified by this check.
 
 ## Local verification — 2026-10-05

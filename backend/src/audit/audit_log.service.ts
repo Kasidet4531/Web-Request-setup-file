@@ -11,6 +11,9 @@ import { DATABASE_POOL } from '../database/database.service';
 
 type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const REQUEST_AUDIT_ACTION = {
   DRAFT_CREATED: 'DRAFT_CREATED',
   DRAFT_REQUESTER_DATA_UPDATED: 'DRAFT_REQUESTER_DATA_UPDATED',
@@ -29,9 +32,21 @@ export interface RecordRequestAuditAction {
   actionType: string;
   actor: AuthenticatedUserProfile;
   metadata: Record<string, unknown>;
+  // Defaults to true: an entry tied to a request stores its Request Snapshot.
+  requestSnapshot?: boolean;
+}
+
+export interface RequestSnapshot {
+  status: string;
+  formVersion: number;
+  psfFormVersion: number | null;
+  requesterData: Record<string, unknown>;
+  psfCreatedData: Record<string, unknown>;
 }
 
 export interface RequestAuditHistoryEntry {
+  id: string;
+  hasRequestSnapshot: boolean;
   actionType: string;
   actorDisplayName: string;
   actorRole: AuthenticatedUserProfile['role'];
@@ -50,6 +65,8 @@ export interface GlobalAuditLogFilters {
 }
 
 export interface GlobalAuditLogEntry {
+  id: string;
+  hasRequestSnapshot: boolean;
   requestId: string | null;
   requestNo: string | null;
   actionType: string;
@@ -60,6 +77,8 @@ export interface GlobalAuditLogEntry {
 }
 
 interface RequestAuditHistoryRow {
+  id: string;
+  has_request_snapshot: boolean;
   action_type: string;
   actor_display_name: string;
   actor_role: AuthenticatedUserProfile['role'];
@@ -68,6 +87,8 @@ interface RequestAuditHistoryRow {
 }
 
 interface GlobalAuditLogRow {
+  id: string;
+  has_request_snapshot: boolean;
   request_id: string | null;
   request_no: string | null;
   action_type: string;
@@ -100,9 +121,24 @@ export class AuditLogService implements OnModuleInit {
           actor_display_name,
           actor_role,
           metadata_json,
+          request_snapshot_json,
           created_at
         )
-        VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6, $7, $8::jsonb, NOW())
+        VALUES (
+          $1::uuid, $2::uuid, $3, $4::uuid, $5, $6, $7, $8::jsonb,
+          CASE WHEN $9::boolean THEN (
+            SELECT jsonb_build_object(
+              'status', status,
+              'formVersion', form_version,
+              'psfFormVersion', psf_created_schema_snapshot_json->'version',
+              'requesterData', requester_data_json,
+              'psfCreatedData', psf_created_data_json
+            )
+            FROM psf_requests
+            WHERE id = $2::uuid
+          ) END,
+          NOW()
+        )
       `,
       [
         randomUUID(),
@@ -113,6 +149,7 @@ export class AuditLogService implements OnModuleInit {
         event.actor.displayName,
         event.actor.role,
         event.metadata,
+        event.requestSnapshot !== false,
       ],
     );
   }
@@ -124,6 +161,8 @@ export class AuditLogService implements OnModuleInit {
     const result = await this.pool.query<RequestAuditHistoryRow>(
       `
         SELECT
+          id,
+          request_snapshot_json IS NOT NULL AS has_request_snapshot,
           action_type,
           actor_display_name,
           actor_role,
@@ -143,13 +182,58 @@ export class AuditLogService implements OnModuleInit {
           row.action_type !==
             REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
       )
-      .map((row) => ({
-        actionType: row.action_type,
-        actorDisplayName: row.actor_display_name,
-        actorRole: row.actor_role,
-        createdAt: this.serializeTimestamp(row.created_at),
-        metadata: row.metadata_json,
-      }));
+      .map((row) => this.toHistoryEntry(row));
+  }
+
+  async findRequestSnapshot(
+    requestId: string,
+    entryId: string,
+  ): Promise<
+    | { entry: RequestAuditHistoryEntry; requestSnapshot: RequestSnapshot }
+    | undefined
+  > {
+    if (!UUID_PATTERN.test(entryId)) return undefined;
+    const result = await this.pool.query<
+      RequestAuditHistoryRow & { request_snapshot_json: RequestSnapshot }
+    >(
+      `
+        SELECT
+          id,
+          TRUE AS has_request_snapshot,
+          action_type,
+          actor_display_name,
+          actor_role,
+          created_at,
+          metadata_json,
+          request_snapshot_json
+        FROM psf_request_audit_logs
+        WHERE request_id = $1
+          AND id = $2::uuid
+          AND request_snapshot_json IS NOT NULL
+      `,
+      [requestId, entryId],
+    );
+    const row = result.rows[0];
+    return (
+      row && {
+        entry: this.toHistoryEntry(row),
+        requestSnapshot: row.request_snapshot_json,
+      }
+    );
+  }
+
+  private toHistoryEntry(
+    row: RequestAuditHistoryRow,
+  ): RequestAuditHistoryEntry {
+    return {
+      id: row.id,
+      hasRequestSnapshot: row.has_request_snapshot,
+      actionType: row.action_type,
+      actorDisplayName: row.actor_display_name,
+      actorRole: row.actor_role,
+      createdAt: this.serializeTimestamp(row.created_at),
+      metadata: row.metadata_json,
+    };
   }
 
   parsePage(filters: GlobalAuditLogFilters): { limit: number; offset: number } {
@@ -196,6 +280,8 @@ export class AuditLogService implements OnModuleInit {
     const result = await this.pool.query<GlobalAuditLogRow>(
       `
         SELECT
+          audit_log.id,
+          audit_log.request_snapshot_json IS NOT NULL AS has_request_snapshot,
           audit_log.request_id,
           psf_request.request_no,
           audit_log.action_type,
@@ -213,6 +299,8 @@ export class AuditLogService implements OnModuleInit {
     );
 
     return result.rows.map((row) => ({
+      id: row.id,
+      hasRequestSnapshot: row.has_request_snapshot,
       requestId: row.request_id,
       requestNo: row.request_no,
       actionType: row.action_type,
@@ -294,7 +382,8 @@ export class AuditLogService implements OnModuleInit {
     }
 
     return {
-      whereSql: where.length > 0 ? `WHERE ${where.join('\n          AND ')}` : '',
+      whereSql:
+        where.length > 0 ? `WHERE ${where.join('\n          AND ')}` : '',
       values,
     };
   }
@@ -337,6 +426,11 @@ export class AuditLogService implements OnModuleInit {
     `);
 
     await this.pool.query(`
+      ALTER TABLE psf_request_audit_logs
+      ADD COLUMN IF NOT EXISTS request_snapshot_json JSONB NULL
+    `);
+
+    await this.pool.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_request_audit_logs_request_created_at
       ON psf_request_audit_logs (request_id, created_at DESC)
     `);
@@ -367,11 +461,7 @@ export class AuditLogService implements OnModuleInit {
       return undefined;
     }
 
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        normalized,
-      )
-    ) {
+    if (!UUID_PATTERN.test(normalized)) {
       throw new BadRequestException('requestId must be a UUID.');
     }
 
