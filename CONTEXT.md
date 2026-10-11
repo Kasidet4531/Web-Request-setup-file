@@ -121,7 +121,7 @@ The workbook's "For" value: Requester columns belong to the requester form; Crea
 
 **Request Snapshot**:
 The complete content of one PSF Request (Requester Information, PSF Created Information and Work Status) as it stood immediately after one Audit History entry. It is read-only and is seen under the same visibility rules as the entry it belongs to.
-Decided 11 October 2026, not yet implemented.
+Decided 11 October 2026, implemented in source.
 _Avoid_: snapshot on its own (a request's captured Form Schema is its "schema snapshot"), version, revision
 
 

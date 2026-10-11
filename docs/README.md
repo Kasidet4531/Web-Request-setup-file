@@ -75,7 +75,7 @@ behavior and test outcomes.
 | [docs/adr/0013-excel-export-schema-alignment.md](adr/0013-excel-export-schema-alignment.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0014-current-production-baseline-and-visual-reference-boundary.md](adr/0014-current-production-baseline-and-visual-reference-boundary.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0015-initial-data-load-legacy-form-version-and-request-to.md](adr/0015-initial-data-load-legacy-form-version-and-request-to.md) | Accepted 8 October 2026: Legacy Columns kept as Form Version 1; Request To is Product Type |
-| [docs/adr/0016-full-request-snapshot-per-audit-history-entry.md](adr/0016-full-request-snapshot-per-audit-history-entry.md) | Accepted 11 October 2026, not yet implemented: every request Audit History entry stores a full Request Snapshot; replaces the no-snapshot choice in ADR 0011 |
+| [docs/adr/0016-full-request-snapshot-per-audit-history-entry.md](adr/0016-full-request-snapshot-per-audit-history-entry.md) | Accepted 11 October 2026, implemented in source: every request Audit History entry stores a full Request Snapshot; replaces the no-snapshot choice in ADR 0011 |
 | [docs/github_issues.md](github_issues.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/github_issues_refined.md](github_issues_refined.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/history/diagrams-target-architecture.md](history/diagrams-target-architecture.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |

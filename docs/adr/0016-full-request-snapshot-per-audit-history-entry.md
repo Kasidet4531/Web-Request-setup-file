@@ -1,6 +1,6 @@
 # 16. Every request Audit History entry stores a full Request Snapshot
 
-Status: accepted (11 October 2026); not yet implemented
+Status: accepted (11 October 2026); implemented in source
 
 Audit History must let a reader open one entry and see the whole PSF Request as it stood at that moment, with what that entry changed highlighted. We decided that every Audit History entry tied to a request stores a full Request Snapshot (the values of both forms, the Work Status and each form's Form Version) next to the per-field changes it already records. This replaces the "diff instead of full snapshots" choice in [ADR 0011](0011-key-by-key-diff-request-audit-logs.md); the per-field changes stay and are what the page highlights.
 
