@@ -133,6 +133,16 @@ describe('AppShell form version navigation', () => {
     expect(header).not.toContain('formKey=psf-created-information')
   })
 
+  it('leads a Request Snapshot back through the request and its history', () => {
+    routerStateHarness.request = { requestId: 'real-uuid', requestNo: 'PSF-0042' }
+    routerStateHarness.pathname = '/requests/real-uuid/history/entry-1'
+    const breadcrumbs = renderToStaticMarkup(<AppShell />).match(/<nav aria-label="Breadcrumbs"[^>]*>(.*?)<\/nav>/)?.[1]
+    expect(breadcrumbs).toContain('href="/requests"')
+    expect(breadcrumbs).toMatch(/href="\/requests\/real-uuid"[^>]*>PSF-0042<\/a>/)
+    expect(breadcrumbs).toMatch(/href="\/requests\/real-uuid\/history"[^>]*>Request History<\/a>/)
+    expect(breadcrumbs).toMatch(/aria-current="page"[^>]*>Request Snapshot<\/span>/)
+  })
+
   it('uses private My Drafts ancestry after resolving a Draft and keeps its History parent linked by UUID', () => {
     routerStateHarness.request = { requestId: 'real-uuid', requestNo: 'DRAFT-0042', isDraft: true }
     routerStateHarness.pathname = '/requests/real-uuid'

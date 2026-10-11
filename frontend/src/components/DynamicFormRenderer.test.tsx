@@ -253,6 +253,25 @@ describe('DynamicFormRenderer', () => {
 })
 
 
+describe('DynamicFormRenderer previous values', () => {
+  it('marks only the fields that changed and shows what each held before', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer
+      readOnly
+      schema={schema}
+      values={{ title: 'Renamed', priority: 'Urgent', request_note: 'Kept' }}
+      previousValues={{ title: 'Original', priority: '' }}
+    />)
+
+    expect(html.match(/Previous: /g)).toHaveLength(2)
+    expect(html).toContain('Previous: Original')
+    expect(html).toContain('Previous: Empty')
+    const note = html.slice(html.indexOf('Request Note'))
+    expect(note).not.toContain('Previous:')
+    const titleDescription = html.match(/<output aria-describedby="([^"]+)"[^>]*>Renamed<\/output>/)?.[1]
+    expect(html).toContain(`id="${titleDescription}"`)
+  })
+})
+
 describe('DynamicFormRenderer field policy', () => {
   it('locks actual field keys individually while preserving editing of other fields', () => {
     const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} readOnlyFieldKeys={['title']} values={{ title: 'Locked identity', priority: 'Urgent' }} />)

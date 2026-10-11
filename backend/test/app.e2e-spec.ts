@@ -836,6 +836,7 @@ describe('AppController (e2e)', () => {
           kind: 'open',
         },
       }),
+      true,
     ]);
 
     pool.query.mockClear();

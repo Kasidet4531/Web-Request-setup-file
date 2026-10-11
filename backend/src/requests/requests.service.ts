@@ -150,6 +150,8 @@ export interface PsfRequestResponse {
 export interface RequestSnapshotResponse {
   entry: RequestAuditHistoryEntry;
   requestNo: string;
+  // The request's Work Status now; `status` is the one of that time.
+  currentStatus: string;
   status: string;
   formVersion: number;
   requesterData: RequesterData;
@@ -724,6 +726,7 @@ export class RequestsService implements OnModuleInit {
     return {
       entry,
       requestNo: request.requestNo,
+      currentStatus: request.status,
       status: snapshot.status,
       formVersion: snapshot.formVersion,
       requesterData: snapshot.requesterData,

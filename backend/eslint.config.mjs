@@ -38,6 +38,7 @@ export default tseslint.config(
       'test/loading-system.e2e.mjs',
       'test/psf-trigger-system.e2e.mjs',
       'test/form-management-system.e2e.mjs',
+      'test/request-snapshot-system.e2e.mjs',
     ],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {

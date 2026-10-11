@@ -630,6 +630,22 @@ describe('RequestHistoryPanel', () => {
     expect(html).toContain('role="status"')
   })
 
+  it('links only the entries that have a Request Snapshot to their snapshot page', () => {
+    const entry = { actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester', createdAt: '2026-06-18T01:02:03.000Z', metadata: {} }
+    const render = (hasSnapshot: boolean) => RequestsWorkspace.RequestHistoryPanel({
+      requestId: 'request-1',
+      entries: [{ ...entry, id: 'entry-1', hasSnapshot }] as never,
+      error: null,
+      loading: false,
+    })
+    const isSnapshotLink = (element: { props: Record<string, unknown> }) => element.props.to === '/requests/$requestId/history/$entryId'
+
+    const link = requireRenderedElement(render(true), isSnapshotLink)
+    expect(link.props.params).toEqual({ requestId: 'request-1', entryId: 'entry-1' })
+    expect(link.props.children).toBe('View snapshot')
+    expect(findRenderedElement(render(false), isSnapshotLink)).toBeNull()
+  })
+
   it('surfaces a history loading failure accessibly instead of treating it as empty', () => {
     const panel = getRequestHistoryPanel()
     if (!panel) {
@@ -1866,7 +1882,7 @@ describe('RequestDetailShell workflow actions', () => {
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'LOCAL PSF edit' })
     expect(form.key).toBeNull()
-    expect(form.props.requestSnapshot).toEqual(refreshedRequest)
+    expect(form.props.loadedRequest).toEqual(refreshedRequest)
     expect((requesterRenderer.props.values as Record<string, string>).request_title_v4).toBe('LOCAL requester title')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()

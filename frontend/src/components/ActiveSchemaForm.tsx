@@ -58,7 +58,7 @@ export interface ActiveSchemaFormProps {
   onRequestSaved?: (request: PsfRequestResponse) => void
   onSavingChange?: (saving: boolean) => void
   onSubmissionConflictSettled?: (pending: boolean) => void
-  requestSnapshot?: PsfRequestResponse
+  loadedRequest?: PsfRequestResponse
   submissionConflict?: number
 }
 
@@ -157,7 +157,7 @@ export function DraftSchemaUpgradeDecision({
 
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
-export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, deleteAction, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, requestSnapshot, submissionConflict = 0 }: ActiveSchemaFormProps) {
+export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, deleteAction, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, loadedRequest, submissionConflict = 0 }: ActiveSchemaFormProps) {
   const savedValuesRef = useRef<DynamicFormValues>({})
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
@@ -246,7 +246,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           setErrors({})
           setCurrentRequest(request)
           setEditingInformation(false)
-          // Publish the same snapshot so the shell cannot rebase this load onto its old request.
+          // Publish the same response so the shell cannot rebase this load onto its old request.
           if (mode === 'request') onRequestSavedRef.current?.(request)
           setActiveRequestSchema(requestSchema)
           setActiveSchema(resolvedSchema)
@@ -337,34 +337,34 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     if (
       mode !== 'request' ||
       !requestId ||
-      !requestSnapshot ||
-      requestSnapshot.id !== requestId ||
+      !loadedRequest ||
+      loadedRequest.id !== requestId ||
       !currentRequest ||
-      requestSnapshot === currentRequest
+      loadedRequest === currentRequest
     ) {
       return
     }
 
-    const nextActiveRequestSchema = requestSnapshot.status === DRAFT_STATUS
+    const nextActiveRequestSchema = loadedRequest.status === DRAFT_STATUS
       ? activeRequestSchema
       : null
-    const classification = classifyDraftSchemaVersion(mode, requestSnapshot, nextActiveRequestSchema)
-    const resolvedSchema = resolveRequestFormSchema(mode, requestSnapshot, nextActiveRequestSchema)
-    const requestDataWithLocalEdits = { ...requestSnapshot.requesterData }
+    const classification = classifyDraftSchemaVersion(mode, loadedRequest, nextActiveRequestSchema)
+    const resolvedSchema = resolveRequestFormSchema(mode, loadedRequest, nextActiveRequestSchema)
+    const requestDataWithLocalEdits = { ...loadedRequest.requesterData }
     Object.keys(valuesRef.current).forEach((fieldKey) => {
       if (valuesRef.current[fieldKey] !== savedValuesRef.current[fieldKey]) {
         requestDataWithLocalEdits[fieldKey] = valuesRef.current[fieldKey]
       }
     })
-    const latestSavedValues = buildRequestValuesForSchema(resolvedSchema.schema, requestSnapshot.requesterData)
+    const latestSavedValues = buildRequestValuesForSchema(resolvedSchema.schema, loadedRequest.requesterData)
     const nextValues = buildRequestValuesForSchema(resolvedSchema.schema, requestDataWithLocalEdits)
     const schemaChanged =
-      currentRequest.formVersion !== requestSnapshot.formVersion ||
-      currentRequest.schemaSnapshot.version !== requestSnapshot.schemaSnapshot.version
+      currentRequest.formVersion !== loadedRequest.formVersion ||
+      currentRequest.schemaSnapshot.version !== loadedRequest.schemaSnapshot.version
 
-    // This external server snapshot must rebase the child's editable local state.
+    // This external server response must rebase the child's editable local state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCurrentRequest(requestSnapshot)
+    setCurrentRequest(loadedRequest)
     setActiveRequestSchema(nextActiveRequestSchema)
     setActiveSchema(resolvedSchema)
     setDraftSchemaVersion(classification)
@@ -390,7 +390,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     onDirtyChange,
     onDraftSchemaSubmitAllowedChange,
     requestId,
-    requestSnapshot,
+    loadedRequest,
   ])
 
   useEffect(() => {
@@ -486,18 +486,18 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const schemaDecisionRequired = isDraftSchemaDecisionRequired(draftSchemaVersion)
   const isSchemaChoicePending = schemaDecisionRequired && draftSchemaDecision === 'unresolved'
   const hasInconsistentDraftSchema = draftSchemaVersion === 'newer-or-inconsistent'
-  const requestSnapshotPending = Boolean(
-    requestSnapshot &&
-    requestSnapshot.id === requestId &&
+  const loadedRequestPending = Boolean(
+    loadedRequest &&
+    loadedRequest.id === requestId &&
     currentRequest &&
-    requestSnapshot !== currentRequest,
+    loadedRequest !== currentRequest,
   )
   const readOnly = requesterFieldsAreReadOnly(
     mode,
-    requestSnapshotPending && requestSnapshot ? requestSnapshot : currentRequest,
+    loadedRequestPending && loadedRequest ? loadedRequest : currentRequest,
   )
   const usesExplicitEdit = explicitEdit && mode === 'request' && Boolean(currentRequest && currentRequest.status !== DRAFT_STATUS)
-  const formUnavailable = readOnly || disabled || requestSnapshotPending || saving || upgradePending || hasInconsistentDraftSchema
+  const formUnavailable = readOnly || disabled || loadedRequestPending || saving || upgradePending || hasInconsistentDraftSchema
   const formReadOnly = formUnavailable || (usesExplicitEdit && !editingInformation)
   const readOnlyFieldKeys = activeSchema?.schema.sections.flatMap((section) => section.fields
     .filter((field) => isRequesterIdentityKey(field.canonicalKey))
