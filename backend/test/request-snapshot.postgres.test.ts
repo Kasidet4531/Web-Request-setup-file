@@ -1,8 +1,16 @@
 import { PGlite } from '@electric-sql/pglite';
 import assert from 'node:assert/strict';
 import { after, before, it } from 'node:test';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Pool } from 'pg';
+import {
+  configuredPostgres,
+  type ConfiguredPostgres,
+} from './configured-postgres';
 import {
   admin,
   lifecycleFixture,
@@ -13,19 +21,43 @@ import {
 } from './draft-lifecycle.fixture';
 import type { FormSchemaJson } from '../src/admin/form_schema.service';
 
-let db: PGlite;
+// In-memory PostgreSQL by default. With REQUEST_SNAPSHOT_CONFIGURED_POSTGRES=1
+// and the DB_* variables loaded (node --env-file=.env), the same tests run on
+// that server inside session-temporary tables; see configured-postgres.ts.
+const onConfiguredServer =
+  process.env.REQUEST_SNAPSHOT_CONFIGURED_POSTGRES === '1';
+
+let db: {
+  query(
+    sql: string,
+    values?: unknown[],
+  ): Promise<{ rows: Record<string, unknown>[] }>;
+  close(): Promise<void>;
+};
+let configured: ConfiguredPostgres | undefined;
+// Storage changes need a read-write transaction on the configured server.
+let ddl = <T>(change: () => Promise<T>): Promise<T> => change();
 let fixture: Awaited<ReturnType<typeof lifecycleFixture>>;
 
 before(
   async () => {
-    db = new PGlite();
-    const query = (sql: string, args?: unknown[]) => db.query(sql, args);
+    if (onConfiguredServer) {
+      const server = (configured = await configuredPostgres());
+      db = server;
+      ddl = (change) => server.ddl(change);
+      fixture = await ddl(() => lifecycleFixture(server.pool));
+      return;
+    }
+    const memory = new PGlite();
+    const query = (sql: string, values?: unknown[]) =>
+      memory.query<Record<string, unknown>>(sql, values);
+    db = { query, close: () => memory.close() };
     fixture = await lifecycleFixture({
       query,
       connect: () => Promise.resolve({ query, release() {} }),
     } as unknown as Pool);
   },
-  { timeout: 30000 },
+  { timeout: 60000 },
 );
 after(async () => db.close());
 
@@ -435,4 +467,231 @@ void it('deletes a Draft together with its Request Snapshots', async () => {
     [draft.id],
   );
   assert.equal(remaining.rows.length, 0);
+});
+
+void it('rolls a change back when its Audit History entry cannot be recorded', async () => {
+  const submitted = await fixture.submit(await fixture.draft());
+  await ddl(() =>
+    db.query(
+      "ALTER TABLE psf_request_audit_logs ADD CONSTRAINT refuse_requester_edits CHECK (action_type <> 'REQUESTER_INFORMATION_UPDATED') NOT VALID",
+    ),
+  );
+  try {
+    await assert.rejects(
+      fixture.service.updateDraftRequesterData(
+        submitted.id,
+        {
+          formVersion: 1,
+          expectedUpdatedAt: submitted.updatedAt,
+          requesterData: { title: 'Never stored' },
+        },
+        requester,
+      ),
+      /refuse_requester_edits/,
+    );
+  } finally {
+    await ddl(() =>
+      db.query(
+        'ALTER TABLE psf_request_audit_logs DROP CONSTRAINT refuse_requester_edits',
+      ),
+    );
+  }
+
+  const stored = await fixture.service.getRequest(submitted.id, requester);
+  assert.equal(stored.requesterData.title, 'Test request');
+  assert.equal(stored.updatedAt, submitted.updatedAt);
+  const history = await fixture.service.getRequestHistory(
+    submitted.id,
+    requester,
+  );
+  assert.deepEqual(
+    history.map((entry) => entry.actionType),
+    ['DRAFT_CREATED', 'REQUEST_SUBMITTED'],
+  );
+});
+
+void it(
+  'gives real requests their first Request Snapshot on their first entry',
+  { skip: !onConfiguredServer && 'needs the configured PostgreSQL server' },
+  async () => {
+    assert.ok(configured);
+    const limit = Number(process.env.REQUEST_SNAPSHOT_SAMPLE ?? 500);
+    const columns = String(
+      (
+        await configured.readConfigured(
+          `SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position) AS list
+           FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'psf_requests'`,
+        )
+      ).rows[0].list,
+    );
+    // Copied into this session's temporary table; the configured rows are only read.
+    const sample = await configured.readConfigured(
+      `INSERT INTO psf_requests (${columns})
+       SELECT ${columns} FROM public.psf_requests
+       WHERE status <> 'Draft' ORDER BY md5(id::text) LIMIT $1
+       RETURNING id`,
+      [limit],
+    );
+    const { entries, psfVisibilityTriggerIds = [] } =
+      await fixture.workflow.getConfiguration();
+    const tally = {
+      sampled: 0,
+      edited: 0,
+      notEditable: 0,
+      hiddenFromRequester: 0,
+    };
+
+    const refusals: Record<string, number> = {};
+
+    for (const row of sample.rows) {
+      const id = String(row.id);
+      const before = await fixture.service.getRequest(id, ownerA);
+      assert.deepEqual(await fixture.service.getRequestHistory(id, ownerA), []);
+      const target = entries.find(
+        (entry) =>
+          entry.kind === 'open' &&
+          entry.name !== before.status &&
+          !psfVisibilityTriggerIds.includes(entry.id),
+      );
+      assert.ok(target);
+      const moved = await fixture.service.updateRequestStatus(id, {
+        actor: ownerA,
+        status: target.name,
+        expectedUpdatedAt: before.updatedAt,
+      });
+
+      const [first] = await fixture.service.getRequestHistory(id, ownerA);
+      assert.equal(first.hasRequestSnapshot, true);
+      const requestSnapshot = await fixture.service.getRequestSnapshot(
+        id,
+        first.id,
+        ownerA,
+      );
+      assert.equal(requestSnapshot.status, target.name);
+      assert.equal(requestSnapshot.formVersion, before.formVersion);
+      assert.equal(requestSnapshot.schemaSnapshot.version, before.formVersion);
+      assert.deepEqual(requestSnapshot.requesterData, before.requesterData);
+      assert.deepEqual(requestSnapshot.psfCreatedData, before.psfCreatedData);
+
+      const requesterView = await fixture.service.getRequestSnapshot(
+        id,
+        first.id,
+        requester,
+      );
+      assert.equal(
+        requesterView.psfCreatedDataVisible,
+        before.psfReleasedAt !== null,
+      );
+      if (!requesterView.psfCreatedDataVisible) {
+        assert.deepEqual(requesterView.psfCreatedData, {});
+        tally.hiddenFromRequester++;
+      }
+
+      const field = before.schemaSnapshot.sections
+        .flatMap((section) => section.fields)
+        .find(
+          (candidate) =>
+            candidate.type === 'text' &&
+            !['requester_name', 'product_type'].includes(candidate.fieldKey),
+        );
+      assert.ok(field);
+      // Saved values are trimmed, so an empty field becomes just the suffix.
+      const current = before.requesterData[field.fieldKey];
+      const edited =
+        `${typeof current === 'string' ? current : ''} (edited)`.trim();
+      try {
+        await fixture.service.updateDraftRequesterData(
+          id,
+          {
+            formVersion: before.formVersion,
+            expectedUpdatedAt: moved.updatedAt,
+            requesterData: {
+              ...before.requesterData,
+              [field.fieldKey]: edited,
+            },
+          },
+          ownerA,
+        );
+      } catch (error) {
+        // Loaded content that its own form no longer accepts; not a snapshot fault.
+        assert.ok(error instanceof BadRequestException);
+        // The rule that refused it, without field names or values.
+        const rule =
+          /missing required fields|must be one of the configured options|must be a number|must be a valid ISO calendar date|Unknown form field/.exec(
+            error.message,
+          )?.[0] ?? 'other';
+        refusals[rule] = (refusals[rule] ?? 0) + 1;
+        tally.notEditable++;
+        tally.sampled++;
+        continue;
+      }
+      const history = await fixture.service.getRequestHistory(id, ownerA);
+      assert.equal(history.length, 2);
+      const afterEdit = await fixture.service.getRequestSnapshot(
+        id,
+        history[1].id,
+        ownerA,
+      );
+      assert.equal(afterEdit.requesterData[field.fieldKey], edited);
+      const unchanged = await fixture.service.getRequestSnapshot(
+        id,
+        first.id,
+        ownerA,
+      );
+      assert.deepEqual(unchanged.requesterData, before.requesterData);
+      tally.edited++;
+      tally.sampled++;
+    }
+
+    const size = await db.query(
+      `SELECT count(*)::int AS stored, round(avg(pg_column_size(request_snapshot_json)))::int AS average_bytes,
+              max(pg_column_size(request_snapshot_json))::int AS largest_bytes
+       FROM psf_request_audit_logs
+       WHERE request_id = ANY($1::uuid[])`,
+      [sample.rows.map((row) => row.id)],
+    );
+    console.log(
+      'real requests',
+      tally,
+      'edits refused by',
+      refusals,
+      'Request Snapshots',
+      size.rows[0],
+    );
+    assert.ok(tally.sampled > 0);
+  },
+);
+
+void it('adds Request Snapshot storage to an existing audit table and leaves its earlier entries without one', async () => {
+  const draft = await fixture.draft();
+  await ddl(async () => {
+    await db.query(
+      'ALTER TABLE psf_request_audit_logs DROP COLUMN request_snapshot_json',
+    );
+    await fixture.audit.onModuleInit();
+  });
+
+  const [created] = await fixture.service.getRequestHistory(
+    draft.id,
+    requester,
+  );
+  assert.equal(created.hasRequestSnapshot, false);
+  await fixture.service.updateDraftRequesterData(
+    draft.id,
+    {
+      formVersion: 1,
+      expectedUpdatedAt: draft.updatedAt,
+      requesterData: { title: 'Saved after the upgrade' },
+    },
+    requester,
+  );
+  const history = await fixture.service.getRequestHistory(draft.id, requester);
+  assert.equal(history[1].hasRequestSnapshot, true);
+  const requestSnapshot = await fixture.service.getRequestSnapshot(
+    draft.id,
+    history[1].id,
+    requester,
+  );
+  assert.equal(requestSnapshot.requesterData.title, 'Saved after the upgrade');
 });

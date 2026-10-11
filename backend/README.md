@@ -97,3 +97,17 @@ The `test:e2e` suite uses mocked database/services; it is not live PostgreSQL or
 LDAP acceptance. Some HTTP tests open temporary local ports. The bare lint script
 includes `--fix`; append `--no-fix` for a read-only check. Existing verification
 results are dated records under [docs/verification](../docs/README.md).
+
+The Request Snapshot database tests run on an in-memory PostgreSQL by default and
+can run on the configured server without writing to its tables:
+
+```sh
+node --require ts-node/register --test test/request-snapshot.postgres.test.ts
+REQUEST_SNAPSHOT_CONFIGURED_POSTGRES=1 node --env-file=.env \
+  --require ts-node/register --test test/request-snapshot.postgres.test.ts
+```
+
+The second form uses one session whose tables are all temporary, reads up to
+`REQUEST_SNAPSHOT_SAMPLE` (default 500) real requests into them and prints counts
+only. [`test/configured-postgres.ts`](test/configured-postgres.ts) explains what
+keeps it from writing; the session needs the `TEMPORARY` privilege.
