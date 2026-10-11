@@ -294,7 +294,7 @@ export function RequestHistoryPanel({
                 <strong>{historyActionSummary(entry)}</strong>
                 <span>{entry.actorDisplayName} · {entry.actorRole}</span>
                 <HistoryChanges metadata={entry.metadata} />
-                {entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View snapshot</Link> : null}
+                {entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View Request Snapshot</Link> : null}
               </div>
             </li>
           ))}

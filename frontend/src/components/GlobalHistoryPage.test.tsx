@@ -181,8 +181,8 @@ describe('GlobalAuditLogTable', () => {
       entries: [{ ...entry, id: 'entry-old', hasRequestSnapshot: false }, { ...entry, id: 'entry-new', hasRequestSnapshot: true }],
       error: null, loading: false,
     }))
-    expect(html).toContain('<a href="/requests/request-1/history/entry-new">View snapshot</a>')
-    expect(html.match(/View snapshot/g)).toHaveLength(1)
+    expect(html).toContain('<a href="/requests/request-1/history/entry-new">View Request Snapshot</a>')
+    expect(html.match(/View Request Snapshot/g)).toHaveLength(1)
   })
 
   it('keeps loaded audit rows visible and inert while refreshing instead of replacing the table', () => {

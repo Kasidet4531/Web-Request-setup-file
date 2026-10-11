@@ -50,7 +50,7 @@ test(
     await page.goto(`${system.origin}/requests/${draft.id}`);
     await page.getByRole('tab', { name: 'History', exact: true }).click();
     const links = page.getByRole('link', {
-      name: 'View snapshot',
+      name: 'View Request Snapshot',
       exact: true,
     });
     // Created, submitted and edited: one Request Snapshot each.
@@ -86,7 +86,7 @@ test(
     // The entry before the edit still shows the content of its own time.
     await page.goto(`${system.origin}/history`);
     await page
-      .getByRole('link', { name: 'View snapshot', exact: true })
+      .getByRole('link', { name: 'View Request Snapshot', exact: true })
       .nth(1)
       .click();
     await expect(

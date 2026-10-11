@@ -642,7 +642,7 @@ describe('RequestHistoryPanel', () => {
 
     const link = requireRenderedElement(render(true), isSnapshotLink)
     expect(link.props.params).toEqual({ requestId: 'request-1', entryId: 'entry-1' })
-    expect(link.props.children).toBe('View snapshot')
+    expect(link.props.children).toBe('View Request Snapshot')
     expect(findRenderedElement(render(false), isSnapshotLink)).toBeNull()
   })
 
