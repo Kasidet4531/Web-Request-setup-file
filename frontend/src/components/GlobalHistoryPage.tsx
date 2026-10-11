@@ -184,7 +184,7 @@ export function GlobalAuditLogTable({
               <td>{actionLabel(entry.actionType)}</td>
               <td>
                 <HistoryChanges metadata={entry.metadata} />
-                {entry.requestId && entry.hasSnapshot ? <Link className="table-action" params={{ requestId: entry.requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View snapshot</Link> : null}
+                {entry.requestId && entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId: entry.requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View snapshot</Link> : null}
               </td>
             </tr>
           ))}

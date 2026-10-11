@@ -50,11 +50,11 @@ const psfSchema: FormSchema = {
   }],
 }
 
-function snapshot(overrides: Partial<RequestSnapshotResponse> = {}, entry: Partial<RequestSnapshotResponse['entry']> = {}): RequestSnapshotResponse {
+function requestSnapshot(overrides: Partial<RequestSnapshotResponse> = {}, entry: Partial<RequestSnapshotResponse['entry']> = {}): RequestSnapshotResponse {
   return {
     entry: {
       id: 'entry-1',
-      hasSnapshot: true,
+      hasRequestSnapshot: true,
       actionType: 'REQUESTER_INFORMATION_UPDATED',
       actorDisplayName: 'Editor',
       actorRole: 'requester',
@@ -77,7 +77,7 @@ function snapshot(overrides: Partial<RequestSnapshotResponse> = {}, entry: Parti
 
 describe('RequestSnapshotView', () => {
   it('shows the whole request of that time and what the entry changed', () => {
-    const html = renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot()} />)
+    const html = renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot()} />)
 
     expect(html).toContain('Requester information updated')
     expect(html).toContain('Editor')
@@ -90,7 +90,7 @@ describe('RequestSnapshotView', () => {
   })
 
   it('withholds PSF Created Information that is not visible to the reader', () => {
-    const html = renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot({ psfCreatedDataVisible: false, psfCreatedData: {} })} />)
+    const html = renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot({ psfCreatedDataVisible: false, psfCreatedData: {} })} />)
 
     expect(html).toContain('PSF Created Information is not visible for this request.')
     expect(html).not.toContain('Setup File Name')
@@ -98,7 +98,7 @@ describe('RequestSnapshotView', () => {
   })
 
   it('shows a PSF Created Information change on the PSF form, not on a requester field', () => {
-    const html = renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot({}, {
+    const html = renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot({}, {
       actionType: 'PSF_CREATED_INFORMATION_UPDATED',
       metadata: { fieldChanges: [{ fieldKey: 'note', fieldLabel: 'Setup File Name', before: 'old.psf', after: 'setup.psf' }] },
     })} />)
@@ -108,7 +108,7 @@ describe('RequestSnapshotView', () => {
   })
 
   it('shows the Work Status of that time next to the one it replaced', () => {
-    const html = renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot({ status: 'Work' }, {
+    const html = renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot({ status: 'Work' }, {
       actionType: 'REQUEST_STATUS_CHANGED',
       metadata: { fromStatus: 'Submitted', toStatus: 'Work' },
     })} />)
@@ -118,7 +118,7 @@ describe('RequestSnapshotView', () => {
   })
 
   it('shows every field a new request was created with as new', () => {
-    const html = renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot({ status: 'Draft' }, {
+    const html = renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot({ status: 'Draft' }, {
       actionType: 'DRAFT_CREATED',
       metadata: { fieldChanges: [
         { fieldKey: 'title', fieldLabel: 'Title', before: null, after: 'Renamed' },
@@ -130,7 +130,7 @@ describe('RequestSnapshotView', () => {
   })
 
   it('lists apart the fields a Form Version upgrade removed', () => {
-    const html = renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot({ formVersion: 2 }, {
+    const html = renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot({ formVersion: 2 }, {
       actionType: 'DRAFT_REQUESTER_DATA_UPDATED',
       metadata: { fromFormVersion: 1, toFormVersion: 2, fieldChanges: [{ fieldKey: 'legacy', fieldLabel: 'Legacy Field', before: 'dropped value', after: null }] },
     })} />)
@@ -140,7 +140,7 @@ describe('RequestSnapshotView', () => {
     expect(removed).toContain('Legacy Field')
     expect(removed).toContain('dropped value')
     expect(html).not.toContain('Previous: ')
-    expect(renderToStaticMarkup(<RequestSnapshotView snapshot={snapshot()} />)).not.toContain('Removed fields')
+    expect(renderToStaticMarkup(<RequestSnapshotView requestSnapshot={requestSnapshot()} />)).not.toContain('Removed fields')
   })
 })
 
@@ -161,14 +161,14 @@ describe('RequestSnapshotPage', () => {
   })
 
   it('loads the Request Snapshot named by the route and names its request for the breadcrumb', async () => {
-    const data = snapshot({ currentStatus: 'Draft' })
+    const data = requestSnapshot({ currentStatus: 'Draft' })
     service.fetchRequestSnapshot.mockResolvedValue(data)
 
     expect(requireRenderedElement(render(), (element) => element.type === AsyncNotice).props.kind).toBe('loading')
     const page = await settle()
 
     expect(service.fetchRequestSnapshot).toHaveBeenCalledWith('request-1', 'entry-1')
-    expect(requireRenderedElement(page, (element) => element.type === RequestSnapshotView).props.snapshot).toBe(data)
+    expect(requireRenderedElement(page, (element) => element.type === RequestSnapshotView).props.requestSnapshot).toBe(data)
     hooks.current!.runEffects()
     expect(identity).toHaveBeenLastCalledWith({ requestId: 'request-1', requestNo: 'PSF-0042', isDraft: true })
   })
@@ -183,7 +183,7 @@ describe('RequestSnapshotPage', () => {
     expect(findRenderedElement(failed, (element) => element.type === RequestSnapshotView)).toBeNull()
 
     const retry = requireRenderedElement(notice.props.action, (element) => element.type === 'button').props.onClick as () => void
-    service.fetchRequestSnapshot.mockResolvedValue(snapshot())
+    service.fetchRequestSnapshot.mockResolvedValue(requestSnapshot())
     retry()
     render()
     expect(findRenderedElement(await settle(), (element) => element.type === RequestSnapshotView)).not.toBeNull()

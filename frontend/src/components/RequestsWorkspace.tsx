@@ -268,7 +268,7 @@ export function RequestHistoryPanel({
   requestId,
 }: {
   onRetry?: () => void
-  requestId?: string
+  requestId: string
   entries: PsfRequestHistoryEntry[]
   error: string | null
   loading: boolean
@@ -294,7 +294,7 @@ export function RequestHistoryPanel({
                 <strong>{historyActionSummary(entry)}</strong>
                 <span>{entry.actorDisplayName} · {entry.actorRole}</span>
                 <HistoryChanges metadata={entry.metadata} />
-                {requestId && entry.hasSnapshot ? <Link className="table-action" params={{ requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View snapshot</Link> : null}
+                {entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View snapshot</Link> : null}
               </div>
             </li>
           ))}

@@ -16,10 +16,14 @@ This changes History viewing access. It does not grant administration, request e
 
 The authorized implementation on 5 October 2026 updates shared navigation and `GET /api/audit-logs` for every authenticated role. The API resolves the stored actor profile and applies visibility filters before returning audit rows: private Draft events remain creator-only, including for Admin, and Requesters cannot see unreleased PSF update events. Requestless configuration events remain available to authenticated roles. Viewing History does not grant the separate editing, export or administration permissions.
 
-A Request Snapshot opened from an entry (11 October 2026, [ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md)) follows the same rules: it needs access to the request, a Requester gets no PSF Created Information in it before release, and Draft-period snapshots stay with the creator until submission.
-
 These are working-tree source changes, not deployment evidence. Local unit, HTTP, SQL and browser checks passed; see [implementation verification](superpowers/plans/2026-10-05-stitch-desktop-implementation.md). SQL visibility tests cover private Drafts and unreleased PSF metadata; browser checks cover both owner departments and anonymous access. The configured PostgreSQL and LDAP services have not been exercised or mutated by this implementation work. Earlier Admin-only source observations remain dated historical evidence.
 
 Source pointers: [navigation](../frontend/src/components/navigationState.ts), [History route](../frontend/src/routes/history/index.tsx), [History page](../frontend/src/components/GlobalHistoryPage.tsx), [audit controller](../backend/src/audit/audit_log.controller.ts), [audit service](../backend/src/audit/audit_log.service.ts).
 
 For future work, use this document as the current product requirement. Dated source audits describe observed behavior and remain implementation evidence, not a reason to restore the superseded Admin-only requirement. The History portion of decision D01 is resolved; other role decisions and detailed audit metadata decisions remain separate.
+
+## Request Snapshot, 11 October 2026
+
+A Request Snapshot opened from an entry ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md)) follows the rules above: it needs access to the request, a Requester gets no PSF Created Information in it and cannot open PSF update entries before release, and Draft-period Request Snapshots stay with the creator, including from Admin, until submission. The rule is enforced in [the request service](../backend/src/requests/requests.service.ts) (`getRequestSnapshot`).
+
+This is a source change, not deployment evidence. `backend/test/request-snapshot.postgres.test.ts` covers these rules against an in-memory PostgreSQL and passed on 11 October 2026; the 5 October checks above do not cover it.

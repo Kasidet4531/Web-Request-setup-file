@@ -320,15 +320,18 @@ describe('RequestsController draft flow', () => {
       role: 'requester' as const,
       setupOwnerDepartment: null,
     };
-    const snapshot = { status: 'Draft', requesterData: { title: 'Then' } };
+    const requestSnapshot = {
+      status: 'Draft',
+      requesterData: { title: 'Then' },
+    };
     authService.getProfile.mockResolvedValue(actor);
-    service.getRequestSnapshot.mockResolvedValue(snapshot);
+    service.getRequestSnapshot.mockResolvedValue(requestSnapshot);
 
     await expect(
       controller.getRequestSnapshot('request-1', 'entry-1', {
         session: { userId: 'user-1' },
       } as never),
-    ).resolves.toEqual(snapshot);
+    ).resolves.toEqual(requestSnapshot);
 
     expect(service.getRequestSnapshot).toHaveBeenCalledWith(
       'request-1',

@@ -9,7 +9,7 @@ describe('resolved request document titles', () => {
     const request = { requestId: 'request-1', requestNo: 'PSF-0042' }
     expect(requestDocumentTitle('/requests/request-1', request, 'Request detail')).toBe('PSF-0042 · PSF Request Portal')
     expect(requestDocumentTitle('/requests/request-1/history', request, 'Audit History')).toBe('PSF-0042 history · PSF Request Portal')
-    expect(requestDocumentTitle('/requests/request-1/history/entry-1', request, 'Request Snapshot')).toBe('PSF-0042 snapshot · PSF Request Portal')
+    expect(requestDocumentTitle('/requests/request-1/history/entry-1', request, 'Request Snapshot')).toBe('PSF-0042 Request Snapshot · PSF Request Portal')
   })
   it('ignores identity belonging to another route', () => {
     expect(requestDocumentTitle('/requests/request-2', { requestId: 'request-1', requestNo: 'PSF-0042' }, 'Request detail')).toBe('Request detail · PSF Request Portal')

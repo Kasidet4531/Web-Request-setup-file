@@ -47,9 +47,9 @@ function breadcrumbsForPath(pathname: string, formVersion: FormVersionBreadcrumb
       const isHistory = segments[2] === 'history'
       if (isHistory && request?.isDraft && request.requestId === segments[1]) crumbs[0] = { label: 'My Drafts', to: '/my-drafts' }
       crumbs.push({ label: request?.requestId === segments[1] ? request.requestNo : 'Request detail', ...(isHistory ? { to: parent.to } : {}) })
-      const isSnapshot = isHistory && Boolean(segments[3])
-      if (isHistory) crumbs.push({ label: 'Request History', ...(isSnapshot ? { to: `${parent.to}/history` } : {}) })
-      if (isSnapshot) crumbs.push({ label: 'Request Snapshot' })
+      const isRequestSnapshot = isHistory && Boolean(segments[3])
+      if (isHistory) crumbs.push({ label: 'Request History', ...(isRequestSnapshot ? { to: `${parent.to}/history` } : {}) })
+      if (isRequestSnapshot) crumbs.push({ label: 'Request Snapshot' })
     }
     return crumbs
   }

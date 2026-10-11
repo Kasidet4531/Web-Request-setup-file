@@ -458,7 +458,7 @@ describe('createApiClient', () => {
     const history = [
       {
         id: 'entry-1',
-        hasSnapshot: true,
+        hasRequestSnapshot: true,
         actionType: 'REQUEST_STATUS_CHANGED',
         actorDisplayName: 'Setup Owner GNTC Demo',
         actorRole: 'setup_owner',
@@ -495,14 +495,14 @@ describe('createApiClient', () => {
   })
 
   it('fetches one Request Snapshot through the request history API path', async () => {
-    const snapshot = { status: 'Draft', requesterData: { title: 'Then' } }
+    const requestSnapshot = { status: 'Draft', requesterData: { title: 'Then' } }
     globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(snapshot), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      new Response(JSON.stringify(requestSnapshot), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     ) as typeof fetch
 
     const client = createApiClient({ baseUrl: '/api' })
 
-    await expect(client.fetchRequestSnapshot('request 1', 'entry/1')).resolves.toEqual(snapshot)
+    await expect(client.fetchRequestSnapshot('request 1', 'entry/1')).resolves.toEqual(requestSnapshot)
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/api/requests/request%201/history/entry%2F1',
       expect.objectContaining({ credentials: 'include', method: 'GET' }),

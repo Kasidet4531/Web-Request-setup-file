@@ -3236,7 +3236,7 @@ describe('RequestsService draft flow', () => {
       await expect(
         service.updatePsfCreatedData('request-1', {
           actor,
-          psfCreatedData: {},
+          psfCreatedData: { field_3: '2026-10-02' },
           expectedUpdatedAt: revision,
         }),
       ).resolves.toMatchObject({
@@ -3250,7 +3250,7 @@ describe('RequestsService draft flow', () => {
       ).not.toHaveBeenCalled();
       expect(pool.query).toHaveBeenLastCalledWith(
         expect.stringContaining('psf_created_at = CASE'),
-        ['request-1', {}, false, revision],
+        ['request-1', { field_3: '2026-10-02' }, true, revision],
       );
     },
   );
@@ -3677,7 +3677,10 @@ describe('RequestsService draft flow', () => {
               'request-1',
               {
                 formVersion: 3,
-                requesterData: requestRow.requester_data_json,
+                requesterData: {
+                  ...requestRow.requester_data_json,
+                  product_type: 'New Product',
+                },
                 expectedUpdatedAt: revision,
               },
               actor,
@@ -3728,7 +3731,12 @@ describe('RequestsService draft flow', () => {
       };
       const data = {
         ...requestRow.requester_data_json,
+        product_type: 'New Product',
         requester_name: 'Spoofed editor',
+      };
+      const saved = {
+        ...requestRow.requester_data_json,
+        product_type: 'New Product',
       };
       pool.query
         .mockResolvedValueOnce({ rows: [current] })
@@ -3750,7 +3758,7 @@ describe('RequestsService draft flow', () => {
           : operation === 'psf'
             ? service.updatePsfCreatedData('request-1', {
                 actor,
-                psfCreatedData: {},
+                psfCreatedData: { psf_setup_file_name: 'valid.psf' },
                 expectedUpdatedAt: exact,
               })
             : operation === 'status'
@@ -3779,25 +3787,20 @@ describe('RequestsService draft flow', () => {
       expect(params).not.toContain(actor.displayName);
       expect(formSchemaService.getActiveSchema).not.toHaveBeenCalled();
       if (operation === 'requester') {
-        expect(params[2]).toEqual(requestRow.requester_data_json);
+        expect(params[2]).toEqual(saved);
         expect(
           searchIndexService.upsertSubmittedCanonicalValues,
         ).toHaveBeenCalledWith(
           'request-1',
           activeSchema.schema,
-          requestRow.requester_data_json,
+          saved,
           dbClient,
         );
       }
-      if (operation === 'requester' || operation === 'psf') {
-        // Nothing changed, so no Audit History entry is recorded.
-        expect(auditLogService.record).not.toHaveBeenCalled();
-      } else {
-        expect(auditLogService.record).toHaveBeenCalledWith(
-          expect.objectContaining({ actor }),
-          dbClient,
-        );
-      }
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        expect.objectContaining({ actor }),
+        dbClient,
+      );
     },
   );
 

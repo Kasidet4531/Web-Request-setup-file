@@ -14,8 +14,8 @@ Audit History must let a reader open one entry and see the whole PSF Request as 
 ## Consequences
 
 - Entries recorded before deploy have no Request Snapshot and keep only the changed-fields table. An Imported Request gets its first Request Snapshot with its first entry after deploy.
-- Layout is not copied. A Request Snapshot records Form Version numbers and is rendered with those versions, which relies on published Form Versions staying immutable.
+- The Form Schema is not copied. A Request Snapshot records Form Version numbers and the requester form is rendered with that version, which relies on published Form Versions staying immutable. PSF Created Information is rendered with the Form Schema the request captured at creation, which is never upgraded.
 - Creation records the initial content, and submit and a Draft Form Version upgrade record their field changes, so the highlight is complete.
-- A save that changes nothing creates no entry. Bulk Status replacement by an Admin keeps its per-request entries but stores no Request Snapshot, because it can touch thousands of requests without changing form content.
+- A save that changes nothing writes nothing: no entry and no new revision. Bulk Status replacement by an Admin keeps its per-request entries but stores no Request Snapshot, because it can touch thousands of requests without changing form content.
 - Visibility is unchanged and applied on read: a Requester sees no PSF Created Information in any Request Snapshot before PSF Visibility Release, Draft-period entries stay creator-only until submission, and permanently deleting a Draft deletes its Request Snapshots.
 - Request Snapshots are kept for the life of the request. Size was estimated at a few KB each and has not been measured against the configured database.

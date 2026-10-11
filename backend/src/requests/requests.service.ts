@@ -270,13 +270,11 @@ export class RequestsService implements OnModuleInit {
           requestId: createdRow.id,
           actionType: REQUEST_AUDIT_ACTION.DRAFT_CREATED,
           actor,
-          metadata: {
-            fieldChanges: this.getFieldChanges(
-              activeSchema.schema,
-              {},
-              requesterData,
-            ),
-          },
+          metadata: this.fieldChangesMetadata(
+            activeSchema.schema,
+            {},
+            requesterData,
+          ),
         },
         client,
       );
@@ -722,28 +720,31 @@ export class RequestsService implements OnModuleInit {
       throw new NotFoundException('Request Snapshot was not found.');
     }
 
-    const { entry, snapshot } = found;
+    const { entry, requestSnapshot } = found;
     return {
       entry,
       requestNo: request.requestNo,
       currentStatus: request.status,
-      status: snapshot.status,
-      formVersion: snapshot.formVersion,
-      requesterData: snapshot.requesterData,
+      status: requestSnapshot.status,
+      formVersion: requestSnapshot.formVersion,
+      requesterData: requestSnapshot.requesterData,
       psfCreatedData: request.psfCreatedDataVisible
-        ? snapshot.psfCreatedData
+        ? requestSnapshot.psfCreatedData
         : {},
       psfCreatedDataVisible: request.psfCreatedDataVisible,
       schemaSnapshot:
-        snapshot.formVersion === request.formVersion
+        requestSnapshot.formVersion === request.formVersion
           ? request.schemaSnapshot
-          : await this.schemaForFormVersion(request, snapshot.formVersion),
+          : await this.schemaForFormVersion(
+              request,
+              requestSnapshot.formVersion,
+            ),
       psfCreatedInformationSchema: request.psfCreatedInformationSchema,
     };
   }
 
-  // Only a Draft upgraded since the snapshot reaches this: published Form
-  // Versions are immutable, so the earlier layout is still on record.
+  // Only a Draft upgraded since then reaches this. Published Form Versions
+  // are immutable, so the Form Schema of that time is still on record.
   private async schemaForFormVersion(
     request: PsfRequestResponse,
     version: number,
@@ -751,10 +752,15 @@ export class RequestsService implements OnModuleInit {
     const { versions } = await this.formSchemaService.listVersions(
       request.formKey,
     );
-    return (
-      versions.find((candidate) => candidate.version === version)?.schema ??
-      request.schemaSnapshot
-    );
+    const schema = versions.find(
+      (candidate) => candidate.version === version,
+    )?.schema;
+    if (!schema) {
+      throw new NotFoundException(
+        `Form Version ${version} of this Request Snapshot is no longer on record.`,
+      );
+    }
+    return schema;
   }
 
   async getAllowedStatusTransitions(
@@ -835,6 +841,15 @@ export class RequestsService implements OnModuleInit {
         ),
         requesterIdentity.displayName,
       );
+      const fieldChanges = this.getFieldChanges(
+        request.schema_snapshot_json,
+        request.requester_data_json ?? {},
+        requesterData,
+      );
+      // A save that changes nothing writes nothing: no Audit History entry
+      // and no new revision for other editors to conflict with.
+      if (fieldChanges.length === 0) return this.mapRequestRow(request, actor);
+
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
         `
@@ -885,26 +900,18 @@ export class RequestsService implements OnModuleInit {
           client,
         );
       }
-      const fieldChanges = this.getFieldChanges(
-        request.schema_snapshot_json,
-        request.requester_data_json ?? {},
-        requesterData,
+      await this.auditLogService.record(
+        {
+          requestId: updatedRow.id,
+          actionType:
+            request.status === DRAFT_STATUS
+              ? REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED
+              : REQUEST_AUDIT_ACTION.REQUESTER_INFORMATION_UPDATED,
+          actor,
+          metadata: { fieldChanges },
+        },
+        client,
       );
-      // A save that changes nothing leaves no Audit History entry.
-      if (fieldChanges.length > 0) {
-        await this.auditLogService.record(
-          {
-            requestId: updatedRow.id,
-            actionType:
-              request.status === DRAFT_STATUS
-                ? REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED
-                : REQUEST_AUDIT_ACTION.REQUESTER_INFORMATION_UPDATED,
-            actor,
-            metadata: { fieldChanges },
-          },
-          client,
-        );
-      }
 
       return this.mapRequestRow(updatedRow, actor);
     });
@@ -1041,7 +1048,7 @@ export class RequestsService implements OnModuleInit {
           metadata: {
             fromFormVersion: request.form_version,
             toFormVersion: activeSchema.version,
-            // Diffed over the earlier layout, so removed fields are listed.
+            // Diffed over the earlier Form Schema, so removed fields are listed.
             ...this.fieldChangesMetadata(
               request.schema_snapshot_json,
               request.requester_data_json ?? {},
@@ -1089,6 +1096,14 @@ export class RequestsService implements OnModuleInit {
           allowMissingRequired: request.status === DRAFT_STATUS,
         },
       );
+      const fieldChanges = this.getFieldChanges(
+        schema,
+        request.psf_created_data_json ?? {},
+        psfCreatedData,
+      );
+      if (fieldChanges.length === 0)
+        return this.mapRequestRow(request, dto.actor);
+
       const hasPsfData = Object.values(psfCreatedData).some(
         (value) => typeof value === 'string' && value.trim().length > 0,
       );
@@ -1129,22 +1144,15 @@ export class RequestsService implements OnModuleInit {
           client,
         );
       }
-      const fieldChanges = this.getFieldChanges(
-        schema,
-        request.psf_created_data_json ?? {},
-        psfCreatedData,
+      await this.auditLogService.record(
+        {
+          requestId: updatedRow.id,
+          actionType: REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
+          actor: dto.actor,
+          metadata: { fieldChanges },
+        },
+        client,
       );
-      if (fieldChanges.length > 0) {
-        await this.auditLogService.record(
-          {
-            requestId: updatedRow.id,
-            actionType: REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
-            actor: dto.actor,
-            metadata: { fieldChanges },
-          },
-          client,
-        );
-      }
       return this.mapRequestRow(updatedRow, dto.actor);
     });
   }
@@ -1923,12 +1931,13 @@ export class RequestsService implements OnModuleInit {
   }> {
     return schema.sections.flatMap((section) =>
       section.fields.flatMap((field) => {
-        const read = (data: RequesterData): unknown =>
+        // An empty value and a missing one are the same to a reader.
+        const valueOrNull = (data: RequesterData): unknown =>
           Object.hasOwn(data, field.fieldKey) && data[field.fieldKey] !== ''
             ? (data[field.fieldKey] ?? null)
             : null;
-        const previous = read(before);
-        const next = read(after);
+        const previous = valueOrNull(before);
+        const next = valueOrNull(after);
         return JSON.stringify(previous) === JSON.stringify(next)
           ? []
           : [

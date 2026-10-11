@@ -510,7 +510,7 @@ export class WorkflowTransitionService implements OnModuleInit {
                   },
                   // One replacement can move thousands of requests without
                   // changing their content (ADR 0016).
-                  snapshot: false,
+                  requestSnapshot: false,
                 },
                 client,
               );

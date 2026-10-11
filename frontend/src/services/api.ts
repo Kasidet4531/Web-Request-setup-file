@@ -306,7 +306,7 @@ export type PsfRequestHistoryAction =
 
 export interface PsfRequestHistoryEntry {
   id: string
-  hasSnapshot: boolean
+  hasRequestSnapshot: boolean
   actionType: PsfRequestHistoryAction
   actorDisplayName: string
   actorRole: UserRole
@@ -348,7 +348,7 @@ export interface GlobalAuditLogPage {
 
 export interface GlobalAuditLogEntry {
   id: string
-  hasSnapshot: boolean
+  hasRequestSnapshot: boolean
   requestId: string | null
   requestNo: string | null
   actionType: PsfRequestHistoryAction

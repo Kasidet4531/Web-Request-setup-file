@@ -310,7 +310,7 @@ function renderNewDraftForm() {
   return ActiveSchemaForm({ mode: 'request' })
 }
 
-function renderDraftFormWithRequestSnapshot(
+function renderDraftFormWithLoadedRequest(
   loadedRequest: PsfRequestResponse,
   onDirtyChange?: (dirty: boolean) => void,
 ) {
@@ -863,11 +863,11 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
       requesterData: { title: 'Saved value' },
       submittedAt: '2026-08-08T00:01:00.000Z',
     })
-    page = renderDraftFormWithRequestSnapshot(refreshedRequest, onDirtyChange)
+    page = renderDraftFormWithLoadedRequest(refreshedRequest, onDirtyChange)
     expect(getFormRenderer(page).props.readOnly).toBe(true)
     expect(getFormRenderer(page).props.onSubmit).toBeUndefined()
     hookHarness.runEffects()
-    page = renderDraftFormWithRequestSnapshot(refreshedRequest, onDirtyChange)
+    page = renderDraftFormWithLoadedRequest(refreshedRequest, onDirtyChange)
 
     const renderer = getFormRenderer(page)
     expect(renderer.props.values).toEqual({ title: 'LOCAL requester edit' })
@@ -1244,10 +1244,10 @@ describe('ActiveSchemaForm explicit submitted editing', () => {
     clickButton(page, 'Edit information')
     page = renderExplicitForm()
     ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('legacy_note', 'Local note')
-    const snapshot = buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: { ...submittedValues, legacy_note: '' }, updatedAt: '2026-08-10T00:00:00.000Z' })
-    renderExplicitForm({ loadedRequest: snapshot })
+    const loadedRequest = buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: { ...submittedValues, legacy_note: '' }, updatedAt: '2026-08-10T00:00:00.000Z' })
+    renderExplicitForm({ loadedRequest })
     hookHarness.runEffects()
-    page = renderExplicitForm({ loadedRequest: snapshot })
+    page = renderExplicitForm({ loadedRequest })
     expect(getFormRenderer(page).props.readOnly).toBe(false)
     expect((getFormRenderer(page).props.values as Record<string, string>).legacy_note).toBe('Local note')
     // The trigger stays equal to the saved value, so generation invalidation is
@@ -1256,7 +1256,7 @@ describe('ActiveSchemaForm explicit submitted editing', () => {
     clickButton(page, 'Cancel')
     finishLookup?.({ matched: true, suggestedValues: { legacy_note: 'Late suggestion' } })
     await flushAsyncWork()
-    page = renderExplicitForm({ loadedRequest: snapshot })
+    page = renderExplicitForm({ loadedRequest: loadedRequest })
     expect(getFormRenderer(page).props.readOnly).toBe(true)
     expect(getFormRenderer(page).props.values).toEqual({ ...submittedValues, legacy_note: '' })
     expect(getFormRenderer(page).props.fieldStatuses).toEqual({})

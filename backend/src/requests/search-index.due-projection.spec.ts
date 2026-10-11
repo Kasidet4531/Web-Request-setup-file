@@ -233,7 +233,7 @@ describe.each(['text', 'textarea'] as const)(
             request.id,
             {
               formVersion: schema.version,
-              requesterData: normalized,
+              requesterData: { ...normalized, title: 'edited title' },
               expectedUpdatedAt: revision,
             },
             actor,
@@ -241,7 +241,10 @@ describe.each(['text', 'textarea'] as const)(
         if (operation === 'psf-save')
           result = await requests.updatePsfCreatedData(request.id, {
             actor: { ...actor, role: 'admin' },
-            psfCreatedData: completeData(PSF_CREATED_INFORMATION_SCHEMA),
+            psfCreatedData: {
+              ...completeData(PSF_CREATED_INFORMATION_SCHEMA),
+              psf_setup_file_name: 'setup.psf',
+            },
             expectedUpdatedAt: revision,
           });
         if (operation === 'status')
@@ -298,11 +301,8 @@ describe.each(['text', 'textarea'] as const)(
             .filter(([sql]) => /^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))
             .map(([sql]) => sql),
         ).toEqual(['BEGIN', 'COMMIT']);
-        // These saves change nothing, so they leave no Audit History entry.
-        const unchangedSave =
-          operation === 'requester-save' || operation === 'psf-save';
-        expect(record).toHaveBeenCalledTimes(unchangedSave ? 0 : 1);
-        if (!unchangedSave) expect(record.mock.calls[0][1]).toBe(client);
+        expect(record).toHaveBeenCalledTimes(1);
+        expect(record.mock.calls[0][1]).toBe(client);
         expect(client.release).toHaveBeenCalledTimes(1);
       },
     );

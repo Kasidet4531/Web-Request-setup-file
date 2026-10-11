@@ -92,7 +92,7 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
   void it('tells which entries can be opened as a Request Snapshot', async () => {
     const result = await service.findGlobalAuditLogs({}, actor('admin'));
     assert.deepEqual(
-      result.map((entry) => [entry.id.slice(-2), entry.hasSnapshot]),
+      result.map((entry) => [entry.id.slice(-2), entry.hasRequestSnapshot]),
       [
         ['13', false],
         ['12', false],

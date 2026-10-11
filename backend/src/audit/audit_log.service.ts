@@ -33,7 +33,7 @@ export interface RecordRequestAuditAction {
   actor: AuthenticatedUserProfile;
   metadata: Record<string, unknown>;
   // Defaults to true: an entry tied to a request stores its Request Snapshot.
-  snapshot?: boolean;
+  requestSnapshot?: boolean;
 }
 
 export interface RequestSnapshot {
@@ -46,7 +46,7 @@ export interface RequestSnapshot {
 
 export interface RequestAuditHistoryEntry {
   id: string;
-  hasSnapshot: boolean;
+  hasRequestSnapshot: boolean;
   actionType: string;
   actorDisplayName: string;
   actorRole: AuthenticatedUserProfile['role'];
@@ -66,7 +66,7 @@ export interface GlobalAuditLogFilters {
 
 export interface GlobalAuditLogEntry {
   id: string;
-  hasSnapshot: boolean;
+  hasRequestSnapshot: boolean;
   requestId: string | null;
   requestNo: string | null;
   actionType: string;
@@ -78,7 +78,7 @@ export interface GlobalAuditLogEntry {
 
 interface RequestAuditHistoryRow {
   id: string;
-  has_snapshot: boolean;
+  has_request_snapshot: boolean;
   action_type: string;
   actor_display_name: string;
   actor_role: AuthenticatedUserProfile['role'];
@@ -88,7 +88,7 @@ interface RequestAuditHistoryRow {
 
 interface GlobalAuditLogRow {
   id: string;
-  has_snapshot: boolean;
+  has_request_snapshot: boolean;
   request_id: string | null;
   request_no: string | null;
   action_type: string;
@@ -149,7 +149,7 @@ export class AuditLogService implements OnModuleInit {
         event.actor.displayName,
         event.actor.role,
         event.metadata,
-        event.snapshot !== false,
+        event.requestSnapshot !== false,
       ],
     );
   }
@@ -162,7 +162,7 @@ export class AuditLogService implements OnModuleInit {
       `
         SELECT
           id,
-          request_snapshot_json IS NOT NULL AS has_snapshot,
+          request_snapshot_json IS NOT NULL AS has_request_snapshot,
           action_type,
           actor_display_name,
           actor_role,
@@ -189,7 +189,8 @@ export class AuditLogService implements OnModuleInit {
     requestId: string,
     entryId: string,
   ): Promise<
-    { entry: RequestAuditHistoryEntry; snapshot: RequestSnapshot } | undefined
+    | { entry: RequestAuditHistoryEntry; requestSnapshot: RequestSnapshot }
+    | undefined
   > {
     if (!UUID_PATTERN.test(entryId)) return undefined;
     const result = await this.pool.query<
@@ -198,7 +199,7 @@ export class AuditLogService implements OnModuleInit {
       `
         SELECT
           id,
-          TRUE AS has_snapshot,
+          TRUE AS has_request_snapshot,
           action_type,
           actor_display_name,
           actor_role,
@@ -216,7 +217,7 @@ export class AuditLogService implements OnModuleInit {
     return (
       row && {
         entry: this.toHistoryEntry(row),
-        snapshot: row.request_snapshot_json,
+        requestSnapshot: row.request_snapshot_json,
       }
     );
   }
@@ -226,7 +227,7 @@ export class AuditLogService implements OnModuleInit {
   ): RequestAuditHistoryEntry {
     return {
       id: row.id,
-      hasSnapshot: row.has_snapshot,
+      hasRequestSnapshot: row.has_request_snapshot,
       actionType: row.action_type,
       actorDisplayName: row.actor_display_name,
       actorRole: row.actor_role,
@@ -280,7 +281,7 @@ export class AuditLogService implements OnModuleInit {
       `
         SELECT
           audit_log.id,
-          audit_log.request_snapshot_json IS NOT NULL AS has_snapshot,
+          audit_log.request_snapshot_json IS NOT NULL AS has_request_snapshot,
           audit_log.request_id,
           psf_request.request_no,
           audit_log.action_type,
@@ -299,7 +300,7 @@ export class AuditLogService implements OnModuleInit {
 
     return result.rows.map((row) => ({
       id: row.id,
-      hasSnapshot: row.has_snapshot,
+      hasRequestSnapshot: row.has_request_snapshot,
       requestId: row.request_id,
       requestNo: row.request_no,
       actionType: row.action_type,

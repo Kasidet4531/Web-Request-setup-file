@@ -630,11 +630,11 @@ describe('RequestHistoryPanel', () => {
     expect(html).toContain('role="status"')
   })
 
-  it('links only the entries that have a Request Snapshot to their snapshot page', () => {
+  it('links only the entries that have a Request Snapshot to its page', () => {
     const entry = { actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester', createdAt: '2026-06-18T01:02:03.000Z', metadata: {} }
-    const render = (hasSnapshot: boolean) => RequestsWorkspace.RequestHistoryPanel({
+    const render = (hasRequestSnapshot: boolean) => RequestsWorkspace.RequestHistoryPanel({
       requestId: 'request-1',
-      entries: [{ ...entry, id: 'entry-1', hasSnapshot }] as never,
+      entries: [{ ...entry, id: 'entry-1', hasRequestSnapshot }] as never,
       error: null,
       loading: false,
     })

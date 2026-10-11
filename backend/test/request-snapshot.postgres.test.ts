@@ -37,18 +37,18 @@ void it('keeps the content a request was created with as its first Request Snaps
     requester,
   );
   assert.equal(created.actionType, 'DRAFT_CREATED');
-  assert.equal(created.hasSnapshot, true);
+  assert.equal(created.hasRequestSnapshot, true);
 
-  const snapshot = await fixture.service.getRequestSnapshot(
+  const requestSnapshot = await fixture.service.getRequestSnapshot(
     draft.id,
     created.id,
     requester,
   );
-  assert.equal(snapshot.status, 'Draft');
-  assert.equal(snapshot.formVersion, 1);
-  assert.equal(snapshot.requesterData.title, 'Test request');
-  assert.equal(snapshot.schemaSnapshot.version, 1);
-  assert.deepEqual(snapshot.entry.metadata.fieldChanges, [
+  assert.equal(requestSnapshot.status, 'Draft');
+  assert.equal(requestSnapshot.formVersion, 1);
+  assert.equal(requestSnapshot.requesterData.title, 'Test request');
+  assert.equal(requestSnapshot.schemaSnapshot.version, 1);
+  assert.deepEqual(requestSnapshot.entry.metadata.fieldChanges, [
     {
       fieldKey: 'title',
       fieldLabel: 'Title',
@@ -102,7 +102,7 @@ void it('adds a Request Snapshot per save and leaves earlier ones as they were',
   ]);
 });
 
-void it('records no entry for a save that changes nothing', async () => {
+void it('records no entry and keeps the revision for a save that changes nothing', async () => {
   const draft = await fixture.draft();
   const saved = await fixture.service.updateDraftRequesterData(
     draft.id,
@@ -113,12 +113,15 @@ void it('records no entry for a save that changes nothing', async () => {
     },
     requester,
   );
+  // Another editor holding the earlier revision is not turned away.
+  assert.equal(saved.updatedAt, draft.updatedAt);
   const submitted = await fixture.submit(saved);
-  await fixture.service.updatePsfCreatedData(submitted.id, {
+  const psfSaved = await fixture.service.updatePsfCreatedData(submitted.id, {
     actor: ownerA,
     expectedUpdatedAt: submitted.updatedAt,
     psfCreatedData: { file: '' },
   });
+  assert.equal(psfSaved.updatedAt, submitted.updatedAt);
 
   const history = await fixture.service.getRequestHistory(draft.id, ownerA);
   assert.deepEqual(
@@ -280,7 +283,7 @@ void it('stores no Request Snapshot for bulk Status replacement or for entries r
 
   const history = await fixture.service.getRequestHistory(submitted.id, ownerA);
   assert.deepEqual(
-    history.map((entry) => [entry.actionType, entry.hasSnapshot]),
+    history.map((entry) => [entry.actionType, entry.hasRequestSnapshot]),
     [
       ['DRAFT_CREATED', false],
       ['REQUEST_SUBMITTED', true],
@@ -323,7 +326,7 @@ void it('records the content a submit changed next to its Status change', async 
   });
 });
 
-void it('lists the fields a Draft Form Version upgrade removed and keeps the earlier layout for earlier Request Snapshots', async () => {
+void it('lists the fields a Draft Form Version upgrade removed and shows earlier Request Snapshots in their own Form Version', async () => {
   const draft = await fixture.draft();
   const nextSchema: FormSchemaJson = {
     ...schema,
@@ -398,4 +401,38 @@ void it('lists the fields a Draft Form Version upgrade removed and keeps the ear
   assert.equal(after.formVersion, 2);
   assert.equal(after.schemaSnapshot.version, 2);
   assert.equal(Object.hasOwn(after.requesterData, 'title'), false);
+
+  // Without the Form Version of that time it must not be shown in another one.
+  await db.query(
+    "UPDATE form_definitions SET version = 99 WHERE form_key = 'psf-request' AND version = 1",
+  );
+  try {
+    await assert.rejects(
+      fixture.service.getRequestSnapshot(draft.id, created.id, requester),
+      NotFoundException,
+    );
+  } finally {
+    await db.query(
+      "UPDATE form_definitions SET version = 1 WHERE form_key = 'psf-request' AND version = 99",
+    );
+  }
+});
+
+void it('deletes a Draft together with its Request Snapshots', async () => {
+  const draft = await fixture.draft();
+  const [created] = await fixture.service.getRequestHistory(
+    draft.id,
+    requester,
+  );
+  await fixture.service.deleteDraft(draft.id, draft.updatedAt, requester);
+
+  await assert.rejects(
+    fixture.service.getRequestSnapshot(draft.id, created.id, requester),
+    NotFoundException,
+  );
+  const remaining = await db.query(
+    'SELECT 1 FROM psf_request_audit_logs WHERE request_id = $1',
+    [draft.id],
+  );
+  assert.equal(remaining.rows.length, 0);
 });

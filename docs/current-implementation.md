@@ -5,7 +5,7 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
-> **Request Snapshot, 11 October 2026:** every Audit History entry tied to a request now stores a Request Snapshot, opened read-only from the request's History tab or the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). This is a source change: unit tests, in-memory PostgreSQL tests and a real-browser system test against a disposable PostgreSQL passed; the configured database and a deployment have not been exercised. Entries recorded before this change have no Request Snapshot.
+> **Request Snapshot, 11 October 2026:** an Audit History entry tied to a request now stores a Request Snapshot, opened read-only from the request's History tab or the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). Bulk Status replacement entries and entries recorded before this change have none. This is a source change. Checked on 11 October 2026 from `backend`: `npx jest` (704 passed), `node --require ts-node/register --test test/request-snapshot.postgres.test.ts test/audit-visibility.postgres.test.ts` (in-memory PostgreSQL, passed) and `node --test test/request-snapshot-system.e2e.mjs` (real browser, backend and disposable PostgreSQL, passed); from `frontend`: `npx vitest run` (489 passed). Not exercised: the configured database and any deployment. In the same `test:ui:system` script the loading regression fails at the Dashboard "Open work" heading, with or without this change.
 
 > **Initial Data Load, number fields and export scope, 8 October 2026:** the [Initial Data Load script](initial-data-load.md) reloads forms, the Status catalog and requests from the PSF form detail workbook. Form fields may be `number` (validated as plain decimals, exported as numeric cells), Dashboard Team Group also reads the Request To options, and every authenticated role exports all non-Draft requests. Verified by unit and disposable-database tests only; the script has not been run against the configured database.
 
@@ -184,15 +184,16 @@ separate audit row per field.
 Each entry tied to a request also stores a Request Snapshot: both forms' values,
 the Work Status and the Form Version numbers, captured in the same transaction as
 the change. Creation records the initial content, and submit and a Draft Form
-Version upgrade record their field changes. A save that changes nothing records
-no entry. Bulk Status replacement keeps its per-request entries but stores no
+Version upgrade record their field changes. A save that changes nothing writes
+nothing: no entry and no new revision. Bulk Status replacement keeps its per-request entries but stores no
 Request Snapshot. Reading one applies the request's access check, hides PSF
 Created Information and PSF update entries from a Requester before release, and
 renders with the Form Version of that time. History entries now carry an `id`
 and `hasSnapshot`.
 Sources: [capture and read](../backend/src/audit/audit_log.service.ts),
-[visibility and layout](../backend/src/requests/requests.service.ts),
-[snapshot page](../frontend/src/components/RequestSnapshotPage.tsx).
+[visibility and Form Version lookup](../backend/src/requests/requests.service.ts),
+[bulk replacement exception](../backend/src/admin/workflow_transition.service.ts),
+[Request Snapshot page](../frontend/src/components/RequestSnapshotPage.tsx).
 
 Admins can choose any supported requester form field as a trigger; each rule
 has one trigger and one or more targets. Runtime trigger metadata comes from
