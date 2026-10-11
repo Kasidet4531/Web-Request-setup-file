@@ -26,4 +26,4 @@ For future work, use this document as the current product requirement. Dated sou
 
 A Request Snapshot opened from an entry ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md)) follows the rules above: it needs access to the request, a Requester gets no PSF Created Information in it and cannot open PSF update entries before release, and Draft-period Request Snapshots stay with the creator, including from Admin, until submission. The rule is enforced in [the request service](../backend/src/requests/requests.service.ts) (`getRequestSnapshot`).
 
-This is a source change, not deployment evidence. `backend/test/request-snapshot.postgres.test.ts` covers these rules against an in-memory PostgreSQL and passed on 11 October 2026; the 5 October checks above do not cover it.
+This is a source change, not deployment evidence. `backend/test/request-snapshot.postgres.test.ts` covers these rules and passed on 11 October 2026, in memory and on the configured server inside temporary tables; see the [verification record](verification/2026-10-11-request-snapshot.md). The 5 October checks above do not cover it.

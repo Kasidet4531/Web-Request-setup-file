@@ -91,6 +91,7 @@ behavior and test outcomes.
 | [docs/plans/production-ui-integration-execution-plan.md](plans/production-ui-integration-execution-plan.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/psf-created-information-editing.md](plans/psf-created-information-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/superpowers/plans/2026-09-01-ldap-api-login.md](superpowers/plans/2026-09-01-ldap-api-login.md) | Original scoped plan; not a current execution instruction |
+| [Request Snapshot verification](verification/2026-10-11-request-snapshot.md) | Suites against the `main` baseline, real-browser flow, and a run on the configured PostgreSQL inside session-temporary tables; not deployment acceptance |
 | [Draft lifecycle verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md) | Public browser/HTTP/mail, SQL races and regression evidence |
 | [docs/verification/2026-10-07-admin-autofill-dialogs.md](verification/2026-10-07-admin-autofill-dialogs.md) | Rule activation, modal editing and recipient-layout regression tests, browser evidence and two-axis review |
 | [docs/verification/2026-10-06-main-documentation-alignment.md](verification/2026-10-06-main-documentation-alignment.md) | Main documentation baseline, assignment semantics, link checks and original Task 4 evidence availability |

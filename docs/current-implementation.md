@@ -5,7 +5,7 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
-> **Request Snapshot, 11 October 2026:** an Audit History entry tied to a request now stores a Request Snapshot, opened read-only from the request's History tab or the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). Bulk Status replacement entries and entries recorded before this change have none. This is a source change. Checked on 11 October 2026 from `backend`: `npx jest` (704 passed), `node --require ts-node/register --test test/request-snapshot.postgres.test.ts test/audit-visibility.postgres.test.ts` (in-memory PostgreSQL, passed) and `node --test test/request-snapshot-system.e2e.mjs` (real browser, backend and disposable PostgreSQL, passed); from `frontend`: `npx vitest run` (489 passed). Not exercised: the configured database and any deployment. In the same `test:ui:system` script the loading regression fails at the Dashboard "Open work" heading, with or without this change.
+> **Request Snapshot, 11 October 2026:** an Audit History entry tied to a request now stores a Request Snapshot, opened read-only through "View Request Snapshot" in the request's History tab or on the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). Bulk Status replacement entries and entries recorded before this change have none. This is a source change; the dated checks, including a run on the configured PostgreSQL server inside session-temporary tables, are in the [verification record](verification/2026-10-11-request-snapshot.md). The configured tables were not written and no deployment was exercised.
 
 > **Initial Data Load, number fields and export scope, 8 October 2026:** the [Initial Data Load script](initial-data-load.md) reloads forms, the Status catalog and requests from the PSF form detail workbook. Form fields may be `number` (validated as plain decimals, exported as numeric cells), Dashboard Team Group also reads the Request To options, and every authenticated role exports all submitted (non-Draft) requests, never any Draft, not even their own. The load script was run against the configured database on 8 October 2026 with `--lenient` (read-back counts only); see [Initial Data Load](initial-data-load.md).
 
@@ -189,7 +189,9 @@ nothing: no entry and no new revision. Bulk Status replacement keeps its per-req
 Request Snapshot. Reading one applies the request's access check, hides PSF
 Created Information and PSF update entries from a Requester before release, and
 renders with the Form Version of that time. History entries now carry an `id`
-and `hasSnapshot`.
+and `hasRequestSnapshot`; both are additions, and no earlier field changed. The
+request's History tab reloads after a save or Status change that produced a new
+revision.
 Sources: [capture and read](../backend/src/audit/audit_log.service.ts),
 [visibility and Form Version lookup](../backend/src/requests/requests.service.ts),
 [bulk replacement exception](../backend/src/admin/workflow_transition.service.ts),
