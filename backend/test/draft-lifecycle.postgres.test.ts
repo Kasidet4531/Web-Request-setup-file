@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 import { before, after, it } from 'node:test';
 import { ExcelExportService } from '../src/export/excel_export.service';
 import { ExportJobRepository } from '../src/export/export-job.repository';
@@ -296,16 +297,30 @@ void it('creates another unique Draft number after deletion without reusing the 
   assert.notEqual(third.requestNo, second.requestNo);
 });
 
-void it('renders retained Draft exports when the app starts outside the backend directory', async () => {
+void it('renders an export when the app starts outside the backend directory', async () => {
   const previous = process.cwd();
+  const nodePath = process.env.NODE_PATH;
   try {
     process.chdir('/tmp');
+    // The export worker inherits `--require ts-node/register`, which only resolves from the backend directory.
+    process.env.NODE_PATH = join(previous, 'node_modules');
     const workbook = await new ExcelExportService(
       fixture.index,
       fixture.forms,
     ).exportAllRequests({}, requester);
     assert.ok(workbook.content.length > 0);
   } finally {
+    if (nodePath === undefined) delete process.env.NODE_PATH;
+    else process.env.NODE_PATH = nodePath;
     process.chdir(previous);
   }
+});
+
+void it('never exports a Draft, not even its creator’s own', async () => {
+  await fixture.reset();
+  await fixture.draft();
+  const exported = await fixture.index.queryExportRequests({}, requester, 100);
+  assert.equal(exported.total, 0);
+  assert.deepEqual(exported.items, []);
+  assert.equal(await fixture.index.countExportRequests({}), 0);
 });

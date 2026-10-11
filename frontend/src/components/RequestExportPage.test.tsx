@@ -216,13 +216,13 @@ describe("request export URL", () => {
     expect(html).not.toContain('value="Draft"');
   });
 
-  it("renders accessible loading, success, and 403 error feedback", () => {
+  it("announces loading to screen readers only and renders 403 errors as alerts", () => {
     const RequestExportFeedback = Reflect.get(
       RequestExportPageModule,
       "RequestExportFeedback",
     ) as (props: {
       downloading: boolean;
-      feedback: { kind: "success" | "error"; message: string } | null;
+      feedback: { message: string } | null;
     }) => unknown;
 
     const loadingHtml = renderToStaticMarkup(
@@ -231,26 +231,21 @@ describe("request export URL", () => {
         feedback: null,
       }) as never,
     );
-    const successHtml = renderToStaticMarkup(
-      RequestExportFeedback({
-        downloading: false,
-        feedback: { kind: "success", message: "Request export downloaded." },
-      }) as never,
+    const idleHtml = renderToStaticMarkup(
+      RequestExportFeedback({ downloading: false, feedback: null }) as never,
     );
     const errorHtml = renderToStaticMarkup(
       RequestExportFeedback({
         downloading: false,
-        feedback: {
-          kind: "error",
-          message: "Only admins can export requests.",
-        },
+        feedback: { message: "Only admins can export requests." },
       }) as never,
     );
 
     expect(loadingHtml).toContain("Preparing request export…");
     expect(loadingHtml).toContain('role="status"');
-    expect(successHtml).toContain("Request export downloaded.");
-    expect(successHtml).toContain('role="status"');
+    expect(loadingHtml).toContain("sr-only");
+    expect(loadingHtml).not.toContain("ui-notice");
+    expect(idleHtml).toBe("");
     expect(errorHtml).toContain("Only admins can export requests.");
     expect(errorHtml).toContain('role="alert"');
   });
@@ -292,6 +287,8 @@ describe("request export URL", () => {
     );
 
     expect(html).toContain("Request preview");
+    expect(html).toContain("submitted requests only, never Drafts");
+    expect(html).not.toContain("only requests permitted");
     expect(html).toContain("Request No.");
     expect(html).toContain("Title / Product Type");
     expect(html).toContain("Requester");

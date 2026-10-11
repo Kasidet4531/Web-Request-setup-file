@@ -15,6 +15,8 @@ import {
   type AdminAutofillRuleDraft,
 } from './adminAutofillRulesState'
 
+const MAX_VISIBLE_TARGETS = 4
+
 type AdminAutofillRulesFeedbackValue = {
   kind: 'success' | 'error'
   message: string
@@ -89,18 +91,28 @@ export function AdminAutofillRulesTable({
           </tr>
         </thead>
         <tbody>
-          {rules.map((rule) => (
+          {rules.map((rule) => {
+            const targets = rule.targetCanonicalKeys.map((key, index) => ({
+              key,
+              label: getFieldDescription(key, fields, `Removed target field ${index + 1}`),
+            }))
+            const hidden = targets.slice(MAX_VISIBLE_TARGETS).map((target) => target.label).join(', ')
+            return (
             <tr key={rule.id}>
               <td>
                 <strong>{fields.find((field) => field.canonicalKey === rule.triggerCanonicalKey)?.label ?? getFieldDescription(rule.triggerCanonicalKey, fields)}</strong>
               </td>
               <td>
                 <ul className="admin-autofill-rules__targets">
-                  {rule.targetCanonicalKeys.map((targetCanonicalKey, index) => (
-                    <li key={targetCanonicalKey}>
-                      {getFieldDescription(targetCanonicalKey, fields, `Removed target field ${index + 1}`)}
-                    </li>
+                  {targets.slice(0, MAX_VISIBLE_TARGETS).map((target) => (
+                    <li key={target.key}>{target.label}</li>
                   ))}
+                  {hidden ? (
+                    <li title={hidden}>
+                      <span aria-hidden="true">…</span>
+                      <span className="sr-only">and more: {hidden}</span>
+                    </li>
+                  ) : null}
                 </ul>
               </td>
               <td>
@@ -119,7 +131,8 @@ export function AdminAutofillRulesTable({
                 </button>
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>

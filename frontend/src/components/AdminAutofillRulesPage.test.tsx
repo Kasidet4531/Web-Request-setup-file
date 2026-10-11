@@ -63,6 +63,23 @@ describe('AdminAutofillRulesPage', () => {
     expect(editor).toContain('admin-autofill-rules__editor-grid')
   })
 
+  it('lists at most four fill targets and ends with an ellipsis that names the rest', () => {
+    const keys = ['a', 'b', 'c', 'd', 'e', 'f']
+    const schemaFields: FormSchemaField[] = keys.map((key) => ({ fieldKey: key, canonicalKey: key, label: `Field ${key}`, type: 'text', required: false }))
+    const rule = (targetCanonicalKeys: string[]) => ({ id: 'r', formKey: 'psf-request', triggerCanonicalKey: 'a', targetCanonicalKeys, lookupSource: 'previous_completed_submission' as const, status: 'active' as const, createdAt: '', updatedAt: '' })
+    const render = (targetCanonicalKeys: string[]) => renderToStaticMarkup(createElement(AdminAutofillRulesTable, { disabled: false, fields: schemaFields, rules: [rule(targetCanonicalKeys)], onEdit() {} }))
+
+    const many = render(keys)
+    for (const label of ['Field a', 'Field b', 'Field c', 'Field d']) expect(many).toContain(`<li>${label}</li>`)
+    expect(many).not.toContain('<li>Field e</li>')
+    expect(many).toContain('title="Field e, Field f"')
+    expect(many).toContain('<span aria-hidden="true">…</span>')
+
+    const four = render(keys.slice(0, 4))
+    expect(four).toContain('<li>Field d</li>')
+    expect(four).not.toContain('…')
+  })
+
   it('wires the admin autofill route to a focused rule-management page', () => {
     const routeOptions = Reflect.get(AdminAutofillRoute.Route, 'options') as {
       component: unknown

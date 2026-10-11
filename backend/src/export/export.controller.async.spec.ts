@@ -104,10 +104,9 @@ describe('ExportController async lifecycle', () => {
       response,
     );
 
-    expect(searchIndexService.countExportRequests).toHaveBeenCalledWith(
-      { status: 'Submitted' },
-      adminActor,
-    );
+    expect(searchIndexService.countExportRequests).toHaveBeenCalledWith({
+      status: 'Submitted',
+    });
     expect(excelExportService.exportRequests).toHaveBeenCalledWith(
       { status: 'Submitted' },
       adminActor,
@@ -135,10 +134,9 @@ describe('ExportController async lifecycle', () => {
       response,
     );
 
-    expect(searchIndexService.countExportRequests).toHaveBeenCalledWith(
-      { status: 'Submitted' },
-      adminActor,
-    );
+    expect(searchIndexService.countExportRequests).toHaveBeenCalledWith({
+      status: 'Submitted',
+    });
     expect(exportJobRepository.enqueue).toHaveBeenCalledWith(
       { status: 'Submitted' },
       adminActor,

@@ -23,5 +23,6 @@ describe("RequestExportPage asynchronous lifecycle feedback", () => {
 
     expect(html).toContain("Request export queued…");
     expect(html).toContain('role="status"');
+    expect(html).toContain("sr-only");
   });
 });
