@@ -961,6 +961,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
             expectedUpdatedAt: request.updatedAt,
           })
       setRequest(updatedRequest)
+      setHistoryRetry((value) => value + 1)
       setPsfCreatedValues(buildPsfCreatedInformationValues(updatedRequest))
       setMessage(request.status === 'Draft'
         ? `Request ${updatedRequest.requestNo} submitted to ${updatedRequest.status}.`
@@ -999,6 +1000,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     const nextValues = psfDraft.current.dirty ? psfDraft.current.values : baseline
     const nextDirty = JSON.stringify(nextValues) !== JSON.stringify(baseline)
     psfDraft.current = { values: nextValues, dirty: nextDirty }
+    // A save that changed nothing keeps its revision and adds no History entry.
+    if (savedRequest.updatedAt !== request?.updatedAt) setHistoryRetry((value) => value + 1)
     setRequest(savedRequest)
     if (workflowContext.current.requestId !== savedRequest.id || workflowContext.current.status !== savedRequest.status) {
       void refreshWorkflowOptions(savedRequest)
@@ -1038,6 +1041,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
         expectedUpdatedAt: request.updatedAt,
         psfCreatedData: values,
       })
+      if (savedRequest.updatedAt !== request.updatedAt) setHistoryRetry((value) => value + 1)
       setRequest(savedRequest)
       setPsfCreatedValues(buildPsfCreatedInformationValues(savedRequest))
       setPsfCreatedDirty(false)

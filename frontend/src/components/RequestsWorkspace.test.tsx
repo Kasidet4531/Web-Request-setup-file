@@ -2124,6 +2124,30 @@ describe('Tabbed Detail and PSF edit lifecycle', () => {
   const psf = (page: unknown) => requireRenderedElement(page, e => e.type === RequestsWorkspace.PsfCreatedInformationPanel)
   const load = async () => { renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return renderRequestDetailShell() }
 
+  it('reloads History after a save that changed the request, and not after one that changed nothing', async () => {
+    let page = await load()
+    const initial = psf(page).props.request as PsfRequestResponse
+    const settle = async () => { renderRequestDetailShell(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork(); return renderRequestDetailShell() }
+    const acceptSaved = (saved: PsfRequestResponse) => (requireRenderedElement(page, e => e.type === ActiveSchemaForm).props.onRequestSaved as (request: PsfRequestResponse) => void)(saved)
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(1)
+
+    acceptSaved({ ...initial, updatedAt: 'requester-save-r2' })
+    page = await settle()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(2)
+
+    acceptSaved({ ...initial, updatedAt: 'requester-save-r2' })
+    page = await settle()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(2)
+
+    requestDetailApi.updatePsfCreatedData.mockResolvedValueOnce({ ...initial, updatedAt: 'psf-save-r3' })
+    ;(psf(page).props.onEdit as () => void)()
+    page = renderRequestDetailShell()
+    ;(psf(page).props.onSave as (values: Record<string, string>) => void)(psf(page).props.values as Record<string, string>)
+    await flushRequestDetailAsyncWork()
+    await settle()
+    expect(requestDetailApi.fetchPsfRequestHistory).toHaveBeenCalledTimes(3)
+  })
+
   it('rebases clean PSF values from a requester snapshot and saves the current values with its new revision', async () => {
     let page = await load()
     const initial = psf(page).props.request as PsfRequestResponse

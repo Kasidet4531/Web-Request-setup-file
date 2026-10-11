@@ -33,27 +33,48 @@ test(
     });
     const catalog = await api(page, 'GET', '/workflow/statuses');
     const target = catalog.entries.find((entry) => entry.kind === 'open');
-    const submitted = await api(page, 'POST', `/requests/${draft.id}/submit`, {
+    await api(page, 'POST', `/requests/${draft.id}/submit`, {
       formVersion: draft.formVersion,
       expectedUpdatedAt: draft.updatedAt,
       status: target.name,
     });
-    await api(page, 'PUT', `/requests/${draft.id}/requester-data`, {
-      formVersion: submitted.formVersion,
-      expectedUpdatedAt: submitted.updatedAt,
-      requesterData: {
-        ...submitted.requesterData,
-        title: 'Renamed for snapshot',
-      },
-    });
-
     await page.goto(`${system.origin}/requests/${draft.id}`);
-    await page.getByRole('tab', { name: 'History', exact: true }).click();
+    const tab = (name) => page.getByRole('tab', { name, exact: true });
+    const editButton = page.getByRole('button', {
+      name: 'Edit information',
+      exact: true,
+    });
+    const saveRequesterInformation = async () => {
+      await page
+        .getByRole('button', {
+          name: 'Save information',
+          exact: true,
+        })
+        .click();
+      await expect(editButton).toBeVisible();
+    };
+    await tab('Requester Information').click();
+    await editButton.click();
+    await page
+      .getByRole('textbox', { name: 'Title', exact: true })
+      .fill('Renamed for snapshot');
+    await saveRequesterInformation();
+
+    // The new entry is there without reloading the page.
+    await tab('History').click();
     const links = page.getByRole('link', {
       name: 'View Request Snapshot',
       exact: true,
     });
     // Created, submitted and edited: one Request Snapshot each.
+    await expect(links).toHaveCount(3);
+
+    // A save that changes nothing succeeds and adds no entry.
+    await tab('Requester Information').click();
+    await editButton.click();
+    await saveRequesterInformation();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await tab('History').click();
     await expect(links).toHaveCount(3);
     await page.screenshot({
       path: join(system.evidence, 'request-snapshot-history.png'),
