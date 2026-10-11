@@ -341,6 +341,20 @@ describe('RequestsService explicit draft schema upgrade', () => {
         metadata: {
           fromFormVersion: lockedDraft.form_version,
           toFormVersion: activeSchema.version,
+          fieldChanges: [
+            {
+              fieldKey: 'requester_name',
+              fieldLabel: 'Requester Name',
+              before: 'Client supplied name',
+              after: 'Fook',
+            },
+            {
+              fieldKey: 'legacy_field',
+              fieldLabel: 'Legacy Field',
+              before: 'remove only after Upgrade',
+              after: null,
+            },
+          ],
         },
       },
       dbClient,

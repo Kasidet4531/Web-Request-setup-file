@@ -10,6 +10,7 @@ describe('RequestsController draft flow', () => {
     createDraft: jest.Mock;
     getAllowedStatusTransitions: jest.Mock;
     getRequestHistory: jest.Mock;
+    getRequestSnapshot: jest.Mock;
     getRequest: jest.Mock;
     queryRequests: jest.Mock;
     submitRequest: jest.Mock;
@@ -25,6 +26,7 @@ describe('RequestsController draft flow', () => {
       createDraft: jest.fn(),
       getAllowedStatusTransitions: jest.fn(),
       getRequestHistory: jest.fn(),
+      getRequestSnapshot: jest.fn(),
       getRequest: jest.fn(),
       queryRequests: jest.fn(),
       submitRequest: jest.fn(),
@@ -308,6 +310,41 @@ describe('RequestsController draft flow', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(service.getRequestHistory).not.toHaveBeenCalled();
+  });
+
+  it('returns one Request Snapshot for the authenticated actor', async () => {
+    const actor = {
+      id: 'user-1',
+      username: 'requester.demo',
+      displayName: 'Requester',
+      role: 'requester' as const,
+      setupOwnerDepartment: null,
+    };
+    const snapshot = { status: 'Draft', requesterData: { title: 'Then' } };
+    authService.getProfile.mockResolvedValue(actor);
+    service.getRequestSnapshot.mockResolvedValue(snapshot);
+
+    await expect(
+      controller.getRequestSnapshot('request-1', 'entry-1', {
+        session: { userId: 'user-1' },
+      } as never),
+    ).resolves.toEqual(snapshot);
+
+    expect(service.getRequestSnapshot).toHaveBeenCalledWith(
+      'request-1',
+      'entry-1',
+      actor,
+    );
+  });
+
+  it('rejects a Request Snapshot lookup without a session user', async () => {
+    await expect(
+      controller.getRequestSnapshot('request-1', 'entry-1', {
+        session: {},
+      } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(service.getRequestSnapshot).not.toHaveBeenCalled();
   });
 
   it('returns backend-authoritative status options for the authenticated actor', async () => {

@@ -3509,7 +3509,10 @@ describe('RequestsService draft flow', () => {
               'request-1',
               {
                 formVersion: 3,
-                requesterData: requestRow.requester_data_json,
+                requesterData: {
+                  ...requestRow.requester_data_json,
+                  product_type: 'New Product',
+                },
                 expectedUpdatedAt: revision,
               },
               actor,
@@ -3786,10 +3789,15 @@ describe('RequestsService draft flow', () => {
           dbClient,
         );
       }
-      expect(auditLogService.record).toHaveBeenCalledWith(
-        expect.objectContaining({ actor }),
-        dbClient,
-      );
+      if (operation === 'requester' || operation === 'psf') {
+        // Nothing changed, so no Audit History entry is recorded.
+        expect(auditLogService.record).not.toHaveBeenCalled();
+      } else {
+        expect(auditLogService.record).toHaveBeenCalledWith(
+          expect.objectContaining({ actor }),
+          dbClient,
+        );
+      }
     },
   );
 

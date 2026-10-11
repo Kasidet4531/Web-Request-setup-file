@@ -298,8 +298,11 @@ describe.each(['text', 'textarea'] as const)(
             .filter(([sql]) => /^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))
             .map(([sql]) => sql),
         ).toEqual(['BEGIN', 'COMMIT']);
-        expect(record).toHaveBeenCalledTimes(1);
-        expect(record.mock.calls[0][1]).toBe(client);
+        // These saves change nothing, so they leave no Audit History entry.
+        const unchangedSave =
+          operation === 'requester-save' || operation === 'psf-save';
+        expect(record).toHaveBeenCalledTimes(unchangedSave ? 0 : 1);
+        if (!unchangedSave) expect(record.mock.calls[0][1]).toBe(client);
         expect(client.release).toHaveBeenCalledTimes(1);
       },
     );

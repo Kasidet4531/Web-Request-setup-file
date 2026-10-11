@@ -125,6 +125,7 @@ describe('AuditLogService', () => {
         'Requester Demo',
         'requester',
         {},
+        true,
       ],
     );
     expect(pool.query).not.toHaveBeenCalled();
@@ -370,6 +371,7 @@ describe('AuditLogService', () => {
         actor.displayName,
         actor.role,
         metadata,
+        true,
       ],
     );
     expect(pool.query).not.toHaveBeenCalled();

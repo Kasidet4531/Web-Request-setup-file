@@ -147,6 +147,18 @@ export interface PsfRequestResponse {
   completedAt: string | null;
 }
 
+export interface RequestSnapshotResponse {
+  entry: RequestAuditHistoryEntry;
+  requestNo: string;
+  status: string;
+  formVersion: number;
+  requesterData: RequesterData;
+  psfCreatedData: RequesterData;
+  psfCreatedDataVisible: boolean;
+  schemaSnapshot: FormSchemaJson;
+  psfCreatedInformationSchema: FormSchemaJson;
+}
+
 interface PsfRequestRow {
   id: string;
   request_no: string;
@@ -256,7 +268,13 @@ export class RequestsService implements OnModuleInit {
           requestId: createdRow.id,
           actionType: REQUEST_AUDIT_ACTION.DRAFT_CREATED,
           actor,
-          metadata: {},
+          metadata: {
+            fieldChanges: this.getFieldChanges(
+              activeSchema.schema,
+              {},
+              requesterData,
+            ),
+          },
         },
         client,
       );
@@ -686,6 +704,56 @@ export class RequestsService implements OnModuleInit {
     );
   }
 
+  async getRequestSnapshot(
+    id: string,
+    entryId: string,
+    actor: AuthenticatedUserProfile,
+  ): Promise<RequestSnapshotResponse> {
+    const request = await this.getRequest(id, actor);
+    const found = await this.auditLogService.findRequestSnapshot(id, entryId);
+    if (
+      !found ||
+      (!request.psfCreatedDataVisible &&
+        found.entry.actionType ===
+          REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED)
+    ) {
+      throw new NotFoundException('Request Snapshot was not found.');
+    }
+
+    const { entry, snapshot } = found;
+    return {
+      entry,
+      requestNo: request.requestNo,
+      status: snapshot.status,
+      formVersion: snapshot.formVersion,
+      requesterData: snapshot.requesterData,
+      psfCreatedData: request.psfCreatedDataVisible
+        ? snapshot.psfCreatedData
+        : {},
+      psfCreatedDataVisible: request.psfCreatedDataVisible,
+      schemaSnapshot:
+        snapshot.formVersion === request.formVersion
+          ? request.schemaSnapshot
+          : await this.schemaForFormVersion(request, snapshot.formVersion),
+      psfCreatedInformationSchema: request.psfCreatedInformationSchema,
+    };
+  }
+
+  // Only a Draft upgraded since the snapshot reaches this: published Form
+  // Versions are immutable, so the earlier layout is still on record.
+  private async schemaForFormVersion(
+    request: PsfRequestResponse,
+    version: number,
+  ): Promise<FormSchemaJson> {
+    const { versions } = await this.formSchemaService.listVersions(
+      request.formKey,
+    );
+    return (
+      versions.find((candidate) => candidate.version === version)?.schema ??
+      request.schemaSnapshot
+    );
+  }
+
   async getAllowedStatusTransitions(
     id: string,
     actor: AuthenticatedUserProfile,
@@ -814,24 +882,26 @@ export class RequestsService implements OnModuleInit {
           client,
         );
       }
-      await this.auditLogService.record(
-        {
-          requestId: updatedRow.id,
-          actionType:
-            request.status === DRAFT_STATUS
-              ? REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED
-              : REQUEST_AUDIT_ACTION.REQUESTER_INFORMATION_UPDATED,
-          actor,
-          metadata: {
-            fieldChanges: this.getFieldChanges(
-              request.schema_snapshot_json,
-              request.requester_data_json ?? {},
-              requesterData,
-            ),
-          },
-        },
-        client,
+      const fieldChanges = this.getFieldChanges(
+        request.schema_snapshot_json,
+        request.requester_data_json ?? {},
+        requesterData,
       );
+      // A save that changes nothing leaves no Audit History entry.
+      if (fieldChanges.length > 0) {
+        await this.auditLogService.record(
+          {
+            requestId: updatedRow.id,
+            actionType:
+              request.status === DRAFT_STATUS
+                ? REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED
+                : REQUEST_AUDIT_ACTION.REQUESTER_INFORMATION_UPDATED,
+            actor,
+            metadata: { fieldChanges },
+          },
+          client,
+        );
+      }
 
       return this.mapRequestRow(updatedRow, actor);
     });
@@ -968,6 +1038,12 @@ export class RequestsService implements OnModuleInit {
           metadata: {
             fromFormVersion: request.form_version,
             toFormVersion: activeSchema.version,
+            // Diffed over the earlier layout, so removed fields are listed.
+            ...this.fieldChangesMetadata(
+              request.schema_snapshot_json,
+              request.requester_data_json ?? {},
+              requesterData,
+            ),
           },
         },
         client,
@@ -1050,21 +1126,22 @@ export class RequestsService implements OnModuleInit {
           client,
         );
       }
-      await this.auditLogService.record(
-        {
-          requestId: updatedRow.id,
-          actionType: REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
-          actor: dto.actor,
-          metadata: {
-            fieldChanges: this.getFieldChanges(
-              schema,
-              request.psf_created_data_json ?? {},
-              psfCreatedData,
-            ),
-          },
-        },
-        client,
+      const fieldChanges = this.getFieldChanges(
+        schema,
+        request.psf_created_data_json ?? {},
+        psfCreatedData,
       );
+      if (fieldChanges.length > 0) {
+        await this.auditLogService.record(
+          {
+            requestId: updatedRow.id,
+            actionType: REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
+            actor: dto.actor,
+            metadata: { fieldChanges },
+          },
+          client,
+        );
+      }
       return this.mapRequestRow(updatedRow, dto.actor);
     });
   }
@@ -1358,7 +1435,15 @@ export class RequestsService implements OnModuleInit {
           requestId: submittedRow.id,
           actionType: REQUEST_AUDIT_ACTION.REQUEST_SUBMITTED,
           actor,
-          metadata: { fromStatus: DRAFT_STATUS, toStatus: target.name },
+          metadata: {
+            fromStatus: DRAFT_STATUS,
+            toStatus: target.name,
+            ...this.fieldChangesMetadata(
+              request.schema_snapshot_json,
+              request.requester_data_json ?? {},
+              normalizedRequesterData,
+            ),
+          },
         },
         client,
       );
@@ -1814,6 +1899,15 @@ export class RequestsService implements OnModuleInit {
     };
   }
 
+  private fieldChangesMetadata(
+    schema: FormSchemaJson,
+    before: RequesterData,
+    after: RequesterData,
+  ): { fieldChanges?: ReturnType<RequestsService['getFieldChanges']> } {
+    const fieldChanges = this.getFieldChanges(schema, before, after);
+    return fieldChanges.length > 0 ? { fieldChanges } : {};
+  }
+
   private getFieldChanges(
     schema: FormSchemaJson,
     before: RequesterData,
@@ -1826,12 +1920,12 @@ export class RequestsService implements OnModuleInit {
   }> {
     return schema.sections.flatMap((section) =>
       section.fields.flatMap((field) => {
-        const previous = Object.hasOwn(before, field.fieldKey)
-          ? before[field.fieldKey]
-          : null;
-        const next = Object.hasOwn(after, field.fieldKey)
-          ? after[field.fieldKey]
-          : null;
+        const read = (data: RequesterData): unknown =>
+          Object.hasOwn(data, field.fieldKey) && data[field.fieldKey] !== ''
+            ? (data[field.fieldKey] ?? null)
+            : null;
+        const previous = read(before);
+        const next = read(after);
         return JSON.stringify(previous) === JSON.stringify(next)
           ? []
           : [

@@ -22,6 +22,7 @@ import type {
   CreateDraftRequestDto,
   PsfRequestResponse,
   RequestQueryDto,
+  RequestSnapshotResponse,
   RequestStatusOptionsResponse,
   SubmitDraftRequestDto,
   UpdateDraftRequesterDataDto,
@@ -98,6 +99,17 @@ export class RequestsController {
     const actor = await this.getAuthenticatedActor(request);
 
     return this.requestsService.getRequestHistory(requestId, actor);
+  }
+
+  @Get(':requestId/history/:entryId')
+  async getRequestSnapshot(
+    @Param('requestId') requestId: string,
+    @Param('entryId') entryId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<RequestSnapshotResponse> {
+    const actor = await this.getAuthenticatedActor(request);
+
+    return this.requestsService.getRequestSnapshot(requestId, entryId, actor);
   }
 
   @Get(':requestId')
