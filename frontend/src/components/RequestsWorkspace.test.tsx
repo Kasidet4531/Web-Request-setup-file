@@ -393,7 +393,7 @@ describe('RequestHeaderSummary', () => {
     expect(html).toContain('Production probe card setup')
     expect(html).not.toContain('<span>Product Type</span>')
     expect(html).not.toContain('status-badge--submitted')
-    expect(html).toContain('Urgent')
+    expect(html).not.toContain('<span>Priority</span>')
     expect(html).toContain('05/08/2026')
     expect(html).toContain('Fook')
     expect(html).not.toContain('Owner / Dept')
@@ -2362,5 +2362,20 @@ describe('Product Type team Dashboard', () => {
   requestDetailHookHarness.beginRender(); page = RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
   expect(requestDetailApi.queryPsfRequests.mock.lastCall?.[0]).toMatchObject({ team: 'all', offset: 0 })
   expect(JSON.stringify(page)).toContain('รอระบุ Product Type')
+ })
+
+ it('displays Modified By alongside Requester in RequestHeaderSummary when modified_by is present', () => {
+  const base = buildSubmittedRequest()
+  const request: PsfRequestResponse = {
+   ...base,
+   requester: 'Creator User',
+   requesterData: {
+    ...base.requesterData,
+    modified_by: 'Editor User',
+   },
+  }
+  const html = renderToStaticMarkup(<RequestHeaderSummary request={request} />)
+  expect(html).toContain('<span>Requester</span><strong>Creator User</strong>')
+  expect(html).toContain('<span>Modified By</span><strong>Editor User</strong>')
  })
 })

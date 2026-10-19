@@ -295,4 +295,18 @@ describe('DynamicFormRenderer field policy', () => {
     expect(html).not.toContain('Additional details')
     expect(html).not.toContain('<details')
   })
+
+  it('includes a non-empty legacy select or radio value in the rendered options so it stays selected during editing', () => {
+    const html = renderToStaticMarkup(
+      <DynamicFormRenderer
+        schema={schema}
+        values={{
+          product_type: 'Revise Old PSF (Update Layout )',
+          priority: 'Legacy Priority',
+        }}
+      />,
+    )
+    expect(html).toContain('checked="" value="Revise Old PSF (Update Layout )"')
+    expect(html).toContain('<option value="Legacy Priority" selected="">Legacy Priority</option>')
+  })
 })

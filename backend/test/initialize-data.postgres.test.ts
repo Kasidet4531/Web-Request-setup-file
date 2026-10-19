@@ -47,6 +47,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
   for (const option of ['LTX_C', 'MCT', 'UFLEX'])
     mapping.addRow(['', '', '', '', option]);
   mapping.addRow(['Creater', 'Job File Name', '', 'Single line of text']);
+  mapping.addRow(['Creater', 'PSF Setup File Name', '', 'Single line of text']);
   mapping.addRow(['Creater', 'Touch down per wafer', '', 'Number']);
   mapping.addRow(['', 'Due Date', '', 'Date and Time']);
   mapping.addRow(['', 'Created By', '', 'Person or Group']);
@@ -67,9 +68,11 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     'Diameter (Inch)',
     'Tester Type',
     'Job File Name',
+    'PSF Setup File Name',
     'Touch down per wafer',
     'Due Date',
     'Created By',
+    'Modified By',
   ]);
   const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
   data.addRow([
@@ -83,9 +86,11 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     'NA ',
     'MCT',
     'job1',
+    'PSF_CHIP_A_01',
     12.5,
     day('2026-08-07'),
     'Somebody',
+    'Editor',
   ]);
   data.addRow([
     101,
@@ -98,7 +103,9 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     12,
     'ltx_c',
     '',
+    '',
     'abc',
+    null,
     null,
     null,
   ]);
@@ -114,6 +121,8 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     '',
     '',
     '',
+    '',
+    null,
     null,
     null,
   ]);
@@ -169,6 +178,7 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
     '30% -- Compare Old and New layout': 1,
   });
   assert.deepEqual(report.mismatches, {
+    'Diameter (Inch)': { rows: 1, distinct: 1 },
     'Touch down per wafer': { rows: 1, distinct: 1 },
   });
   assert.deepEqual(report.missingColumns, ['Workflow Name']);
@@ -181,17 +191,22 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
     ['PSF-000100', 'PSF-000101'],
   );
   const [done, other] = rows;
-  assert.equal(done.requester, 'NA');
+  assert.equal(done.requester, 'Somebody');
   assert.equal(done.requester_user_id, null);
   assert.equal(done.product_type, REQUEST_TO[0]);
   assert.equal(done.requester_data_json.title, 'Chip A');
-  assert.equal(done.requester_data_json.requester_name, 'NA');
-  assert.equal(done.requester_data_json.diameter_inch, '');
+  assert.equal(done.requester_data_json.requester_name, 'Somebody');
+  assert.equal(done.requester_data_json.modified_by, 'Editor');
+  assert.equal(done.requester_data_json.diameter_inch, 'NA');
   assert.equal(done.requester_data_json.due_date, '2026-08-07');
-  assert.equal(done.requester_data_json.created_by, 'Somebody');
+  assert.equal('created_by' in done.requester_data_json, false);
   assert.equal(done.requester_data_json.workflow_name, '');
   assert.equal(done.psf_created_data_json.touch_down_per_wafer, '12.5');
+  assert.equal(done.psf_created_data_json.psf_setup_file_name, 'PSF_CHIP_A_01');
   assert.ok(done.psf_released_at && done.completed_at);
+  assert.equal(other.requester, 'NA');
+  assert.equal(other.requester_data_json.requester_name, 'NA');
+  assert.equal(other.requester_data_json.modified_by, 'NA');
   assert.equal(other.psf_released_at, null);
   assert.equal(other.requester_data_json.tester_type, 'LTX_C');
   assert.equal(other.requester_data_json.diameter_inch, '12');
@@ -207,6 +222,17 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
     { form_key: 'psf-request', version: 1, status: 'published' },
     { form_key: 'psf-request', version: 2, status: 'active' },
   ]);
+  const v2FieldKeys = (
+    await db.query<{ k: string }>(
+      `SELECT f->>'fieldKey' AS k FROM form_definitions, jsonb_array_elements(schema_json->'sections'->0->'fields') f
+     WHERE form_key = 'psf-request' AND version = 2`,
+    )
+  ).rows.map((r) => r.k);
+  assert.ok(v2FieldKeys.includes('requester_name'));
+  assert.ok(v2FieldKeys.includes('modified_by'));
+  assert.ok(v2FieldKeys.includes('due_date'));
+  assert.equal(v2FieldKeys.includes('workflow_name'), false);
+
   const types = (
     await db.query<{ t: string }>(
       `SELECT f->>'type' AS t FROM form_definitions, jsonb_array_elements(schema_json->'sections'->0->'fields') f
@@ -227,14 +253,68 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
       0,
     true,
   );
-  assert.equal(
-    (await db.query('SELECT 1 FROM psf_request_search_index')).rows.length,
-    2,
-  );
+  const searchRows = (
+    await db.query<{
+      request_no: string;
+      requester: string;
+      psf_setup_file_name: string | null;
+    }>(
+      'SELECT request_no, requester, psf_setup_file_name FROM psf_request_search_index ORDER BY request_no',
+    )
+  ).rows;
+  assert.deepEqual(searchRows, [
+    {
+      request_no: 'PSF-000100',
+      requester: 'Somebody',
+      psf_setup_file_name: 'PSF_CHIP_A_01',
+    },
+    {
+      request_no: 'PSF-000101',
+      requester: 'NA',
+      psf_setup_file_name: null,
+    },
+  ]);
   assert.equal((await db.query('SELECT 1 FROM app_users')).rows.length, 4);
 
   const detail = await fixture.service.getRequest(done.id, admin);
   assert.equal(detail.requestNo, 'PSF-000100');
+
+  const updatedRequester = await fixture.service.updateDraftRequesterData(
+    done.id,
+    {
+      formVersion: detail.formVersion,
+      expectedUpdatedAt: detail.updatedAt,
+      requesterData: {
+        ...detail.requesterData,
+        title: 'Chip A Updated',
+      },
+    },
+    admin,
+  );
+  assert.equal(updatedRequester.requesterData.title, 'Chip A Updated');
+  assert.equal(updatedRequester.requesterData.diameter_inch, 'NA');
+  assert.equal(updatedRequester.requesterData.requester_name, 'Somebody');
+  assert.equal(updatedRequester.requesterData.modified_by, admin.displayName);
+
+  const updatedCreated = await fixture.service.updatePsfCreatedData(done.id, {
+    actor: admin,
+    expectedUpdatedAt: updatedRequester.updatedAt,
+    psfCreatedData: {
+      ...updatedRequester.psfCreatedData,
+      psf_setup_file_name: 'PSF_CHIP_A_02',
+    },
+  });
+  assert.equal(
+    updatedCreated.psfCreatedData.psf_setup_file_name,
+    'PSF_CHIP_A_02',
+  );
+  const updatedSearchRow = (
+    await db.query<{ psf_setup_file_name: string | null }>(
+      'SELECT psf_setup_file_name FROM psf_request_search_index WHERE request_id = $1',
+      [done.id],
+    )
+  ).rows[0];
+  assert.equal(updatedSearchRow.psf_setup_file_name, 'PSF_CHIP_A_02');
 });
 
 void it('lenient mode blanks non-fitting values and skips unusable rows', async () => {
@@ -251,6 +331,8 @@ void it('lenient mode blanks non-fitting values and skips unusable rows', async 
     '',
     '',
     '',
+    '',
+    null,
     null,
     null,
   ];
@@ -278,10 +360,12 @@ void it('lenient mode blanks non-fitting values and skips unusable rows', async 
     'ID is duplicated': 1,
   });
   assert.deepEqual(report.mismatches, {
+    'Diameter (Inch)': { rows: 1, distinct: 1 },
     'Touch down per wafer': { rows: 1, distinct: 1 },
   });
   const { rows } = await db.query<RequestRow>(
     'SELECT * FROM psf_requests ORDER BY request_no',
   );
+  assert.equal(rows[0].requester_data_json.diameter_inch, '');
   assert.equal(rows[1].psf_created_data_json.touch_down_per_wafer, '');
 });

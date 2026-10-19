@@ -218,6 +218,9 @@ export class RequestsService implements OnModuleInit {
         allowMissingRequired: true,
       }),
       requester,
+      this.shouldTrackModifiedBy(activeSchema.schema)
+        ? actor.displayName
+        : undefined,
     );
 
     return this.withTransaction(async (client) => {
@@ -831,24 +834,48 @@ export class RequestsService implements OnModuleInit {
       }
 
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
-      const requesterData = this.withServerRequesterIdentity(
+      const trackModifiedBy = this.shouldTrackModifiedBy(
+        request.schema_snapshot_json,
+        request.requester_data_json,
+      );
+      const baseRequesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(
           request.schema_snapshot_json,
           dto.requesterData,
           {
             allowMissingRequired: request.status === DRAFT_STATUS,
+            existingData: request.requester_data_json ?? {},
           },
         ),
         requesterIdentity.displayName,
+        trackModifiedBy
+          ? typeof request.requester_data_json?.modified_by === 'string'
+            ? request.requester_data_json.modified_by
+            : actor.displayName
+          : undefined,
       );
+      const userFieldChanges = this.getFieldChanges(
+        request.schema_snapshot_json,
+        request.requester_data_json ?? {},
+        baseRequesterData,
+      ).filter((change) => change.fieldKey !== 'modified_by');
+      // A save that changes nothing writes nothing: no Audit History entry
+      // and no new revision for other editors to conflict with.
+      if (userFieldChanges.length === 0)
+        return this.mapRequestRow(request, actor);
+
+      const requesterData = trackModifiedBy
+        ? this.withServerRequesterIdentity(
+            baseRequesterData,
+            requesterIdentity.displayName,
+            actor.displayName,
+          )
+        : baseRequesterData;
       const fieldChanges = this.getFieldChanges(
         request.schema_snapshot_json,
         request.requester_data_json ?? {},
         requesterData,
       );
-      // A save that changes nothing writes nothing: no Audit History entry
-      // and no new revision for other editors to conflict with.
-      if (fieldChanges.length === 0) return this.mapRequestRow(request, actor);
 
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -896,7 +923,11 @@ export class RequestsService implements OnModuleInit {
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
           },
-          canonicalValues,
+          this.withPsfSetupFileNameCanonical(
+            canonicalValues,
+            updatedRow.psf_created_schema_snapshot_json,
+            updatedRow.psf_created_data_json,
+          ),
           client,
         );
       }
@@ -1005,6 +1036,12 @@ export class RequestsService implements OnModuleInit {
           true,
         ),
         requesterIdentity.displayName,
+        this.shouldTrackModifiedBy(
+          activeSchema.schema,
+          request.requester_data_json,
+        )
+          ? actor.displayName
+          : undefined,
       );
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -1094,6 +1131,7 @@ export class RequestsService implements OnModuleInit {
         dto.psfCreatedData,
         {
           allowMissingRequired: request.status === DRAFT_STATUS,
+          existingData: request.psf_created_data_json ?? {},
         },
       );
       const fieldChanges = this.getFieldChanges(
@@ -1107,8 +1145,35 @@ export class RequestsService implements OnModuleInit {
       const hasPsfData = Object.values(psfCreatedData).some(
         (value) => typeof value === 'string' && value.trim().length > 0,
       );
-      const result = await client.query<PsfRequestRow>(
-        `
+      const trackModifiedBy = this.shouldTrackModifiedBy(
+        request.schema_snapshot_json,
+        request.requester_data_json,
+      );
+      const result = trackModifiedBy
+        ? await client.query<PsfRequestRow>(
+            `
+          UPDATE psf_requests
+          SET psf_created_data_json = $2::jsonb,
+              psf_created_at = CASE WHEN $3::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
+              requester_data_json = $5::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+            AND updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+            [
+              id,
+              psfCreatedData,
+              hasPsfData,
+              dto.expectedUpdatedAt,
+              {
+                ...(request.requester_data_json ?? {}),
+                modified_by: dto.actor.displayName,
+              },
+            ],
+          )
+        : await client.query<PsfRequestRow>(
+            `
           UPDATE psf_requests
           SET psf_created_data_json = $2::jsonb,
               psf_created_at = CASE WHEN $3::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
@@ -1117,8 +1182,8 @@ export class RequestsService implements OnModuleInit {
             AND updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-        [id, psfCreatedData, hasPsfData, dto.expectedUpdatedAt],
-      );
+            [id, psfCreatedData, hasPsfData, dto.expectedUpdatedAt],
+          );
       const updatedRow = result.rows[0];
       if (!updatedRow) {
         throw new ConflictException(
@@ -1137,9 +1202,13 @@ export class RequestsService implements OnModuleInit {
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
           },
-          this.searchIndexService.extractCanonicalValues(
-            updatedRow.schema_snapshot_json,
-            updatedRow.requester_data_json ?? {},
+          this.withPsfSetupFileNameCanonical(
+            this.searchIndexService.extractCanonicalValues(
+              updatedRow.schema_snapshot_json,
+              updatedRow.requester_data_json ?? {},
+            ),
+            updatedRow.psf_created_schema_snapshot_json,
+            updatedRow.psf_created_data_json,
           ),
           client,
         );
@@ -1217,8 +1286,39 @@ export class RequestsService implements OnModuleInit {
         );
       }
 
-      const result = await client.query<PsfRequestRow>(
-        `
+      const trackModifiedBy = this.shouldTrackModifiedBy(
+        currentRequest.schema_snapshot_json,
+        currentRequest.requester_data_json,
+      );
+      const result = trackModifiedBy
+        ? await client.query<PsfRequestRow>(
+            `
+          UPDATE psf_requests
+          SET status = $2,
+              completed_at = CASE WHEN $3::boolean THEN NOW() ELSE completed_at END,
+              psf_released_at = CASE WHEN $4::boolean THEN COALESCE(psf_released_at, NOW()) ELSE psf_released_at END,
+              requester_data_json = $7::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+            AND status = $5
+            AND updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
+          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
+        `,
+            [
+              id,
+              target.name,
+              target.kind === 'completed',
+              entersTrigger,
+              currentRequest.status,
+              dto.expectedUpdatedAt,
+              {
+                ...(currentRequest.requester_data_json ?? {}),
+                modified_by: dto.actor.displayName,
+              },
+            ],
+          )
+        : await client.query<PsfRequestRow>(
+            `
           UPDATE psf_requests
           SET status = $2,
               completed_at = CASE WHEN $3::boolean THEN NOW() ELSE completed_at END,
@@ -1229,15 +1329,15 @@ export class RequestsService implements OnModuleInit {
             AND updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-        [
-          id,
-          target.name,
-          target.kind === 'completed',
-          entersTrigger,
-          currentRequest.status,
-          dto.expectedUpdatedAt,
-        ],
-      );
+            [
+              id,
+              target.name,
+              target.kind === 'completed',
+              entersTrigger,
+              currentRequest.status,
+              dto.expectedUpdatedAt,
+            ],
+          );
 
       const updatedRow = result.rows[0];
       if (!updatedRow) {
@@ -1257,9 +1357,13 @@ export class RequestsService implements OnModuleInit {
           requestDate: updatedRow.created_at,
           updatedAt: updatedRow.updated_at,
         },
-        this.searchIndexService.extractCanonicalValues(
-          updatedRow.schema_snapshot_json,
-          updatedRow.requester_data_json,
+        this.withPsfSetupFileNameCanonical(
+          this.searchIndexService.extractCanonicalValues(
+            updatedRow.schema_snapshot_json,
+            updatedRow.requester_data_json,
+          ),
+          updatedRow.psf_created_schema_snapshot_json,
+          updatedRow.psf_created_data_json,
         ),
         client,
       );
@@ -1364,9 +1468,16 @@ export class RequestsService implements OnModuleInit {
           request.requester_data_json ?? {},
           {
             allowMissingRequired: false,
+            existingData: request.requester_data_json ?? {},
           },
         ),
         requesterIdentity.displayName,
+        this.shouldTrackModifiedBy(
+          request.schema_snapshot_json,
+          request.requester_data_json,
+        )
+          ? actor.displayName
+          : undefined,
       );
       const entersTrigger = (
         configuration.psfVisibilityTriggerIds ?? [
@@ -1437,7 +1548,11 @@ export class RequestsService implements OnModuleInit {
           requestDate: submittedRow.created_at,
           updatedAt: submittedRow.updated_at,
         },
-        canonicalValues,
+        this.withPsfSetupFileNameCanonical(
+          canonicalValues,
+          submittedRow.psf_created_schema_snapshot_json,
+          submittedRow.psf_created_data_json,
+        ),
         client,
       );
 
@@ -1530,13 +1645,74 @@ export class RequestsService implements OnModuleInit {
     );
   }
 
+  private shouldTrackModifiedBy(
+    schema: FormSchemaJson | null | undefined,
+    existingRequesterData?: RequesterData | null,
+  ): boolean {
+    if (
+      existingRequesterData &&
+      Object.hasOwn(existingRequesterData, 'modified_by')
+    ) {
+      return true;
+    }
+    return Boolean(
+      schema?.sections?.some((section) =>
+        section.fields?.some(
+          (field) =>
+            field.fieldKey === 'modified_by' ||
+            field.canonicalKey === 'modified_by',
+        ),
+      ),
+    );
+  }
+
+  private withPsfSetupFileNameCanonical(
+    canonicalValues: Record<
+      string,
+      string | number | boolean | string[] | null
+    >,
+    psfCreatedSchemaSnapshot: FormSchemaJson | null | undefined,
+    psfCreatedData: RequesterData | null | undefined,
+  ): Record<string, string | number | boolean | string[] | null> {
+    if (!psfCreatedData || typeof psfCreatedData !== 'object') {
+      return canonicalValues;
+    }
+    const createdSchema = resolvePsfCreatedInformationSchema(
+      psfCreatedSchemaSnapshot,
+    );
+    const setupFileField = createdSchema.sections
+      .flatMap((section) => section.fields)
+      .find(
+        (field) =>
+          (field.canonicalKey === 'psf_setup_file_name' ||
+            field.fieldKey === 'psf_setup_file_name') &&
+          field.searchable === true,
+      );
+    if (!setupFileField) {
+      return canonicalValues;
+    }
+    const rawValue = psfCreatedData[setupFileField.fieldKey];
+    const normalized =
+      typeof rawValue === 'string' && rawValue.trim().length > 0
+        ? rawValue.trim()
+        : null;
+    return {
+      ...canonicalValues,
+      psf_setup_file_name: normalized,
+    };
+  }
+
   private withServerRequesterIdentity(
     requesterData: RequesterData,
     requesterDisplayName: string,
+    modifiedByDisplayName?: string,
   ): RequesterData {
     return {
       ...requesterData,
       requester_name: requesterDisplayName,
+      ...(modifiedByDisplayName !== undefined
+        ? { modified_by: modifiedByDisplayName }
+        : {}),
     };
   }
 

@@ -172,7 +172,7 @@ type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 const GNTC_PRODUCT_TYPES =
   "(product_type = 'New Product' OR product_type LIKE 'Create new PSF%')";
 const MFG_PRODUCT_TYPES =
-  "(product_type IN ('Transfer Product','Existing Product') OR product_type LIKE 'Revise from old PSF%' OR product_type LIKE 'Product Transfer%')";
+  "(product_type IN ('Transfer Product','Existing Product') OR product_type LIKE 'Revise from old PSF%' OR product_type LIKE 'Revise Old PSF%' OR product_type LIKE 'Product Transfer%')";
 
 @Injectable()
 export class SearchIndexService implements OnModuleInit {

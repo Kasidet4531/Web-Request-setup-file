@@ -230,11 +230,16 @@ function FieldInput({ describedBy, error, field, fieldId, onChange, readOnly, va
     return <textarea {...commonProps} rows={4} />
   }
 
+  const options =
+    value && !(field.options ?? []).includes(value)
+      ? [value, ...(field.options ?? [])]
+      : (field.options ?? [])
+
   if (field.type === 'select') {
     return (
       <select {...commonProps}>
         <option value="">Select {field.label}</option>
-        {(field.options ?? []).map((option) => (
+        {options.map((option) => (
           <option key={option} value={option}>
             {option}
           </option>
@@ -246,7 +251,7 @@ function FieldInput({ describedBy, error, field, fieldId, onChange, readOnly, va
   if (field.type === 'radio') {
     return (
       <div className="dynamic-form__radio-group">
-        {(field.options ?? []).map((option, index) => (
+        {options.map((option, index) => (
           <label className={`dynamic-form__radio-option${value === option ? ' dynamic-form__radio-option--selected' : ''}`} key={option}>
             <input
               aria-describedby={describedBy}
