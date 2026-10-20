@@ -32,7 +32,11 @@ import type {
 const PSF_REQUEST_FORM_KEY = 'psf-request'
 
 function isRequesterIdentityKey(canonicalKey: string): boolean {
-  return canonicalKey === 'requester' || canonicalKey === 'requester_name'
+  return (
+    canonicalKey === 'requester' ||
+    canonicalKey === 'requester_name' ||
+    canonicalKey === 'modified_by'
+  )
 }
 
 function buildInitialValues(schema: FormSchema): DynamicFormValues {

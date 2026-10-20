@@ -19,7 +19,7 @@ export function AdminFormConfigPreview({ schema }: { schema: FormSchema | null }
   const fields = schema.sections.flatMap((section) => section.fields)
   const identityKeys = schema.formKey === 'psf-request'
     ? fields
-      .filter((field) => field.canonicalKey === 'requester' || field.canonicalKey === 'requester_name')
+      .filter((field) => field.canonicalKey === 'requester' || field.canonicalKey === 'requester_name' || field.canonicalKey === 'modified_by')
       .map((field) => field.fieldKey)
     : []
   const values = { ...current.values }

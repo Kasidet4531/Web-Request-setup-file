@@ -140,21 +140,27 @@ function readMapping(ws: ExcelJS.Worksheet) {
     const name = cellText(own(row.getCell(2))).trim();
     const option = cellText(own(row.getCell(5))).trim();
     if (name) {
-      inStatus = norm(name) === 'status';
+      const normalizedName = norm(name);
+      inStatus = normalizedName === 'status';
       current = undefined;
-      if (!inStatus) {
+      if (
+        !inStatus &&
+        normalizedName !== 'created by' &&
+        normalizedName !== 'modified by'
+      ) {
         const audience = norm(cellText(own(row.getCell(1))));
         const type = TYPES[norm(cellText(own(row.getCell(4))))];
         if (!type) throw new Error(`Column_Mapping row ${r}: unknown Type.`);
         current = {
           name,
           label: cellText(own(row.getCell(3))).trim() || name,
-          key: KEY_OVERRIDES[norm(name)] ?? slug(name),
-          side: /requ/.test(audience)
-            ? 'requester'
-            : /creat/.test(audience)
-              ? 'created'
-              : 'legacy',
+          key: KEY_OVERRIDES[normalizedName] ?? slug(name),
+          side:
+            /requ/.test(audience) || normalizedName === 'due date'
+              ? 'requester'
+              : /creat/.test(audience)
+                ? 'created'
+                : 'legacy',
           type: type === 'choice' ? 'select' : type,
           options: [],
         };
@@ -219,9 +225,18 @@ function buildSchemas(columns: Column[]) {
     searchable: true,
     exportable: true,
   };
+  const modifiedBy: FormSchemaField = {
+    fieldKey: 'modified_by',
+    canonicalKey: 'modified_by',
+    label: 'Modified By',
+    type: 'text',
+    required: false,
+    exportable: true,
+  };
   const current = [
     toField(productType),
     requesterName,
+    modifiedBy,
     ...columns
       .filter((c) => c.side === 'requester' && c !== productType)
       .map(toField),
@@ -278,8 +293,8 @@ function convert(
     return raw.toISOString().slice(0, 10);
   const value = cellText(raw).trim();
   if (!value) return '';
-  const textual = column.type === 'text' || column.type === 'textarea';
-  if (/^na$/i.test(value)) return textual ? 'NA' : '';
+  if (/^na$/i.test(value) && (column.type === 'text' || column.type === 'textarea'))
+    return 'NA';
   let fits = true;
   if (column.type === 'select' || column.type === 'radio') {
     const option = column.options.find((o) => norm(o) === norm(value));
@@ -293,7 +308,7 @@ function convert(
     mismatches.set(column.name, seen);
     if (lenient) return '';
   }
-  return value;
+  return /^na$/i.test(value) ? 'NA' : value;
 }
 
 export async function initialize(
@@ -331,6 +346,8 @@ export async function initialize(
     if (!n) throw new Error(`Data has no ${name} column.`);
     return n;
   });
+  const createdByCol = find('Created By');
+  const modifiedByCol = find('Modified By');
   const index = new Map(columns.map((c) => [c, find(c.name)] as const));
   const missingColumns = columns
     .filter((c) => !index.get(c))
@@ -432,7 +449,16 @@ export async function initialize(
     if (!inCatalog.has(status))
       outsideCatalog.set(status, (outsideCatalog.get(status) ?? 0) + 1);
 
-    const requesterData: Record<string, string> = { requester_name: 'NA' };
+    const createdBy =
+      (createdByCol ? cellText(own(row.getCell(createdByCol))).trim() : '') ||
+      'NA';
+    const modifiedBy =
+      (modifiedByCol ? cellText(own(row.getCell(modifiedByCol))).trim() : '') ||
+      createdBy;
+    const requesterData: Record<string, string> = {
+      requester_name: createdBy,
+      modified_by: modifiedBy,
+    };
     const createdData: Record<string, string> = {};
     for (const column of columns) {
       const cell = index.get(column);
@@ -454,14 +480,15 @@ export async function initialize(
          id, request_no, form_key, form_version, status, requester, product_type,
          requester_data_json, psf_created_data_json, schema_snapshot_json, psf_created_schema_snapshot_json,
          created_at, updated_at, submitted_at, psf_created_at, psf_released_at, completed_at)
-       VALUES ($1, $2, 'psf-request', 1, $3, 'NA', $4, $5::jsonb, $6::jsonb,
+       VALUES ($1, $2, 'psf-request', 1, $3, $4, $5, $6::jsonb, $7::jsonb,
          (SELECT schema_json FROM form_definitions WHERE form_key = 'psf-request' AND version = 1),
          (SELECT schema_json FROM form_definitions WHERE form_key = 'psf-created-information' AND version = 1),
-         $7::timestamp, $8::timestamp, $7::timestamp, $9::timestamp, $10::timestamp, $10::timestamp)`,
+         $8::timestamp, $9::timestamp, $8::timestamp, $10::timestamp, $11::timestamp, $11::timestamp)`,
       [
         requestId,
         requestNo,
         status,
+        createdBy,
         productType,
         JSON.stringify(requesterData),
         JSON.stringify(createdData),
@@ -477,18 +504,22 @@ export async function initialize(
       requesterData,
       db,
     );
+    const createdCanonical = searchIndex.extractCanonicalValues(
+      schemas.created,
+      createdData,
+    );
     await searchIndex.upsertRequestSearchIndex(
       {
         requestId,
         requestNo,
         status,
-        requester: 'NA',
+        requester: createdBy,
         requesterUserId: null,
         productType,
         requestDate: createdAt,
         updatedAt: modifiedAt,
       },
-      canonical,
+      { ...canonical, ...createdCanonical },
       db,
     );
     if (++imported % 1000 === 0)

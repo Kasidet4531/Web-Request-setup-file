@@ -3,11 +3,10 @@
 `backend/scripts/initialize-data.ts` resets the PSF Request data and form configuration
 from the PSF form detail workbook (sheets `Column_Mapping` and `Data`). It is a
 one-time, destructive operation. Source is authoritative; this guide describes the
-script as written on 8 October 2026. Automated tests use a disposable in-memory database
-with a fabricated workbook (`backend/test/initialize-data.postgres.test.ts`). The real
-workbook was loaded into the configured PostgreSQL (`psf_setup_db`) on 8 October 2026 with
-`--lenient`: 5,570 requests, 3 form versions and a 12-entry Status catalog (read-back counts
-only; the real data is not reproduced here).
+script as updated on 19 October 2026 ([ADR 0015](adr/0015-initial-data-load-legacy-form-version-and-request-to.md), [ADR 0017](adr/0017-verbatim-workbook-data-and-core-actor-schedule-fields.md)). Automated tests use a disposable in-memory database
+with a fabricated workbook (`backend/test/initialize-data.postgres.test.ts`). The censored
+workbook (`PSF_form_detail-censor.xlsx`) is loaded into the configured PostgreSQL (`psf_setup_db`) without
+`--lenient`: 5,570 requests (43 `Draft` rows skipped), 3 form versions and a 12-entry Status catalog.
 
 ## Running it
 
@@ -20,14 +19,7 @@ npm run db:initialize -- /path/to/workbook.xlsx --yes    # apply
 
 Add `--show-values` to a dry run to see which values do not fit.
 
-Add `--lenient` to load whatever fits, for testing. Values that do not fit their field
-(unknown Choice option, non-numeric Number, non-date) are stored empty instead of kept, so
-every loaded request satisfies its form. Rows that cannot be loaded (ID not an integer,
-duplicated ID, blank Status, Created/Modified not a date) are skipped and counted by reason
-in `skippedRows`, and mapped columns missing from `Data` are loaded empty instead of
-stopping the load. Statuses outside the catalog are still kept. Without `--lenient` the same
-rows and columns stop the load with an error. Do not use `--lenient` for the real load unless
-losing those values is intended: the blanked values are not recoverable except by loading again.
+Add `--lenient` only for synthetic/disposable test runs where you want non-fitting values blanked and broken rows skipped. For the real workbook load, run **without** `--lenient` so all historical cell values in `Data` are preserved verbatim in the database.
 
 Connection settings come from `backend/.env` (`DB_HOST`, `DB_PORT`, `DB_NAME`,
 `DB_USER`, `DB_PASSWORD`); the target is printed first. Without `--yes` the whole load
@@ -47,11 +39,11 @@ non-fitting values per column, which are real data: use it only in your own term
    `psf_request_audit_logs`, `draft_deletion_logs`, `draft_reminders`, `email_outbox`,
    `psf_export_jobs`, `form_definitions` and `autofill_rules`. It keeps `app_users` and
    `request_data_migrations`.
-2. **Forms.** Requester columns (and `Creater/Requestor`) become `psf-request`; `Creater`
-   columns become `psf-created-information` version 1. Columns with an empty "For" are
+2. **Forms.** Requester columns (plus `Creater/Requestor` and `Due Date`) become `psf-request`; `Creater`
+   columns become `psf-created-information` version 1. Columns with an empty "For" other than `Due Date` and `Created By` (`Workflow Name`, `Item Type`, `Path`) are
    Legacy Columns: they appear only in `psf-request` version 1 (status `published`). Version
-   2 (`active`) has the Requester columns only. Every request keeps version 1 as its snapshot.
-   `Request To` is the `product_type` field; `requester_name` is added (required) with value `NA`.
+   2 (`active`) has the Requester columns (including `due_date`). Every imported request keeps version 1 as its snapshot.
+   `Request To` is the `product_type` field; `requester_name` (`Requester Name`, `canonicalKey: 'requester'`, required) and `modified_by` (`Modified By`, `canonicalKey: 'modified_by'`, read-only) are placed right after `product_type` in both version 1 and version 2.
 3. **Field details.** Label = "Column Name change" else "Column Name". Key = slug of the
    original name, except `Reference OLD PSF name`→`reference_psf_name`, `Fab.`→`wafer_fab`,
    `First Die Ref. ( X,Y )`→`first_die_ref_xy`, `Request To`→`product_type`. Types: Single
@@ -63,14 +55,13 @@ non-fitting values per column, which are real data: use it only in your own term
    are off and `100% -- Completed` is the only PSF Visibility Release trigger.
 5. **Requests.** One per `Data` row, found by header name (whitespace-insensitive, with aliases
    for `NNR Recipr for WT3`, `Total Test Die (Enovia)` and `…NAS`). `PSF-` + `ID` padded to six
-   digits is the request number. Requester is `NA` with no account, so Requesters do not see
-   them in their own lists. `Created`/`Modified` give created/submitted and updated time;
+   digits is the request number. `Created By` populates `psf_requests.requester`, `psf_request_search_index.requester`, and `requester_data_json.requester_name` (fallback `NA` if blank), while `requester_user_id` remains `NULL`. `Modified By` populates `requester_data_json.modified_by` (fallback to `Created By`). `Created`/`Modified` give created/submitted and updated time;
    Completed rows also get `completed_at` and `psf_released_at` from `Modified`. Status is stored
-   verbatim even when outside the catalog. Rows whose Status is `Draft` are skipped.
-6. **Values.** Trimmed; `NA` (any case) becomes `NA` in text fields and empty in other types;
+   verbatim even when outside the catalog. Rows whose Status is `Draft` are skipped. `psf_setup_file_name` from `psf_created_data_json` is indexed into `psf_request_search_index.psf_setup_file_name`.
+6. **Values.** Trimmed; `NA` (any case) is normalized to `NA` and kept in all field types;
    Choice values are matched to the configured option ignoring case/spacing; dates become
-   `YYYY-MM-DD`. Values that still do not fit (non-numeric Number, unknown option) are kept and
-   counted (blanked under `--lenient`); saving a request that keeps them requires correcting them.
+   `YYYY-MM-DD`. Values that still do not fit (non-numeric Number, unknown option) are kept verbatim in default mode and
+   counted in `mismatches` (or blanked under `--lenient`). When editing a request, unchanged legacy Choice/Radio values remain selectable and valid unless the user changes that field to a new value.
 
 ## Known consequences
 

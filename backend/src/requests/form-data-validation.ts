@@ -4,7 +4,10 @@ import type { FormSchemaJson } from '../admin/form_schema.constants';
 export function validateAndNormalizeFormData(
   schema: FormSchemaJson,
   input: unknown,
-  options: { allowMissingRequired: boolean },
+  options: {
+    allowMissingRequired: boolean;
+    existingData?: Record<string, unknown>;
+  },
 ): Record<string, unknown> {
   if (!isRecord(input)) {
     throw new BadRequestException('Form information must be a JSON object.');
@@ -31,10 +34,19 @@ export function validateAndNormalizeFormData(
     }
 
     const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+    const existingRaw =
+      options.existingData && Object.hasOwn(options.existingData, fieldKey)
+        ? options.existingData[fieldKey]
+        : undefined;
+    const existingValue =
+      typeof existingRaw === 'string' ? existingRaw.trim() : '';
+    const isUnchangedLegacyOption =
+      value.length > 0 && existingValue.length > 0 && value === existingValue;
     if (
       value &&
       (field.type === 'select' || field.type === 'radio') &&
-      !field.options?.includes(value)
+      !field.options?.includes(value) &&
+      !isUnchangedLegacyOption
     ) {
       throw new BadRequestException(
         `${field.label} must be one of the configured options.`,
@@ -81,10 +93,12 @@ export function assertValidRequiredFormData(
   schema: FormSchemaJson,
   input: unknown,
   label: string,
+  existingData?: Record<string, unknown>,
 ): void {
   try {
     validateAndNormalizeFormData(schema, input, {
       allowMissingRequired: false,
+      existingData,
     });
   } catch (error) {
     if (error instanceof BadRequestException) {

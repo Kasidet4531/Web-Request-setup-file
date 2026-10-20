@@ -101,9 +101,9 @@ interface RequestDetailSummary {
   requestNo: string
   title: string
   productType: string
-  priority: string
   dueDate: string | null
   requester: string
+  modifiedBy: string
 }
 
 function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSummary {
@@ -111,18 +111,18 @@ function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSu
     requestNo: request.requestNo,
     title: getRequestTitle(request),
     productType: productTypeLabel(request.productType ?? requesterValueForCanonicalKey(request, 'product_type')),
-    priority: requesterValueForCanonicalKey(request, 'priority') ?? 'Normal',
     dueDate: requesterValueForCanonicalKey(request, 'due_date'),
     requester: request.requester ?? requesterValueForCanonicalKey(request, 'requester') ?? '—',
+    modifiedBy: requesterValueForCanonicalKey(request, 'modified_by') ?? '—',
   }
 }
 
 function RequestMetadata({ request }: { request: PsfRequestResponse }) {
   const summary = buildRequestDetailSummary(request)
   return <section className="detail-summary-grid" aria-label="Request metadata">
-    <div><span>Priority</span><strong className={priorityClassName(summary.priority)}>{summary.priority}</strong></div>
     <div><span>Due Date</span><strong>{formatDate(summary.dueDate)}</strong></div>
     <div><span>Requester</span><strong>{summary.requester}</strong></div>
+    <div><span>Modified By</span><strong>{summary.modifiedBy}</strong></div>
   </section>
 }
 
@@ -313,10 +313,6 @@ async function loadCurrentUser(): Promise<AuthenticatedUserProfile> {
   return response.user
 }
 
-function priorityClassName(priority: string | null): string {
-  return `priority-badge priority-badge--${(priority ?? 'normal').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-}
-
 export function RequestsTable({
   items,
   compact = false,
@@ -361,7 +357,7 @@ export function RequestsTable({
           <tr>
             <th scope="col">Request</th>
             <th scope="col">{drafts ? 'Product Type' : 'Status'}</th>
-            {drafts ? null : <th scope="col">{compact ? 'Due date' : 'Schedule'}</th>}
+            {drafts ? null : <th scope="col">Due Date</th>}
             <th scope="col">{drafts ? 'Updated' : 'Requester'}</th>
             {drafts || !interactiveRows ? <th scope="col"><span className="sr-only">Actions</span></th> : null}
           </tr>
@@ -396,10 +392,9 @@ export function RequestsTable({
                 <td data-label="Updated">{formatDateTime(item.updatedAt)}</td></> : <><td data-label="Status">
                 <StatusLabel kind={statusKinds[item.status]} status={item.status} />
               </td>
-              <td data-label="Schedule">
+              <td data-label="Due Date">
                 <div className="request-cell-stack">
-                  <span className={priorityClassName(item.priority)}>{item.priority ?? 'Normal'}</span>
-                  <span className="cell-meta"><span className="request-cell-label">Due </span>{formatDate(item.dueDate)}</span>
+                  <span>{formatDate(item.dueDate)}</span>
                 </div>
               </td>
               <td data-label="Responsibility">

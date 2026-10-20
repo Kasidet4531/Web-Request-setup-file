@@ -99,23 +99,27 @@ The Admin capability to list and read Drafts and permanently delete them before 
 
 **Dashboard Team Group**:
 A Product Type-derived grouping: New Product belongs to GNTC; Transfer Product and Existing Product belong to MFG. It is used for Dashboard filtering while preserving cross-team PSF editing rights. Missing or unrecognized Product Type is displayed as “รอระบุ Product Type” and belongs to neither team group.
-Decided 8 October 2026, implemented in source: with the Request To options, Create new PSF belongs to GNTC; Revise from old PSF and Product Transfer belong to MFG.
+Decided 8 October 2026 and updated 19 October 2026: with the Request To options, `Create new PSF*` belongs to GNTC; `Revise from old PSF*`, `Revise Old PSF*` and `Product Transfer*` belong to MFG.
 
 ## Initial Data Load vocabulary
 
 **Initial Data Load**:
-A one-time, destructive reset that clears all PSF Requests and form configuration and replaces them from the PSF form detail workbook (its column mapping and its data). The Status catalog is replaced by the workbook's Status options, with Completed as the PSF Visibility Release trigger. User accounts are kept.
+A one-time, destructive reset that clears all PSF Requests and form configuration and replaces them from the PSF form detail workbook (`PSF_form_detail-censor.xlsx`, its column mapping and its data). The Status catalog is replaced by the workbook's Status options, with Completed as the PSF Visibility Release trigger. User accounts are kept.
 _Avoid_: Migration, import
 
 **Imported Request**:
-A PSF Request created by the Initial Data Load. Its requester is “NA”, so it belongs to no Requester account and is not in any Requester's own list. It has no assigned owner and no history. Its Status is kept verbatim from the workbook even when absent from the replaced Status catalog; such a request is listed and filterable by that Status but counted in no Open, Overdue or Completed total. An Imported Request already at Completed has its PSF Visibility Release set.
+A PSF Request created by the Initial Data Load. Its Requester (`requester` / `requester_name`) is populated from `Created By` in `Data` with `requester_user_id = NULL` (so it is not tied to any individual Requester account), and its `Modified By` is populated from `Modified By` in `Data`. All cell values from `Data` (including `"NA"` and legacy choice strings) are preserved verbatim, and unchanged legacy choice values remain valid when editing other fields. It has no prior audit history. Its Status is kept verbatim from the workbook even when absent from the replaced Status catalog; such a request is listed and filterable by that Status but counted in no Open, Overdue or Completed total. An Imported Request already at Completed has its PSF Visibility Release set.
+
+**Modified By**:
+The most recent actor to save changes to a PSF Request, displayed alongside Requester in request metadata and as a locked read-only field in the form. It initializes from `Modified By` on Imported Requests (or the creator on new requests) and updates automatically to the acting user's display name whenever the request is modified.
+_Avoid_: Last editor, updater
 
 **Legacy Column**:
-A workbook column with no audience (neither Requester nor Creater). It belongs only to the earlier Form Version 1 of the requester form and is absent from the active version. Imported Requests keep its values under Form Version 1.
+A workbook column with no audience (neither Requester nor Creater), excluding core context fields (`Due Date`, `Created By`, and `Modified By`). It belongs only to the earlier Form Version 1 of the requester form and is absent from the active version. Imported Requests keep its values under Form Version 1.
 _Avoid_: Old field, deprecated field
 
 **Column Audience**:
-The workbook's "For" value: Requester columns belong to the requester form; Creater columns belong to PSF Created Information; Creater/Requestor columns belong to the requester form.
+The workbook's "For" value: Requester columns (`Requester`, `Creater/Requestor`, and core fields `Due Date`, `Created By`, `Modified By`) belong to the requester form; Creater columns belong to PSF Created Information.
 
 ## Audit History vocabulary
 
