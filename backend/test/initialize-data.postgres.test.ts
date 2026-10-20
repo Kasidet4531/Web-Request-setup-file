@@ -141,6 +141,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
 
 interface RequestRow {
   id: string;
+  numeric_id: number;
   request_no: string;
   requester: string;
   requester_user_id: string | null;
@@ -167,7 +168,12 @@ before(
 after(async () => db.close());
 
 void it('clears old data, loads forms, catalog and requests, and keeps accounts', async () => {
-  await fixture.draft();
+  const old = await fixture.draft();
+  await db.query(
+    `INSERT INTO psf_request_attachments (id, request_id, filename, relative_path, mime_type, size_bytes)
+     VALUES (gen_random_uuid(), $1, 'old.txt', 'Test request_1/old.txt', 'text/plain', 1)`,
+    [old.id],
+  );
   const report = await initialize(
     {
       query: (sql: string, args?: unknown[]) => db.query(sql, args),
@@ -192,6 +198,15 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
   assert.deepEqual(
     rows.map((r) => r.request_no),
     ['PSF-000100', 'PSF-000101'],
+  );
+  assert.deepEqual(
+    rows.map((r) => r.numeric_id),
+    [100, 101],
+  );
+  // Only metadata: it is rebuilt from the untouched NAS folders when read.
+  assert.equal(
+    (await db.query('SELECT 1 FROM psf_request_attachments')).rows.length,
+    0,
   );
   const [done, other] = rows;
   assert.equal(done.requester, 'Somebody');
@@ -320,6 +335,10 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
     )
   ).rows[0];
   assert.equal(updatedSearchRow.psf_setup_file_name, 'PSF_CHIP_A_02');
+
+  // New Drafts continue above every workbook ID, the skipped Draft's 102 included.
+  const next = await fixture.draft();
+  assert.equal(next.numericId, 103);
 });
 
 void it('lenient mode blanks non-fitting values and skips unusable rows', async () => {

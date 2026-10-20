@@ -52,7 +52,9 @@ export interface Report {
 }
 
 // Tables emptied by the load. app_users and request_data_migrations are kept.
+// Attachment metadata is rebuilt from the NAS folders, which are never touched.
 const WIPE = [
+  'psf_request_attachments',
   'psf_requests',
   'psf_request_search_index',
   'canonical_submission_values',
@@ -66,6 +68,7 @@ const WIPE = [
 ];
 const REQUIRED_TABLES = [
   'psf_requests',
+  'psf_request_numeric_id_seq',
   'psf_request_search_index',
   'canonical_submission_values',
   'form_definitions',
@@ -419,6 +422,8 @@ export async function initialize(
   const skippedRows = new Map<string, number>();
   const seenNumbers = new Set<string>();
   let skippedDraft = 0;
+  // Every workbook ID may already name a NAS folder, skipped rows included.
+  let highestId = 0;
 
   for (let r = 2; r <= data.rowCount; r++) {
     const row = data.getRow(r);
@@ -427,6 +432,7 @@ export async function initialize(
     const status = cellText(own(row.getCell(statusCol))).trim();
     const created = own(row.getCell(createdCol));
     const modified = own(row.getCell(modifiedCol));
+    if (/^\d+$/.test(id)) highestId = Math.max(highestId, Number(id));
     const problem = !/^\d+$/.test(id)
       ? 'ID is not an integer'
       : !status
@@ -477,10 +483,10 @@ export async function initialize(
     const isCompleted = status === catalog.completed.name;
     await db.query(
       `INSERT INTO psf_requests (
-         id, request_no, form_key, form_version, status, requester, product_type,
+         id, numeric_id, request_no, form_key, form_version, status, requester, product_type,
          requester_data_json, psf_created_data_json, schema_snapshot_json, psf_created_schema_snapshot_json,
          created_at, updated_at, submitted_at, psf_created_at, psf_released_at, completed_at)
-       VALUES ($1, $2, 'psf-request', 1, $3, $4, $5, $6::jsonb, $7::jsonb,
+       VALUES ($1, $12, $2, 'psf-request', 1, $3, $4, $5, $6::jsonb, $7::jsonb,
          (SELECT schema_json FROM form_definitions WHERE form_key = 'psf-request' AND version = 1),
          (SELECT schema_json FROM form_definitions WHERE form_key = 'psf-created-information' AND version = 1),
          $8::timestamp, $9::timestamp, $8::timestamp, $10::timestamp, $11::timestamp, $11::timestamp)`,
@@ -496,6 +502,7 @@ export async function initialize(
         modifiedAt,
         Object.values(createdData).some(Boolean) ? modifiedAt : null,
         isCompleted ? modifiedAt : null,
+        Number(id),
       ],
     );
     const canonical = await searchIndex.upsertSubmittedCanonicalValues(
@@ -525,6 +532,11 @@ export async function initialize(
     if (++imported % 1000 === 0)
       console.log(`  ${imported} requests loaded...`);
   }
+  // New Drafts continue from the highest workbook ID.
+  await db.query(
+    `SELECT setval('psf_request_numeric_id_seq', GREATEST($1::int, 1), $1::int > 0)`,
+    [highestId],
+  );
 
   return {
     cleared,

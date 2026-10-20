@@ -37,8 +37,9 @@ non-fitting values per column, which are real data: use it only in your own term
 
 1. **Clears** `psf_requests`, `psf_request_search_index`, `canonical_submission_values`,
    `psf_request_audit_logs`, `draft_deletion_logs`, `draft_reminders`, `email_outbox`,
-   `psf_export_jobs`, `form_definitions` and `autofill_rules`. It keeps `app_users` and
-   `request_data_migrations`.
+   `psf_export_jobs`, `form_definitions`, `autofill_rules` and the Attachment metadata
+   `psf_request_attachments`. It keeps `app_users` and `request_data_migrations`, and never
+   touches the NAS: each request's existing folder is listed again when the request is opened.
 2. **Forms.** Requester columns (plus `Creater/Requestor`, `Due Date`, and `Start Date`) become `psf-request`; `Creater`
    columns become `psf-created-information` version 1. Columns with an empty "For" other than `Due Date` and `Created By` (`Workflow Name`, `Item Type`, `Path`) are
    Legacy Columns: they appear only in `psf-request` version 1 (status `published`). Version
@@ -54,8 +55,10 @@ non-fitting values per column, which are real data: use it only in your own term
    Names that match the former catalog keep their id and kind; others are `open`. Email policies
    are off and `100% -- Completed` is the only PSF Visibility Release trigger.
 5. **Requests.** One per `Data` row, found by header name (whitespace-insensitive, with aliases
-   for `NNR Recipr for WT3`, `Total Test Die (Enovia)` and `…NAS`). `PSF-` + `ID` padded to six
-   digits is the request number. `Created By` populates `psf_requests.requester`, `psf_request_search_index.requester`, and `requester_data_json.requester_name` (fallback `NA` if blank), while `requester_user_id` remains `NULL`. `Modified By` populates `requester_data_json.modified_by` (fallback to `Created By`). `Created`/`Modified` give created/submitted and updated time;
+   for `NNR Recipr for WT3`, `Total Test Die (Enovia)` and `…NAS`). `ID` is the Request ID
+   (`numeric_id`) and `PSF-` + `ID` padded to six digits is the request number. New Drafts
+   continue above the highest workbook `ID`, skipped `Draft` rows included, since their NAS
+   folders may exist ([Request Attachments](request-attachments.md)). `Created By` populates `psf_requests.requester`, `psf_request_search_index.requester`, and `requester_data_json.requester_name` (fallback `NA` if blank), while `requester_user_id` remains `NULL`. `Modified By` populates `requester_data_json.modified_by` (fallback to `Created By`). `Created`/`Modified` give created/submitted and updated time;
    Completed rows also get `completed_at` and `psf_released_at` from `Modified`. Status is stored
    verbatim even when outside the catalog. Rows whose Status is `Draft` are skipped. `psf_setup_file_name` from `psf_created_data_json` is indexed into `psf_request_search_index.psf_setup_file_name`.
 6. **Values.** Trimmed; `NA` (any case) is normalized to `NA` and kept in all field types;

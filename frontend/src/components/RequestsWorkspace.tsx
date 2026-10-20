@@ -12,6 +12,7 @@ import {
   Search,
 } from 'lucide-react'
 import { DraftDeleteDialog } from './DraftDeleteDialog'
+import { RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
@@ -779,16 +780,49 @@ export function RequestCreatePage() {
     return () => { mounted = false }
   }, [])
   const [savedRequest, setSavedRequest] = useState<PsfRequestResponse | null>(null)
+  // Chosen before the Draft exists, then uploaded as soon as it is created.
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [stagedUpload, setStagedUpload] = useState<{ pending: boolean; error: string | null }>({ pending: false, error: null })
+  const stagedFilesRef = useRef(stagedFiles)
+  const stagedUploadRunning = useRef(false)
+  useEffect(() => { stagedFilesRef.current = stagedFiles }, [stagedFiles])
+  const unsaved = dirty || stagedFiles.length > 0
   const shouldBlockExit = useCallback(({ current, next }: { current: { pathname: string }; next: { pathname: string } }) =>
-    dirty && current.pathname !== next.pathname, [dirty])
-  const blocker = useBlocker({ shouldBlockFn: shouldBlockExit, enableBeforeUnload: dirty, withResolver: true })
+    unsaved && current.pathname !== next.pathname, [unsaved])
+  const blocker = useBlocker({ shouldBlockFn: shouldBlockExit, enableBeforeUnload: unsaved, withResolver: true })
   useEffect(() => {
-    if (savedRequest && !dirty) void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
-  }, [dirty, navigate, savedRequest])
+    if (savedRequest && !unsaved && !stagedUpload.pending) void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
+  }, [navigate, savedRequest, stagedUpload.pending, unsaved])
+
+  async function uploadStagedFiles(request: PsfRequestResponse) {
+    const files = stagedFilesRef.current
+    if (!files.length || stagedUploadRunning.current) return
+    stagedUploadRunning.current = true
+    setStagedUpload({ pending: true, error: null })
+    try {
+      await api.uploadRequestAttachments(request.id, files)
+      stagedFilesRef.current = []
+      setStagedFiles([])
+      setStagedUpload({ pending: false, error: null })
+    } catch (error) {
+      setStagedUpload({ pending: false, error: `Draft ${request.requestNo} was saved, but its attachments were not uploaded: ${error instanceof Error ? error.message : 'Upload failed'}. Remove or replace the files, then retry.` })
+    } finally {
+      stagedUploadRunning.current = false
+    }
+  }
+
+  function acceptSavedRequest(request: PsfRequestResponse) {
+    setSavedRequest(request)
+    void uploadStagedFiles(request)
+  }
+
   return (
     <article className="workflow-page request-create-page">
       <PageHeader title="New Request" description="Save a private draft, then review and submit from its detail page." />
-      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={setSavedRequest} />
+      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
+      <StagedAttachmentsPanel files={stagedFiles} disabled={stagedUpload.pending} error={stagedUpload.error} onChange={setStagedFiles} />
+      {stagedUpload.pending ? <AsyncNotice kind="loading" title="Uploading attachments…" /> : null}
+      {savedRequest && stagedUpload.error && stagedFiles.length > 0 ? <button className="btn-primary" type="button" onClick={() => void uploadStagedFiles(savedRequest)}>Retry attachment upload</button> : null}
       <ConfirmDialog open={blocker?.status === 'blocked'} title="Discard unsaved changes?" description="Your unsaved request changes will be lost when you leave this page." confirmLabel="Discard and leave" cancelLabel="Stay on page" tone="danger" onCancel={() => { if (blocker?.status === 'blocked') blocker.reset() }} onConfirm={() => { if (blocker?.status === 'blocked') blocker.proceed() }} />
     </article>
   )
@@ -831,7 +865,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   const [savingStatus, setSavingStatus] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [historyRetry, setHistoryRetry] = useState(0)
-  const [activeTab, setActiveTab] = useState<'requester' | 'psf' | 'history' | null>(null)
+  const [activeTab, setActiveTab] = useState<'requester' | 'psf' | 'attachments' | 'history' | null>(null)
   const [psfEditing, setPsfEditing] = useState(false)
   const [statusKinds, setStatusKinds] = useState<Record<string, WorkflowStatusKind>>({})
   useEffect(() => {
@@ -1074,7 +1108,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       : null
 
   const selectedTab = activeTab ?? (request?.canEditPsfCreatedData && request.status !== 'Draft' ? 'psf' : 'requester')
-  const detailTabs = [{ key: 'requester', label: 'Requester Information' }, { key: 'psf', label: 'PSF Created Information' }, { key: 'history', label: 'History' }] as const
+  const detailTabs = [{ key: 'requester', label: 'Requester Information' }, { key: 'psf', label: 'PSF Created Information' }, { key: 'attachments', label: 'Attachments' }, { key: 'history', label: 'History' }] as const
+  const isDraft = request?.status === 'Draft'
 
   return (
     <article className={`workflow-page detail-page${request?.status === 'Draft' ? ' detail-page--draft' : ''}`}>
@@ -1111,7 +1146,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           </aside>
           {request.status !== 'Draft' ? <div className="detail-tabs" role="tablist" aria-label="Request information">
             {detailTabs.map((tab, index) => <button type="button" key={tab.key} id={`detail-tab-${tab.key}`} role="tab" aria-selected={selectedTab === tab.key} aria-controls={`detail-panel-${tab.key}`} tabIndex={selectedTab === tab.key ? 0 : -1} onClick={() => setActiveTab(tab.key)} onKeyDown={(event) => {
-              const next = event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : null
+              const count = detailTabs.length
+              const next = event.key === 'ArrowRight' ? (index + 1) % count : event.key === 'ArrowLeft' ? (index + count - 1) % count : event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : null
               if (next !== null) { event.preventDefault(); setActiveTab(detailTabs[next].key); event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus() }
             }}>{tab.label}</button>)}
           </div> : null}
@@ -1142,6 +1178,11 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
                 loadedRequest={request}
                 submissionConflict={submissionConflict}
               />
+            </section>
+
+            {/* A Draft shows Attachments below Requester Information; submitted work in its tab. */}
+            <section className="workflow-section detail-layout__attachments" id="detail-panel-attachments" role={isDraft ? undefined : 'tabpanel'} aria-labelledby={isDraft ? undefined : 'detail-tab-attachments'} hidden={!isDraft && selectedTab !== 'attachments'}>
+              <RequestAttachmentsPanel requestId={requestId} reloadKey={request.requesterData.title} onChanged={() => setHistoryRetry((value) => value + 1)} />
             </section>
 
             <section className="workflow-section detail-layout__psf" id="detail-panel-psf" role="tabpanel" aria-labelledby="detail-tab-psf" hidden={request.status === 'Draft' || selectedTab !== 'psf'}>

@@ -27,6 +27,8 @@ const AUDIT_ACTIONS: Array<{ label: string; value: PsfRequestHistoryAction }> = 
   { label: 'Requester information updated', value: 'REQUESTER_INFORMATION_UPDATED' },
   { label: 'PSF Created Information updated', value: 'PSF_CREATED_INFORMATION_UPDATED' },
   { label: 'Workflow catalog updated', value: 'WORKFLOW_CATALOG_UPDATED' },
+  { label: 'Attachment uploaded', value: 'ATTACHMENT_UPLOADED' },
+  { label: 'Attachment deleted', value: 'ATTACHMENT_DELETED' },
 ]
 
 export interface GlobalAuditLogFiltersProps {
@@ -174,11 +176,15 @@ export function GlobalAuditLogTable({
             <tr key={`${entry.requestId}-${entry.createdAt}-${entry.actionType}-${index}`}>
               <td><time dateTime={entry.createdAt}>{formatHistoryDateTime(entry.createdAt)}</time></td>
               <td>
+                {/* Product_Description reads better than a Draft number, which is not shown. */}
                 {entry.requestId && entry.requestNo ? (
-                  <Link className="table-action font-mono-code" params={{ requestId: entry.requestId }} to="/requests/$requestId">
-                    {entry.requestNo}
-                  </Link>
-                ) : entry.requestNo ?? 'Workflow configuration'}
+                  <span className="request-cell-stack">
+                    <Link className="table-action" params={{ requestId: entry.requestId }} to="/requests/$requestId">
+                      {entry.requestLabel ?? entry.requestNo}
+                    </Link>
+                    {entry.requestLabel && !entry.requestNo.startsWith('DRAFT-') ? <span className="font-mono-code">{entry.requestNo}</span> : null}
+                  </span>
+                ) : entry.requestLabel ?? entry.requestNo ?? 'Workflow configuration'}
               </td>
               <td>{entry.actorDisplayName}</td>
               <td>{actionLabel(entry.actionType)}</td>

@@ -38,7 +38,9 @@ See [local accounts/removal](../docs/local-development-auth.md).
 
 Dashboard, request lists/drafts/create/detail, global audit history, user/role
 management, two form families, status management, autofill and XLSX export have
-API-backed components. The `/admin/export-profile` path opens the export page;
+API-backed components. Request Attachments (upload, image preview, download,
+delete) appear on New Request, Draft and submitted Request Detail; see
+[Request Attachments](../docs/request-attachments.md). The `/admin/export-profile` path opens the export page;
 it is not export-profile CRUD. `/admin/`, `/admin/master-data` and the standalone
 `/requests/$requestId/history` page remain placeholders. See the current guide
 for route/source mappings and backend permissions.

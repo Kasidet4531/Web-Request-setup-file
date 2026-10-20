@@ -13,6 +13,7 @@ import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { AsyncNotice } from './ui/AsyncNotice'
+import { ImagePreviewModal, RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 
 const navigation = vi.hoisted(() => ({ blocker: null as { shouldBlockFn: (location: { current: { pathname: string }; next: { pathname: string } }) => boolean; enableBeforeUnload: boolean; withResolver?: boolean } | null, navigate: vi.fn(), resolver: { status: 'idle' as 'idle' | 'blocked', proceed: vi.fn(), reset: vi.fn() } }))
 vi.mock('@tanstack/react-router', async (load) => ({
@@ -31,6 +32,10 @@ const requestDetailApi = vi.hoisted(() => ({
   submitPsfRequest: vi.fn(),
   updatePsfCreatedData: vi.fn(),
   updatePsfRequestStatus: vi.fn(),
+  fetchRequestAttachments: vi.fn(),
+  uploadRequestAttachments: vi.fn(),
+  deleteRequestAttachment: vi.fn(),
+  requestAttachmentDownloadUrl: vi.fn((requestId: string, attachmentId: string) => `/api/requests/${requestId}/attachments/${attachmentId}/download`),
 }))
 
 const requestDetailHookHarness = vi.hoisted(() => {
@@ -193,6 +198,24 @@ function findRenderedElement(
   }
 
   return null
+}
+
+function findAllRenderedElements(
+  node: unknown,
+  matches: (element: RenderedElement) => boolean,
+  found: RenderedElement[] = [],
+): RenderedElement[] {
+  if (Array.isArray(node)) {
+    node.forEach((child) => findAllRenderedElements(child, matches, found))
+    return found
+  }
+  if (!node || typeof node !== 'object' || !('props' in node) || !('type' in node) || typeof node.props !== 'object' || node.props === null) {
+    return found
+  }
+  const element: RenderedElement = { key: 'key' in node ? (node.key as string | null) : null, props: node.props as Record<string, unknown>, type: node.type }
+  if (matches(element)) found.push(element)
+  findAllRenderedElements(element.props.children, matches, found)
+  return found
 }
 
 function requireRenderedElement(
@@ -2381,4 +2404,197 @@ describe('Product Type team Dashboard', () => {
   expect(html).toContain('<span>Requester</span><strong>Creator User</strong>')
   expect(html).toContain('<span>Modified By</span><strong>Editor User</strong>')
  })
+})
+
+describe('Request Attachments', () => {
+  const image = { id: 'image-id', filename: 'wafer.png', mimeType: 'image/png', sizeBytes: 2048, isImage: true, uploadedByDisplayName: 'Fook', createdAt: '2026-10-20T01:00:00.000Z' }
+  const layout = { id: 'layout-id', filename: 'layout.dpl', mimeType: 'application/octet-stream', sizeBytes: 12, isImage: false, uploadedByDisplayName: null, createdAt: '2026-10-19T01:00:00.000Z' }
+
+  beforeEach(() => {
+    requestDetailHookHarness.reset()
+    navigation.blocker = null
+    navigation.navigate.mockReset()
+    navigation.resolver.status = 'idle'
+    for (const mock of [requestDetailApi.fetchPsfRequest, requestDetailApi.fetchRequestAttachments, requestDetailApi.uploadRequestAttachments, requestDetailApi.deleteRequestAttachment]) mock.mockReset()
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, layout] })
+  })
+
+  async function loadDetail(request: PsfRequestResponse) {
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    return renderRequestDetailShell()
+  }
+
+  function renderPanel(onChanged?: () => void) {
+    requestDetailHookHarness.beginRender()
+    return RequestAttachmentsPanel({ requestId: 'request-1', onChanged })
+  }
+
+  async function loadPanel(onChanged?: () => void) {
+    renderPanel(onChanged)
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    return renderPanel(onChanged)
+  }
+
+  it('places the Attachments tab between PSF Created Information and History on submitted work', async () => {
+    let shell = await loadDetail(buildSubmittedRequest())
+    const tabs = findAllRenderedElements(shell, (element) => element.props.role === 'tab')
+    expect(tabs.map((tab) => tab.props.children)).toEqual(['Requester Information', 'PSF Created Information', 'Attachments', 'History'])
+    const attachmentsPanel = () => requireRenderedElement(shell, (element) => element.props.id === 'detail-panel-attachments')
+    expect(attachmentsPanel().props.role).toBe('tabpanel')
+    expect(attachmentsPanel().props['aria-labelledby']).toBe('detail-tab-attachments')
+    expect(attachmentsPanel().props.hidden).toBe(true)
+    expect(requireRenderedElement(attachmentsPanel().props.children, (element) => element.type === RequestAttachmentsPanel).props.requestId).toBe('request-1')
+
+    ;(tabs[2].props.onClick as () => void)()
+    shell = renderRequestDetailShell()
+    expect(attachmentsPanel().props.hidden).toBe(false)
+    expect(requireRenderedElement(shell, (element) => element.props.id === 'detail-panel-history').props.hidden).toBe(true)
+  })
+
+  it('shows Attachments directly below Requester Information on a Draft', async () => {
+    const shell = await loadDetail(buildDraftRequest())
+    expect(findAllRenderedElements(shell, (element) => element.props.role === 'tab')).toEqual([])
+    const editors = requireRenderedElement(shell, (element) => element.props.className === 'detail-editors')
+    const panels = findAllRenderedElements(editors.props.children, (element) => typeof element.props.id === 'string' && element.props.id.startsWith('detail-panel-'))
+    expect(panels.map((panel) => panel.props.id).slice(0, 2)).toEqual(['detail-panel-requester', 'detail-panel-attachments'])
+    expect(panels[1].props.hidden).toBe(false)
+    expect(panels[1].props.role).toBeUndefined()
+  })
+
+  it('uploads files chosen on New Request right after the Draft is created, then opens it', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const file = new File(['pcsf'], 'pcsf.pdf', { type: 'application/pdf' })
+    let page = render()
+    const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
+    const staged = requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel)
+    // Attachments render below Requester Information.
+    expect(findAllRenderedElements(page, (element) => element.type === ActiveSchemaForm || element.type === StagedAttachmentsPanel).map((element) => element.type)).toEqual([ActiveSchemaForm, StagedAttachmentsPanel])
+    ;(staged.props.onChange as (files: File[]) => void)([file])
+    page = render()
+    requestDetailHookHarness.runEffects()
+    expect(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.files).toEqual([file])
+    // Chosen files are unsaved work until uploaded.
+    expect(navigation.blocker?.enableBeforeUnload).toBe(true)
+
+    let finishUpload: (value: unknown) => void = () => undefined
+    requestDetailApi.uploadRequestAttachments.mockReturnValue(new Promise((resolve) => { finishUpload = resolve }))
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file])
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).not.toHaveBeenCalled()
+
+    finishUpload({ folderName: 'Product_Description_5571', canManage: true, items: [] })
+    await flushRequestDetailAsyncWork()
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+    expect(navigation.blocker?.enableBeforeUnload).toBe(false)
+  })
+
+  it('keeps staged files and offers a retry when their upload fails after the Draft is saved', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const file = new File(['lay'], 'job.lay')
+    let page = render()
+    ;(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.onChange as (files: File[]) => void)([file])
+    page = render()
+    requestDetailHookHarness.runEffects()
+    requestDetailApi.uploadRequestAttachments.mockRejectedValueOnce(new ApiError('Attachment storage is unreachable. Try again later.', 503, 'Service Unavailable', null))
+    const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    await flushRequestDetailAsyncWork()
+    page = render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).not.toHaveBeenCalled()
+    const staged = requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel)
+    expect(staged.props.files).toEqual([file])
+    expect(staged.props.error).toContain('Draft DRAFT-0001 was saved, but its attachments were not uploaded: Attachment storage is unreachable.')
+
+    requestDetailApi.uploadRequestAttachments.mockResolvedValueOnce({ folderName: 'x', canManage: true, items: [] })
+    const retry = requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Retry attachment upload')
+    ;(retry.props.onClick as () => void)()
+    await flushRequestDetailAsyncWork()
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledTimes(2)
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+  })
+
+  it('opens image attachments in a preview modal and downloads other files directly', async () => {
+    let panel = await loadPanel()
+    expect(requestDetailApi.fetchRequestAttachments).toHaveBeenCalledWith('request-1')
+    expect(JSON.stringify(panel)).toContain('Chip A_5571')
+    const fileLink = requireRenderedElement(panel, (element) => element.type === 'a' && element.props.download === 'layout.dpl')
+    expect(fileLink.props.href).toBe('/api/requests/request-1/attachments/layout-id/download')
+    expect(findRenderedElement(panel, (element) => element.type === 'a' && element.props.download === 'wafer.png')).toBeNull()
+    expect(findRenderedElement(panel, (element) => element.type === ImagePreviewModal)).toBeNull()
+
+    const imageButton = requireRenderedElement(panel, (element) => element.type === 'button' && element.props.className === 'request-attachments__name')
+    ;(imageButton.props.onClick as () => void)()
+    panel = renderPanel()
+    const modal = requireRenderedElement(panel, (element) => element.type === ImagePreviewModal)
+    expect(modal.props.attachment).toEqual(image)
+    expect(modal.props.downloadUrl).toBe('/api/requests/request-1/attachments/image-id/download')
+    const html = renderToStaticMarkup(<ImagePreviewModal {...(modal.props as Parameters<typeof ImagePreviewModal>[0])} />)
+    expect(html).toContain('<img class="image-preview-dialog__image" src="/api/requests/request-1/attachments/image-id/download" alt="wafer.png"/>')
+    expect(html).toMatch(/<a [^>]*href="\/api\/requests\/request-1\/attachments\/image-id\/download" download="wafer.png">.*Download<\/a>/)
+
+    ;(modal.props.onClose as () => void)()
+    expect(findRenderedElement(renderPanel(), (element) => element.type === ImagePreviewModal)).toBeNull()
+  })
+
+  it('deletes an attachment only after confirmation and uploads chosen files immediately', async () => {
+    const onChanged = vi.fn()
+    let panel = await loadPanel(onChanged)
+    ;(requireRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete layout.dpl').props.onClick as () => void)()
+    panel = renderPanel(onChanged)
+    let confirmation = requireRenderedElement(panel, (element) => element.type === ConfirmDialog)
+    expect(confirmation.props.open).toBe(true)
+    expect(confirmation.props.description).toContain('layout.dpl')
+    expect(requestDetailApi.deleteRequestAttachment).not.toHaveBeenCalled()
+
+    requestDetailApi.deleteRequestAttachment.mockResolvedValue({ deleted: true })
+    ;(confirmation.props.onConfirm as () => void)()
+    await flushRequestDetailAsyncWork()
+    panel = renderPanel(onChanged)
+    expect(requestDetailApi.deleteRequestAttachment).toHaveBeenCalledExactlyOnceWith('request-1', 'layout-id')
+    expect(findRenderedElement(panel, (element) => element.props.download === 'layout.dpl')).toBeNull()
+    confirmation = requireRenderedElement(panel, (element) => element.type === ConfirmDialog)
+    expect(confirmation.props.open).toBe(false)
+    expect(onChanged).toHaveBeenCalledTimes(1)
+
+    const file = new File(['dpl'], 'new.dpl')
+    requestDetailApi.uploadRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, { ...layout, id: 'new-id', filename: 'new.dpl' }] })
+    ;(requireRenderedElement(panel, (element) => element.props.label === 'Upload files').props.onSelect as (files: File[]) => void)([file])
+    await flushRequestDetailAsyncWork()
+    panel = renderPanel(onChanged)
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file])
+    expect(findRenderedElement(panel, (element) => element.props.download === 'new.dpl')).not.toBeNull()
+    expect(onChanged).toHaveBeenCalledTimes(2)
+  })
+
+  it('names the file of an Attachment upload or deletion in the request History', () => {
+    const html = renderToStaticMarkup(<RequestsWorkspace.RequestHistoryPanel requestId="request-1" error={null} loading={false} entries={[
+      { id: 'entry-1', hasRequestSnapshot: false, actionType: 'ATTACHMENT_UPLOADED', actorDisplayName: 'Fook', actorRole: 'requester', createdAt: '2026-10-20T01:00:00.000Z', metadata: { filename: 'layout.dpl', sizeBytes: 12, mimeType: 'application/octet-stream' } },
+      { id: 'entry-2', hasRequestSnapshot: false, actionType: 'ATTACHMENT_DELETED', actorDisplayName: 'Owner', actorRole: 'setup_owner', createdAt: '2026-10-20T02:00:00.000Z', metadata: { filename: 'old.png', sizeBytes: 10, mimeType: 'image/png' } },
+    ]} />)
+    expect(html).toContain('<strong>Attachment uploaded: layout.dpl</strong><span>Fook · requester</span>')
+    expect(html).toContain('<strong>Attachment deleted: old.png</strong><span>Owner · setup_owner</span>')
+  })
+
+  it('offers no upload or delete where the server grants read access only', async () => {
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: '_5571', canManage: false, items: [layout] })
+    const panel = await loadPanel()
+    expect(findRenderedElement(panel, (element) => element.props.label === 'Upload files')).toBeNull()
+    expect(findRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete layout.dpl')).toBeNull()
+    expect(findRenderedElement(panel, (element) => element.props.download === 'layout.dpl')).not.toBeNull()
+  })
 })

@@ -124,6 +124,7 @@ const requesterActor = {
 
 const requestRow = {
   id: 'request-1',
+  numeric_id: 7,
   request_no: 'DRAFT-1',
   form_key: 'psf-request',
   form_version: 3,
@@ -2654,6 +2655,7 @@ describe('RequestsService draft flow', () => {
           updated_at_version: revision,
           psf_released_at: null,
           id: 'request-1',
+          numeric_id: 7,
           form_key: 'psf-request',
           status: 'Draft',
           form_version: 4,
@@ -2724,6 +2726,7 @@ describe('RequestsService draft flow', () => {
         false,
         false,
         revision,
+        'PSF-000007',
       ],
     );
     expect(
@@ -2795,6 +2798,7 @@ describe('RequestsService draft flow', () => {
           updated_at_version: revision,
           psf_released_at: null,
           id: 'request-1',
+          numeric_id: 7,
           form_key: 'psf-request',
           status: 'Draft',
           form_version: 3,
@@ -2867,6 +2871,7 @@ describe('RequestsService draft flow', () => {
         false,
         false,
         revision,
+        'PSF-000007',
       ],
     );
     expect(
@@ -3482,6 +3487,7 @@ describe('RequestsService draft flow', () => {
         false,
         false,
         revision,
+        'PSF-000007',
       ],
     );
     expect(
@@ -3783,7 +3789,10 @@ describe('RequestsService draft flow', () => {
         schemaSnapshot: activeSchema.schema,
       });
       const [, params] = pool.query.mock.calls[1] as [string, unknown[]];
-      expect(params[params.length - 1]).toBe(exact);
+      // Submit also passes its PSF number, after the revision.
+      expect(params[params.length - (operation === 'submit' ? 2 : 1)]).toBe(
+        exact,
+      );
       expect(params).not.toContain(actor.displayName);
       expect(formSchemaService.getActiveSchema).not.toHaveBeenCalled();
       if (operation === 'requester') {

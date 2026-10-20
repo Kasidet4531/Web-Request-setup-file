@@ -21,5 +21,10 @@ export function historyActionSummary(entry: PsfRequestHistoryEntry): string {
     case 'REQUESTER_INFORMATION_UPDATED': return 'Requester information updated'
     case 'PSF_CREATED_INFORMATION_UPDATED': return 'PSF Created Information updated'
     case 'WORKFLOW_CATALOG_UPDATED': return 'Workflow catalog updated'
+    case 'ATTACHMENT_UPLOADED':
+    case 'ATTACHMENT_DELETED': {
+      const action = entry.actionType === 'ATTACHMENT_UPLOADED' ? 'Attachment uploaded' : 'Attachment deleted'
+      return typeof entry.metadata.filename === 'string' ? `${action}: ${entry.metadata.filename}` : action
+    }
   }
 }
