@@ -36,7 +36,10 @@
   box-shadow: 0 -6px 16px #172b3a14;
 }
 
-/* D: B's rows plus C's pinned bar, with Save at the far right edge of the card. */
+/* D: B's rows plus C's pinned bar, with Save at the far right edge of the card.
+   Edit mode uses read-only's label type and row height, so switching modes moves nothing. */
+.prototype-form--d .dynamic-form__label { font-size: 14px; font-weight: 700; color: var(--foreground); }
+.prototype-form--d .prototype-row { padding: 6px 0; }
 .prototype-form--d .dynamic-form__actions {
   position: sticky; bottom: 0; z-index: 20;
   margin: 24px -24px -24px; padding: 12px 24px; justify-content: flex-end;
