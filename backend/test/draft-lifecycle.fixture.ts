@@ -12,6 +12,8 @@ import {
 import { SearchIndexService } from '../src/requests/search-index.service';
 import type { AuthenticatedUserProfile } from '../src/auth/session.types';
 import { NotificationService } from '../src/notifications/notification.service';
+import { AttachmentStorage } from '../src/requests/attachment-storage';
+import { RequestAttachmentsService } from '../src/requests/request-attachments.service';
 
 export const requester: AuthenticatedUserProfile = {
   id: '00000000-0000-4000-8000-000000000101',
@@ -101,6 +103,9 @@ export async function lifecycleFixture(pool: Pool) {
       return Promise.resolve();
     },
   } as unknown as NotificationService;
+  // Attachments are stored under ATTACHMENT_STORAGE_PATH, as in the app.
+  const storage = new AttachmentStorage(process.env);
+  const attachments = new RequestAttachmentsService(pool, storage, audit);
   const service = new RequestsService(
     pool,
     forms,
@@ -108,6 +113,7 @@ export async function lifecycleFixture(pool: Pool) {
     index,
     audit,
     notifications,
+    attachments,
   );
   await pool.query(
     `CREATE TABLE app_users (id uuid PRIMARY KEY, username text, display_name text, role text, setup_owner_department text, updated_at timestamp, password_hash text)`,
@@ -164,6 +170,8 @@ export async function lifecycleFixture(pool: Pool) {
   return {
     pool,
     service,
+    attachments,
+    storage,
     audit,
     forms,
     workflow,

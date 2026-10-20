@@ -20,6 +20,7 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
+| [Request Attachments and request IDs](request-attachments.md) | NAS folder layout, reconciliation, access, request numbering, screens and dated verification scope (issue #78) |
 | [Draft management and reminders](draft-management-and-reminders.md) | Admin readonly inspection, creator/Admin permanent deletion, cleanup, seven-day notification and team filters |
 | [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and dated offline/LAN verification scope; merged into main |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
@@ -67,7 +68,7 @@ behavior and test outcomes.
 | [docs/adr/0005-manual-workflow-status-transitions.md](adr/0005-manual-workflow-status-transitions.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0006-local-database-authentication.md](adr/0006-local-database-authentication.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0007-admin-json-schema-editor.md](adr/0007-admin-json-schema-editor.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
-| [docs/adr/0008-local-filesystem-attachment-storage.md](adr/0008-local-filesystem-attachment-storage.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
+| [docs/adr/0008-local-filesystem-attachment-storage.md](adr/0008-local-filesystem-attachment-storage.md) | Original design; the 20 October 2026 implementation keeps original file names in per-request NAS folders instead, see [Request Attachments](request-attachments.md) |
 | [docs/adr/0009-autofill-resolution-strategy.md](adr/0009-autofill-resolution-strategy.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0010-shared-setup-queue-visibility.md](adr/0010-shared-setup-queue-visibility.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0011-key-by-key-diff-request-audit-logs.md](adr/0011-key-by-key-diff-request-audit-logs.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |

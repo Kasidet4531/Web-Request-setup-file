@@ -106,6 +106,7 @@ const setupOwnerActor = {
 
 const draftRow = {
   id: 'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
+  numeric_id: 42,
   request_no: 'DRAFT-20260618-0001',
   form_key: 'psf-request',
   form_version: 3,
@@ -464,6 +465,7 @@ describe('RequestsService audit baseline', () => {
         false,
         false,
         CURRENT_REVISION,
+        'PSF-000042',
       ],
     );
     expect(dbClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
@@ -529,6 +531,7 @@ describe('RequestsService audit baseline', () => {
         false,
         true,
         CURRENT_REVISION,
+        'PSF-000042',
       ],
     );
     expect(dbClient.query).toHaveBeenLastCalledWith('ROLLBACK');

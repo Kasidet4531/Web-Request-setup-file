@@ -1,3 +1,5 @@
+import { formatFileSize } from './fileSize'
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -32,6 +34,11 @@ export function HistoryChanges({ metadata }: { metadata: Record<string, unknown>
   const statusChange = typeof metadata.fromStatus === 'string' && typeof metadata.toStatus === 'string'
   const catalogOperation = isRecord(metadata.operation) ? metadata.operation : null
   const catalogChange = catalogOperation && Object.hasOwn(metadata, 'before') && Object.hasOwn(metadata, 'after')
+
+  // An Attachment upload or deletion records its file, not field changes.
+  if (typeof metadata.filename === 'string') {
+    return <span className="history-attachment">{metadata.filename}{typeof metadata.sizeBytes === 'number' ? ` (${formatFileSize(metadata.sizeBytes)})` : ''}</span>
+  }
 
   if (!changes.length && !statusChange && !catalogOperation) return <>—</>
 

@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Attachments and request IDs, 20 October 2026:** every request has a sequential integer ID continuing the Imported Requests' numbering; a submitted Draft is renumbered `PSF-` and its six-digit ID; New Request starts Product_Description as `Product_Description`. Attachments live in a `[Product_Description]_[ID]` folder under `ATTACHMENT_STORAGE_PATH` (the NAS), with metadata in `psf_request_attachments` reconciled on every read, an Attachments tab on submitted Request Detail and a section below Requester Information on Drafts and New Request. Audit History shows Product_Description instead of Draft numbers and records `ATTACHMENT_UPLOADED`/`ATTACHMENT_DELETED`. See [Request Attachments and request IDs](request-attachments.md) (issue #78). Checks ran on disposable databases and a temporary directory, not the configured database or a NAS share.
+
 > **Request Snapshot, 11 October 2026:** an Audit History entry tied to a request now stores a Request Snapshot, opened read-only through "View Request Snapshot" in the request's History tab or on the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). Bulk Status replacement entries and entries recorded before this change have none. This is a source change; the dated checks, including a run on the configured PostgreSQL server inside session-temporary tables, are in the [verification record](verification/2026-10-11-request-snapshot.md). The configured tables were not written and no deployment was exercised.
 
 > **Initial Data Load, number fields and export scope, 8 October 2026:** the [Initial Data Load script](initial-data-load.md) reloads forms, the Status catalog and requests from the PSF form detail workbook. Form fields may be `number` (validated as plain decimals, exported as numeric cells), Dashboard Team Group also reads the Request To options, and every authenticated role exports all submitted (non-Draft) requests, never any Draft, not even their own. The load script was run against the configured database on 8 October 2026 with `--lenient` (read-back counts only); see [Initial Data Load](initial-data-load.md).
@@ -261,6 +263,7 @@ query parameters. This table lists routes, not full payload schemas.
 | Request reads      | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/history/:entryId` (Request Snapshot), `GET /api/requests/:requestId/status-options`     | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Draft management | `GET /api/admin/drafts`, `GET /api/admin/drafts/:id`, `GET /api/admin/draft-deletions`, `DELETE /api/requests/:id` | [Admin controller](../backend/src/requests/admin-drafts.controller.ts), [request controller](../backend/src/requests/requests.controller.ts) |
 | Draft reminders | `GET /api/admin/draft-reminders` | [reminder inspection](../backend/src/notifications/draft-reminders.controller.ts) |
+| Attachments        | `GET/POST /api/requests/:requestId/attachments`, `GET /api/requests/:requestId/attachments/:attachmentId/download`, `DELETE /api/requests/:requestId/attachments/:attachmentId` | [RequestAttachmentsController](../backend/src/requests/request-attachments.controller.ts) |
 | Request edits      | `PUT /api/requests/:requestId/requester-data`, `PUT /api/requests/:requestId/psf-created-data`, `PUT /api/requests/:requestId/status`                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Submission/upgrade | `POST /api/requests/:requestId/submit`, `POST /api/requests/:requestId/upgrade-schema`                                                                           | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Status reads       | `GET /api/workflow/statuses`                                                                                                                                     | [WorkflowStatusController](../backend/src/admin/workflow_transition.controller.ts)     |
@@ -281,7 +284,8 @@ standalone migration command in the backend package scripts.
 | Tables                                                    | Initializer/source                                                               |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `app_users`                                               | [AuthService](../backend/src/auth/auth.service.ts)                               |
-| `psf_requests`                                            | [RequestsService](../backend/src/requests/requests.service.ts)                   |
+| `psf_requests` (with `numeric_id` and `psf_request_numeric_id_seq`) | [RequestsService](../backend/src/requests/requests.service.ts)                   |
+| `psf_request_attachments`                                 | [RequestAttachmentsService](../backend/src/requests/request-attachments.service.ts) |
 | `form_definitions`                                        | [FormSchemaService](../backend/src/admin/form_schema.service.ts)                 |
 | `workflow_transition_config`                              | [WorkflowTransitionService](../backend/src/admin/workflow_transition.service.ts) |
 | `autofill_rules`                                          | [AutofillRuleService](../backend/src/admin/autofill_rule.service.ts)             |
@@ -315,7 +319,7 @@ Credentials belong in ignored local configuration.
 
 Source: [file routes](../frontend/src/routes),
 [navigation permissions](../frontend/src/components/navigationState.ts).
-Request Detail includes Requester Information, PSF Created Information and History tabs for submitted work; its explicit form Edit/Save/Cancel controls remain separate from Save Status. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
+Request Detail includes Requester Information, PSF Created Information, Attachments and History tabs for submitted work (Drafts show Attachments below Requester Information; see [Request Attachments](request-attachments.md)); its explicit form Edit/Save/Cancel controls remain separate from Save Status. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
 Form editing uses application components, including a textarea-based advanced
 JSON editor, rather than Monaco/CodeMirror.
 Sources: [visual form editor](../frontend/src/components/AdminFormConfigEditor.tsx),
@@ -361,7 +365,7 @@ and the [form-management](../backend/test/form-management-system.e2e.mjs) /
 [historical request-assignment](https://github.com/Kasidet4531/Web-Request-setup-file/blob/43f6d6abe3245662300e17b25742f71e68fe739c/backend/test/request-assignment-system.e2e.mjs) test sources (the assignment source is pinned to its pre-removal commit)
 are available for historical reproduction; they do not replace the missing original run report.
 
-- No attachment runtime, export-profile CRUD, tracked Nginx deployment configuration,
+- No export-profile CRUD, tracked Nginx deployment configuration,
   or advanced third-party schema editor is implemented in this checkout.
 - Sessions use the default in-memory store; `main.ts` has a development fallback
   secret. Mock auth being blocked in production is not a production readiness audit.

@@ -80,8 +80,16 @@ A sequential integer within one Form Schema family: `psf-request` or `psf-create
 _Avoid_: Version number, revision
 
 **Attachment**:
-Planned external file linked to a PSF Request (e.g., specification sheets or probe cards layout files). Attachment runtime support is not implemented in the current source baseline; see ADR 0014.
+An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]` and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too. Implemented 20 October 2026; see [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
+
+**Request ID**:
+The sequential integer identifying a PSF Request, continuing the Imported Requests' `ID` (`PSF-000100` is ID 100). It names the request's NAS folder, and a submitted request's number is `PSF-` and the ID padded to six digits. A Draft keeps its `DRAFT-YYYYMMDD-NNNN` number until submitted. IDs are never reused.
+_Avoid_: Draft number (a different, temporary identifier), UUID
+
+**Product_Description**:
+The requester form's `title` field, labelled Product_Description in the Initial Data Load forms. It names a request in Audit History and prefixes its NAS folder; New Request starts it as `Product_Description`.
+_Avoid_: Title alone when the folder or Audit History label is meant
 
 **Master Data**:
 The standardized reference values (e.g., list of Products, Wafer FABs, or Machines) embedded directly within the Form Schema to populate selection dropdowns, ensuring data consistency.

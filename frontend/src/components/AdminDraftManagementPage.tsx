@@ -7,6 +7,7 @@ import { AsyncNotice } from './ui/AsyncNotice'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { RequestHeaderSummary } from './RequestsWorkspace'
 import { DraftDeleteDialog } from './DraftDeleteDialog'
+import { RequestAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { formatHistoryDateTime } from './ui/historyDateTime'
 
@@ -380,6 +381,14 @@ export function AdminDraftDetailPage() {
                   values={currentDraft.requesterData}
                   headerTitle="Requester Information"
                 />
+              </section>
+
+              {/* The server offers changes only on the Admin's own Draft; others are read only. */}
+              <section
+                className="workflow-section detail-layout__attachments"
+                hidden={currentDraft.psfCreatedDataVisible && activeTab !== 'requester'}
+              >
+                <RequestAttachmentsPanel requestId={currentDraft.id} />
               </section>
 
               {currentDraft.psfCreatedDataVisible ? (

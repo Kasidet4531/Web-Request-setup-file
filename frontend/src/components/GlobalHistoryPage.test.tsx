@@ -174,7 +174,7 @@ describe('GlobalAuditLogFilters', () => {
 describe('GlobalAuditLogTable', () => {
   it('links only the entries that have a Request Snapshot to its page', () => {
     const entry = {
-      id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUESTER_INFORMATION_UPDATED' as const,
+      id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null, actionType: 'REQUESTER_INFORMATION_UPDATED' as const,
       actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-06T01:00:00Z', metadata: {},
     }
     const html = renderToStaticMarkup(GlobalAuditLogTable({
@@ -185,10 +185,30 @@ describe('GlobalAuditLogTable', () => {
     expect(html.match(/View Request Snapshot/g)).toHaveLength(1)
   })
 
+  it('labels requests by Product_Description instead of a Draft number and lists Attachment changes', () => {
+    const base = { hasRequestSnapshot: false, actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-20T01:00:00Z' }
+    const html = renderToStaticMarkup(GlobalAuditLogTable({
+      entries: [
+        { ...base, id: 'entry-3', requestId: 'request-1', requestNo: 'PSF-005571', requestLabel: 'Chip A', actionType: 'ATTACHMENT_UPLOADED', metadata: { filename: 'layout.dpl', sizeBytes: 2048, mimeType: 'application/octet-stream' } },
+        { ...base, id: 'entry-2', requestId: 'request-2', requestNo: 'DRAFT-20261020-0001', requestLabel: 'Untitled Draft (#5572)', actionType: 'ATTACHMENT_DELETED', metadata: { filename: 'old.png', sizeBytes: 10, mimeType: 'image/png' } },
+        { ...base, id: 'entry-1', requestId: 'request-3', requestNo: 'DRAFT-20261020-0002', requestLabel: 'Product_Description', actionType: 'DRAFT_CREATED', metadata: {} },
+      ],
+      error: null, loading: false,
+    }))
+    expect(html).toContain('<a href="/requests/request-1">Chip A</a><span class="font-mono-code">PSF-005571</span>')
+    expect(html).toContain('<a href="/requests/request-2">Untitled Draft (#5572)</a>')
+    expect(html).toContain('<a href="/requests/request-3">Product_Description</a>')
+    expect(html).not.toContain('DRAFT-2026')
+    expect(html).toContain('<td>Attachment uploaded</td>')
+    expect(html).toContain('<td>Attachment deleted</td>')
+    expect(html).toContain('layout.dpl (2.0 KB)')
+    expect(html).toContain('old.png (10 B)')
+  })
+
   it('keeps loaded audit rows visible and inert while refreshing instead of replacing the table', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [{
-        id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', actionType: 'REQUEST_SUBMITTED',
+        id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null, actionType: 'REQUEST_SUBMITTED',
         actorDisplayName: 'Requester', actorRole: 'requester', createdAt: '2026-10-06T01:00:00Z', metadata: {},
       }], error: null, loading: true,
     }))
@@ -200,7 +220,7 @@ describe('GlobalAuditLogTable', () => {
   it('displays Bangkok time and readable server-provided field changes without inventing missing history', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [{
-        id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001',
+        id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null,
         actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester',
         createdAt: '2026-10-04T23:30:00Z', metadata: {
           fieldChanges: [{ fieldKey: 'priority', fieldLabel: 'Priority', before: 'Normal', after: 'Urgent' }],
@@ -218,7 +238,7 @@ describe('GlobalAuditLogTable', () => {
 
   it('renders factual catalog metadata and escapes untrusted values', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
-      id: 'entry-1', hasRequestSnapshot: false, requestId: null, requestNo: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
+      id: 'entry-1', hasRequestSnapshot: false, requestId: null, requestNo: null, requestLabel: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
       actorDisplayName: 'Admin', actorRole: 'admin', createdAt: 'invalid-date',
       metadata: { operation: { action: 'rename', name: '<script>new status</script>' } },
     }], error: null, loading: false }))
@@ -256,6 +276,7 @@ describe('GlobalAuditLogTable', () => {
           hasRequestSnapshot: false,
           requestId: 'request-2',
           requestNo: 'PSF-0002',
+          requestLabel: null,
           actionType: 'REQUEST_STATUS_CHANGED',
           actorDisplayName: 'Setup Owner GNTC Demo',
           actorRole: 'setup_owner',
@@ -270,6 +291,7 @@ describe('GlobalAuditLogTable', () => {
           hasRequestSnapshot: false,
           requestId: 'request-1',
           requestNo: 'PSF-0001',
+          requestLabel: null,
           actionType: 'DRAFT_CREATED',
           actorDisplayName: 'Requester Demo',
           actorRole: 'requester',

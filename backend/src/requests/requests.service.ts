@@ -40,9 +40,15 @@ import {
   isNumericText,
   validateAndNormalizeFormData,
 } from './form-data-validation';
+import {
+  RequestAttachmentsService,
+  type RegisterUndo,
+} from './request-attachments.service';
 
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
+// Continues the Imported Requests' integer IDs (PSF-000100 is ID 100).
+const NUMERIC_ID_SEQUENCE = 'psf_request_numeric_id_seq';
 
 const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
   updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC',
@@ -124,6 +130,8 @@ export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'> & {
 
 export interface PsfRequestResponse {
   id: string;
+  // The sequential integer ID shared with the request's NAS folder name.
+  numericId: number;
   requestNo: string;
   formKey: string;
   formVersion: number;
@@ -163,6 +171,7 @@ export interface RequestSnapshotResponse {
 
 interface PsfRequestRow {
   id: string;
+  numeric_id: number;
   request_no: string;
   form_key: string;
   form_version: number;
@@ -195,6 +204,7 @@ export class RequestsService implements OnModuleInit {
     private readonly searchIndexService: SearchIndexService,
     private readonly auditLogService: AuditLogService,
     @Optional() private readonly notificationService?: NotificationService,
+    @Optional() private readonly requestAttachments?: RequestAttachmentsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -202,6 +212,7 @@ export class RequestsService implements OnModuleInit {
       await this.ensureRequestsStorage(client);
       await this.searchIndexService.ensureRequestSearchIndexStorage(client);
       await this.ensureDraftManagementStorage(client);
+      await this.requestAttachments?.ensureStorage(client);
     });
   }
 
@@ -236,6 +247,7 @@ export class RequestsService implements OnModuleInit {
         `
           INSERT INTO psf_requests (
             id,
+            numeric_id,
             request_no,
             form_key,
             form_version,
@@ -250,7 +262,7 @@ export class RequestsService implements OnModuleInit {
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
+          VALUES ($1, nextval('${NUMERIC_ID_SEQUENCE}'), $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -453,7 +465,7 @@ export class RequestsService implements OnModuleInit {
     actor: AuthenticatedUserProfile,
   ): Promise<{ deleted: true }> {
     this.assertExpectedUpdatedAt(expectedUpdatedAt);
-    return this.withTransaction(async (client) => {
+    const deleted = await this.withTransaction(async (client) => {
       const result = await client.query<PsfRequestRow>(
         `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id=$1 FOR UPDATE`,
         [id],
@@ -470,6 +482,7 @@ export class RequestsService implements OnModuleInit {
         throw new ConflictException(
           'The Draft changed. Reload before deleting.',
         );
+      await this.requestAttachments?.assertFolderRemovable();
       await client.query(
         'DELETE FROM canonical_submission_values WHERE request_id=$1',
         [id],
@@ -510,9 +523,15 @@ export class RequestsService implements OnModuleInit {
         'INSERT INTO draft_deletion_logs(id,draft_no,actor_id,actor_display_name,actor_role,deleted_at) VALUES($1,$2,$3,$4,$5,NOW())',
         [randomUUID(), row.request_no, actor.id, actor.displayName, actor.role],
       );
+      // Its Attachment rows go with it (ON DELETE CASCADE).
       await client.query('DELETE FROM psf_requests WHERE id=$1', [id]);
-      return { deleted: true };
+      return row;
     });
+    await this.requestAttachments?.removeRequestFolder(
+      deleted.requester_data_json?.title,
+      deleted.numeric_id,
+    );
+    return { deleted: true };
   }
 
   private async ensureDraftManagementStorage(
@@ -806,7 +825,7 @@ export class RequestsService implements OnModuleInit {
     this.assertExpectedFormVersion(dto.formVersion);
     this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
-    return this.withTransaction(async (client) => {
+    return this.withTransaction(async (client, onRollback) => {
       const current = await client.query<PsfRequestRow>(
         `
           SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
@@ -947,6 +966,12 @@ export class RequestsService implements OnModuleInit {
         },
         client,
       );
+      await this.renameAttachmentFolder(
+        client,
+        request,
+        updatedRow,
+        onRollback,
+      );
 
       return this.mapRequestRow(updatedRow, actor);
     });
@@ -959,11 +984,12 @@ export class RequestsService implements OnModuleInit {
   ): Promise<PsfRequestResponse> {
     this.assertExpectedFormVersion(dto.formVersion);
 
-    return this.withTransaction(async (client) => {
+    return this.withTransaction(async (client, onRollback) => {
       const current = await client.query<
         Pick<
           PsfRequestRow,
           | 'id'
+          | 'numeric_id'
           | 'form_key'
           | 'form_version'
           | 'status'
@@ -976,6 +1002,7 @@ export class RequestsService implements OnModuleInit {
         `
           SELECT
             id,
+            numeric_id,
             form_key,
             form_version,
             status,
@@ -1099,6 +1126,12 @@ export class RequestsService implements OnModuleInit {
           },
         },
         client,
+      );
+      await this.renameAttachmentFolder(
+        client,
+        request,
+        upgradedRow,
+        onRollback,
       );
 
       return this.mapRequestRow(upgradedRow, actor);
@@ -1507,6 +1540,7 @@ export class RequestsService implements OnModuleInit {
         `
           UPDATE psf_requests
           SET status = $2,
+              request_no = $8,
               product_type = $3,
               requester_data_json = $4::jsonb,
               submitted_at = NOW(),
@@ -1526,6 +1560,7 @@ export class RequestsService implements OnModuleInit {
           target.kind === 'completed',
           entersTrigger,
           dto.expectedUpdatedAt,
+          this.submittedRequestNo(request.numeric_id),
         ],
       );
 
@@ -1590,6 +1625,26 @@ export class RequestsService implements OnModuleInit {
 
       return this.mapRequestRow(submittedRow, actor);
     });
+  }
+
+  // PSF- and the six-digit zero-padded ID, the Imported Requests' numbering.
+  private submittedRequestNo(numericId: number): string {
+    return `PSF-${String(numericId).padStart(6, '0')}`;
+  }
+
+  private async renameAttachmentFolder(
+    client: QueryRunner,
+    before: Pick<PsfRequestRow, 'requester_data_json'>,
+    after: Pick<PsfRequestRow, 'id' | 'numeric_id' | 'requester_data_json'>,
+    onRollback: RegisterUndo,
+  ): Promise<void> {
+    await this.requestAttachments?.renameRequestFolder(
+      client,
+      { id: after.id, numericId: after.numeric_id },
+      before.requester_data_json?.title,
+      after.requester_data_json?.title,
+      onRollback,
+    );
   }
 
   private assertExpectedFormVersion(value: unknown): asserts value is number {
@@ -1777,18 +1832,22 @@ export class RequestsService implements OnModuleInit {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
+  // Work outside the database, such as a NAS folder rename, registers its
+  // undo through onRollback.
   private async withTransaction<T>(
-    operation: (client: PoolClient) => Promise<T>,
+    operation: (client: PoolClient, onRollback: RegisterUndo) => Promise<T>,
   ): Promise<T> {
     const client = await this.pool.connect();
+    const undos: Array<() => Promise<void>> = [];
 
     try {
       await client.query('BEGIN');
-      const result = await operation(client);
+      const result = await operation(client, (undo) => undos.push(undo));
       await client.query('COMMIT');
       return result;
     } catch (error) {
       await this.rollbackTransaction(client);
+      for (const undo of undos.reverse()) await undo().catch(() => undefined);
       throw error;
     } finally {
       client.release();
@@ -1876,6 +1935,8 @@ export class RequestsService implements OnModuleInit {
       $$;
     `);
 
+    await this.ensureNumericIdStorage(queryRunner);
+
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_status_updated
       ON psf_requests (status, updated_at DESC)
@@ -1884,6 +1945,61 @@ export class RequestsService implements OnModuleInit {
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_requester_user_id
       ON psf_requests (requester_user_id)
+    `);
+  }
+
+  // Imported Requests keep the ID of their PSF-NNNNNN number; any other
+  // request takes the next ID in creation order. The sequence never moves
+  // back, so a deleted Draft's ID (and NAS folder name) is not reused.
+  private async ensureNumericIdStorage(queryRunner: QueryRunner) {
+    await queryRunner.query(
+      `ALTER TABLE psf_requests ADD COLUMN IF NOT EXISTS numeric_id INTEGER`,
+    );
+    await queryRunner.query(`
+      UPDATE psf_requests AS request
+      SET numeric_id = numbered.numeric_id
+      FROM (
+        SELECT DISTINCT ON (SUBSTRING(request_no FROM 5)::int)
+          id, SUBSTRING(request_no FROM 5)::int AS numeric_id
+        FROM psf_requests
+        WHERE request_no ~ '^PSF-[0-9]{1,9}$' AND numeric_id IS NULL
+        ORDER BY SUBSTRING(request_no FROM 5)::int, created_at, id
+      ) AS numbered
+      WHERE request.id = numbered.id AND request.numeric_id IS NULL
+    `);
+    await queryRunner.query(
+      `CREATE SEQUENCE IF NOT EXISTS ${NUMERIC_ID_SEQUENCE}`,
+    );
+    await queryRunner.query(`
+      SELECT setval('${NUMERIC_ID_SEQUENCE}', GREATEST(highest, 1), highest > 0)
+      FROM (
+        SELECT GREATEST(
+          (SELECT COALESCE(MAX(numeric_id), 0) FROM psf_requests),
+          (SELECT CASE WHEN is_called THEN last_value ELSE 0 END FROM ${NUMERIC_ID_SEQUENCE})
+        ) AS highest
+      ) AS current_ids
+    `);
+    await queryRunner.query(`
+      UPDATE psf_requests AS request
+      SET numeric_id = numbered.numeric_id
+      FROM (
+        SELECT id, nextval('${NUMERIC_ID_SEQUENCE}') AS numeric_id
+        FROM (
+          SELECT id FROM psf_requests
+          WHERE numeric_id IS NULL
+          ORDER BY created_at, id
+        ) AS unnumbered
+      ) AS numbered
+      WHERE request.id = numbered.id
+    `);
+    await queryRunner.query(`
+      ALTER TABLE psf_requests
+      ALTER COLUMN numeric_id SET DEFAULT nextval('${NUMERIC_ID_SEQUENCE}'),
+      ALTER COLUMN numeric_id SET NOT NULL
+    `);
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_psf_requests_numeric_id
+      ON psf_requests (numeric_id)
     `);
   }
 
@@ -2100,6 +2216,7 @@ export class RequestsService implements OnModuleInit {
 
     return {
       id: row.id,
+      numericId: row.numeric_id,
       requestNo: row.request_no,
       formKey: row.form_key,
       formVersion: row.form_version,

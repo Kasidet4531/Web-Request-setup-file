@@ -195,6 +195,9 @@ describe('AuditLogService', () => {
         {
           request_id: 'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
           request_no: 'PSF-0002',
+          request_status: 'Setup In Progress',
+          request_numeric_id: 2,
+          request_title: ' Chip A ',
           action_type: 'REQUEST_STATUS_CHANGED',
           actor_display_name: 'Setup Owner GNTC Demo',
           actor_role: 'setup_owner',
@@ -207,6 +210,9 @@ describe('AuditLogService', () => {
         {
           request_id: 'request-1',
           request_no: 'PSF-0001',
+          request_status: 'Draft',
+          request_numeric_id: 1,
+          request_title: '',
           action_type: 'DRAFT_CREATED',
           actor_display_name: 'Requester Demo',
           actor_role: 'requester',
@@ -228,6 +234,7 @@ describe('AuditLogService', () => {
       {
         requestId: 'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
         requestNo: 'PSF-0002',
+        requestLabel: 'Chip A',
         actionType: 'REQUEST_STATUS_CHANGED',
         actorDisplayName: 'Setup Owner GNTC Demo',
         actorRole: 'setup_owner',
@@ -240,6 +247,7 @@ describe('AuditLogService', () => {
       {
         requestId: 'request-1',
         requestNo: 'PSF-0001',
+        requestLabel: 'Untitled Draft (#1)',
         actionType: 'DRAFT_CREATED',
         actorDisplayName: 'Requester Demo',
         actorRole: 'requester',
@@ -313,6 +321,7 @@ describe('AuditLogService', () => {
       {
         requestId: null,
         requestNo: null,
+        requestLabel: null,
         actionType: 'WORKFLOW_CATALOG_UPDATED',
         actorDisplayName: 'Admin',
         actorRole: 'admin',
