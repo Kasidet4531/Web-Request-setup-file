@@ -41,7 +41,9 @@ not count as an unsaved change. Source:
 `ATTACHMENT_STORAGE_PATH` names the root folder: a Windows mapped drive
 (`Z:\PSF`), a UNC path (`\\nas\share\PSF`) or a local directory. A backend
 running as a Windows service does not see drives mapped in a user's logon
-session; use a UNC path there. `ATTACHMENT_MAX_BYTES` limits each file (default
+session; use a UNC path there. In `backend/.env` write the path unquoted
+(`ATTACHMENT_STORAGE_PATH=\\nas01\share\PSF`): inside double quotes `\n` becomes
+a line break. Restart the backend after changing it. `ATTACHMENT_MAX_BYTES` limits each file (default
 52428800, 50 MB); uploads are held in memory up to that size.
 
 Without `ATTACHMENT_STORAGE_PATH`, Attachment routes answer 503 and
