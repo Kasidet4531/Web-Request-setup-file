@@ -1,0 +1,62 @@
+/* PROTOTYPE: single-column form variants. Branch prototype/single-column-form only; never merge. */
+
+/* Every variant: one field per line, no field spans two columns. */
+.dynamic-form.prototype-form .dynamic-form__grid { grid-template-columns: minmax(0, 1fr); }
+.dynamic-form.prototype-form .dynamic-form__field--textarea,
+.dynamic-form.prototype-form .dynamic-form__product-type { grid-column: auto; }
+
+/* A and C: label above the control, in a narrow column. */
+.prototype-form--a .dynamic-form__grid,
+.prototype-form--c .dynamic-form__grid { max-width: 600px; gap: 20px; }
+.prototype-form--a.dynamic-form--readonly .dynamic-form__grid,
+.prototype-form--c.dynamic-form--readonly .dynamic-form__grid { gap: 16px; }
+.prototype-form--a .dynamic-form__actions { max-width: 600px; }
+
+/* B: spec sheet. One row per field, label cell left, control or value right. */
+.prototype-form--b .dynamic-form__grid { max-width: 840px; gap: 0; border-top: 1px solid var(--border); }
+.prototype-row { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 4px 24px; align-items: start; min-width: 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.prototype-row__label { padding-top: 8px; }
+.prototype-row__control { display: grid; gap: 6px; min-width: 0; }
+.prototype-row__control .dynamic-form__autofill-status { margin: 0; }
+.prototype-form--b.dynamic-form--readonly .prototype-row { padding: 6px 0; }
+.prototype-form--b.dynamic-form--readonly .prototype-row__label { padding-top: 6px; }
+.detail-editors .prototype-form--b.dynamic-form--readonly .prototype-row__label { padding-bottom: 0; border-bottom: 0; }
+.prototype-form--b .dynamic-form__actions { max-width: 840px; border-top: 0; }
+@media (max-width: 599px) {
+  .prototype-row { grid-template-columns: minmax(0, 1fr); }
+  .prototype-row__label { padding-top: 0; }
+}
+
+/* C: the save action bar stays pinned to the bottom of the viewport while the form scrolls. */
+.prototype-form--c .dynamic-form__actions {
+  position: sticky; bottom: 0; z-index: 20;
+  margin: 24px -24px -24px; padding: 12px max(24px, calc(100% - 576px)) 12px 24px;
+  background: var(--card); border-top: 1px solid var(--border); border-radius: 0 0 8px 8px;
+  box-shadow: 0 -6px 16px #172b3a14;
+}
+
+/* Floating variant switcher: deliberately unlike the app so it reads as tooling. */
+.prototype-switcher {
+  position: fixed; left: 50%; bottom: 16px; z-index: 90; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center;
+  padding: 6px 10px; border-radius: 999px; background: #15181b; color: #f4f3ee;
+  box-shadow: 0 8px 28px #0007; font: 12px/18px var(--font-sans);
+}
+.prototype-switcher--lifted { bottom: 84px; }
+.prototype-switcher__arrow { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: #2c3136; color: inherit; }
+.prototype-switcher__arrow:hover { background: #3c4349; }
+.prototype-switcher__label { min-width: 200px; text-align: center; white-space: nowrap; }
+.prototype-switcher__label strong { margin-right: 4px; color: #a8c83a; }
+.prototype-switcher__segment { display: inline-flex; padding: 2px; border-radius: 999px; background: #2c3136; }
+.prototype-switcher__segment button { min-height: 24px; padding: 2px 10px; border: 0; border-radius: 999px; background: transparent; color: #c9ccca; font: inherit; }
+.prototype-switcher__segment button[aria-pressed="true"] { background: #f4f3ee; color: #15181b; font-weight: 600; }
+.prototype-switcher__status { padding-right: 6px; color: #b7bab8; white-space: nowrap; }
+.dark .prototype-switcher { background: #f4f3ee; color: #15181b; }
+.dark .prototype-switcher__arrow, .dark .prototype-switcher__segment { background: #dcdcd6; }
+.dark .prototype-switcher__segment button { color: #3b3e40; }
+.dark .prototype-switcher__segment button[aria-pressed="true"] { background: #15181b; color: #f4f3ee; }
+.dark .prototype-switcher__label strong { color: #006f95; }
+.dark .prototype-switcher__status { color: #62686c; }
+/* Keep the end of the page reachable above the floating bar. */
+.prototype-host { padding-bottom: 8px; }
+.request-create-page:has(.prototype-host) { padding-bottom: 96px; }

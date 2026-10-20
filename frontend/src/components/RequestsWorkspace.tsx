@@ -15,6 +15,7 @@ import { DraftDeleteDialog } from './DraftDeleteDialog'
 import { RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { SingleColumnFormPrototype } from './SingleColumnFormPrototype'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
@@ -823,7 +824,9 @@ export function RequestCreatePage() {
   return (
     <article className="workflow-page request-create-page">
       <PageHeader title="New Request" description="Save a private draft, then review and submit from its detail page." />
-      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
+      <SingleColumnFormPrototype>
+        <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
+      </SingleColumnFormPrototype>
       <StagedAttachmentsPanel files={stagedFiles} disabled={stagedUpload.pending} error={stagedUpload.error} onChange={setStagedFiles} />
       {stagedUpload.pending ? <AsyncNotice kind="loading" title="Uploading attachments…" /> : null}
       {savedRequest && stagedUpload.error && stagedFiles.length > 0 ? <button className="btn-primary" type="button" onClick={() => void uploadStagedFiles(savedRequest)}>Retry attachment upload</button> : null}

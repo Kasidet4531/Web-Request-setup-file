@@ -5,6 +5,7 @@ import type {
   FormSchema,
   FormSchemaField,
 } from '../types/forms'
+import { useSingleColumnPrototype } from './SingleColumnFormPrototype'
 
 export type {
   DynamicFormErrors,
@@ -56,6 +57,7 @@ export function DynamicFormRenderer({
   submitLabel = 'Submit request',
   values = {},
 }: DynamicFormRendererProps) {
+  const prototypeVariant = useSingleColumnPrototype()?.variant
   const visibleFields = (fields: FormSchemaField[]) => fields.filter((field) => !isHeaderMetadataField(field))
   const hasRequiredFields = schema.sections.some((section) => visibleFields(section.fields).some((field) => field.required))
 
@@ -67,7 +69,9 @@ export function DynamicFormRenderer({
   }
 
   function renderField(field: FormSchemaField) {
-    return <FieldControl
+    // PROTOTYPE: variant B swaps the stacked field for a label-left spec-sheet row.
+    const Field = prototypeVariant === 'B' ? PrototypeSpecSheetRow : FieldControl
+    return <Field
       errors={errors}
       field={field}
       fieldStatus={fieldStatuses[field.fieldKey]}
@@ -97,7 +101,7 @@ export function DynamicFormRenderer({
   }
 
   return (
-    <form className={`dynamic-form${readOnly ? ' dynamic-form--readonly' : ''}`} noValidate onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
+    <form className={`dynamic-form${readOnly ? ' dynamic-form--readonly' : ''}${prototypeVariant ? ` prototype-form prototype-form--${prototypeVariant.toLowerCase()}` : ''}`} noValidate onKeyDown={handleKeyDown} onSubmit={handleSubmit}>
       {showSchemaHeader ? (
         <div className="dynamic-form__header">
           {headerTitle === undefined ? <p className="page-card__eyebrow">Schema preview</p> : null}
@@ -205,6 +209,61 @@ function FieldControl({ errors, field, fieldStatus, onChange, previousValue, rea
         </p>
       ) : null}
       {changed ? <p className="dynamic-form__previous" id={previousId}>Previous: {previousValue || 'Empty'}</p> : null}
+    </div>
+  )
+}
+
+// PROTOTYPE (variant B): one row per field, label cell on the left, control or value on the right.
+function PrototypeSpecSheetRow({ errors, field, fieldStatus, onChange, previousValue, readOnly, value }: FieldControlProps) {
+  const instanceId = useId()
+  const error = errors[field.fieldKey]
+  const fieldId = `dynamic-field-${instanceId}-${field.fieldKey}`
+  const labelId = `${fieldId}-label`
+  const errorId = `${fieldId}-error`
+  const fieldStatusId = `${fieldId}-autofill-status`
+  const previousId = `${fieldId}-previous`
+  const changed = previousValue !== undefined
+  const describedBy = [error ? errorId : null, fieldStatus ? fieldStatusId : null, changed ? previousId : null]
+    .filter((id): id is string => id !== null)
+    .join(' ') || undefined
+  const label = <>
+    <span>{field.label}</span>
+    {field.required ? <span aria-hidden="true" className="dynamic-form__required">*</span> : null}
+  </>
+  const input = <FieldInput
+    describedBy={describedBy}
+    error={Boolean(error)}
+    field={field}
+    fieldId={fieldId}
+    onChange={onChange}
+    readOnly={readOnly}
+    value={value}
+  />
+
+  return (
+    <div className={`prototype-row${field.type === 'textarea' ? ' prototype-row--textarea' : ''}${changed ? ' dynamic-form__field--changed' : ''}`}>
+      {readOnly || field.type === 'radio'
+        ? <span className="dynamic-form__label prototype-row__label" id={labelId}>{label}</span>
+        : <label className="dynamic-form__label prototype-row__label" htmlFor={fieldId} id={labelId}>{label}</label>}
+      <div className="prototype-row__control">
+        {readOnly ? (
+          <output aria-describedby={describedBy} aria-labelledby={labelId} className="dynamic-form__readonly" id={fieldId}>
+            {value || 'Not provided'}
+          </output>
+        ) : field.type === 'radio' ? (
+          <div aria-describedby={describedBy} aria-invalid={Boolean(error) || undefined} aria-labelledby={labelId}
+            aria-required={field.required || undefined} role="radiogroup">
+            {input}
+          </div>
+        ) : input}
+        {error ? <p className="ui-error" id={errorId}>{error}</p> : null}
+        {fieldStatus ? (
+          <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
+            {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
+          </p>
+        ) : null}
+        {changed ? <p className="dynamic-form__previous" id={previousId}>Previous: {previousValue || 'Empty'}</p> : null}
+      </div>
     </div>
   )
 }

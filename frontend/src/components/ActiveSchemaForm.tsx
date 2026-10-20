@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { useSingleColumnPrototype } from './SingleColumnFormPrototype'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
   activeSchemaFromRequest,
@@ -166,6 +167,7 @@ export function DraftSchemaUpgradeDecision({
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
 export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, deleteAction, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, loadedRequest, submissionConflict = 0 }: ActiveSchemaFormProps) {
+  const prototype = useSingleColumnPrototype()
   const savedValuesRef = useRef<DynamicFormValues>({})
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
@@ -341,6 +343,21 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     onDirtyChange?.(JSON.stringify(nextValues) !== JSON.stringify(nextBaseline))
   }, [activeSchema, currentRequest, loadedSchemaKey, loadKey, mode, onDirtyChange, requestId, requesterIdentity])
 
+  // PROTOTYPE: fill or clear the unsaved New Request form with the switcher's sample values.
+  const prototypeSampleValues = prototype?.sampleValues ?? null
+  const appliedPrototypeSample = useRef<DynamicFormValues | null>(null)
+  useEffect(() => {
+    if (!prototype || !activeSchema || loadedSchemaKey !== loadKey || currentRequest) return
+    if (appliedPrototypeSample.current === prototypeSampleValues) return
+    appliedPrototypeSample.current = prototypeSampleValues
+    const nextValues = prototypeSampleValues
+      ? buildRequestValuesForSchema(activeSchema.schema, prototypeSampleValues)
+      : buildInitialValues(activeSchema.schema, mode)
+    savedValuesRef.current = nextValues
+    replaceValues(nextValues)
+    onDirtyChange?.(false)
+  }, [activeSchema, currentRequest, loadedSchemaKey, loadKey, mode, onDirtyChange, prototype, prototypeSampleValues])
+
   useEffect(() => {
     if (
       mode !== 'request' ||
@@ -506,7 +523,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   )
   const usesExplicitEdit = explicitEdit && mode === 'request' && Boolean(currentRequest && currentRequest.status !== DRAFT_STATUS)
   const formUnavailable = readOnly || disabled || loadedRequestPending || saving || upgradePending || hasInconsistentDraftSchema
-  const formReadOnly = formUnavailable || (usesExplicitEdit && !editingInformation)
+  const formReadOnly = Boolean(prototype?.readOnly) || formUnavailable || (usesExplicitEdit && !editingInformation)
   const readOnlyFieldKeys = activeSchema?.schema.sections.flatMap((section) => section.fields.filter((field) => isRequesterIdentityKey(field.canonicalKey) || field.canonicalKey === 'start_date' || field.fieldKey === 'start_date').map((field) => field.fieldKey)) ?? []
 
 
@@ -682,6 +699,13 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   }
 
   async function saveDraft(currentValues: DynamicFormValues) {
+    // PROTOTYPE: never create a Draft on the shared dev database.
+    if (prototype) {
+      prototype.onStubbedSave()
+      setSaveError(null)
+      setSaveMessage('Prototype: Save is stubbed. Nothing was sent to the server.')
+      return
+    }
     const mutationLock = draftSchemaUpgradeLock.current
     if (
       !activeSchema ||
