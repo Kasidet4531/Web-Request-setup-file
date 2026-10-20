@@ -7,6 +7,16 @@
 // read-only arrangement and ?sample=true to fill the form with a real
 // request's values. Field order, grouping, labels and visibility are unchanged.
 // Save is stubbed: nothing is sent to the shared dev database.
+//
+// Verdict (21 Oct 2026, confirmed by the user): variant D.
+// - Editable: B's spec-sheet rows (label left, control right, one row per
+//   field, row dividers) with C's action bar pinned to the bottom of the
+//   viewport, and the Save button at the far right edge of the card.
+// - Edit mode uses the same label type as read-only (14px bold, foreground)
+//   and the same row height, so switching modes moves nothing; only wrapping
+//   radio groups and the Description textarea are taller while editing.
+// - Read-only views (request detail, Admin Draft detail, Request Snapshot)
+//   use the same B rows: label left, value right.
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { PrototypeSwitcher } from './ui/PrototypeSwitcher'
