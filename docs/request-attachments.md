@@ -171,11 +171,13 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 
 20 October 2026, on the feature branch:
 
-- `npm run test:attachments:postgres` (16 tests): `attachments.postgres.test.ts`
+- `npm run test:attachments:postgres` (17 tests): `attachments.postgres.test.ts`
   runs `RequestsService`, the Attachment service and `AuditLogService` on
   in-memory PostgreSQL with a real temporary directory as
-  `ATTACHMENT_STORAGE_PATH`, and checks folder paths under Windows path rules
-  (`Z:/attachment`, a `Z:/` drive root, a UNC share);
+  `ATTACHMENT_STORAGE_PATH`, checks folder paths under Windows path rules
+  (`Z:/attachment`, a `Z:/` drive root, a UNC share) and checks that the
+  submission email queued with a real notification service carries the
+  `PSF-` number, not the Draft number;
   `check-attachment-folders.test.ts` covers the folder check, before and after
   Request IDs. `initialize-data.postgres.test.ts` covers IDs and the sequence
   after a load; `request-attachments.controller.spec.ts` covers multipart upload

@@ -29,14 +29,25 @@ import {
   ownerA,
   ownerB,
   requester,
+  submittedStatus,
 } from './draft-lifecycle.fixture';
+import { CONFIGURATION_KEY } from '../src/admin/workflow_transition.service';
+import { MailConfig } from '../src/notifications/mail.config';
+import { NotificationService } from '../src/notifications/notification.service';
+import {
+  NotificationStorage,
+  OUTBOX_SCHEMA,
+} from '../src/notifications/notification.storage';
 import {
   AttachmentStorage,
   pathInside,
   requestFolderName,
 } from '../src/requests/attachment-storage';
 import { RequestAttachmentsService } from '../src/requests/request-attachments.service';
-import type { PsfRequestResponse } from '../src/requests/requests.service';
+import {
+  RequestsService,
+  type PsfRequestResponse,
+} from '../src/requests/requests.service';
 
 let db: PGlite;
 let root: string;
@@ -156,6 +167,81 @@ void it('allocates sequential IDs and numbers a submitted Draft PSF- and its six
     )
   ).rows;
   assert.equal(indexed.request_no, submitted.requestNo);
+});
+
+void it('puts the PSF number, not the Draft number, in the submission email', async () => {
+  await db.exec(OUTBOX_SCHEMA);
+  type Catalog = { entries: Array<{ name: string }> };
+  const [{ config_json: catalog }] = (
+    await db.query<{ config_json: Catalog }>(
+      'SELECT config_json FROM workflow_transition_config WHERE config_key = $1',
+      [CONFIGURATION_KEY],
+    )
+  ).rows;
+  const saveCatalog = (config: Catalog) =>
+    db.query(
+      'UPDATE workflow_transition_config SET config_json = $2 WHERE config_key = $1',
+      [CONFIGURATION_KEY, config],
+    );
+  // Email the team whenever a request is submitted to this Status.
+  await saveCatalog({
+    ...catalog,
+    entries: catalog.entries.map((entry) =>
+      entry.name === submittedStatus
+        ? {
+            ...entry,
+            emailPolicy: { enabled: true, to: ['team@example.com'], cc: [] },
+          }
+        : entry,
+    ),
+  });
+  try {
+    const service = new RequestsService(
+      fixture.pool,
+      fixture.forms,
+      fixture.workflow,
+      fixture.index,
+      fixture.audit,
+      new NotificationService(
+        new NotificationStorage(fixture.pool),
+        new MailConfig({ APP_BASE_URL: 'http://127.0.0.1:5173' }),
+      ),
+      fixture.attachments,
+    );
+    const draft = await fixture.draft();
+
+    const submitted = await service.submitRequest(
+      draft.id,
+      {
+        formVersion: 1,
+        expectedUpdatedAt: draft.updatedAt,
+        status: submittedStatus,
+      },
+      requester,
+    );
+
+    const psfNo = `PSF-${String(draft.numericId).padStart(6, '0')}`;
+    assert.equal(submitted.requestNo, psfNo);
+    const emails = (
+      await db.query<{
+        request_no: string;
+        subject: string;
+        body_html: string;
+      }>(
+        'SELECT request_no, subject, body_html FROM email_outbox WHERE request_id = $1',
+        [draft.id],
+      )
+    ).rows;
+    assert.equal(emails.length, 1);
+    const [email] = emails;
+    assert.equal(email.request_no, psfNo);
+    assert.ok(email.subject.includes(psfNo), email.subject);
+    assert.ok(email.body_html.includes(psfNo));
+    assert.ok(!email.subject.includes(draft.requestNo));
+    assert.ok(!email.body_html.includes(draft.requestNo));
+  } finally {
+    await saveCatalog(catalog);
+  }
 });
 
 void it('continues IDs above the Imported Requests when existing storage is upgraded', async () => {
