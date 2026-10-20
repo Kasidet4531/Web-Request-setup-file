@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnApplicationBootstrap,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -82,7 +83,7 @@ interface AttachmentRow {
  * reconciled with the folder whenever the list is read.
  */
 @Injectable()
-export class RequestAttachmentsService {
+export class RequestAttachmentsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(RequestAttachmentsService.name);
 
   constructor(
@@ -90,6 +91,25 @@ export class RequestAttachmentsService {
     private readonly storage: AttachmentStorage,
     private readonly auditLogService: AuditLogService,
   ) {}
+
+  // Reports the storage at startup without stopping the app; Attachment
+  // routes keep refusing work until the folder can be reached.
+  async onApplicationBootstrap(): Promise<void> {
+    if (!this.storage.configured) {
+      this.logger.warn(
+        'ATTACHMENT_STORAGE_PATH is not set; Attachments are disabled.',
+      );
+      return;
+    }
+    try {
+      await this.storage.assertReachable();
+      this.logger.log(`Attachment storage: ${this.storage.rootPath}`);
+    } catch {
+      this.logger.error(
+        `Attachment storage ${this.storage.rootPath} cannot be reached. A drive letter mapped in a user's logon (such as Z:) is not visible to a backend running as a Windows service: use the UNC path (\\\\server\\share\\folder) or run the service as an account that maps the drive.`,
+      );
+    }
+  }
 
   async ensureStorage(client: QueryRunner): Promise<void> {
     await client.query(`

@@ -39,12 +39,21 @@ not count as an unsaved change. Source:
 ## Storage
 
 `ATTACHMENT_STORAGE_PATH` names the root folder: a Windows mapped drive
-(`Z:\PSF`), a UNC path (`\\nas\share\PSF`) or a local directory. A backend
-running as a Windows service does not see drives mapped in a user's logon
-session; use a UNC path there. In `backend/.env` write the path unquoted
-(`ATTACHMENT_STORAGE_PATH=\\nas01\share\PSF`): inside double quotes `\n` becomes
-a line break. Restart the backend after changing it. `ATTACHMENT_MAX_BYTES` limits each file (default
-52428800, 50 MB); uploads are held in memory up to that size.
+(`Z:/attachment` or `Z:\attachment`, a drive root such as `Z:/` included), a
+UNC path (`\\nas01\share\attachment`) or a local directory. A mapped drive
+works only while the backend runs in the logon session that maps it: a backend
+running as a Windows service does not see `Z:`, so use the share's UNC path
+there or run the service as an account that maps the drive. The startup log
+reports whether the folder can be reached. In `backend/.env` write the path
+unquoted (`ATTACHMENT_STORAGE_PATH=Z:/attachment`): inside double quotes `\n`
+becomes a line break. Restart the backend after changing it.
+`ATTACHMENT_MAX_BYTES` limits each file (default 52428800, 50 MB); uploads are
+held in memory up to that size.
+
+Any number of files can be attached. The browser sends them in batches of up
+to 10 per request; after a failed batch only the files not yet uploaded are
+retried. On a Windows share, renaming a folder or deleting a file that someone
+has open is refused with "in use on the NAS" (409) and nothing changes.
 
 Without `ATTACHMENT_STORAGE_PATH`, Attachment routes answer 503 and
 Product_Description changes rename nothing. When the root folder cannot be
@@ -86,6 +95,34 @@ Requests' existing folders appear, and how files added or removed in Windows
 Explorer show up the next time the request is opened.
 
 Source: [service](../backend/src/requests/request-attachments.service.ts).
+
+## Checking existing NAS folders
+
+Before deploying, compare the folders already on the NAS with the names the app
+will look for. From `backend/`, with `backend/.env` holding the database
+settings and `ATTACHMENT_STORAGE_PATH`:
+
+```bash
+npm run attachments:check                         # counts and the first 20 problems
+npm run attachments:check -- --csv report.csv     # every finding, opens in Excel
+npm run attachments:check -- --root Z:/attachment # another folder than the .env one
+```
+
+It only reads: the database inside a read-only transaction and the folder
+names directly under the root. It also runs on a database from before Request
+IDs, taking each ID from the `PSF-NNNNNN` number. It reports:
+
+| Count | Meaning |
+| --- | --- |
+| `matched` | The expected `[Product_Description]_[ID]` folder exists |
+| `caseOnly` | It differs only in letter case: the same folder on a Windows share |
+| `noFolder` | No folder ends with the ID, as for a request with nothing attached |
+| `renamed` | A folder with the ID exists under another name: **the app will show no files** until it is renamed to the expected name |
+| `duplicates` | More than one folder ends with the same ID; the app uses only the expected one |
+| `unmatchedFolders` | Folders whose name has no `_ID` of any request |
+| `withoutId` | Requests whose ID is not known yet (a Draft number before the upgrade) |
+
+Source: [check script](../backend/scripts/check-attachment-folders.ts).
 
 ## Access and API
 
@@ -134,16 +171,23 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 
 20 October 2026, on the feature branch:
 
-- `backend/test/attachments.postgres.test.ts` (13 tests) runs `RequestsService`,
-  the Attachment service and `AuditLogService` on in-memory PostgreSQL with a
-  real temporary directory as `ATTACHMENT_STORAGE_PATH`;
-  `initialize-data.postgres.test.ts` covers IDs and the sequence after a load;
-  `request-attachments.controller.spec.ts` covers multipart upload with a Thai
-  file name, the 413 limit, download headers and sign-in over HTTP.
+- `npm run test:attachments:postgres` (16 tests): `attachments.postgres.test.ts`
+  runs `RequestsService`, the Attachment service and `AuditLogService` on
+  in-memory PostgreSQL with a real temporary directory as
+  `ATTACHMENT_STORAGE_PATH`, and checks folder paths under Windows path rules
+  (`Z:/attachment`, a `Z:/` drive root, a UNC share);
+  `check-attachment-folders.test.ts` covers the folder check, before and after
+  Request IDs. `initialize-data.postgres.test.ts` covers IDs and the sequence
+  after a load; `request-attachments.controller.spec.ts` covers multipart upload
+  with a Thai file name, the 413 limit, download headers and sign-in over HTTP.
 - Frontend tests cover tab order, Draft placement, the default
-  Product_Description, staged upload and its failure, preview versus direct
-  download, delete confirmation and Audit History labels.
+  Product_Description, staged upload and its failure, batches of 10 with a
+  retry of only the files not uploaded, preview versus direct download, delete
+  confirmation and Audit History labels.
 - A manual run of the built backend on a disposable PostgreSQL 16 with the Vite
   frontend in Chromium exercised New Request with staged files, the folder
   rename, submission to `PSF-000002`, the Attachments tab, preview, deletion and
-  Audit History. The configured database and a real NAS share were not used.
+  Audit History; `npm run attachments:check` was run against a disposable
+  PostgreSQL 16 with Thai folder names. The configured database, a Windows
+  server and a real NAS share were not used, so the "in use on the NAS" refusal
+  is untested.

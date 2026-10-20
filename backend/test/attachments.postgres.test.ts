@@ -12,7 +12,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { after, before, beforeEach, it } from 'node:test';
 import {
   BadRequestException,
@@ -32,6 +32,7 @@ import {
 } from './draft-lifecycle.fixture';
 import {
   AttachmentStorage,
+  pathInside,
   requestFolderName,
 } from '../src/requests/attachment-storage';
 import { RequestAttachmentsService } from '../src/requests/request-attachments.service';
@@ -105,6 +106,27 @@ void it('names a request folder [Product_Description]_[ID], or _[ID] while blank
   );
   assert.equal(requestFolderName('   ', 7), '_7');
   assert.equal(requestFolderName(undefined, 7), '_7');
+});
+
+void it('keeps request folders inside a Windows mapped drive, drive root or share', () => {
+  const windows = win32;
+  assert.equal(
+    pathInside('Z:/attachment', 'Chip A_5571', windows),
+    'Z:\\attachment\\Chip A_5571',
+  );
+  assert.equal(
+    pathInside('Z:\\attachment\\', '_5571', windows),
+    'Z:\\attachment\\_5571',
+  );
+  // A drive root already ends with its separator.
+  assert.equal(pathInside('Z:/', 'Chip A_5571', windows), 'Z:\\Chip A_5571');
+  assert.equal(
+    pathInside('\\\\nas01\\share\\PSF', 'Chip A_5571', windows),
+    '\\\\nas01\\share\\PSF\\Chip A_5571',
+  );
+  assert.equal(pathInside('Z:/attachment', '..', windows), null);
+  assert.equal(pathInside('Z:/attachment', '', windows), null);
+  assert.equal(pathInside('Z:/attachment', 'C:\\Windows', windows), null);
 });
 
 void it('allocates sequential IDs and numbers a submitted Draft PSF- and its six-digit ID', async () => {

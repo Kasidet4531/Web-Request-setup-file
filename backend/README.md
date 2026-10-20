@@ -90,6 +90,11 @@ without `--yes`. See [Initial Data Load](../docs/initial-data-load.md) before us
 It clears Attachment metadata but never touches the NAS folders, which are
 listed again when each request is opened.
 
+`npm run attachments:check [-- --csv report.csv] [--root <folder>]` compares the
+existing NAS folders with the `[Product_Description]_[ID]` names the app looks
+for, without changing anything. See
+[checking existing NAS folders](../docs/request-attachments.md#checking-existing-nas-folders).
+
 ## Checks
 
 ```sh

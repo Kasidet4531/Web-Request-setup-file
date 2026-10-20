@@ -2486,7 +2486,7 @@ describe('Request Attachments', () => {
     requestDetailApi.uploadRequestAttachments.mockReturnValue(new Promise((resolve) => { finishUpload = resolve }))
     ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
     ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
-    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file])
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file], expect.any(Function))
     render()
     requestDetailHookHarness.runEffects()
     expect(navigation.navigate).not.toHaveBeenCalled()
@@ -2497,6 +2497,34 @@ describe('Request Attachments', () => {
     requestDetailHookHarness.runEffects()
     expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
     expect(navigation.blocker?.enableBeforeUnload).toBe(false)
+  })
+
+  it('retries only the staged files whose batch was not uploaded', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const files = Array.from({ length: 12 }, (_, index) => new File(['x'], `layout-${index}.dpl`))
+    let page = render()
+    ;(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.onChange as (files: File[]) => void)(files)
+    page = render()
+    requestDetailHookHarness.runEffects()
+    // The first batch of ten goes through, then the NAS stops answering.
+    requestDetailApi.uploadRequestAttachments.mockImplementationOnce(async (_requestId: string, sent: File[], onBatchUploaded: (uploaded: File[], list: unknown) => void) => {
+      onBatchUploaded(sent.slice(0, 10), { folderName: 'x', canManage: true, items: [] })
+      throw new ApiError('Attachment storage is unreachable. Try again later.', 503, 'Service Unavailable', null)
+    })
+    const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    await flushRequestDetailAsyncWork()
+    page = render()
+    expect(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.files).toEqual(files.slice(10))
+
+    requestDetailApi.uploadRequestAttachments.mockResolvedValueOnce({ folderName: 'x', canManage: true, items: [] })
+    ;(requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Retry attachment upload').props.onClick as () => void)()
+    await flushRequestDetailAsyncWork()
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenLastCalledWith('request-1', files.slice(10), expect.any(Function))
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
   })
 
   it('keeps staged files and offers a retry when their upload fails after the Draft is saved', async () => {
@@ -2576,7 +2604,7 @@ describe('Request Attachments', () => {
     ;(requireRenderedElement(panel, (element) => element.props.label === 'Upload files').props.onSelect as (files: File[]) => void)([file])
     await flushRequestDetailAsyncWork()
     panel = renderPanel(onChanged)
-    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file])
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file], expect.any(Function))
     expect(findRenderedElement(panel, (element) => element.props.download === 'new.dpl')).not.toBeNull()
     expect(onChanged).toHaveBeenCalledTimes(2)
   })

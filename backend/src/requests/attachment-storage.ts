@@ -12,7 +12,7 @@ import {
   stat,
   unlink,
 } from 'node:fs/promises';
-import { extname, join, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep, type PlatformPath } from 'node:path';
 
 export const DEFAULT_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -117,6 +117,30 @@ function errorCode(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException | undefined)?.code;
 }
 
+// Windows refuses to move or delete what someone has open on the share.
+function inUseConflict(error: unknown, what: string): unknown {
+  return ['EBUSY', 'EPERM', 'EACCES'].includes(errorCode(error) ?? '')
+    ? new ConflictException(
+        `${what} is in use on the NAS (a file may be open). Close it and try again.`,
+      )
+    : error;
+}
+
+/**
+ * Resolves one name inside a root, or null when it would land outside or on
+ * the root itself. A drive root such as `Z:/` already ends with a separator.
+ */
+export function pathInside(
+  root: string,
+  name: string,
+  paths: Pick<PlatformPath, 'resolve' | 'sep'> = { resolve, sep },
+): string | null {
+  const base = paths.resolve(root);
+  const target = paths.resolve(base, name);
+  const prefix = base.endsWith(paths.sep) ? base : base + paths.sep;
+  return target !== base && target.startsWith(prefix) ? target : null;
+}
+
 /** Request Attachment folders under `ATTACHMENT_STORAGE_PATH`, typically a NAS share. */
 export class AttachmentStorage {
   readonly rootPath: string | null;
@@ -151,10 +175,8 @@ export class AttachmentStorage {
   }
 
   filePath(folder: string, filename: string): string {
-    const directory = this.folderPath(folder);
-    const path = resolve(directory, filename);
-    if (!path.startsWith(directory + sep))
-      throw new BadRequestException('Invalid attachment file name.');
+    const path = pathInside(this.folderPath(folder), filename);
+    if (!path) throw new BadRequestException('Invalid attachment file name.');
     return path;
   }
 
@@ -222,7 +244,7 @@ export class AttachmentStorage {
     try {
       await unlink(this.filePath(folder, filename));
     } catch (error) {
-      if (errorCode(error) !== 'ENOENT') throw error;
+      if (errorCode(error) !== 'ENOENT') throw inUseConflict(error, filename);
     }
   }
 
@@ -240,7 +262,11 @@ export class AttachmentStorage {
       throw new ConflictException(
         `A NAS folder named "${to}" already exists. Move or rename it on the NAS, then save again.`,
       );
-    await rename(source, target);
+    try {
+      await rename(source, target);
+    } catch (error) {
+      throw inUseConflict(error, `The NAS folder "${from}"`);
+    }
     return () => rename(target, source);
   }
 
@@ -253,10 +279,8 @@ export class AttachmentStorage {
       throw new ServiceUnavailableException(
         'Attachment storage is not configured (ATTACHMENT_STORAGE_PATH).',
       );
-    const root = resolve(this.rootPath);
-    const directory = resolve(root, folder);
-    if (directory === root || !directory.startsWith(root + sep))
-      throw new BadRequestException('Invalid attachment folder.');
+    const directory = pathInside(this.rootPath, folder);
+    if (!directory) throw new BadRequestException('Invalid attachment folder.');
     return directory;
   }
 

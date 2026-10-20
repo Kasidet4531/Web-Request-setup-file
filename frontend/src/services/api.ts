@@ -380,6 +380,9 @@ export interface RequestAttachmentList {
   items: RequestAttachment[]
 }
 
+/** The most files the server takes in one upload request; more are sent in batches. */
+export const ATTACHMENTS_PER_UPLOAD = 10
+
 function attachmentsPath(requestId: string, attachmentId?: string): string {
   const base = `/requests/${encodeURIComponent(requestId)}/attachments`
   return attachmentId ? `${base}/${encodeURIComponent(attachmentId)}` : base
@@ -583,10 +586,23 @@ export function createApiClient(config: ApiClientConfig = {}) {
       }),
     fetchRequestAttachments: (requestId: string) =>
       request<RequestAttachmentList>(attachmentsPath(requestId), { method: 'GET' }),
-    uploadRequestAttachments: (requestId: string, files: File[]) => {
-      const body = new FormData()
-      files.forEach((file) => body.append('files', file, file.name))
-      return request<RequestAttachmentList>(attachmentsPath(requestId), { body, method: 'POST' })
+    // Any number of files, one batch after another; onBatchUploaded reports each
+    // finished batch so a later failure never resends files already uploaded.
+    uploadRequestAttachments: async (
+      requestId: string,
+      files: File[],
+      onBatchUploaded?: (uploaded: File[], list: RequestAttachmentList) => void,
+    ) => {
+      let list: RequestAttachmentList | null = null
+      for (let start = 0; start < files.length; start += ATTACHMENTS_PER_UPLOAD) {
+        const batch = files.slice(start, start + ATTACHMENTS_PER_UPLOAD)
+        const body = new FormData()
+        batch.forEach((file) => body.append('files', file, file.name))
+        list = await request<RequestAttachmentList>(attachmentsPath(requestId), { body, method: 'POST' })
+        onBatchUploaded?.(batch, list)
+      }
+      if (!list) throw new Error('Choose at least one file to attach.')
+      return list
     },
     deleteRequestAttachment: (requestId: string, attachmentId: string) =>
       request<{ deleted: true }>(attachmentsPath(requestId, attachmentId), { method: 'DELETE' }),

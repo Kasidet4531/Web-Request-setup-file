@@ -103,14 +103,20 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
     setUploading(true)
     setActionError(null)
     setMessage(null)
+    let uploaded = 0
     try {
-      const data = await api.uploadRequestAttachments(requestId, files)
+      const data = await api.uploadRequestAttachments(requestId, files, (batch, partial) => {
+        uploaded += batch.length
+        setState({ loading: false, error: null, data: partial })
+      })
+      uploaded = files.length
       setState({ loading: false, error: null, data })
       setMessage(`${files.length === 1 ? files[0].name : `${files.length} files`} uploaded.`)
-      onChanged?.()
     } catch (error) {
-      setActionError(`Upload failed: ${errorMessage(error, 'Unable to upload attachments')}`)
+      const progress = uploaded ? ` (${uploaded} of ${files.length} files were uploaded)` : ''
+      setActionError(`Upload failed: ${errorMessage(error, 'Unable to upload attachments')}${progress}`)
     } finally {
+      if (uploaded) onChanged?.()
       setUploading(false)
     }
   }

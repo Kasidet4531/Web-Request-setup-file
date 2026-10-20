@@ -800,7 +800,11 @@ export function RequestCreatePage() {
     stagedUploadRunning.current = true
     setStagedUpload({ pending: true, error: null })
     try {
-      await api.uploadRequestAttachments(request.id, files)
+      await api.uploadRequestAttachments(request.id, files, (uploaded) => {
+        // Only files still waiting stay staged, so a retry sends just those.
+        stagedFilesRef.current = stagedFilesRef.current.filter((file) => !uploaded.includes(file))
+        setStagedFiles(stagedFilesRef.current)
+      })
       stagedFilesRef.current = []
       setStagedFiles([])
       setStagedUpload({ pending: false, error: null })
