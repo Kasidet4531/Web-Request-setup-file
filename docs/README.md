@@ -48,6 +48,15 @@ behavior and test outcomes.
 | [Auto-fill Rules and Status recipient design](specs/2026-10-07-autofill-admin-dialogs-design.md) | Active/Inactive selection, modal editing, field labels and recipient layout requirements |
 | [Auto-fill Admin Dialogs plan](plans/2026-10-07-autofill-admin-dialogs.md) | Implementation checklist using `/implement` and `/code-review` |
 
+## Research inputs
+
+External research that feeds requirement interviews. It does not describe
+current behavior.
+
+| Document | Use/scope |
+| --- | --- |
+| [Form UX and color accessibility research](design/2026-10-20-form-ux-accessibility-research.md) | General guidance on dynamic-form structure, input errors, request lists and WCAG contrast (Thai); sources not yet verified against the originals |
+
 ## Agent and tracker conventions
 
 | Document | Use/scope |
