@@ -44,7 +44,7 @@ export function AdminFormConfigPreview({ schema }: { schema: FormSchema | null }
         setPreview((state) => ({ ...state, values: { ...state.values, [fieldKey]: value } }))
       }}
       onSubmit={() => setPreview((state) => ({ ...state, checked: true }))}
-      readOnlyFieldKeys={identityKeys}
+      readOnlyFieldKeys={schema.formKey === 'psf-request' ? fields.filter((field) => identityKeys.includes(field.fieldKey) || field.canonicalKey === 'start_date' || field.fieldKey === 'start_date').map((field) => field.fieldKey) : identityKeys}
       schema={schema}
       showSchemaHeader={false}
       submitLabel="Check required fields"

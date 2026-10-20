@@ -39,10 +39,10 @@ non-fitting values per column, which are real data: use it only in your own term
    `psf_request_audit_logs`, `draft_deletion_logs`, `draft_reminders`, `email_outbox`,
    `psf_export_jobs`, `form_definitions` and `autofill_rules`. It keeps `app_users` and
    `request_data_migrations`.
-2. **Forms.** Requester columns (plus `Creater/Requestor` and `Due Date`) become `psf-request`; `Creater`
+2. **Forms.** Requester columns (plus `Creater/Requestor`, `Due Date`, and `Start Date`) become `psf-request`; `Creater`
    columns become `psf-created-information` version 1. Columns with an empty "For" other than `Due Date` and `Created By` (`Workflow Name`, `Item Type`, `Path`) are
    Legacy Columns: they appear only in `psf-request` version 1 (status `published`). Version
-   2 (`active`) has the Requester columns (including `due_date`). Every imported request keeps version 1 as its snapshot.
+   2 (`active`) has the Requester columns (including `due_date` and `start_date`). Every imported request keeps version 1 as its snapshot. In the UI, `Start Date`, `Requester`, and `Modified By` are shown in the header metadata (`Start Date | Due Date | Requester | Modified By`) rather than rendered inside the form grid.
    `Request To` is the `product_type` field; `requester_name` (`Requester Name`, `canonicalKey: 'requester'`, required) and `modified_by` (`Modified By`, `canonicalKey: 'modified_by'`, read-only) are placed right after `product_type` in both version 1 and version 2.
 3. **Field details.** Label = "Column Name change" else "Column Name". Key = slug of the
    original name, except `Reference OLD PSF name`→`reference_psf_name`, `Fab.`→`wafer_fab`,
