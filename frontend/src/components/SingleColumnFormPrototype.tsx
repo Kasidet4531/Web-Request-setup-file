@@ -3,7 +3,7 @@
 // Question: what should the dynamic form look like as a single column, both
 // editable and read-only?
 // Plan: three single-column variants of the existing New Request page
-// (/requests/new), switchable with ?variant=A|B|C, plus ?view=read for the
+// (/requests/new), switchable with ?variant=A|B|C (D combines B and C), plus ?view=read for the
 // read-only arrangement and ?sample=true to fill the form with a real
 // request's values. Field order, grouping, labels and visibility are unchanged.
 // Save is stubbed: nothing is sent to the shared dev database.
@@ -18,6 +18,8 @@ export const FORM_LAYOUT_VARIANTS = [
   { key: 'A', name: 'Label above, narrow column' },
   { key: 'B', name: 'Label left, control right' },
   { key: 'C', name: 'Label above + sticky action bar' },
+  // Added after review: the user's pick, B's rows with C's pinned bar and Save at the far right.
+  { key: 'D', name: 'B rows + sticky bar, Save far right' },
 ] as const
 
 export type FormLayoutVariant = (typeof FORM_LAYOUT_VARIANTS)[number]['key']
@@ -98,7 +100,7 @@ function SingleColumnFormPrototypeShell({ children }: { children: ReactNode }) {
     <SingleColumnPrototypeContext.Provider value={state}>
       {/* Read-only request views (detail, Admin Draft detail, Snapshot) all sit inside .detail-editors. */}
       <div className={readOnly ? 'detail-editors prototype-host' : 'prototype-host'}>{children}</div>
-      <PrototypeSwitcher current={variant} lifted={variant === 'C' && !readOnly} onChange={(key) => update({ variant: key as FormLayoutVariant })} variants={FORM_LAYOUT_VARIANTS}>
+      <PrototypeSwitcher current={variant} lifted={(variant === 'C' || variant === 'D') && !readOnly} onChange={(key) => update({ variant: key as FormLayoutVariant })} variants={FORM_LAYOUT_VARIANTS}>
         <span aria-label="Mode" className="prototype-switcher__segment" role="group">
           <button aria-pressed={!readOnly} onClick={() => update({ view: 'edit' })} type="button">Editable</button>
           <button aria-pressed={readOnly} onClick={() => update({ view: 'read' })} type="button">Read-only</button>

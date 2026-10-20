@@ -12,15 +12,16 @@
 .prototype-form--c.dynamic-form--readonly .dynamic-form__grid { gap: 16px; }
 .prototype-form--a .dynamic-form__actions { max-width: 600px; }
 
-/* B: spec sheet. One row per field, label cell left, control or value right. */
-.prototype-form--b .dynamic-form__grid { max-width: 840px; gap: 0; border-top: 1px solid var(--border); }
+/* B (and D): spec sheet. One row per field, label cell left, control or value right. */
+.prototype-form--b .dynamic-form__grid, .prototype-form--d .dynamic-form__grid { max-width: 840px; gap: 0; border-top: 1px solid var(--border); }
 .prototype-row { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 4px 24px; align-items: start; min-width: 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .prototype-row__label { padding-top: 8px; }
 .prototype-row__control { display: grid; gap: 6px; min-width: 0; }
 .prototype-row__control .dynamic-form__autofill-status { margin: 0; }
-.prototype-form--b.dynamic-form--readonly .prototype-row { padding: 6px 0; }
-.prototype-form--b.dynamic-form--readonly .prototype-row__label { padding-top: 6px; }
-.detail-editors .prototype-form--b.dynamic-form--readonly .prototype-row__label { padding-bottom: 0; border-bottom: 0; }
+.prototype-form--b.dynamic-form--readonly .prototype-row, .prototype-form--d.dynamic-form--readonly .prototype-row { padding: 6px 0; }
+.prototype-form--b.dynamic-form--readonly .prototype-row__label, .prototype-form--d.dynamic-form--readonly .prototype-row__label { padding-top: 6px; }
+.detail-editors .prototype-form--b.dynamic-form--readonly .prototype-row__label,
+.detail-editors .prototype-form--d.dynamic-form--readonly .prototype-row__label { padding-bottom: 0; border-bottom: 0; }
 .prototype-form--b .dynamic-form__actions { max-width: 840px; border-top: 0; }
 @media (max-width: 599px) {
   .prototype-row { grid-template-columns: minmax(0, 1fr); }
@@ -31,6 +32,14 @@
 .prototype-form--c .dynamic-form__actions {
   position: sticky; bottom: 0; z-index: 20;
   margin: 24px -24px -24px; padding: 12px max(24px, calc(100% - 576px)) 12px 24px;
+  background: var(--card); border-top: 1px solid var(--border); border-radius: 0 0 8px 8px;
+  box-shadow: 0 -6px 16px #172b3a14;
+}
+
+/* D: B's rows plus C's pinned bar, with Save at the far right edge of the card. */
+.prototype-form--d .dynamic-form__actions {
+  position: sticky; bottom: 0; z-index: 20;
+  margin: 24px -24px -24px; padding: 12px 24px; justify-content: flex-end;
   background: var(--card); border-top: 1px solid var(--border); border-radius: 0 0 8px 8px;
   box-shadow: 0 -6px 16px #172b3a14;
 }

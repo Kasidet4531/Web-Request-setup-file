@@ -69,8 +69,8 @@ export function DynamicFormRenderer({
   }
 
   function renderField(field: FormSchemaField) {
-    // PROTOTYPE: variant B swaps the stacked field for a label-left spec-sheet row.
-    const Field = prototypeVariant === 'B' ? PrototypeSpecSheetRow : FieldControl
+    // PROTOTYPE: variants B and D swap the stacked field for a label-left spec-sheet row.
+    const Field = prototypeVariant === 'B' || prototypeVariant === 'D' ? PrototypeSpecSheetRow : FieldControl
     return <Field
       errors={errors}
       field={field}
@@ -213,7 +213,7 @@ function FieldControl({ errors, field, fieldStatus, onChange, previousValue, rea
   )
 }
 
-// PROTOTYPE (variant B): one row per field, label cell on the left, control or value on the right.
+// PROTOTYPE (variants B and D): one row per field, label cell on the left, control or value on the right.
 function PrototypeSpecSheetRow({ errors, field, fieldStatus, onChange, previousValue, readOnly, value }: FieldControlProps) {
   const instanceId = useId()
   const error = errors[field.fieldKey]
