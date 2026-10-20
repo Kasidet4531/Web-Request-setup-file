@@ -218,6 +218,7 @@ export class RequestsService implements OnModuleInit {
         allowMissingRequired: true,
       }),
       requester,
+      this.shouldTrackStartDate(activeSchema.schema) ? new Date().toISOString().slice(0, 10) : undefined,
       this.shouldTrackModifiedBy(activeSchema.schema)
         ? actor.displayName
         : undefined,
@@ -838,6 +839,7 @@ export class RequestsService implements OnModuleInit {
         request.schema_snapshot_json,
         request.requester_data_json,
       );
+      const startDate = this.resolveServerStartDate(request.schema_snapshot_json, request.requester_data_json, request.created_at);
       const baseRequesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(
           request.schema_snapshot_json,
@@ -848,6 +850,7 @@ export class RequestsService implements OnModuleInit {
           },
         ),
         requesterIdentity.displayName,
+        startDate,
         trackModifiedBy
           ? typeof request.requester_data_json?.modified_by === 'string'
             ? request.requester_data_json.modified_by
@@ -858,7 +861,7 @@ export class RequestsService implements OnModuleInit {
         request.schema_snapshot_json,
         request.requester_data_json ?? {},
         baseRequesterData,
-      ).filter((change) => change.fieldKey !== 'modified_by');
+      ).filter((change) => change.fieldKey !== 'modified_by' && change.fieldKey !== 'start_date');
       // A save that changes nothing writes nothing: no Audit History entry
       // and no new revision for other editors to conflict with.
       if (userFieldChanges.length === 0)
@@ -868,6 +871,7 @@ export class RequestsService implements OnModuleInit {
         ? this.withServerRequesterIdentity(
             baseRequesterData,
             requesterIdentity.displayName,
+            startDate,
             actor.displayName,
           )
         : baseRequesterData;
@@ -1036,6 +1040,7 @@ export class RequestsService implements OnModuleInit {
           true,
         ),
         requesterIdentity.displayName,
+        this.resolveServerStartDate(activeSchema.schema, request.requester_data_json),
         this.shouldTrackModifiedBy(
           activeSchema.schema,
           request.requester_data_json,
@@ -1472,6 +1477,7 @@ export class RequestsService implements OnModuleInit {
           },
         ),
         requesterIdentity.displayName,
+        this.resolveServerStartDate(activeSchema.schema, request.requester_data_json),
         this.shouldTrackModifiedBy(
           request.schema_snapshot_json,
           request.requester_data_json,
@@ -1702,14 +1708,56 @@ export class RequestsService implements OnModuleInit {
     };
   }
 
+  private shouldTrackStartDate(
+    schema?: FormSchemaJson | null,
+    existingRequesterData?: RequesterData | null,
+  ): boolean {
+    if (
+      existingRequesterData &&
+      Object.hasOwn(existingRequesterData, 'start_date')
+    ) {
+      return true;
+    }
+    return Boolean(
+      schema?.sections?.some((section) =>
+        section.fields?.some(
+          (field) =>
+            field.fieldKey === 'start_date' ||
+            field.canonicalKey === 'start_date',
+        ),
+      ),
+    );
+  }
+
+  private resolveServerStartDate(
+    schema?: FormSchemaJson | null,
+    existingRequesterData?: RequesterData | null,
+    createdAt?: Date | string,
+  ): string | undefined {
+    if (!this.shouldTrackStartDate(schema, existingRequesterData)) {
+      return undefined;
+    }
+    if (
+      typeof existingRequesterData?.start_date === 'string' &&
+      existingRequesterData.start_date.trim().length > 0
+    ) {
+      return existingRequesterData.start_date.trim();
+    }
+    return createdAt !== undefined
+      ? this.serializeTimestamp(createdAt).slice(0, 10)
+      : undefined;
+  }
+
   private withServerRequesterIdentity(
     requesterData: RequesterData,
     requesterDisplayName: string,
+    startDate?: string,
     modifiedByDisplayName?: string,
   ): RequesterData {
     return {
       ...requesterData,
       requester_name: requesterDisplayName,
+      ...(startDate !== undefined ? { start_date: startDate } : {}),
       ...(modifiedByDisplayName !== undefined
         ? { modified_by: modifiedByDisplayName }
         : {}),

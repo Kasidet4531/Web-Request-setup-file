@@ -101,6 +101,7 @@ interface RequestDetailSummary {
   requestNo: string
   title: string
   productType: string
+  startDate: string | null
   dueDate: string | null
   requester: string
   modifiedBy: string
@@ -111,6 +112,7 @@ function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSu
     requestNo: request.requestNo,
     title: getRequestTitle(request),
     productType: productTypeLabel(request.productType ?? requesterValueForCanonicalKey(request, 'product_type')),
+    startDate: requesterValueForCanonicalKey(request, 'start_date') ?? (request.createdAt || null),
     dueDate: requesterValueForCanonicalKey(request, 'due_date'),
     requester: request.requester ?? requesterValueForCanonicalKey(request, 'requester') ?? '—',
     modifiedBy: requesterValueForCanonicalKey(request, 'modified_by') ?? '—',
@@ -120,6 +122,7 @@ function buildRequestDetailSummary(request: PsfRequestResponse): RequestDetailSu
 function RequestMetadata({ request }: { request: PsfRequestResponse }) {
   const summary = buildRequestDetailSummary(request)
   return <section className="detail-summary-grid" aria-label="Request metadata">
+    <div><span>Start Date</span><strong>{formatDate(summary.startDate)}</strong></div>
     <div><span>Due Date</span><strong>{formatDate(summary.dueDate)}</strong></div>
     <div><span>Requester</span><strong>{summary.requester}</strong></div>
     <div><span>Modified By</span><strong>{summary.modifiedBy}</strong></div>

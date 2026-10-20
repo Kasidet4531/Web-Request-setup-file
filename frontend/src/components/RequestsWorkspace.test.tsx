@@ -386,6 +386,7 @@ describe('RequestHeaderSummary', () => {
   it('uses the submitted schema snapshot for header metadata while requester data stays read-only', () => {
     const request = buildSubmittedRequest()
     const html = renderToStaticMarkup(<RequestHeaderSummary request={request} />)
+  expect(html).toContain('<span>Start Date</span><strong>')
 
     expect(html.match(/PSF-0001/g)).toHaveLength(1)
     expect(html).toContain('PSF-0001')
@@ -406,6 +407,7 @@ describe('RequestHeaderSummary', () => {
     malformedRequesterData.delivery_by_v4 = 42
 
     const html = renderToStaticMarkup(<RequestHeaderSummary request={request} />)
+  expect(html).toContain('<span>Start Date</span><strong>')
 
     expect(html).toContain('<span>Due Date</span><strong>—</strong>')
   })
@@ -2375,6 +2377,7 @@ describe('Product Type team Dashboard', () => {
    },
   }
   const html = renderToStaticMarkup(<RequestHeaderSummary request={request} />)
+  expect(html).toContain('<span>Start Date</span><strong>')
   expect(html).toContain('<span>Requester</span><strong>Creator User</strong>')
   expect(html).toContain('<span>Modified By</span><strong>Editor User</strong>')
  })

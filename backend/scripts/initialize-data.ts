@@ -156,7 +156,7 @@ function readMapping(ws: ExcelJS.Worksheet) {
           label: cellText(own(row.getCell(3))).trim() || name,
           key: KEY_OVERRIDES[normalizedName] ?? slug(name),
           side:
-            /requ/.test(audience) || normalizedName === 'due date'
+            /requ/.test(audience) || normalizedName === 'due date' || normalizedName === 'start date'
               ? 'requester'
               : /creat/.test(audience)
                 ? 'created'

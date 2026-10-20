@@ -308,5 +308,30 @@ describe('DynamicFormRenderer field policy', () => {
     )
     expect(html).toContain('checked="" value="Revise Old PSF (Update Layout )"')
     expect(html).toContain('<option value="Legacy Priority" selected="">Legacy Priority</option>')
+    const schemaWithHeaderFields: FormSchema = {
+      ...schema,
+      sections: [
+        {
+          ...schema.sections[0],
+          fields: [
+            ...schema.sections[0].fields,
+            { fieldKey: 'requester_name', canonicalKey: 'requester', label: 'Requester Name', type: 'text', required: true },
+            { fieldKey: 'modified_by', canonicalKey: 'modified_by', label: 'Modified By', type: 'text', required: false },
+            { fieldKey: 'start_date', canonicalKey: 'start_date', label: 'Start Date', type: 'date', required: false },
+            { fieldKey: 'due_date', canonicalKey: 'due_date', label: 'Due Date', type: 'date', required: false },
+          ],
+        },
+      ],
+    }
+    const headerHtml = renderToStaticMarkup(
+      <DynamicFormRenderer
+        schema={schemaWithHeaderFields}
+        values={{ requester_name: 'Hathai', modified_by: 'Boonchai', start_date: '2026-08-04', due_date: '2026-08-07' }}
+      />,
+    )
+    expect(headerHtml).not.toContain('Requester Name')
+    expect(headerHtml).not.toContain('Modified By')
+    expect(headerHtml).not.toContain('Start Date')
+    expect(headerHtml).toContain('Due Date')
   })
 })

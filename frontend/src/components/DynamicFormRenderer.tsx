@@ -34,6 +34,11 @@ export interface DynamicFormRendererProps {
 }
 
 const PRODUCT_TYPE_FIELD_KEY = 'product_type'
+const HEADER_METADATA_FIELD_KEYS = new Set(['requester_name', 'modified_by', 'start_date'])
+
+function isHeaderMetadataField(field: FormSchemaField): boolean {
+  return HEADER_METADATA_FIELD_KEYS.has(field.fieldKey) || field.canonicalKey === 'modified_by' || field.canonicalKey === 'start_date'
+}
 
 export function DynamicFormRenderer({
   deleteAction,
@@ -51,7 +56,8 @@ export function DynamicFormRenderer({
   submitLabel = 'Submit request',
   values = {},
 }: DynamicFormRendererProps) {
-  const hasRequiredFields = schema.sections.some((section) => section.fields.some((field) => field.required))
+  const visibleFields = (fields: FormSchemaField[]) => fields.filter((field) => !isHeaderMetadataField(field))
+  const hasRequiredFields = schema.sections.some((section) => visibleFields(section.fields).some((field) => field.required))
 
   function handleFieldChange(fieldKey: string) {
     return (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -114,7 +120,7 @@ export function DynamicFormRenderer({
               <h3 className="dynamic-form__section-title">{section.title}</h3>
             </div>}
             <div className="dynamic-form__grid">
-              {section.fields.map(renderField)}
+              {visibleFields(section.fields).map(renderField)}
             </div>
 
           </section>

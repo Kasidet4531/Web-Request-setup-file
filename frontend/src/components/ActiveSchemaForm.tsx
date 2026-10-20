@@ -321,8 +321,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
 
   useEffect(() => {
     if (mode !== 'request' || requestId || currentRequest || !activeSchema || loadedSchemaKey !== loadKey || !requesterIdentity?.trim()) return
-    const identityFields = activeSchema.schema.sections.flatMap((section) => section.fields)
-      .filter((field) => isRequesterIdentityKey(field.canonicalKey))
+    const identityFields = activeSchema.schema.sections.flatMap((section) => section.fields).filter((field) => isRequesterIdentityKey(field.canonicalKey))
+  
     if (!identityFields.some((field) => valuesRef.current[field.fieldKey] !== requesterIdentity)) return
 
     const nextBaseline = { ...savedValuesRef.current }
@@ -503,9 +503,9 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const usesExplicitEdit = explicitEdit && mode === 'request' && Boolean(currentRequest && currentRequest.status !== DRAFT_STATUS)
   const formUnavailable = readOnly || disabled || loadedRequestPending || saving || upgradePending || hasInconsistentDraftSchema
   const formReadOnly = formUnavailable || (usesExplicitEdit && !editingInformation)
-  const readOnlyFieldKeys = activeSchema?.schema.sections.flatMap((section) => section.fields
-    .filter((field) => isRequesterIdentityKey(field.canonicalKey))
-    .map((field) => field.fieldKey)) ?? []
+  const readOnlyFieldKeys = activeSchema?.schema.sections.flatMap((section) => section.fields.filter((field) => isRequesterIdentityKey(field.canonicalKey) || field.canonicalKey === 'start_date' || field.fieldKey === 'start_date').map((field) => field.fieldKey)) ?? []
+
+
   const submitLabel = useMemo(() => {
     if (usesExplicitEdit) return 'Save information'
     if (currentRequest) {
@@ -582,7 +582,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       lookupEditVersions,
       schema,
       suggestedValues: Object.fromEntries(Object.entries(response.suggestedValues)
-        .filter(([canonicalKey]) => !isRequesterIdentityKey(canonicalKey))),
+        .filter(([canonicalKey]) => !isRequesterIdentityKey(canonicalKey) && canonicalKey !== 'start_date')),
     })
     if (applied.appliedFieldKeys.length === 0) {
       return

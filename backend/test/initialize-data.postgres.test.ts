@@ -50,6 +50,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
   mapping.addRow(['Creater', 'PSF Setup File Name', '', 'Single line of text']);
   mapping.addRow(['Creater', 'Touch down per wafer', '', 'Number']);
   mapping.addRow(['', 'Due Date', '', 'Date and Time']);
+  mapping.addRow(['', 'Start Date', '', 'Date and Time']);
   mapping.addRow(['', 'Created By', '', 'Person or Group']);
   mapping.addRow(['', 'Workflow Name', '', 'Single line of text']);
   mapping.addRow(['', 'Status', '', 'Choice', STATUSES[0]]);
@@ -71,6 +72,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     'PSF Setup File Name',
     'Touch down per wafer',
     'Due Date',
+    'Start Date',
     'Created By',
     'Modified By',
   ]);
@@ -89,6 +91,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     'PSF_CHIP_A_01',
     12.5,
     day('2026-08-07'),
+    day('2026-08-04'),
     'Somebody',
     'Editor',
   ]);
@@ -199,6 +202,7 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
   assert.equal(done.requester_data_json.modified_by, 'Editor');
   assert.equal(done.requester_data_json.diameter_inch, 'NA');
   assert.equal(done.requester_data_json.due_date, '2026-08-07');
+  assert.equal(done.requester_data_json.start_date, '2026-08-04');
   assert.equal('created_by' in done.requester_data_json, false);
   assert.equal(done.requester_data_json.workflow_name, '');
   assert.equal(done.psf_created_data_json.touch_down_per_wafer, '12.5');
@@ -231,6 +235,7 @@ void it('clears old data, loads forms, catalog and requests, and keeps accounts'
   assert.ok(v2FieldKeys.includes('requester_name'));
   assert.ok(v2FieldKeys.includes('modified_by'));
   assert.ok(v2FieldKeys.includes('due_date'));
+  assert.ok(v2FieldKeys.includes('start_date'));
   assert.equal(v2FieldKeys.includes('workflow_name'), false);
 
   const types = (
