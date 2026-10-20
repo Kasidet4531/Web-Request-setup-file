@@ -13,6 +13,7 @@ import {
 import { ExcelExportService } from './../src/export/excel_export.service';
 import { ExportJobProcessor } from './../src/export/export-job.processor';
 import { ExportJobRepository } from './../src/export/export-job.repository';
+import { NotificationWorker } from './../src/notifications/notification.worker';
 import { AutofillService } from './../src/requests/autofill.service';
 
 interface HealthResponseBody {
@@ -188,6 +189,8 @@ describe('AppController (e2e)', () => {
       .overrideProvider(ExportJobRepository)
       .useValue(exportJobRepository)
       .overrideProvider(ExportJobProcessor)
+      .useValue({})
+      .overrideProvider(NotificationWorker)
       .useValue({})
       .compile();
 
@@ -1785,7 +1788,7 @@ describe('AppController (e2e)', () => {
       );
   });
 
-  it('/api/requests/export.xlsx (GET) preserves the setup-owner denial before exporting', () => {
+  it('/api/requests/export.xlsx (GET) permits a setup owner and forwards the authenticated actor', () => {
     const setupOwnerActor = {
       id: 'setup-owner-1',
       username: 'setup.owner',
@@ -1800,12 +1803,18 @@ describe('AppController (e2e)', () => {
 
     return request(app.getHttpServer() as Parameters<typeof request>[0])
       .get('/api/requests/export.xlsx')
-      .expect(403)
-      .expect(({ body }: { body: { message: string } }) => {
-        expect(body.message).toBe(
-          'Only admins and requesters can export requests.',
+      .expect(200)
+      .expect(
+        'Content-Disposition',
+        'attachment; filename="psf_requests_20260619_000506.xlsx"',
+      )
+      .expect(() => {
+        expect(authService.getProfile).toHaveBeenCalledWith(setupOwnerActor.id);
+        expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+          {},
+          setupOwnerActor,
+          2000,
         );
-        expect(excelExportService.exportRequests).not.toHaveBeenCalled();
       });
   });
 
