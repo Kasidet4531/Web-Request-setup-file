@@ -83,14 +83,14 @@
 .page-card__section > h2 { padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
 .filter-bar label, .request-export label { font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
 
-/* My Drafts now has four columns. */
-.requests-table--drafts th:nth-child(1) { width: 42%; }
+/* My Drafts: Product Description, Request No., Product Type, Updated, Delete. */
+.requests-table--drafts table { min-width: 720px; }
+.requests-table--drafts th:nth-child(1) { width: 34%; }
 .requests-table--drafts th:nth-child(2) { width: 22%; }
-.requests-table--drafts th:nth-child(3) { width: 24%; }
-.requests-table--drafts th:nth-child(4) { width: 12%; }
-.requests-table--drafts th:nth-child(5) { width: auto; }
+.requests-table--drafts th:nth-child(3) { width: 18%; }
+.requests-table--drafts th:nth-child(4) { width: 16%; }
+.requests-table--drafts th:nth-child(5) { width: 10%; }
 .dashboard-filters, .request-browser__toolbar { padding-top: 16px; }
-.requests-table--drafts td:nth-child(2) { padding-left: 16px; }
 .detail-layout__actions .section-heading { border-bottom: 0; padding-bottom: 0; }
 
 /* Draft Management: breathing room under the table and before the reminder section. */

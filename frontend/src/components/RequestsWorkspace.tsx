@@ -323,7 +323,6 @@ async function loadCurrentUser(): Promise<AuthenticatedUserProfile> {
 
 export function RequestsTable({
   items,
-  compact = false,
   drafts = false,
   onOpenItem,
   onDeleteItem,
@@ -337,7 +336,6 @@ export function RequestsTable({
   onClearFilters?: () => void
   statusKinds?: Readonly<Record<string, WorkflowStatusKind>>
   items: PsfRequestListItem[]
-  compact?: boolean
   drafts?: boolean
   onOpenItem?: (requestId: string) => void
   onDeleteItem?: (item: PsfRequestListItem) => void
@@ -363,10 +361,16 @@ export function RequestsTable({
       <table>
         <thead>
           <tr>
-            <th scope="col">Request</th>
-            <th scope="col">{drafts ? 'Product Type' : 'Status'}</th>
-            {drafts ? null : <th scope="col">Due Date</th>}
-            <th scope="col">{drafts ? 'Updated' : 'Requester'}</th>
+            <th scope="col">Product Description</th>
+            <th scope="col">Request No.</th>
+            <th scope="col">Product Type</th>
+            {drafts ? <th scope="col">Updated</th> : <>
+              <th scope="col">Status</th>
+              <th scope="col">PSF Setup File Name</th>
+              <th scope="col">Job File Name</th>
+              <th scope="col">Due Date</th>
+              <th scope="col">Requester</th>
+            </>}
             {drafts || !interactiveRows ? <th scope="col"><span className="sr-only">Actions</span></th> : null}
           </tr>
         </thead>
@@ -387,29 +391,17 @@ export function RequestsTable({
               } : undefined}
               tabIndex={interactiveRows ? 0 : undefined}
             >
-              <td data-label="Request">
-                <div className="request-identity">
-                  <Link className="request-identity__link" to="/requests/$requestId" params={{ requestId: item.requestId }}>
-                    <span className="request-identity__title">{getRequestTitle(item)}</span>
-                    <span className="font-mono-code">{item.requestNo}{compact && item.probecardName ? ` · ${item.probecardName}` : ''}</span>
-                  </Link>
-                  {!compact && !drafts ? <span className="request-identity__type">{productTypeLabel(item.productType)}</span> : null}
-                </div>
+              <td data-label="Product Description"><span className="request-identity__title">{item.title || '—'}</span></td>
+              <td data-label="Request No.">
+                <Link className="request-identity__link font-mono-code" to="/requests/$requestId" params={{ requestId: item.requestId }}>{item.requestNo}</Link>
               </td>
-              {drafts ? <><td data-label="Product Type">{productTypeLabel(item.productType)}</td>
-                <td data-label="Updated">{formatDateTime(item.updatedAt)}</td></> : <><td data-label="Status">
-                <StatusLabel kind={statusKinds[item.status]} status={item.status} />
-              </td>
-              <td data-label="Due Date">
-                <div className="request-cell-stack">
-                  <span>{formatDate(item.dueDate)}</span>
-                </div>
-              </td>
-              <td data-label="Responsibility">
-                <div className="request-cell-stack">
-                  <span>{item.requester ?? '—'}</span>
-                </div>
-              </td>
+              <td data-label="Product Type">{productTypeLabel(item.productType)}</td>
+              {drafts ? <td data-label="Updated">{formatDateTime(item.updatedAt)}</td> : <>
+                <td data-label="Status"><StatusLabel kind={statusKinds[item.status]} status={item.status} /></td>
+                <td data-label="PSF Setup File Name">{item.psfSetupFileName || '—'}</td>
+                <td data-label="Job File Name">{item.jobFileName || '—'}</td>
+                <td data-label="Due Date">{formatDate(item.dueDate)}</td>
+                <td data-label="Requester">{item.requester ?? '—'}</td>
               </>}
               {drafts || !interactiveRows ? (
                 <td data-label="Action">
@@ -578,7 +570,7 @@ export function DashboardPage() {
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
       {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, ROW_PX.dashboard)}>
-        <RequestsTable compact statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
+        <RequestsTable statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
       {hasResults ? <div className="table-footer" aria-label="Dashboard pagination" aria-busy={pending}><span>{state.data.items.length ? `${state.data.offset + 1}–${Math.min(state.data.offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
         {state.data.offset > 0 || state.data.total > state.data.limit ? <div className="toolbar__actions">

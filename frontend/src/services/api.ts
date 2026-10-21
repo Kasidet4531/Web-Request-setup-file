@@ -151,6 +151,7 @@ export interface PsfRequestListItem {
   title: string | null
   referencePsfName: string | null
   psfSetupFileName: string | null
+  jobFileName: string | null
   probecardName: string | null
   status: string
   priority: string | null

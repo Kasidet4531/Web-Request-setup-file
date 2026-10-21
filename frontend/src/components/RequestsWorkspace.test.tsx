@@ -2335,7 +2335,7 @@ describe('Private draft table presentation', () => {
   it('shows the persisted update timestamp, opens a draft from its row, and offers Delete as a button', () => {
     requestDetailHookHarness.beginRender()
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
-      referencePsfName: null, psfSetupFileName: null, probecardName: null, status: 'Draft',
+      referencePsfName: null, psfSetupFileName: null, jobFileName: null, probecardName: null, status: 'Draft',
       priority: 'Normal', requester: 'Engineer',
       productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
     const onOpenItem = vi.fn()

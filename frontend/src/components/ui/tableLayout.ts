@@ -1,6 +1,6 @@
 // Measured sizes (px) of the shared table styles; keep in sync with ux-polish.css / index.css.
 export const TABLE_HEADER_PX = 43
-export const ROW_PX = { audit: 52, requests: 89, dashboard: 71 } as const
+export const ROW_PX = { audit: 52, requests: 69, dashboard: 69 } as const
 
 /** Reserve the height of a full page so the pagination footer stays put on the last, shorter page. */
 export function pagedMinHeight(total: number, limit: number, rowPx: number) {
