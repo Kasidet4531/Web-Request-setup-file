@@ -30,7 +30,7 @@ pinned action bar is issue #90, recorded in its own section below.
 
 ### Local data
 
-- **Form Version 2 with 42 fields**, like the active production Requester form:
+- **Form Version 2 with 42 fields**, the size spec #86 gives for the active Requester form:
   as Admin, through the API, the seeded Version 1 was duplicated, its first field
   relabelled "Request To" with four long options, padded to 42 fields cycling
   text, number, date, select, text and text area (every seventh required), and

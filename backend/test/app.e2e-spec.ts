@@ -949,7 +949,7 @@ describe('AppController (e2e)', () => {
     }
   });
 
-  it('serves the Attachment policy to a signed-in user even without attachment storage', async () => {
+  it('serves the Attachment Policy to a signed-in user even without attachment storage', async () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
     activeUserId = undefined;
     await request(server).get('/api/attachment-policy').expect(401);
