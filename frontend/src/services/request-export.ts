@@ -30,9 +30,15 @@ export interface RequestExportJobStatus {
   downloadUrl?: string;
 }
 
-// The file's own columns, its first rows and the number of requests it holds.
+// An Export Preview page holds as many rows as a request list page.
+export const EXPORT_PREVIEW_PAGE_SIZE = 100;
+
+// The file's own columns, one page of its rows and the number of requests it
+// holds.
 export interface RequestExportPreview {
   total: number;
+  offset: number;
+  limit: number;
   headers: string[];
   rows: Array<Array<string | number>>;
 }
@@ -45,6 +51,7 @@ export function buildRequestExportUrl(
   filters: RequestExportFilterValues,
   resolveUrl: (path: string) => string = api.resolveUrl,
   route = "/requests/export.xlsx",
+  page?: { offset: number; limit: number },
 ): string {
   const query = new URLSearchParams();
   const status = filters.status;
@@ -61,6 +68,11 @@ export function buildRequestExportUrl(
 
   if (to) {
     query.set("to", to);
+  }
+
+  if (page) {
+    query.set("offset", String(page.offset));
+    query.set("limit", String(page.limit));
   }
 
   const serializedQuery = query.toString();
@@ -126,9 +138,13 @@ export async function startRequestExport(
 
 export async function fetchRequestExportPreview(
   filters: RequestExportFilterValues,
+  offset = 0,
 ): Promise<RequestExportPreview> {
   const response = await fetch(
-    buildRequestExportUrl(filters, api.resolveUrl, "/requests/export-preview"),
+    buildRequestExportUrl(filters, api.resolveUrl, "/requests/export-preview", {
+      offset,
+      limit: EXPORT_PREVIEW_PAGE_SIZE,
+    }),
     { credentials: "include", method: "GET" },
   );
 
@@ -142,6 +158,8 @@ export async function fetchRequestExportPreview(
   if (
     !isRecord(body) ||
     typeof body.total !== "number" ||
+    typeof body.offset !== "number" ||
+    typeof body.limit !== "number" ||
     !Array.isArray(body.headers) ||
     !body.headers.every((header) => typeof header === "string") ||
     !Array.isArray(body.rows) ||

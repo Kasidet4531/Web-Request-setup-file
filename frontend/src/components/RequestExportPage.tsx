@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { api } from "../services/api";
 import { PageHeader } from './ui/PageHeader';
 import { AsyncNotice } from './ui/AsyncNotice';
 import {
+  EXPORT_PREVIEW_PAGE_SIZE,
   downloadCompletedRequestExport,
   fetchRequestExportJob,
   fetchRequestExportPreview,
@@ -104,21 +105,29 @@ type RequestExportPreviewState = RequestExportPreviewValue & {
   loading: boolean;
 };
 
-// The first rows of the file itself: the same columns, values and NA cells,
-// with Request No pinned while the other columns scroll.
+// The file itself a page at a time: the same columns, values and NA cells,
+// with Request No pinned while the other columns scroll. A page stays in
+// place while the next one loads, as on the request list.
 export function RequestExportPreview({
   error,
   headers,
   rows,
   loading,
   total,
-}: RequestExportPreviewState) {
+  offset,
+  limit,
+  onPageChange,
+  tableRef,
+}: RequestExportPreviewState & {
+  onPageChange: (offset: number) => void;
+  tableRef?: Ref<HTMLDivElement>;
+}) {
   return (
     <section className="request-export__preview" aria-live="polite">
       <div className="request-export__preview-header">
         <div>
           <h2>Request preview</h2>
-          <p>{loading ? "Loading filtered requests…" : `First ${rows.length} of ${total} request${total === 1 ? "" : "s"} in the file.`}</p>
+          <p>{loading ? "Loading filtered requests…" : `${total} request${total === 1 ? "" : "s"} in the file.`}</p>
           <p>The download includes every submitted request that matches these filters, never Drafts, with the same columns shown here.</p>
         </div>
       </div>
@@ -129,10 +138,11 @@ export function RequestExportPreview({
           <p>Adjust the filters to preview different requests.</p>
         </div>
       ) : null}
-      {!loading && !error && rows.length > 0 ? (
-        <div className="request-export__preview-table">
+      {!error && rows.length > 0 ? (
+        <>
+        <div className="request-export__preview-table" inert={loading} aria-busy={loading}>
         <p className="table-scroll__hint">Scroll horizontally to see every column in the file.</p>
-        <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0}>
+        <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0} ref={tableRef}>
           <table>
             <thead>
               <tr>
@@ -152,6 +162,14 @@ export function RequestExportPreview({
           </table>
         </div>
         </div>
+        <div className="table-footer" aria-label="Request preview pagination" aria-busy={loading}>
+          <span>{`${offset + 1}–${Math.min(offset + rows.length, total)} of ${total} requests`}</span>
+          {offset > 0 || total > limit ? <div className="toolbar__actions">
+            <button className="btn-secondary" disabled={loading || offset === 0} onClick={() => onPageChange(Math.max(0, offset - limit))} type="button">Previous</button>
+            <button className="btn-secondary" disabled={loading || offset + limit >= total} onClick={() => onPageChange(offset + limit)} type="button">Next</button>
+          </div> : null}
+        </div>
+        </>
       ) : null}
     </section>
   );
@@ -173,12 +191,16 @@ export function RequestExportPage() {
   const [pendingJob, setPendingJob] = useState<PendingRequestExportJob | null>(
     null,
   );
+  const [offset, setOffset] = useState(0);
+  const previewTable = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<RequestExportPreviewState>({
     error: null,
     headers: [],
     rows: [],
     loading: true,
     total: 0,
+    offset: 0,
+    limit: EXPORT_PREVIEW_PAGE_SIZE,
   });
   const pendingJobStatusUrl = pendingJob?.statusUrl;
 
@@ -187,6 +209,13 @@ export function RequestExportPage() {
     value: string,
   ) => {
     setFilters((current) => ({ ...current, [field]: value }));
+    showPreviewPage(0);
+  };
+
+  const showPreviewPage = (nextOffset: number) => {
+    // A new page starts at its first row.
+    previewTable.current?.scrollTo({ top: 0 });
+    setOffset(nextOffset);
     setPreview((current) => ({ ...current, error: null, loading: true }));
   };
 
@@ -206,7 +235,7 @@ export function RequestExportPage() {
   useEffect(() => {
     let cancelled = false;
 
-    void fetchRequestExportPreview(filters).then(
+    void fetchRequestExportPreview(filters, offset).then(
       (response) => {
         if (!cancelled) {
           setPreview({ error: null, ...response, loading: false });
@@ -220,6 +249,8 @@ export function RequestExportPage() {
             rows: [],
             loading: false,
             total: 0,
+            offset,
+            limit: EXPORT_PREVIEW_PAGE_SIZE,
           });
         }
       },
@@ -228,7 +259,7 @@ export function RequestExportPage() {
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, offset]);
 
   useEffect(() => {
     if (!pendingJobStatusUrl) {
@@ -350,7 +381,7 @@ export function RequestExportPage() {
             jobStatus={pendingJob?.status ?? null}
           />
         </section>
-        <RequestExportPreview {...preview} />
+        <RequestExportPreview {...preview} onPageChange={showPreviewPage} tableRef={previewTable} />
       </div>
     </article>
   );

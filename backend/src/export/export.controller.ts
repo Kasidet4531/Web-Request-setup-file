@@ -23,6 +23,7 @@ import {
   ExcelExportService,
   type RequestExportFilters,
   type RequestExportPreview,
+  type RequestExportPreviewPage,
 } from './excel_export.service';
 import { ExportJobRepository, type ExportJob } from './export-job.repository';
 
@@ -107,6 +108,7 @@ export class ExportController {
     await this.getExportActor(request);
     return this.excelExportService.previewRequests(
       this.parseExportFilters(query),
+      this.parsePreviewPage(query),
     );
   }
 
@@ -180,6 +182,44 @@ export class ExportController {
       ...(requestDateFrom ? { requestDateFrom } : {}),
       ...(requestDateTo ? { requestDateTo } : {}),
     };
+  }
+
+  private parsePreviewPage(
+    query: Record<string, unknown>,
+  ): RequestExportPreviewPage {
+    const offset = this.readOptionalWholeNumber(query.offset, 'offset', 0);
+    const limit = this.readOptionalWholeNumber(query.limit, 'limit', 1);
+
+    return {
+      ...(offset === undefined ? {} : { offset }),
+      ...(limit === undefined ? {} : { limit }),
+    };
+  }
+
+  private readOptionalWholeNumber(
+    value: unknown,
+    name: string,
+    minimum: number,
+  ): number | undefined {
+    const scalarValue = this.readOptionalScalar(value, name)?.trim();
+
+    if (!scalarValue) {
+      return undefined;
+    }
+
+    const parsed = Number(scalarValue);
+
+    if (
+      !/^(0|[1-9]\d*)$/.test(scalarValue) ||
+      !Number.isSafeInteger(parsed) ||
+      parsed < minimum
+    ) {
+      throw new BadRequestException(
+        `${name} must be a whole number of at least ${minimum}.`,
+      );
+    }
+
+    return parsed;
   }
 
   private readOptionalScalar(value: unknown, name: string): string | undefined {

@@ -247,15 +247,46 @@ describe('ExportController', () => {
 
     await expect(
       controller.previewRequests(
-        { status: 'Submitted', from: '2026-06-01', to: '2026-06-30' },
+        {
+          status: 'Submitted',
+          from: '2026-06-01',
+          to: '2026-06-30',
+          offset: '100',
+          limit: '100',
+        },
         { session: { userId: 'requester-1' } } as never,
       ),
     ).resolves.toEqual(preview);
-    expect(excelExportService.previewRequests).toHaveBeenCalledWith({
-      status: 'Submitted',
-      requestDateFrom: '2026-06-01',
-      requestDateTo: '2026-06-30',
+    expect(excelExportService.previewRequests).toHaveBeenCalledWith(
+      {
+        status: 'Submitted',
+        requestDateFrom: '2026-06-01',
+        requestDateTo: '2026-06-30',
+      },
+      { offset: 100, limit: 100 },
+    );
+  });
+
+  it.each([
+    ['offset', '-1'],
+    ['offset', '1.5'],
+    ['limit', '0'],
+    ['limit', 'ten'],
+  ])('refuses an Export Preview page with %s=%s', async (name, value) => {
+    authService.getProfile.mockResolvedValue({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
     });
+
+    await expect(
+      controller.previewRequests({ [name]: value }, {
+        session: { userId: 'requester-1' },
+      } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(excelExportService.previewRequests).not.toHaveBeenCalled();
   });
 
   it('refuses an Export Preview without a signed-in user', async () => {

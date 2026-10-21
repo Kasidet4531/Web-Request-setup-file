@@ -132,7 +132,7 @@ void it('exports fields without an exportable flag and the latest Modified By af
   assert.equal(row.File, 'SETUP_A.psf');
 });
 
-void it('previews the file: its columns, its first 10 rows and its total, for the same filters', async () => {
+void it('previews the file a page at a time: its columns, the rows at that place in the file and its total, for the same filters', async () => {
   const { entries } = await fixture.workflow.getConfiguration();
   const other = entries.find(
     (entry) => entry.kind === 'open' && entry.name !== submittedStatus,
@@ -161,8 +161,18 @@ void it('previews the file: its columns, its first 10 rows and its total, for th
     const preview = await exporter.previewRequests({});
     assert.deepEqual(preview.headers, file.headers);
     assert.ok(preview.headers.includes('FPC'));
-    assert.deepEqual(preview.rows, file.rows.slice(0, 10));
-    assert.equal(preview.total, 13);
+    // The first page holds up to 100 rows, as the request list does.
+    assert.deepEqual(preview.rows, file.rows);
+    assert.deepEqual(
+      [preview.total, preview.offset, preview.limit],
+      [13, 0, 100],
+    );
+    for (const offset of [5, 10]) {
+      const page = await exporter.previewRequests({}, { offset, limit: 5 });
+      assert.deepEqual(page.headers, file.headers);
+      assert.deepEqual(page.rows, file.rows.slice(offset, offset + 5));
+      assert.deepEqual([page.total, page.offset, page.limit], [13, offset, 5]);
+    }
   }
 
   const none = await exporter.previewRequests({ status: other.name });

@@ -32,10 +32,18 @@ export interface RequestExportWorkbook {
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
 export const DEFAULT_SYNC_THRESHOLD = 10000;
-export const EXPORT_PREVIEW_ROWS = 10;
+// The most rows one Export Preview page holds, as on the request list.
+export const EXPORT_PREVIEW_ROWS = 100;
+
+export interface RequestExportPreviewPage {
+  offset?: number;
+  limit?: number;
+}
 
 export interface RequestExportPreview {
   total: number;
+  offset: number;
+  limit: number;
   headers: string[];
   rows: ExportCell[][];
 }
@@ -240,15 +248,15 @@ export class ExcelExportService implements OnModuleDestroy {
   // one snapshot, so it matches the file the same filters download.
   async previewRequests(
     filters: RequestExportFilters,
-    rowLimit = EXPORT_PREVIEW_ROWS,
+    { offset = 0, limit = EXPORT_PREVIEW_ROWS }: RequestExportPreviewPage = {},
   ): Promise<RequestExportPreview> {
     return this.searchIndexService.withExportSnapshot(
       async (search, runner) => {
         // Discovering every captured form first lets the page reuse them.
         const captured = await search.queryExportSchemas(filters);
         const page = await search.queryExportRequests(
-          { ...filters, limit: rowLimit, offset: 0 },
-          rowLimit,
+          { ...filters, limit, offset },
+          EXPORT_PREVIEW_ROWS,
         );
         // One snapshot connection runs one query at a time.
         const requesterSchema = await this.formSchemaService.getActiveSchema(
@@ -267,6 +275,8 @@ export class ExcelExportService implements OnModuleDestroy {
         );
         return {
           total: page.total,
+          offset: page.offset,
+          limit: page.limit,
           headers: table.headers,
           rows: page.items.map((item) => table.row(item)),
         };

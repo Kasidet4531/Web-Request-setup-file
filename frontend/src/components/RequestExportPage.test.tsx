@@ -250,9 +250,11 @@ describe("request export URL", () => {
     expect(errorHtml).toContain('role="alert"');
   });
 
-  it("fetches the Export Preview for the page filters", async () => {
+  it("fetches an Export Preview page for the page filters, 100 rows at a time", async () => {
     const preview = {
-      total: 12,
+      total: 112,
+      offset: 100,
+      limit: 100,
       headers: ["Request No", "Status", "PSF Setup File Name"],
       rows: [["PSF-000012", "Submitted", "NA"]],
     };
@@ -266,14 +268,17 @@ describe("request export URL", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     await expect(
-      RequestExportClient.fetchRequestExportPreview({
-        status: "Submitted",
-        from: "2026-06-01",
-        to: " ",
-      }),
+      RequestExportClient.fetchRequestExportPreview(
+        {
+          status: "Submitted",
+          from: "2026-06-01",
+          to: " ",
+        },
+        100,
+      ),
     ).resolves.toEqual(preview);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/requests/export-preview?status=Submitted&from=2026-06-01",
+      "/api/requests/export-preview?status=Submitted&from=2026-06-01&offset=100&limit=100",
       { credentials: "include", method: "GET" },
     );
   });
@@ -287,7 +292,14 @@ describe("request export URL", () => {
     const filters = { status: "", from: "", to: "" };
 
     globalThis.fetch = vi.fn(async () =>
-      respond(JSON.stringify({ total: 1, headers: ["Request No"], rows: [[{ value: 1 }]] })),
+      respond(JSON.stringify({ total: 1, offset: 0, limit: 100, headers: ["Request No"], rows: [[{ value: 1 }]] })),
+    ) as unknown as typeof fetch;
+    await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
+      "Expected an export preview response.",
+    );
+
+    globalThis.fetch = vi.fn(async () =>
+      respond(JSON.stringify({ total: 1, headers: ["Request No"], rows: [["PSF-000001"]] })),
     ) as unknown as typeof fetch;
     await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
       "Expected an export preview response.",
@@ -317,11 +329,16 @@ describe("request export URL", () => {
         ],
         loading: false,
         total: 2,
+        offset: 0,
+        limit: 100,
+        onPageChange: () => {},
       }) as never,
     );
 
     expect(html).toContain("Request preview");
-    expect(html).toContain("First 2 of 2 requests in the file.");
+    expect(html).toContain("2 requests in the file.");
+    expect(html).toContain("1–2 of 2 requests");
+    expect(html).not.toContain(">Next<");
     expect(html).not.toContain("may list fewer");
     expect(html).not.toContain("Title / Product Type");
     const cell = (value: string) => `<span title="${value}">${value}</span>`;
@@ -333,6 +350,39 @@ describe("request export URL", () => {
       ["Probe card update", "Create new PSF", "12.5", "NA"].map((value) => `<td>${cell(value)}</td>`).join(""),
     );
     expect(html).toContain(`<td>${cell("SETUP_A.psf")}</td>`);
+  });
+
+  it("pages through the file like the request list, keeping the rows in place while the next page loads", () => {
+    const page = (offset: number, loading = false) =>
+      renderToStaticMarkup(
+        RequestExportPageModule.RequestExportPreview({
+          error: null,
+          headers: ["Request No", "Status"],
+          rows: Array.from({ length: offset === 200 ? 50 : 100 }, (_, row) => [`PSF-${offset + row}`, "Submitted"]),
+          loading,
+          total: 250,
+          offset,
+          limit: 100,
+          onPageChange: () => {},
+        }) as never,
+      );
+    const button = (html: string, label: string) =>
+      html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0] ?? "";
+
+    const middle = page(100);
+    expect(middle).toContain('aria-label="Request preview pagination"');
+    expect(middle).toContain("101–200 of 250 requests");
+    expect(button(middle, "Previous")).not.toContain("disabled");
+    expect(button(middle, "Next")).not.toContain("disabled");
+
+    const last = page(200);
+    expect(last).toContain("201–250 of 250 requests");
+    expect(button(last, "Next")).toContain("disabled");
+
+    const loading = page(100, true);
+    expect(loading).toContain("PSF-100");
+    expect(loading).toContain('aria-busy="true"');
+    expect(button(loading, "Next")).toContain("disabled");
   });
 
   it("replaces the route placeholder with the request export page", () => {
