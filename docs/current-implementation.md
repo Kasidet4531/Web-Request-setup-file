@@ -11,7 +11,7 @@ for the scope of this review.
 
 > **Every column in the Excel export, 21 October 2026:** the export lists every field of every form version, including fields an administrator adds without the `exportable` flag, and always shows Modified By once, right after Updated At, wherever a form version places it. A cell without a value shows `NA`; `NA` is never stored. Cells are read from each request's current data through its own captured form version instead of `canonical_submission_values`, which Status changes and PSF saves never refreshed, so Modified By is no longer stale. Every role gets the same cells: PSF Created Information is no longer blanked for a Requester before PSF Visibility Release ([ADR 0019](adr/0019-excel-export-shows-every-field-to-every-role.md)); the request page, request list and search still hide it. The Export to Excel page's Export Preview shows the file's first 10 rows with its own columns and the number of requests it holds, from `GET /api/requests/export-preview`, with Request No pinned; it no longer uses the Dashboard query or its creator scope. See the [verification record](verification/2026-10-21-export-all-columns.md); checks ran against a throwaway local database.
 
-> **Export transfer, 21 October 2026:** export rows no longer carry their captured form snapshots. Each row carries a content key per snapshot (the MD5 of its JSONB text, compared only within one export and never stored), and each distinct snapshot is read once per export from one request that captured it, inside the export's snapshot. The Export Preview still groups whole snapshots to find its columns and reads none again for its 10 rows. On a simulated 25 ms, 24 Mbit/s link a 5,570-request export fell from 33.4–34.1 s and 92.2 MB to 8.9 s and 18.3 MB; the preview's bytes fell from 230 KB to 98 KB but its time stayed about 1 s (issue #102). See the [verification record](verification/2026-10-21-export-transfer.md); Fook's Tailscale path was not measured.
+> **Export transfer, 21 October 2026:** export rows no longer carry their captured form snapshots. Each row carries a content key per snapshot, the MD5 of its JSONB text, which `psf_requests` stores as the generated columns `schema_snapshot_key` and `psf_created_schema_snapshot_key` (startup adds them to an existing database), and each distinct snapshot is read once per export from one request that captured it, inside the export's snapshot. The Export Preview finds its columns by grouping those keys and reads no snapshot again for its 10 rows. On a simulated 25 ms, 24 Mbit/s link a 5,570-request export fell from 33.4–34.1 s and 92.2 MB to 8.7–8.8 s and 18.3 MB, and the preview from about 1 s to 0.4–0.5 s (issue #102). See the [verification record](verification/2026-10-21-export-transfer.md); Fook's Tailscale path was not measured.
 
 > **NAS folder names and export files, 21 October 2026:** a request's Attachment folder is named as the SharePoint export named the Imported Requests' folders: Product_Description is cut to its first 100 characters and stripped of trailing dots and spaces before `_[ID]` ([ADR 0018](adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). The export's `ItemInfo.txt` and `_export_complete.txt` are system files: never listed as Attachments and refused on upload. No folder or file on the NAS is renamed. See [Request Attachments](request-attachments.md) (issue #97). Checks ran on in-memory PostgreSQL and a temporary directory; the folder check has not been re-run against the NAS share.
 
@@ -313,10 +313,10 @@ version's own Modified By field never adds a second column. Cells come from each
 current data through its own captured form version; a cell without a value
 shows `NA`, which is never stored. The workbook and the preview share one
 [export table](../backend/src/export/export-table.ts). Request pages carry a
-content key per captured form snapshot (the MD5 of its JSONB text), not the
-snapshot; each distinct snapshot is read once per export inside its
-snapshot, and the preview finds its columns by grouping the snapshots of
-every matching request.
+content key per captured form snapshot (the MD5 of its JSONB text, stored
+beside it in `psf_requests`), not the snapshot; each distinct snapshot is
+read once per export inside its snapshot, and the preview finds its columns
+by grouping the stored keys of every matching request.
 Sources: [export routes/policy](../backend/src/export/export.controller.ts),
 [query scope](../backend/src/requests/search-index.service.ts),
 [export service and worker](../backend/src/export/excel_export.service.ts),
