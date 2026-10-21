@@ -32,7 +32,7 @@ _Avoid_: Engineer, Owner, Setup Owner
 Shared PSF Requests available to a Setup File Owner, optionally filtered by Product Type-derived Dashboard Team Group. Requester and Admin Dashboard views remain creator-scoped. Drafts are excluded from shared work and operational totals.
 
 **Product Type**:
-The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in the request table's title/product-type column. XLSX places metadata columns before requester-form fields; Product Type is not its first column.
+The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in its own Product Type column of the request tables (21 October 2026; before, under the title). XLSX places metadata columns before requester-form fields; Product Type is not its first column.
 Decided 8 October 2026, implemented in source and loaded into the configured database on 8 October 2026 (with `--lenient`): after the **Initial Data Load** the Product Type field is the **Request To** field, labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint.
 _Avoid_: Type of product, product category
 
@@ -123,7 +123,7 @@ _Avoid_: Migration, import
 A PSF Request created by the Initial Data Load. Its Requester (`requester` / `requester_name`) is populated from `Created By` in `Data` with `requester_user_id = NULL` (so it is not tied to any individual Requester account), and its `Modified By` is populated from `Modified By` in `Data`. All cell values from `Data` (including `"NA"` and legacy choice strings) are preserved verbatim, and unchanged legacy choice values remain valid when editing other fields. It has no prior audit history. Its Status is kept verbatim from the workbook even when absent from the replaced Status catalog; such a request is listed and filterable by that Status but counted in no Open, Overdue or Completed total. An Imported Request already at Completed has its PSF Visibility Release set.
 
 **Modified By**:
-The most recent actor to save changes to a PSF Request, displayed alongside Requester in request metadata and as a locked read-only field in the form. It initializes from `Modified By` on Imported Requests (or the creator on new requests) and updates automatically to the acting user's display name whenever the request is modified.
+The most recent actor to save changes to a PSF Request, displayed alongside Requester in request metadata and as a locked read-only field in the form. It initializes from `Modified By` on Imported Requests (or the creator on new requests) and updates automatically to the acting user's display name whenever the request is modified, whether or not its form has a Modified By field; a bulk Status replacement does not set it. Since 21 October 2026; before, only forms with a Modified By field recorded it.
 _Avoid_: Last editor, updater
 
 **Legacy Column**:
