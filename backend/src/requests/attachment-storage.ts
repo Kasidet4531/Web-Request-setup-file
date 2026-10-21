@@ -52,12 +52,21 @@ const BLOCKED_ATTACHMENT_EXTENSIONS: readonly string[] = [
   '.vbs',
 ];
 const BLOCKED_EXTENSIONS = new Set(BLOCKED_ATTACHMENT_EXTENSIONS);
-// Written next to user files by Windows Explorer, macOS or an open Office
-// document; they are never Attachments.
-const SYSTEM_FILES = new Set(['thumbs.db', 'desktop.ini', '.ds_store']);
+// Written next to user files by Windows Explorer, macOS, an open Office
+// document or the SharePoint export; they are never Attachments.
+const SYSTEM_FILES = new Set([
+  'thumbs.db',
+  'desktop.ini',
+  '.ds_store',
+  'iteminfo.txt',
+  '_export_complete.txt',
+]);
 // Path separators, characters Windows forbids in names, and control characters.
 // eslint-disable-next-line no-control-regex
 const INVALID_NAME_CHARACTERS = /[/\\:*?"<>|\u0000-\u001f\u007f]/g;
+// Windows drops them from the end of a name, which would rename the file.
+const TRAILING_DOTS_AND_SPACES = /[. ]+$/;
+const FOLDER_SEGMENT_MAX_LENGTH = 100;
 
 /** What the upload path refuses, for pickers to show before files are chosen. */
 export interface AttachmentPolicy {
@@ -71,8 +80,16 @@ export interface StoredAttachmentFile {
   modifiedAt: Date;
 }
 
+/**
+ * The first 100 safe characters, without trailing dots or spaces: how the
+ * SharePoint export named the Imported Requests' folders (ADR 0018).
+ */
 export function sanitizeFolderSegment(value: string): string {
-  return value.trim().replace(INVALID_NAME_CHARACTERS, '_');
+  return value
+    .trim()
+    .replace(INVALID_NAME_CHARACTERS, '_')
+    .slice(0, FOLDER_SEGMENT_MAX_LENGTH)
+    .replace(TRAILING_DOTS_AND_SPACES, '');
 }
 
 /** `[Product_Description]_[ID]`, or `_[ID]` while Product_Description is blank. */
@@ -104,11 +121,10 @@ function isSystemFile(filename: string): boolean {
 /** The original name without any client path, safe to store on the NAS. */
 export function sanitizeAttachmentFilename(originalName: string): string {
   const baseName = originalName.split(/[/\\]/).pop() ?? '';
-  // Windows drops trailing dots and spaces, which would rename the file.
   const filename = baseName
     .replace(INVALID_NAME_CHARACTERS, '_')
     .trim()
-    .replace(/[. ]+$/, '');
+    .replace(TRAILING_DOTS_AND_SPACES, '');
   if (!filename) throw new BadRequestException('A file name is required.');
   if (BLOCKED_EXTENSIONS.has(extname(filename).toLowerCase()))
     throw new BadRequestException(

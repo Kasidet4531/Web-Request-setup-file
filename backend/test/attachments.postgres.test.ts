@@ -119,6 +119,40 @@ void it('names a request folder [Product_Description]_[ID], or _[ID] while blank
   assert.equal(requestFolderName(undefined, 7), '_7');
 });
 
+void it('drops trailing dots and spaces from Product_Description, as the SharePoint export did', () => {
+  assert.equal(
+    requestFolderName('PSF_REQUEST_TEF662X 8 sites Tiger.', 703),
+    'PSF_REQUEST_TEF662X 8 sites Tiger_703',
+  );
+  assert.equal(
+    requestFolderName('Add auto retest Bin32. .', 3782),
+    'Add auto retest Bin32_3782',
+  );
+  assert.equal(requestFolderName('...', 7), '_7');
+});
+
+void it('cuts Product_Description to its first 100 characters, as the SharePoint export did', () => {
+  assert.equal(
+    requestFolderName(
+      'TJA1044_cf1621A1(with out DCC) support CAB 21412437A _ TSK Prober multilocation expansion option enable',
+      4648,
+    ),
+    'TJA1044_cf1621A1(with out DCC) support CAB 21412437A _ TSK Prober multilocation expansion option ena_4648',
+  );
+  assert.equal(
+    requestFolderName(
+      'PSF_REQUEST_KMI70E_I_I_IAMR_340000218852_request for experiment Heat-Expansion probing route from center',
+      5916,
+    ),
+    'PSF_REQUEST_KMI70E_I_I_IAMR_340000218852_request for experiment Heat-Expansion probing route from ce_5916',
+  );
+  // A cut that ends on a dot or space drops it too.
+  assert.equal(
+    requestFolderName(`${'a'.repeat(99)}. tail`, 7),
+    `${'a'.repeat(99)}_7`,
+  );
+});
+
 void it('keeps request folders inside a Windows mapped drive, drive root or share', () => {
   const windows = win32;
   assert.equal(
@@ -396,6 +430,9 @@ void it('lists files already in, added to or removed from the NAS folder directl
   await mkdir(join(root, folder));
   await writeFile(join(root, folder, 'E142.xml'), 'e142');
   await writeFile(join(root, folder, 'Thumbs.db'), 'cache');
+  // Left in every Imported Request's folder by the SharePoint export.
+  await writeFile(join(root, folder, 'ItemInfo.txt'), 'SharePoint Item');
+  await writeFile(join(root, folder, '_export_complete.txt'), 'done');
 
   let listed = await fixture.attachments.list(submitted.id, requester);
   assert.deepEqual(
@@ -516,6 +553,17 @@ void it('rejects executables and files over ATTACHMENT_MAX_BYTES before writing 
     limited.upload(draft.id, [file('big.txt', 'four')], requester),
     PayloadTooLargeException,
   );
+  assert.equal(await exists(join(root, folderOf(draft))), false);
+  assert.equal(await rowCount(draft.id), 0);
+});
+
+void it("refuses an upload named as the SharePoint export's files, which would never be listed", async () => {
+  const draft = await fixture.draft();
+  for (const name of ['ItemInfo.txt', '_export_complete.txt'])
+    await assert.rejects(
+      fixture.attachments.upload(draft.id, [file(name)], requester),
+      BadRequestException,
+    );
   assert.equal(await exists(join(root, folderOf(draft))), false);
   assert.equal(await rowCount(draft.id), 0);
 });
