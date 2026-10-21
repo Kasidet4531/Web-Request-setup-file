@@ -11,7 +11,7 @@
   --accent-foreground: var(--primary-foreground); --accent-light: #eeefea; --selected-text: #24282c;
   --secondary: #f4f4f0; --secondary-foreground: var(--foreground); --muted: var(--secondary); --muted-foreground: #62686c;
   --border: #e2e3de; --border-subtle: var(--border); --border-strong: #9a9f9d;
-  --input: var(--card); --input-background: var(--card); --input-border: #a7adaa; --ring: var(--accent-hover);
+  --input: var(--card); --input-background: var(--card); --input-border: #858b88; --ring: var(--accent-hover);
   --success: #28651d; --warning: #8a4700; --destructive: #b42332; --destructive-foreground: #fff; --lime: #a8c83a;
   --radius-sm: 6px; --radius: 8px; --radius-lg: 10px; --radius-xl: 12px;
   --sidebar: #fafaf8; --sidebar-foreground: #24282c; --sidebar-muted: #62686c;
