@@ -374,6 +374,12 @@ type PsfCreatedInformationPanel = (props: {
   values: Record<string, string>
 }) => ReactElement
 
+/** Renders a PSF Created Information panel element and returns what its form's action bar reports. */
+function psfActionFeedback(panelElement: { type: unknown; props: Record<string, unknown> }): unknown {
+  const tree = (panelElement.type as (props: Record<string, unknown>) => ReactElement)(panelElement.props)
+  return requireRenderedElement(tree, (element) => element.type === DynamicFormRenderer).props.actionFeedback
+}
+
 function getPsfCreatedInformationPanel(): PsfCreatedInformationPanel | undefined {
   const panel = Reflect.get(
     RequestsWorkspace,
@@ -1705,6 +1711,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(renderer.props.readOnly).toBe(true)
     expect(renderer.props.onChange).toBeUndefined()
     expect(renderer.props.onSubmit).toBeUndefined()
+    expect(renderer.props.actionFeedback).toEqual({ kind: 'pending', message: 'Saving PSF Created Information…' })
     expect(requestDetailApi.updatePsfRequestStatus).not.toHaveBeenCalled()
 
     if (!resolveSave) throw new Error('Expected PSF save to remain pending')
@@ -1712,7 +1719,7 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
   })
 
-  it('saves editable PSF Created Information and refreshes the local detail state', async () => {
+  it('saves editable PSF Created Information, refreshes the local detail state and reports the save in the action bar', async () => {
     const setupOwnerRequest = {
       ...buildSubmittedRequest(),
       status: 'Setup In Progress',
@@ -1753,7 +1760,6 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
     shell = renderRequestDetailShell()
     panelElement = requireRenderedElement(shell, (element) => element.type === panel)
-    const success = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
@@ -1764,10 +1770,15 @@ describe('RequestDetailShell workflow actions', () => {
       updatedAt: '2026-08-01T00:00:01.000Z',
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'saved-setup.psf' })
-    expect(success.props.title).toBe('PSF Created Information for PSF-0001 saved.')
+    expect(psfActionFeedback(panelElement)).toEqual({ kind: 'success', message: 'PSF Created Information for PSF-0001 saved.' })
+    expect(findRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')).toBeNull()
+
+    ;(panelElement.props.onEdit as () => void)()
+    shell = renderRequestDetailShell()
+    expect(psfActionFeedback(requireRenderedElement(shell, (element) => element.type === panel))).toBeUndefined()
   })
 
-  it('keeps editable PSF Created Information values and exposes save failures through an alert', async () => {
+  it('keeps editable PSF Created Information values and reports save failures in the action bar as an alert', async () => {
     const setupOwnerRequest = {
       ...buildSubmittedRequest(),
       status: 'Setup In Progress',
@@ -1811,14 +1822,14 @@ describe('RequestDetailShell workflow actions', () => {
     shell = renderRequestDetailShell()
 
     panelElement = requireRenderedElement(shell, (element) => element.type === panel)
-    const alert = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
       psfCreatedData: { psf_setup_file_name: 'retry-setup.psf' },
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'retry-setup.psf' })
-    expect(alert.props.title).toBe('PSF data validation failed')
+    expect(psfActionFeedback(panelElement)).toEqual({ kind: 'error', message: 'PSF data validation failed' })
+    expect(findRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')).toBeNull()
   })
 
   it('keeps real requester and PSF edits when a PSF conflict refresh changes status', async () => {
@@ -1885,7 +1896,6 @@ describe('RequestDetailShell workflow actions', () => {
     rendered = renderRequestDetailWithRequesterChild()
     requesterRenderer = requireRenderedElement(rendered.requesterForm, (element) => element.type === DynamicFormRenderer)
     const form = requireRenderedElement(rendered.shell, (element) => element.type === ActiveSchemaForm)
-    const alert = requireRenderedElement(rendered.shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
 
@@ -1912,9 +1922,10 @@ describe('RequestDetailShell workflow actions', () => {
     expect((requesterRenderer.props.values as Record<string, string>).request_title_v4).toBe('LOCAL requester title')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
-    expect(alert.props.title).toBe(
-      'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
-    )
+    expect(psfActionFeedback(panelElement)).toEqual({
+      kind: 'error',
+      message: 'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
+    })
   })
 
   it('keeps workflow detail stable and exposes a status update failure through an alert', async () => {

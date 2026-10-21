@@ -17,6 +17,7 @@
   --sidebar: #fafaf8; --sidebar-foreground: #24282c; --sidebar-muted: #62686c;
   --sidebar-accent: var(--accent-light); --sidebar-border: var(--border); --sidebar-active-indicator: var(--primary);
   --shadow-sm: none; --shadow-md: 0 4px 16px #172b3a18; --shadow-lg: 0 8px 32px #172b3a24;
+  --shadow-bar: 0 -4px 12px #172b3a14;
 }
 .dark {
   color-scheme: dark;
@@ -24,6 +25,7 @@
   --primary: #73d5ee; --primary-foreground: #181a1c; --accent-hover: #a0e4f5; --accent-light: #303335; --selected-text: #f4f3ee;
   --secondary: #303335; --muted-foreground: #b7bab8; --border: #3b3e40; --border-strong: #858b8b; --input-border: #858b8b;
   --success: #a0d58d; --warning: #ffc36b; --destructive: #ffa2ab; --destructive-foreground: #181a1c; --sidebar: #1e2022; --sidebar-foreground: #f4f3ee; --sidebar-muted: #b7bab8;
+  --shadow-bar: 0 -4px 12px #0000004d;
 }
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
@@ -222,8 +224,18 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .request-snapshot-link { display: block; margin-top: 4px; font-size: 12px; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .dynamic-form__radio-option { display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 28px; cursor: pointer; color: var(--foreground); overflow-wrap: anywhere; min-width: 0; }
-.dynamic-form__actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
-.dynamic-form__actions > p { color: var(--muted-foreground); font-size: 12px; }
+/* The action bar pins to the bottom of the viewport (or of the preview's scroll region) while its form scrolls:
+   the action's result on the left, then the buttons with Save last at the right edge. At the end of the form it
+   sits in flow below the last row, so that row scrolls clear of it. */
+.dynamic-form__actions { position: sticky; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 16px; margin-top: 24px; padding: 12px 0; background: var(--card); border-top: 1px solid var(--border); box-shadow: var(--shadow-bar); }
+.dynamic-form__status { flex: 1 1 auto; min-width: 0; font-size: 14px; line-height: 20px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+/* An idle status region leaves the layout but stays in the accessibility tree, so its next message is announced. */
+.dynamic-form__status:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.dynamic-form__status--success { color: var(--success); }
+.dynamic-form__status--error { color: var(--destructive); font-weight: 500; }
+.dynamic-form__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-left: auto; }
+/* Keyboard focus scrolled into view stops above the pinned bar instead of behind it. */
+html:has(.dynamic-form__actions) { scroll-padding-bottom: 96px; }
 .dynamic-form__readonly { display: block; min-height: 36px; padding: 8px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .form-edit-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
 .form-edit-state--dirty { color: var(--warning); }
@@ -313,7 +325,7 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .admin-form-config__family-nav { display: flex; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
 .admin-form-config__family-link { color: var(--muted-foreground); padding: 10px 0; border-bottom: 2px solid transparent; font-weight: 500; }
 .admin-form-config__family-link[aria-current="page"] { color: var(--selected-text); border-bottom-color: var(--primary); }
-.admin-form-config__preview-content { max-height: 65vh; overflow: auto; min-width: 0; }
+.admin-form-config__preview-content { max-height: 65vh; overflow: auto; min-width: 0; scroll-padding-bottom: 72px; }
 .json-preview { overflow: auto; max-width: 100%; padding: 12px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; font: 12px/18px var(--font-mono); }
 .global-history-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .global-history-filters__dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -402,8 +414,11 @@ dialog::backdrop { background: #10182066; }
   .detail-summary-grid > div { grid-template-columns: 135px minmax(0, 1fr); gap: 12px; }
   .admin-form-config__choice { flex-wrap: wrap; }
   .admin-form-config__choice .admin-form-config__field { flex-basis: 100%; }
-  .dynamic-form__actions { align-items: stretch; }
-  .dynamic-form__actions > button { width: 100%; }
+  /* The buttons take their own line and share it, Save still last; the result sits on the line above. */
+  .dynamic-form__buttons { flex: 1 1 100%; }
+  .dynamic-form__buttons > * { flex: 1 1 auto; }
+  /* Buttons that cannot share a line stack, so the bar can be about twice as tall here. */
+  html:has(.dynamic-form__actions) { scroll-padding-bottom: 152px; }
   .ui-notice { flex-wrap: wrap; }
   .ui-notice__action { margin-left: 24px; }
   .login-card { padding: 24px; }
@@ -442,7 +457,6 @@ dialog::backdrop { background: #10182066; }
 .tool-directory__content small { color:var(--muted-foreground); font-size:12px; line-height:18px; }
 .tool-directory__chevron { margin-left:auto; color:var(--muted-foreground); }
 .request-history-page .request-history { max-width:800px; }
-.dynamic-form__actions { justify-content:flex-end; }
 
 .detail-topbar__status { display:flex; align-items:center; gap:8px; }
 .detail-layout__main > .workflow-section:first-child { gap:8px; }
@@ -557,6 +571,9 @@ dialog::backdrop { background: #10182066; }
 .request-create-page .active-schema-form, .request-create-page .request-attachments,
 .detail-editors > .workflow-section, .detail-layout__history,
 .request-history-page .request-history { padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+/* In a form card the pinned bar spans the card edge to edge and closes its bottom. */
+.request-create-page .active-schema-form .dynamic-form__actions,
+.detail-editors > .workflow-section .dynamic-form__actions { margin: 24px -24px -24px; padding-inline: 24px; border-radius: 0 0 7px 7px; }
 .dynamic-form__section:first-child { border: 0; padding-top: 0; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 12px; }
 .dynamic-form__radio-option { border: 1px solid var(--input-border); border-radius: 6px; padding: 8px 12px; min-height: 38px; }
