@@ -23,17 +23,17 @@ added recipient lists. Recipients wrap below the controls; the edit dialog keeps
 a stable viewport-constrained height so adding or removing recipients does not
 move either input.
 
-**Do not send email on entry** disables recipient controls while retaining added addresses. To is required when enabled; CC is optional. Invalid directory addresses cannot be selected. Addresses are normalized and deduplicated, with To taking precedence over CC. Typed addresses must be added or cleared before saving an enabled policy. Cancel, X or Escape discards local edits and returns focus to the row; closing is blocked during saving. The modal scrolls its body when needed and keeps its action footer visible.
+**Do not send email on entry** disables recipient controls while retaining added addresses. To is required when enabled, unless the request's Requester is sent in To (below); CC is optional. Invalid directory addresses cannot be selected. Addresses are normalized and deduplicated, with To taking precedence over CC. Typed addresses must be added or cleared before saving an enabled policy. Cancel, X or Escape discards local edits and returns focus to the row; closing is blocked during saving. The modal scrolls its body when needed and keeps its action footer visible.
 
 Selecting a user stores their current email address. It is an address picker, not a dynamic role subscription: changing a user's email later does not rewrite status policies or queued jobs. Update the policy when recipients change.
 
 ### The request's Requester as a recipient
 
-Since 21 October 2026 the Edit modal also has **Requester of the request**: *Do not send* (the default for every existing and new status), *To* or *CC*. The stored policy carries `requester: 'to' | 'cc'`, or no `requester` key for *Do not send*. When a request enters the status, the Requester's address is read from the account that created the request (`psf_requests.requester_user_id` → `app_users.email`, refreshed from LDAP at each login) at that moment and added to To or CC beside the typed addresses; To still takes precedence over CC. Unlike a picked system user, this follows each request's own Requester and the account's current address.
+Since 21 October 2026 the Edit modal also has **Send to the Requester**: *Do not send* (the default for every existing and new status), *To* or *CC*. The stored policy carries `requester: 'to' | 'cc'`, or no `requester` key for *Do not send*. When a request enters the status, the Requester's address is read from the account that created the request (`psf_requests.requester_user_id` → `app_users.email`, refreshed from LDAP at each login) at that moment and added to To or CC beside the typed addresses; To still takes precedence over CC. Unlike a picked system user, this follows each request's own Requester and the account's current address.
 
 - An enabled policy needs a To: a typed address, or the Requester in To. With the Requester in CC at least one typed To is still required.
 - Imported Requests have no linked account (`requester_user_id` is null; Created By is only a person's name), so their Requester is never emailed. Names are not matched to accounts.
-- When the Requester's account has no usable address, the email still goes to the typed recipients and a warning is logged. If that leaves To empty, the CC recipients receive it in To; if there is nobody at all, no job is queued and a warning is logged, while the request's Status change still commits.
+- When the Requester's account has no usable address, the email still goes to the typed recipients and a warning is logged (an Imported Request, which has no account, logs nothing at this step). If that leaves To empty, the CC recipients receive it in To; if there is nobody at all, no job is queued and a warning is logged, while the request's Status change still commits.
 - The rule applies whoever changes the Status, including a Requester submitting their own request.
 - The Status Management table summarises the choice ("Requester in To/CC"), and the **Replace and delete status** preview lists "each request's Requester" among the destination's To or CC.
 

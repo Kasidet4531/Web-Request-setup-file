@@ -37,18 +37,23 @@ export class NotificationService {
       );
       if (!result.rows[0])
         throw new Error('Notification request metadata unavailable');
-      const requester = policy.requester
-        ? await this.requesterAddress(client, event.requestId)
+      const requesterAddress = policy.requester
+        ? await this.findRequesterAddress(client, event.requestId)
         : undefined;
-      let to = emailAddresses(policy.to.join(','));
-      let cc = emailAddresses(policy.cc.join(','));
-      if (requester && policy.requester === 'to')
-        to = [...new Set([...to, requester])];
-      if (requester && policy.requester === 'cc')
-        cc = [...new Set([...cc, requester])];
-      cc = cc.filter((address) => !to.includes(address));
-      // Without a To, the configured CC recipients receive it as To instead.
-      if (!to.length) [to, cc] = [cc, []];
+      const recipients = {
+        to: emailAddresses(policy.to.join(',')),
+        cc: emailAddresses(policy.cc.join(',')),
+      };
+      if (requesterAddress && policy.requester)
+        recipients[policy.requester] = [
+          ...new Set([...recipients[policy.requester], requesterAddress]),
+        ];
+      const ccOutsideTo = recipients.cc.filter(
+        (address) => !recipients.to.includes(address),
+      );
+      const [to, cc] = recipients.to.length
+        ? [recipients.to, ccOutsideTo]
+        : [ccOutsideTo, []];
       if (!to.length) {
         this.logger.warn(
           `No email queued for request ${event.requestId}: its Requester has no usable email address and the status has no other recipients`,
@@ -91,9 +96,7 @@ export class NotificationService {
     }
     await client.query(`RELEASE SAVEPOINT ${savepoint}`);
   }
-  // The Requester's account address as it is now; Imported Requests have no
-  // account, so their Requester is never emailed.
-  private async requesterAddress(
+  private async findRequesterAddress(
     client: NotificationClient,
     requestId: string,
   ): Promise<string | undefined> {
@@ -103,17 +106,17 @@ export class NotificationService {
       WHERE request.id=$1`,
       [requestId],
     );
-    let address: string | undefined;
+    // Imported Requests have no Requester account, so no address is expected.
+    if (!result.rows[0]) return undefined;
     try {
-      const parsed = emailAddresses(result.rows[0]?.email ?? '');
-      if (parsed.length === 1) address = parsed[0];
+      const parsed = emailAddresses(result.rows[0].email ?? '');
+      if (parsed.length === 1) return parsed[0];
     } catch {
-      /* An invalid account address is treated as missing. */
+      // An invalid account address is reported like a missing one.
     }
-    if (!address)
-      this.logger.warn(
-        `The Requester of request ${requestId} has no usable email address`,
-      );
-    return address;
+    this.logger.warn(
+      `The Requester of request ${requestId} has no usable email address`,
+    );
+    return undefined;
   }
 }

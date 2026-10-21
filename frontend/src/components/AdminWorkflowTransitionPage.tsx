@@ -4,7 +4,7 @@ import './AdminWorkflowTransitionPage.css'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { StatusLabel } from './ui/StatusLabel'
-import { api, ApiError, type AdminUserProfile, type StatusEmailPolicy, type StatusCatalogEntry, type WorkflowConfiguration, type WorkflowConfigurationOperation, type WorkflowStatusKind } from '../services/api'
+import { api, ApiError, type AdminUserProfile, type RequesterPlacement, type StatusEmailPolicy, type StatusCatalogEntry, type WorkflowConfiguration, type WorkflowConfigurationOperation, type WorkflowStatusKind } from '../services/api'
 
 type WorkflowOperationInput = WorkflowConfigurationOperation extends infer Operation
   ? Operation extends WorkflowConfigurationOperation
@@ -44,8 +44,7 @@ function recipientSummary(policy: StatusEmailPolicy): string {
   return `${policy.to.length} To · ${policy.cc.length} CC${policy.requester ? ` · Requester in ${requesterPlacement[policy.requester]}` : ''}`
 }
 
-// The bulk-replacement preview names the Requester beside the fixed addresses.
-function destinationRecipients(policy: StatusEmailPolicy, field: 'to' | 'cc'): string {
+function destinationRecipients(policy: StatusEmailPolicy, field: RequesterPlacement): string {
   const addresses = [...policy[field], ...(policy.requester === field ? ["each request's Requester"] : [])]
   return addresses.length ? addresses.join(', ') : 'None'
 }
@@ -72,7 +71,7 @@ export function AdminWorkflowTransitionPage() {
   const [emailEnabled, setEmailEnabled] = useState(false)
   const [emailTo, setEmailTo] = useState<string[]>([])
   const [emailCc, setEmailCc] = useState<string[]>([])
-  const [emailRequester, setEmailRequester] = useState<'' | 'to' | 'cc'>('')
+  const [emailRequester, setEmailRequester] = useState<RequesterPlacement | ''>('')
   const [toInput, setToInput] = useState('')
   const [ccInput, setCcInput] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -186,7 +185,7 @@ export function AdminWorkflowTransitionPage() {
     const to = emailTo
     const toSet = new Set(to)
     const cc = emailCc.filter((address) => !toSet.has(address))
-    if (emailEnabled && to.length === 0 && emailRequester !== 'to') {
+    if (emailEnabled && to.length === 0 && !requesterInTo) {
       setEmailError('At least one To address is required when email is enabled, unless the Requester is in To.')
       return
     }
@@ -206,6 +205,7 @@ export function AdminWorkflowTransitionPage() {
 
   const catalogBusy = busy || dialogMode !== null
   const recipientControlsDisabled = busy || !emailEnabled
+  const requesterInTo = emailRequester === 'to'
   const businessEntries = configuration?.entries.filter((entry) => entry.kind !== 'draft') ?? []
   const validReplacement = businessEntries.some((entry) => entry.id === replacementId && entry.id !== deleting?.id)
   const destination = businessEntries.find((entry) => entry.id === replacementId)
@@ -252,14 +252,14 @@ export function AdminWorkflowTransitionPage() {
             </div>
             <p className="ui-help">These recipients apply when a request enters this status, including submission and bulk replacement. Changes take effect after saving.</p>
             <label className="admin-workflow-transition__checkbox"><input type="checkbox" aria-label="Do not send email on entry" checked={!emailEnabled} disabled={busy} onChange={(event) => { setEmailEnabled(!event.target.checked); setEmailError(null) }} />Do not send email on entry</label>
-            <label className="ui-field"><span className="ui-label">Requester of the request</span><select aria-label="Send to the Requester" aria-describedby="email-requester-help" disabled={recipientControlsDisabled} value={emailRequester} onChange={(event) => { setEmailRequester(event.target.value as '' | 'to' | 'cc'); setEmailError(null) }}><option value="">Do not send</option><option value="to">To</option><option value="cc">CC</option></select></label>
-            <p className="ui-help" id="email-requester-help">Sends to the email address of the account that created each request. Imported requests have no account, so their requester is not emailed.</p>
+            <label className="ui-field"><span className="ui-label">Send to the Requester</span><select aria-label="Send to the Requester" aria-describedby="email-requester-help" disabled={recipientControlsDisabled} value={emailRequester} onChange={(event) => { setEmailRequester(event.target.value as RequesterPlacement | ''); setEmailError(null) }}><option value="">Do not send</option><option value="to">To</option><option value="cc">CC</option></select></label>
+            <p className="ui-help" id="email-requester-help">Sends to the email address of the account that created each request. Imported requests have no account, so their Requester is not emailed.</p>
             <p className="ui-help" id="email-recipients-help">Enter an individual or group address, then choose Add. You can paste several addresses separated by commas or semicolons. To takes precedence over CC.</p>
             {usersLoading ? <p className="ui-help" role="status">Loading system users… You can enter addresses now.</p> : null}
             {usersError ? <p className="ui-help" role="status">{`${usersError} — enter email addresses directly, or cancel and reopen to retry.`}</p> : null}
             <div className="admin-workflow-transition__email-fields">
               {(['To', 'CC'] as const).map((field) => <fieldset key={field} className="admin-workflow-transition__recipient-field">
-                <legend className="ui-label">{field}{field === 'CC' ? ' (optional)' : emailRequester === 'to' ? ' (optional, the Requester is in To)' : ' (required when enabled)'}</legend>
+                <legend className="ui-label">{field}{field === 'CC' ? ' (optional)' : requesterInTo ? ' (optional, the Requester is in To)' : ' (required when enabled)'}</legend>
 
                 <div className="admin-status-dialog__add-address"><input aria-label={`${field} addresses`} aria-describedby={`email-recipients-help${emailError ? ' email-policy-error' : ''}`} aria-invalid={Boolean(emailError)} disabled={recipientControlsDisabled} value={field === 'To' ? toInput : ccInput} placeholder="name@example.com" onChange={(event) => { (field === 'To' ? setToInput : setCcInput)(event.target.value); setEmailError(null) }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addRecipients(field, field === 'To' ? toInput : ccInput) } }} /><button className="ui-button ui-button--secondary" aria-label={`Add ${field}`} disabled={recipientControlsDisabled || !(field === 'To' ? toInput : ccInput).trim()} type="button" onClick={() => addRecipients(field, field === 'To' ? toInput : ccInput)}>Add {field}</button></div>
                 <label className="ui-field"><span className="ui-label">Add system user to {field}</span><select aria-label={`Add system user to ${field}`} disabled={recipientControlsDisabled || usersLoading || users === null} value="" onChange={(event) => {

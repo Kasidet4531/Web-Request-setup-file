@@ -1,11 +1,12 @@
 import type { PoolClient } from 'pg';
 import type { AuthenticatedUserProfile } from '../auth/session.types';
+export type RequesterPlacement = 'to' | 'cc';
 export type StatusEmailPolicy = {
   enabled: boolean;
   to: string[];
   cc: string[];
-  // Where the request's Requester is added; absent means they are not emailed.
-  requester?: 'to' | 'cc';
+  // Absent when the request's Requester is not emailed.
+  requester?: RequesterPlacement;
 };
 export type RequestNotificationEvent = {
   eventType: 'REQUEST_SUBMITTED' | 'REQUEST_STATUS_CHANGED';

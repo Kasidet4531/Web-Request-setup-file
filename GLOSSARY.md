@@ -43,6 +43,10 @@ _Avoid_: Setup Information, Completed Info
 A named lifecycle stage in the administrator-managed status catalog, classified as draft, open, completed, or cancelled.
 _Avoid_: Percentage stage
 
+**Status Email Policy**:
+The administrator's choice, per Work Status, of who is emailed when a PSF Request enters it: fixed addresses in To and CC, and optionally the request's own Requester in To or CC.
+_Avoid_: Notification subscription, mailing list
+
 **PSF Visibility Release**:
 A permanent release milestone granted when a PSF Request enters a configured trigger Work Status, making PSF Created Information visible to Requesters.
 
@@ -84,10 +88,6 @@ A reserved non-production account used to simulate a specific role and departmen
 **Draft Management**:
 The administrative capability to inspect unsubmitted Drafts read-only, check reminder statuses, and permanently delete orphaned Drafts.
 _Avoid_: Draft inspection portal, draft admin console
-
-**Status Email Policy**:
-The administrator's choice, per Work Status, of who is emailed when a PSF Request enters it: fixed addresses in To and CC, and optionally the request's own Requester in To or CC. Imported Requests have no Requester address.
-_Avoid_: Notification subscription, mailing list
 
 **Draft Reminder**:
 A one-time notification sent when a PSF Request remains in Draft seven days after creation.

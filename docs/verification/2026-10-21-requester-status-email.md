@@ -16,8 +16,9 @@ request. Decisions settled with Fook before building:
 - If the Requester has no usable address, the typed recipients still get the
   email; if To is then empty, CC moves to To; if nobody is left, no email is
   queued and a warning is logged.
-- The setting applies whoever changes the Status. Only the Requester was added;
-  no Setup File Owner recipient, because requests have no assigned owner.
+- The setting applies whoever changes the Status. Only the Requester is added in
+  this round; a Setup File Owner recipient was left out (requests have no
+  assigned owner today).
 
 Source:
 
@@ -86,14 +87,16 @@ fixed here.
 
 | Check | Base | Branch |
 | --- | --- | --- |
-| Edit status at 1440×900 | no Requester control | *Requester of the request* select with help text above the address inputs; To legend reads "optional, the Requester is in To" when chosen ([before](assets/2026-10-21-requester-status-email/before-edit-status-desktop.png), [after](assets/2026-10-21-requester-status-email/after-edit-status-desktop.png)) |
+| Edit status at 1440×900 | no Requester control | *Send to the Requester* select with help text above the address inputs; To legend reads "optional, the Requester is in To" when chosen ([before](assets/2026-10-21-requester-status-email/before-edit-status-desktop.png), [after](assets/2026-10-21-requester-status-email/after-edit-status-desktop.png)) |
 | Edit status at 390×844 | Save visible at y 771–811 | Save visible at y 771–811 ([before](assets/2026-10-21-requester-status-email/before-edit-status-phone.png), [after](assets/2026-10-21-requester-status-email/after-edit-status-phone.png)) |
 | Catalog row after saving Requester in To with CC `lead@example.com` | not possible | "Enabled · 0 To · 1 CC · Requester in To" ([row](assets/2026-10-21-requester-status-email/after-catalog-row.png)) |
 | Replace and delete 30% into 10% | not possible | "To: each request's Requester", "CC: lead@example.com"; cancelled ([preview](assets/2026-10-21-requester-status-email/after-replace-and-delete-preview.png)) |
 | Requester submits PSF-000001 into 10% (Requester in To, CC lead) | not run | queued To `dev.requester@example.com`, CC `lead@example.com` |
 | Admin moves it to 20% (To `team@example.com`, Requester in CC) | not run | queued To `team@example.com`, CC `dev.requester@example.com` |
 | Requester email cleared, admin moves it to 30% (Requester in To, CC lead) | not run | queued To `lead@example.com`, CC empty; Status changed; backend warned that the Requester has no usable email address |
+| PSF-000001's `requester_user_id` set to null (as on an Imported Request), admin moves it into 10% (Requester in To, CC lead) | not run | queued To `lead@example.com`, CC empty; Status changed; no Requester warning logged |
 
 The queued recipients were read from `GET /api/admin/notifications` as the
-development Administrator. Delivery through the company SOAP service was not
+development Administrator. The flow ran twice (PSF-000001, then PSF-000002 after
+the review changes) with the same recipients each time. Delivery through the company SOAP service was not
 exercised.
