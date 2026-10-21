@@ -338,8 +338,8 @@ export function source(i: number) {
   };
 }
 
-// Request Date and Updated At are shown in Thai time (UTC+7, no daylight saving).
-const thaiTime = (iso: string) =>
+// Request Date and Updated At are shown in Bangkok time (UTC+7, no daylight saving).
+export const bangkokTime = (iso: string) =>
   new Date(Date.parse(iso) + 7 * 3600_000)
     .toISOString()
     .slice(0, 19)
@@ -358,8 +358,8 @@ export function expectedRow(i: number): Cell[] {
   return [
     who.requestNo,
     who.status,
-    thaiTime(who.createdAt),
-    thaiTime(who.updatedAt),
+    bangkokTime(who.createdAt),
+    bangkokTime(who.updatedAt),
     sample(modifiedByColumn, i).cell,
     ...requester,
     ...historicalColumns.map((c, index) =>

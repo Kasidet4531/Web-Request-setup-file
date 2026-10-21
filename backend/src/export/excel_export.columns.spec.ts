@@ -194,7 +194,7 @@ describe('Excel export columns', () => {
     ]);
   });
 
-  it('shows Request Date and Updated At in Thai time, year first', async () => {
+  it('shows Request Date and Updated At in Bangkok time, year first', async () => {
     const form = requesterForm(1, [{ fieldKey: 'title' }]);
 
     const { rows } = await exportSheet(form, [

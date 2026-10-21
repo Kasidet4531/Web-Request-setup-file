@@ -62,8 +62,8 @@ test(
     await expect(preview.locator('tbody th').first()).toHaveText(
       requestNos.at(-1),
     );
-    // Request Date and Updated At read in Thai time (UTC+7), year first.
-    const thaiTime = (iso) =>
+    // Request Date and Updated At read in Bangkok time (UTC+7), year first.
+    const bangkokTime = (iso) =>
       new Date(Date.parse(iso) + 7 * 3600_000)
         .toISOString()
         .slice(0, 19)
@@ -71,10 +71,10 @@ test(
     const headerTexts = await preview.locator('thead th').allTextContents();
     const firstRow = preview.locator('tbody tr').first().locator('th, td');
     await expect(firstRow.nth(headerTexts.indexOf('Request Date'))).toHaveText(
-      thaiTime(newest.createdAt),
+      bangkokTime(newest.createdAt),
     );
     await expect(firstRow.nth(headerTexts.indexOf('Updated At'))).toHaveText(
-      thaiTime(newest.updatedAt),
+      bangkokTime(newest.updatedAt),
     );
     await preview.screenshot({
       path: join(system.evidence, 'export-preview-dates.png'),

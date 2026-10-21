@@ -33,7 +33,7 @@ export function exportCell(
   return field.type === 'number' && isNumericText(text) ? Number(text) : text;
 }
 
-// Request Date and Updated At in Thai time, year first so the column still
+// Request Date and Updated At in Bangkok time, year first so the column still
 // sorts as text: 2025-09-01 10:42:29.
 function exportDateTime(value: Date | string | null): string {
   const date = value === null ? undefined : new Date(value);

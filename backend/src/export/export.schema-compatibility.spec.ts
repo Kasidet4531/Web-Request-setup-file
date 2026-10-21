@@ -9,6 +9,7 @@ import { ExcelExportService } from './excel_export.service';
 import {
   activeCreated,
   activeRequester,
+  bangkokTime,
   columns,
   createdColumns,
   headers,
@@ -69,13 +70,6 @@ function item(i: number): RequestExportItem {
   };
 }
 
-// Request Date and Updated At are shown in Thai time (UTC+7, no daylight saving).
-const thaiTime = (iso: string) =>
-  new Date(Date.parse(iso) + 7 * 3600_000)
-    .toISOString()
-    .slice(0, 19)
-    .replace('T', ' ');
-
 // Version membership is specified independently from source/schema constructors.
 // Every role gets the same cells (ADR 0019); a cell without a value shows NA.
 function expected(i: number): Array<string | number> {
@@ -83,8 +77,8 @@ function expected(i: number): Array<string | number> {
   return [
     row.requestNo,
     row.status,
-    thaiTime(row.createdAt),
-    thaiTime(row.updatedAt),
+    bangkokTime(row.createdAt),
+    bangkokTime(row.updatedAt),
     exportedValue(modifiedByColumn, i),
     ...requesterFieldColumns.map((c) =>
       (c.name === 'Request For' && i % 4 === 0) ||
