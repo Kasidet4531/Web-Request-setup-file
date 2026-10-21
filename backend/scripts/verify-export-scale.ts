@@ -17,6 +17,7 @@ import { Pool } from 'pg';
 import { SaxesParser } from 'saxes';
 import { ExcelExportService } from '../src/export/excel_export.service';
 import {
+  SCHEMA_SNAPSHOT_KEY_STORAGE,
   SearchIndexService,
   type RequestSearchFilters,
 } from '../src/requests/search-index.service';
@@ -364,6 +365,18 @@ export async function createFixtureTables(pool: Pool) {
   CREATE TABLE form_definitions (form_key text, version int, status text, schema_json jsonb,
     title text NOT NULL DEFAULT 'Synthetic', description text, published_at timestamptz,
     PRIMARY KEY(form_key,version))`);
+  for (const statement of SCHEMA_SNAPSHOT_KEY_STORAGE)
+    await pool.query(statement);
+}
+
+// The request columns an INSERT may write: PostgreSQL computes the rest.
+async function writableRequestColumns(pool: Pool): Promise<string> {
+  const result = await pool.query<{ list: string }>(
+    `SELECT string_agg(quote_ident(column_name), ',' ORDER BY ordinal_position) AS list
+     FROM information_schema.columns
+     WHERE table_name = 'psf_requests' AND is_generated = 'NEVER'`,
+  );
+  return result.rows[0].list;
 }
 
 export async function seed(pool: Pool, count: number) {
@@ -594,8 +607,9 @@ export async function restoreFixture(pool: Pool, saved: FixtureState) {
     await pool.query('DELETE FROM psf_requests WHERE id = ANY($1::uuid[])', [
       saved.ids,
     ]);
+    const columns = await writableRequestColumns(pool);
     await pool.query(
-      'INSERT INTO psf_requests SELECT * FROM jsonb_populate_recordset(NULL::psf_requests,$1::jsonb)',
+      `INSERT INTO psf_requests (${columns}) SELECT ${columns} FROM jsonb_populate_recordset(NULL::psf_requests,$1::jsonb)`,
       [JSON.stringify(saved.requests)],
     );
     await pool.query(
@@ -639,10 +653,11 @@ export async function mutateFixture(port: number, rows: number) {
     await writer.query('DELETE FROM psf_requests WHERE id = $1', [
       identity(2).id,
     ]);
+    const columns = await writableRequestColumns(writer);
     await writer.query(
-      `INSERT INTO psf_requests SELECT (jsonb_populate_record(NULL::psf_requests,
-      to_jsonb(request) || jsonb_build_object('id',$1::text,'request_no','AFTER-SNAPSHOT INSERT','updated_at','2041-01-01'))).*
-      FROM psf_requests AS request WHERE id = $2`,
+      `INSERT INTO psf_requests (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::psf_requests,
+      (SELECT to_jsonb(request) || jsonb_build_object('id',$1::text,'request_no','AFTER-SNAPSHOT INSERT','updated_at','2041-01-01')
+      FROM psf_requests AS request WHERE id = $2))`,
       [identity(rows + 1).id, identity(3).id],
     );
     await writer.query(`UPDATE form_definitions SET schema_json = jsonb_set(schema_json,

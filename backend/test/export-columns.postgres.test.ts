@@ -314,3 +314,40 @@ void it('maps each request through its own captured form when two forms of the s
     rows.map((row) => [row['Field 1'], row['Field 2'], row['Field 3']]),
   );
 });
+
+void it('keeps a content key beside each captured form, and gives an existing database those keys at startup', async () => {
+  for (let n = 1; n <= 3; n++) await fixture.submit(await fixture.draft());
+  // A database from before the keys were stored.
+  await db.exec(
+    'ALTER TABLE psf_requests DROP COLUMN IF EXISTS schema_snapshot_key, DROP COLUMN IF EXISTS psf_created_schema_snapshot_key',
+  );
+  await fixture.service.onModuleInit();
+  const unkeyed = () =>
+    db.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM psf_requests
+       WHERE schema_snapshot_key IS DISTINCT FROM md5(schema_snapshot_json::text)
+          OR psf_created_schema_snapshot_key IS DISTINCT FROM md5(psf_created_schema_snapshot_json::text)`,
+    );
+  assert.deepEqual((await unkeyed()).rows, [{ count: 0 }]);
+
+  // A changed form gets a new key, and the export reads it.
+  await db.query(
+    `UPDATE psf_requests SET schema_snapshot_json = jsonb_set(
+       schema_snapshot_json, '{sections,0,fields}',
+       schema_snapshot_json #> '{sections,0,fields}' ||
+       '[{"fieldKey":"fpc","canonicalKey":"fpc","label":"FPC","type":"text","required":false}]'::jsonb),
+       requester_data_json = requester_data_json || '{"fpc":"FPC-1"}'::jsonb
+     WHERE request_no = (SELECT MIN(request_no) FROM psf_requests)`,
+  );
+  assert.deepEqual((await unkeyed()).rows, [{ count: 0 }]);
+  const file = await exportSheet(admin);
+  const preview = await exporter.previewRequests({});
+  const fpc = file.headers.indexOf('FPC');
+  assert.ok(fpc > 0);
+  assert.deepEqual(
+    file.rows.map((row) => row[fpc]),
+    ['NA', 'NA', 'FPC-1'],
+  );
+  assert.deepEqual(preview.headers, file.headers);
+  assert.deepEqual(preview.rows, file.rows);
+});

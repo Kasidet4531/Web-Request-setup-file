@@ -521,7 +521,8 @@ void it(
         await configured.readConfigured(
           `SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position) AS list
            FROM information_schema.columns
-           WHERE table_schema = 'public' AND table_name = 'psf_requests'`,
+           WHERE table_schema = 'public' AND table_name = 'psf_requests'
+             AND is_generated = 'NEVER'`,
         )
       ).rows[0].list,
     );
