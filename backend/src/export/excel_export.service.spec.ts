@@ -8,6 +8,7 @@ import {
   ExcelExportService,
   formatRequestExportFilename,
 } from './excel_export.service';
+import { exportCell } from './export-workbook';
 
 describe('ExcelExportService', () => {
   const adminActor = {
@@ -25,6 +26,7 @@ describe('ExcelExportService', () => {
     setupOwnerDepartment: null,
   };
   let searchIndexService: {
+    withExportSnapshot: jest.Mock;
     queryExportRequests: jest.Mock;
     extractCanonicalValues: jest.Mock;
     serializeCanonicalValue: jest.Mock;
@@ -37,10 +39,14 @@ describe('ExcelExportService', () => {
       query: jest.fn(),
     } as never);
     searchIndexService = {
+      withExportSnapshot: jest.fn(
+        (operation: (search: unknown) => Promise<unknown>) =>
+          operation(searchIndexService),
+      ),
       queryExportRequests: jest.fn().mockResolvedValue({
         items: [],
         total: 0,
-        limit: 2000,
+        limit: 500,
         offset: 0,
       }),
       extractCanonicalValues: jest.fn(
@@ -120,17 +126,21 @@ describe('ExcelExportService', () => {
         status: 'Submitted',
         requestDateFrom: '2026-06-01',
         requestDateTo: '2026-06-30',
-        limit: 2000,
+        limit: 500,
         offset: 0,
       },
       adminActor,
-      2000,
+      500,
     );
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-request',
+      false,
+      undefined,
     );
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-created-information',
+      false,
+      undefined,
     );
   });
 
@@ -374,17 +384,6 @@ describe('ExcelExportService', () => {
     expect(cellFor(3, 'Multi Value')).toBe('A, B, C');
     expect(cellFor(3, 'Newest Only')).toBe('');
     expect(cellFor(3, 'PSF Setup File Name')).toBe('draft-admin-visible.psf');
-    expect(searchIndexService.extractCanonicalValues).toHaveBeenCalledWith(
-      oldSchema,
-      {
-        legacy_title: 'Fallback from old field key',
-        legacy_multi: ['A, B', ' C '],
-      },
-    );
-    expect(searchIndexService.serializeCanonicalValue).toHaveBeenCalledWith([]);
-    expect(searchIndexService.serializeCanonicalValue).toHaveBeenCalledWith(
-      null,
-    );
   });
 
   it('exports active PSF fields first and retains historic fields by canonical identity', async () => {
@@ -534,6 +533,8 @@ describe('ExcelExportService', () => {
     ).toBe('legacy.psf');
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
       'psf-created-information',
+      false,
+      undefined,
     );
   });
 
@@ -664,15 +665,9 @@ describe('ExcelExportService', () => {
   });
 
   it('exports number fields as numeric cells and leaves other text as text', () => {
-    const exportCell = (type: string, value: unknown) =>
-      (
-        service as unknown as {
-          exportCell(field: { type: string }, value: unknown): unknown;
-        }
-      ).exportCell({ type }, value);
-    expect(exportCell('number', '12.5')).toBe(12.5);
-    expect(exportCell('number', 'NA')).toBe('NA');
-    expect(exportCell('text', '12.5')).toBe('12.5');
+    expect(exportCell({ type: 'number' }, '12.5')).toBe(12.5);
+    expect(exportCell({ type: 'number' }, 'NA')).toBe('NA');
+    expect(exportCell({ type: 'text' }, '12.5')).toBe('12.5');
   });
 
   it.each(['synchronous', 'queued'] as const)(
@@ -866,14 +861,6 @@ describe('ExcelExportService', () => {
         sheet.getRow(3).getCell(headers.indexOf('Historical PSF note') + 1)
           .value,
       ).toBe('Captured private note');
-      expect(searchIndexService.extractCanonicalValues).toHaveBeenCalledWith(
-        capturedSchema,
-        {
-          old_title: 'Captured title',
-          old_second: 'Captured two',
-          old_third: 'Captured three',
-        },
-      );
     },
   );
 
@@ -888,6 +875,92 @@ describe('ExcelExportService', () => {
     await expect(service.exportRequests({}, adminActor)).rejects.toBeInstanceOf(
       PayloadTooLargeException,
     );
+  });
+
+  it.each(['synchronous', 'queued'] as const)(
+    'preserves exact CRLF text in the %s XLSX file',
+    async (mode) => {
+      const schema = {
+        formKey: 'psf-request',
+        version: 1,
+        title: 'Captured',
+        sections: [
+          {
+            sectionKey: 'one',
+            title: 'One',
+            fields: [
+              {
+                fieldKey: 'note',
+                canonicalKey: 'note',
+                label: 'Note',
+                type: 'text',
+                required: false,
+                exportable: true,
+              },
+            ],
+          },
+        ],
+      };
+      searchIndexService.queryExportRequests.mockResolvedValueOnce({
+        items: [
+          {
+            requestId: 'request-1',
+            requestNo: 'CRLF-1',
+            status: 'Submitted',
+            requestDate: '2026-01-01',
+            updatedAt: '2026-01-01',
+            requesterData: { note: 'ภาษาไทย 😀\r\nsecond line' },
+            psfCreatedData: {},
+            schemaSnapshot: schema,
+            canonicalValues: null,
+            psfReleasedAt: null,
+          },
+        ],
+        total: 1,
+        limit: 500,
+        offset: 0,
+      });
+      const result =
+        mode === 'synchronous'
+          ? await service.exportRequests({}, adminActor)
+          : await service.exportAllRequests({}, adminActor);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        result.content as unknown as Parameters<typeof workbook.xlsx.load>[0],
+      );
+      const sheet = workbook.getWorksheet('PSF Requests')!;
+      const labels = sheet.getRow(1).values as unknown[];
+      expect(sheet.getCell(2, labels.indexOf('Note')).value).toBe(
+        'ภาษาไทย 😀\r\nsecond line',
+      );
+    },
+  );
+
+  it('rejects a missing page instead of returning a partial large export', async () => {
+    searchIndexService.queryExportRequests
+      .mockResolvedValueOnce({
+        items: [
+          {
+            requestId: 'one',
+            requestNo: 'ONE',
+            status: 'Submitted',
+            requesterData: {},
+            psfCreatedData: {},
+            canonicalValues: {},
+            schemaSnapshot: {
+              formKey: 'psf-request',
+              version: 1,
+              title: 'One',
+              sections: [],
+            },
+          },
+        ],
+        total: 2,
+        limit: 500,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({ items: [], total: 2, limit: 500, offset: 1 });
+    await expect(service.exportAllRequests({}, adminActor)).rejects.toThrow();
   });
 
   it('paginates a durable large export through the same workbook rendering and actor scope', async () => {

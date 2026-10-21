@@ -10,6 +10,47 @@ import { isCalendarDate } from './form-data-validation';
 export type CanonicalValue = string | number | boolean | string[] | null;
 export type CanonicalValues = Record<string, CanonicalValue>;
 
+export function normalizeCanonicalValue(value: unknown): CanonicalValue {
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    const values = value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    return values.length ? values : null;
+  }
+  return null;
+}
+
+export function serializeCanonicalValue(value: unknown): string {
+  const normalized = normalizeCanonicalValue(value);
+  if (typeof normalized === 'string') return normalized;
+  if (typeof normalized === 'number' || typeof normalized === 'boolean')
+    return String(normalized);
+  return Array.isArray(normalized) ? normalized.join(', ') : '';
+}
+
+export function extractCanonicalValues(
+  schema: FormSchemaJson,
+  data: RequesterData,
+): CanonicalValues {
+  const values: CanonicalValues = {};
+  for (const section of schema.sections)
+    for (const field of section.fields)
+      if (
+        typeof field.canonicalKey === 'string' &&
+        field.canonicalKey.trim().length > 0 &&
+        (field.searchable === true ||
+          field.exportable === true ||
+          field.autofillTrigger === true)
+      )
+        values[field.canonicalKey] = normalizeCanonicalValue(
+          data[field.fieldKey],
+        );
+  return values;
+}
+
 export interface RequestSearchIndexSource {
   requestId: string;
   requestNo: string;
@@ -151,8 +192,8 @@ interface RequestExportRow {
   psf_created_data_json: RequesterData;
   psf_released_at: Date | string | null;
   requester_user_id: string | null;
-  psf_created_schema_snapshot_json?: FormSchemaJson | null;
-  schema_snapshot_json: FormSchemaJson;
+  psf_created_schema_snapshot_json?: FormSchemaJson | string | null;
+  schema_snapshot_json: FormSchemaJson | string;
   canonical_values_json: CanonicalValues | null;
   total_count: number;
 }
@@ -176,7 +217,30 @@ const MFG_PRODUCT_TYPES =
 
 @Injectable()
 export class SearchIndexService implements OnModuleInit {
+  private exportContext?: {
+    counts: Map<string, number>;
+    schemas: Map<string, FormSchemaJson>;
+  };
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  async withExportSnapshot<T>(
+    operation: (search: SearchIndexService, runner: QueryRunner) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const search = new SearchIndexService(client as unknown as Pool);
+      search.exportContext = { counts: new Map(), schemas: new Map() };
+      const result = await operation(search, client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   async onModuleInit(): Promise<void> {
     await this.ensureCanonicalValueStorage();
@@ -186,21 +250,7 @@ export class SearchIndexService implements OnModuleInit {
     schema: FormSchemaJson,
     requesterData: RequesterData,
   ): CanonicalValues {
-    const canonicalValues: CanonicalValues = {};
-
-    schema.sections.forEach((section) => {
-      section.fields.forEach((field) => {
-        if (!this.shouldExtractField(field)) {
-          return;
-        }
-
-        canonicalValues[field.canonicalKey] = this.normalizeCanonicalValue(
-          requesterData[field.fieldKey],
-        );
-      });
-    });
-
-    return canonicalValues;
+    return extractCanonicalValues(schema, requesterData);
   }
 
   async upsertRequestSearchIndex(
@@ -550,8 +600,17 @@ export class SearchIndexService implements OnModuleInit {
     const limit = this.normalizeLimit(filters.limit, maximumLimit);
     const offset = this.normalizeOffset(filters.offset);
     const { whereClause, params } = this.buildExportWhere(filters);
+    const countKey = JSON.stringify([whereClause, params]);
+    const knownTotal = this.exportContext?.counts.get(countKey);
     const result = await this.pool.query<RequestExportRow>(
       `
+        WITH export_page AS MATERIALIZED (
+          SELECT request.*${knownTotal === undefined ? ', COUNT(*) OVER()::int AS total_count' : ''}
+          FROM psf_requests AS request
+          ${whereClause}
+          ORDER BY request.updated_at DESC, request.request_no DESC
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        )
         SELECT
           request.id AS request_id,
           request.request_no,
@@ -566,27 +625,28 @@ export class SearchIndexService implements OnModuleInit {
           request.psf_created_data_json,
           request.psf_released_at,
           request.requester_user_id,
-          request.psf_created_schema_snapshot_json,
-          request.schema_snapshot_json,
+          request.psf_created_schema_snapshot_json::text AS psf_created_schema_snapshot_json,
+          request.schema_snapshot_json::text AS schema_snapshot_json,
           canonical_values.canonical_values_json,
-          COUNT(*) OVER()::int AS total_count
-        FROM psf_requests AS request
+          ${knownTotal === undefined ? 'request.total_count' : `${knownTotal}::int AS total_count`}
+        FROM export_page AS request
         LEFT JOIN LATERAL (
           SELECT jsonb_object_agg(canonical_key, value_json) AS canonical_values_json
           FROM canonical_submission_values
           WHERE request_id = request.id
         ) AS canonical_values ON TRUE
-        ${whereClause}
         ORDER BY request.updated_at DESC, request.request_no DESC
-        LIMIT $${params.length + 1}
-        OFFSET $${params.length + 2}
       `,
       [...params, limit, offset],
     );
 
+    const total = knownTotal ?? result.rows[0]?.total_count ?? 0;
+    this.exportContext?.counts.set(countKey, total);
+    const schemas =
+      this.exportContext?.schemas || new Map<string, FormSchemaJson>();
     return {
-      items: result.rows.map((row) => this.mapExportRow(row, actor)),
-      total: result.rows[0]?.total_count ?? 0,
+      items: result.rows.map((row) => this.mapExportRow(row, actor, schemas)),
+      total,
       limit,
       offset,
     };
@@ -770,18 +830,6 @@ export class SearchIndexService implements OnModuleInit {
     `);
   }
 
-  private shouldExtractField(
-    field: FormSchemaJson['sections'][number]['fields'][number],
-  ): boolean {
-    return (
-      typeof field.canonicalKey === 'string' &&
-      field.canonicalKey.trim().length > 0 &&
-      (field.searchable === true ||
-        field.exportable === true ||
-        field.autofillTrigger === true)
-    );
-  }
-
   private stringFromCanonical(
     value: CanonicalValue | undefined,
   ): string | null {
@@ -790,21 +838,7 @@ export class SearchIndexService implements OnModuleInit {
   }
 
   serializeCanonicalValue(value: unknown): string {
-    const normalized = this.normalizeCanonicalValue(value);
-
-    if (typeof normalized === 'string') {
-      return normalized;
-    }
-
-    if (typeof normalized === 'number' || typeof normalized === 'boolean') {
-      return String(normalized);
-    }
-
-    if (Array.isArray(normalized)) {
-      return normalized.join(', ');
-    }
-
-    return '';
+    return serializeCanonicalValue(value);
   }
 
   private serializeDateForQuery(value: unknown): string | null {
@@ -982,7 +1016,17 @@ export class SearchIndexService implements OnModuleInit {
   private mapExportRow(
     row: RequestExportRow,
     actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+    schemas: Map<string, FormSchemaJson>,
   ): RequestExportItem {
+    const schema = (value: FormSchemaJson | string): FormSchemaJson => {
+      if (typeof value !== 'string') return value;
+      let parsed = schemas.get(value);
+      if (!parsed) {
+        parsed = JSON.parse(value) as FormSchemaJson;
+        schemas.set(value, parsed);
+      }
+      return parsed;
+    };
     const psfVisible =
       actor.role !== 'requester' ||
       (row.psf_released_at !== null && row.psf_released_at !== undefined);
@@ -998,9 +1042,11 @@ export class SearchIndexService implements OnModuleInit {
       psfCreatedData: psfVisible ? (row.psf_created_data_json ?? {}) : {},
       psfReleasedAt: this.serializeNullableTimestamp(row.psf_released_at),
       psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
-        row.psf_created_schema_snapshot_json,
+        row.psf_created_schema_snapshot_json == null
+          ? row.psf_created_schema_snapshot_json
+          : schema(row.psf_created_schema_snapshot_json),
       ),
-      schemaSnapshot: row.schema_snapshot_json,
+      schemaSnapshot: schema(row.schema_snapshot_json),
       canonicalValues: row.canonical_values_json,
     };
   }
@@ -1017,26 +1063,5 @@ export class SearchIndexService implements OnModuleInit {
 
   private serializeTimestamp(value: Date | string): string {
     return value instanceof Date ? value.toISOString() : value;
-  }
-
-  private normalizeCanonicalValue(value: unknown): CanonicalValue {
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    }
-
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return value;
-    }
-
-    if (Array.isArray(value)) {
-      const normalized = value
-        .filter((item): item is string => typeof item === 'string')
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-      return normalized.length > 0 ? normalized : null;
-    }
-
-    return null;
   }
 }

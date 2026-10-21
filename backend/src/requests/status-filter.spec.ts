@@ -132,6 +132,9 @@ describe('verbatim catalog status filter production paths', () => {
         return Promise.resolve({ rows, rowCount: 1 });
       }),
     };
+    Object.assign(pool, {
+      connect: () => Promise.resolve({ query: pool.query, release: () => {} }),
+    });
     const search = new SearchIndexService(pool as never);
     const workflow = new WorkflowTransitionService(pool as never, {} as never);
     const service = new RequestsService(

@@ -3,6 +3,7 @@ jest.mock('node:worker_threads', () => ({
 }));
 
 import { Worker } from 'node:worker_threads';
+import { EventEmitter } from 'node:events';
 import { ExcelExportService } from './excel_export.service';
 
 describe('ExcelExportService large export rendering', () => {
@@ -11,8 +12,10 @@ describe('ExcelExportService large export rendering', () => {
   it('hands large workbook rendering to a worker while the main request loop remains free', async () => {
     const listeners = new Map<string, (message: unknown) => void>();
     const worker = {} as {
+      on: jest.Mock;
       once: jest.Mock;
       postMessage: jest.Mock;
+      terminate: jest.Mock;
     };
     worker.once = jest.fn(
       (event: string, listener: (message: unknown) => void) => {
@@ -20,10 +23,18 @@ describe('ExcelExportService large export rendering', () => {
         return worker;
       },
     );
-    worker.postMessage = jest.fn();
+    worker.on = worker.once;
+    worker.terminate = jest.fn().mockResolvedValue(0);
+    worker.postMessage = jest.fn((message: { type: string }) => {
+      if (message.type === 'page')
+        queueMicrotask(() => listeners.get('message')?.({ type: 'accepted' }));
+    });
     workerConstructor.mockImplementation(() => worker);
 
     const searchIndexService = {
+      withExportSnapshot: (
+        operation: (search: unknown) => Promise<unknown>,
+      ): Promise<unknown> => operation(searchIndexService),
       queryExportRequests: jest.fn().mockResolvedValue({
         items: [
           {
@@ -84,7 +95,7 @@ describe('ExcelExportService large export rendering', () => {
 
     for (
       let attempt = 0;
-      attempt < 5 && !worker.postMessage.mock.calls.length;
+      attempt < 10 && worker.postMessage.mock.calls.length < 2;
       attempt += 1
     ) {
       await new Promise<void>((resolve) => setImmediate(resolve));
@@ -94,14 +105,71 @@ describe('ExcelExportService large export rendering', () => {
       expect.any(String),
       expect.objectContaining({ eval: true }),
     );
-    expect(worker.postMessage).toHaveBeenCalledTimes(1);
+    expect(worker.postMessage).toHaveBeenCalledTimes(2);
+    expect(worker.postMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: 'page',
+        items: [expect.objectContaining({ requestNo: 'PSF-0001' })],
+      }),
+    );
 
     const ordinaryApiResponse = await Promise.resolve({ status: 'ok' });
     expect(ordinaryApiResponse).toEqual({ status: 'ok' });
 
-    listeners.get('message')?.({ content: Uint8Array.from([0x50, 0x4b]) });
+    listeners.get('message')?.({
+      type: 'complete',
+      content: Uint8Array.from([0x50, 0x4b]),
+    });
     await expect(exportPromise).resolves.toMatchObject({
       content: Buffer.from([0x50, 0x4b]),
     });
+    expect(worker.terminate).toHaveBeenCalled();
   });
+
+  it.each(['page error', 'finish error', 'early exit', 'invalid result'])(
+    'rejects %s without returning a partial workbook and terminates the worker',
+    async (failure) => {
+      const worker = Object.assign(new EventEmitter(), {
+        terminate: jest.fn().mockResolvedValue(0),
+        postMessage: jest.fn((message: { type: string }) => {
+          queueMicrotask(() => {
+            if (message.type === 'page') {
+              if (failure === 'page error')
+                worker.emit('error', new Error('fixture failure'));
+              else if (failure === 'early exit') worker.emit('exit', 0);
+              else worker.emit('message', { type: 'accepted' });
+            } else if (failure === 'finish error')
+              worker.emit('message', { type: 'error' });
+            else worker.emit('message', { type: 'complete', content: null });
+          });
+        }),
+      });
+      workerConstructor.mockImplementation(() => worker);
+      const search = {
+        withExportSnapshot: (
+          operation: (search: unknown) => Promise<unknown>,
+        ) => operation(search),
+        queryExportRequests: jest
+          .fn()
+          .mockResolvedValue({ items: [], total: 0 }),
+      };
+      const forms = {
+        getActiveSchema: jest
+          .fn()
+          .mockResolvedValue({ schema: { sections: [] } }),
+      };
+      const service = Reflect.construct(ExcelExportService, [
+        search,
+        forms,
+      ]) as ExcelExportService;
+
+      await expect(
+        service.exportAllRequests({}, { id: 'admin-1', role: 'admin' }),
+      ).rejects.toThrow('Unable to render export workbook.');
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+      await service.onModuleDestroy();
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+    },
+  );
 });

@@ -1,0 +1,5 @@
+{
+  "control": "admin-file-read-as-requester",
+  "rejected": true,
+  "reason": "Wrong-role file fails independent cell oracle"
+}

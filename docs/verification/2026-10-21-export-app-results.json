@@ -1,0 +1,2373 @@
+{
+  "timestamp": "2026-10-21T00:09:38.791Z",
+  "implementation": "compiled application routes and workers",
+  "cpuQuota": "200000 100000",
+  "memoryLimitBytes": 8589934592,
+  "sessionAndProfileFixtureOnly": true,
+  "queueThreshold": 2000,
+  "syncThresholdOverrideForTest": true,
+  "healthProbeIntervalMs": 100,
+  "statusPollIntervalMs": 100,
+  "datasets": [
+    {
+      "rows": 5570,
+      "drafts": 37,
+      "total": 5607,
+      "canonical_values": 217230,
+      "seedMs": 4268.7,
+      "compatibilityCoverage": {
+        "probeRows": 780,
+        "completeChoiceAndVersionCoverage": true,
+        "schemas": [
+          {
+            "formKey": "psf-request",
+            "version": 3,
+            "fields": 47
+          },
+          {
+            "formKey": "psf-created-information",
+            "version": 2,
+            "fields": 17
+          },
+          {
+            "formKey": "psf-request",
+            "version": 2,
+            "fields": 49
+          },
+          {
+            "formKey": "psf-created-information",
+            "version": 3,
+            "fields": 18
+          },
+          {
+            "formKey": "psf-request",
+            "version": 3,
+            "fields": 47
+          },
+          {
+            "formKey": "psf-created-information",
+            "version": 1,
+            "fields": 16
+          },
+          {
+            "formKey": "psf-request",
+            "version": 1,
+            "fields": 52
+          }
+        ],
+        "choiceColumns": [
+          {
+            "column": "Additional request PSF for MSA",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\""
+            ]
+          },
+          {
+            "column": "Allow to probe on crack pad (bin 103)",
+            "unlistedInSnapshotAndCurrent": 240,
+            "canonical": 192,
+            "fallback": 48,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"No\"",
+              "string:\"6\"",
+              "string:\"200\"",
+              "string:\"Retired choice (legacy)\"",
+              "object:[\"6\",\"200\"]",
+              "number:6",
+              "number:200",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "Bin assign (No PCM)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "string:\"N/A\"",
+              "string:\"50 ==> Inkless\"",
+              "string:\"50,244 ==> Laser marking\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "DCC require",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Diameter (Inch)",
+            "unlistedInSnapshotAndCurrent": 420,
+            "canonical": 336,
+            "fallback": 84,
+            "psf": 0,
+            "rawVariants": [
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"12\"",
+              "string:\"8\""
+            ]
+          },
+          {
+            "column": "Enable 5SVC2/Micro touch",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Yes\"",
+              "string:\"No\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Flat / Notch direction",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "string:\"L : Left       (TSK=270,EG=90)\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"T : Top       (TSK=0,EG=180)\"",
+              "string:\"R : Right     (TSK=90,EG=270)\"",
+              "string:\"B : Bottom (TSK=180,EG=0)\""
+            ]
+          },
+          {
+            "column": "FPC",
+            "unlistedInSnapshotAndCurrent": 120,
+            "canonical": 96,
+            "fallback": 24,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"200\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Yes\"",
+              "number:200",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"6\"",
+              "string:\"Retired choice (legacy)\"",
+              "number:6",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "Merge Template",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Refer Reference (Not change)\"",
+              "string:\"Review Merge Recipe (Layout change)\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\""
+            ]
+          },
+          {
+            "column": "Move to Network",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200"
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT1",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT2",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\""
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT3",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\""
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT4",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Pad type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Bump\"",
+              "string:\"Trench\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Normal\""
+            ]
+          },
+          {
+            "column": "Physical Wafer",
+            "unlistedInSnapshotAndCurrent": 320,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 320,
+            "rawVariants": [
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "number:200",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"6\""
+            ]
+          },
+          {
+            "column": "Probe card type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"MPI-Osprey-70P\"",
+              "string:\"SV-Spring-P70\"",
+              "string:\"SV-Spring-P80\"",
+              "string:\"TP-T1 (1.5 mil)\"",
+              "string:\"TP-T5 (1.5 mil)\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"FM-V50A(1.6mil)\"",
+              "string:\"FM-V70A (2.0mil)\"",
+              "string:\"FM-V85A (2.5 mil)\"",
+              "string:\"FM-V85B (2.5mil)\"",
+              "string:\"MPI-Kestrel-80\"",
+              "string:\"Epoxy\"",
+              "string:\"FM-ViP2.1 (3.0mil)\"",
+              "string:\"FM-ViP2.2 (2.5mil)\"",
+              "string:\"FM-ViP2.3 (2.0mil)\"",
+              "string:\"FM-ViP2.4 (1.6mil)\"",
+              "string:\"Vprobe 1.6 mil\"",
+              "string:\"Yokowo-Pogo-Crown\"",
+              "string:\"Cobra\""
+            ]
+          },
+          {
+            "column": "Prober Type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "object:[\"6\",\"200\"]",
+              "string:\"TEL\"",
+              "string:\"EG4090\"",
+              "string:\"TSK\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\""
+            ]
+          },
+          {
+            "column": "Product layout",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Refer Reference Layout\"",
+              "string:\"New Product Layout\"",
+              "string:\"Change Layout\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Request Excel Probe Pattern",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\""
+            ]
+          },
+          {
+            "column": "Request For",
+            "unlistedInSnapshotAndCurrent": 360,
+            "canonical": 288,
+            "fallback": 72,
+            "psf": 0,
+            "rawVariants": [
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"Production\"",
+              "string:\"STR\"",
+              "string:\"Experiment\"",
+              "string:\"200\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Request To",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Create new PSF (Require PCSF , E142 or .DPL)\"",
+              "string:\"Revise from old PSF (Require reference PSF , PCSF , E142 or DPL)\"",
+              "string:\"Product Transfer (Require PSF , PCSF , .LAY)\"",
+              "number:6"
+            ]
+          },
+          {
+            "column": "System",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"NEW WORLD\"",
+              "string:\"EWFM\"",
+              "string:\"EWFM/Map Handling\"",
+              "string:\"EWFM/DCC\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "Test temp for WT1 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"95\"",
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"100\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Test temp for WT2 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "object:[\"6\",\"200\"]",
+              "string:\"95\"",
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"100\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Test temp for WT3 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"95\"",
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"100\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Test temp for WT4 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"100\"",
+              "string:\"95\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Tester Type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"MCT\"",
+              "string:\"PS1600_Digital\"",
+              "string:\"PS1600_PWR\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"SPEAD\"",
+              "string:\"SPEAL\"",
+              "string:\"SPEAL-DOT800\"",
+              "string:\"UFLEX\"",
+              "string:\"VQ\"",
+              "string:\"J750\"",
+              "string:\"LTX_C\""
+            ]
+          },
+          {
+            "column": "Transfer PSF and Job file to NAS Server",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Yes\"",
+              "string:\"No\"",
+              "number:6",
+              "string:\"6\""
+            ]
+          }
+        ],
+        "unknownStatusPreserved": true
+      }
+    },
+    {
+      "rows": 100000,
+      "drafts": 37,
+      "total": 100037,
+      "canonical_values": 3900000,
+      "seedMs": 92827,
+      "compatibilityCoverage": {
+        "probeRows": 780,
+        "completeChoiceAndVersionCoverage": true,
+        "schemas": [
+          {
+            "formKey": "psf-request",
+            "version": 3,
+            "fields": 47
+          },
+          {
+            "formKey": "psf-created-information",
+            "version": 2,
+            "fields": 17
+          },
+          {
+            "formKey": "psf-request",
+            "version": 2,
+            "fields": 49
+          },
+          {
+            "formKey": "psf-created-information",
+            "version": 3,
+            "fields": 18
+          },
+          {
+            "formKey": "psf-request",
+            "version": 3,
+            "fields": 47
+          },
+          {
+            "formKey": "psf-created-information",
+            "version": 1,
+            "fields": 16
+          },
+          {
+            "formKey": "psf-request",
+            "version": 1,
+            "fields": 52
+          }
+        ],
+        "choiceColumns": [
+          {
+            "column": "Additional request PSF for MSA",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\""
+            ]
+          },
+          {
+            "column": "Allow to probe on crack pad (bin 103)",
+            "unlistedInSnapshotAndCurrent": 240,
+            "canonical": 192,
+            "fallback": 48,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"No\"",
+              "string:\"6\"",
+              "string:\"200\"",
+              "string:\"Retired choice (legacy)\"",
+              "object:[\"6\",\"200\"]",
+              "number:6",
+              "number:200",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "Bin assign (No PCM)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "string:\"N/A\"",
+              "string:\"50 ==> Inkless\"",
+              "string:\"50,244 ==> Laser marking\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "DCC require",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Diameter (Inch)",
+            "unlistedInSnapshotAndCurrent": 420,
+            "canonical": 336,
+            "fallback": 84,
+            "psf": 0,
+            "rawVariants": [
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"12\"",
+              "string:\"8\""
+            ]
+          },
+          {
+            "column": "Enable 5SVC2/Micro touch",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Yes\"",
+              "string:\"No\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Flat / Notch direction",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "string:\"L : Left       (TSK=270,EG=90)\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"T : Top       (TSK=0,EG=180)\"",
+              "string:\"R : Right     (TSK=90,EG=270)\"",
+              "string:\"B : Bottom (TSK=180,EG=0)\""
+            ]
+          },
+          {
+            "column": "FPC",
+            "unlistedInSnapshotAndCurrent": 120,
+            "canonical": 96,
+            "fallback": 24,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"200\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Yes\"",
+              "number:200",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"6\"",
+              "string:\"Retired choice (legacy)\"",
+              "number:6",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "Merge Template",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Refer Reference (Not change)\"",
+              "string:\"Review Merge Recipe (Layout change)\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\""
+            ]
+          },
+          {
+            "column": "Move to Network",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200"
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT1",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT2",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\""
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT3",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\""
+            ]
+          },
+          {
+            "column": "NNR Recipe for WT4",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Pad type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Bump\"",
+              "string:\"Trench\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Normal\""
+            ]
+          },
+          {
+            "column": "Physical Wafer",
+            "unlistedInSnapshotAndCurrent": 320,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 320,
+            "rawVariants": [
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\"",
+              "string:\"Yes\"",
+              "number:6",
+              "number:200",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"6\""
+            ]
+          },
+          {
+            "column": "Probe card type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"MPI-Osprey-70P\"",
+              "string:\"SV-Spring-P70\"",
+              "string:\"SV-Spring-P80\"",
+              "string:\"TP-T1 (1.5 mil)\"",
+              "string:\"TP-T5 (1.5 mil)\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"FM-V50A(1.6mil)\"",
+              "string:\"FM-V70A (2.0mil)\"",
+              "string:\"FM-V85A (2.5 mil)\"",
+              "string:\"FM-V85B (2.5mil)\"",
+              "string:\"MPI-Kestrel-80\"",
+              "string:\"Epoxy\"",
+              "string:\"FM-ViP2.1 (3.0mil)\"",
+              "string:\"FM-ViP2.2 (2.5mil)\"",
+              "string:\"FM-ViP2.3 (2.0mil)\"",
+              "string:\"FM-ViP2.4 (1.6mil)\"",
+              "string:\"Vprobe 1.6 mil\"",
+              "string:\"Yokowo-Pogo-Crown\"",
+              "string:\"Cobra\""
+            ]
+          },
+          {
+            "column": "Prober Type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "object:[\"6\",\"200\"]",
+              "string:\"TEL\"",
+              "string:\"EG4090\"",
+              "string:\"TSK\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\""
+            ]
+          },
+          {
+            "column": "Product layout",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Refer Reference Layout\"",
+              "string:\"New Product Layout\"",
+              "string:\"Change Layout\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Request Excel Probe Pattern",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Yes\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"No\""
+            ]
+          },
+          {
+            "column": "Request For",
+            "unlistedInSnapshotAndCurrent": 360,
+            "canonical": 288,
+            "fallback": 72,
+            "psf": 0,
+            "rawVariants": [
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"Production\"",
+              "string:\"STR\"",
+              "string:\"Experiment\"",
+              "string:\"200\"",
+              "object:[\"6\",\"200\"]"
+            ]
+          },
+          {
+            "column": "Request To",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Create new PSF (Require PCSF , E142 or .DPL)\"",
+              "string:\"Revise from old PSF (Require reference PSF , PCSF , E142 or DPL)\"",
+              "string:\"Product Transfer (Require PSF , PCSF , .LAY)\"",
+              "number:6"
+            ]
+          },
+          {
+            "column": "System",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"NEW WORLD\"",
+              "string:\"EWFM\"",
+              "string:\"EWFM/Map Handling\"",
+              "string:\"EWFM/DCC\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\""
+            ]
+          },
+          {
+            "column": "Test temp for WT1 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"95\"",
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"100\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Test temp for WT2 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "object:[\"6\",\"200\"]",
+              "string:\"95\"",
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "string:\"100\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Test temp for WT3 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"95\"",
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"100\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Test temp for WT4 (c)",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"85\"",
+              "string:\"40\"",
+              "string:\"30\"",
+              "string:\"25\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"100\"",
+              "string:\"95\"",
+              "string:\"105\"",
+              "string:\"125\"",
+              "string:\"150\"",
+              "string:\"-45\"",
+              "string:\"-43\"",
+              "string:\"-40\"",
+              "string:\"-26\"",
+              "string:\"0\""
+            ]
+          },
+          {
+            "column": "Tester Type",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 384,
+            "fallback": 96,
+            "psf": 0,
+            "rawVariants": [
+              "string:\"MCT\"",
+              "string:\"PS1600_Digital\"",
+              "string:\"PS1600_PWR\"",
+              "number:6",
+              "string:\"6\"",
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"SPEAD\"",
+              "string:\"SPEAL\"",
+              "string:\"SPEAL-DOT800\"",
+              "string:\"UFLEX\"",
+              "string:\"VQ\"",
+              "string:\"J750\"",
+              "string:\"LTX_C\""
+            ]
+          },
+          {
+            "column": "Transfer PSF and Job file to NAS Server",
+            "unlistedInSnapshotAndCurrent": 480,
+            "canonical": 0,
+            "fallback": 0,
+            "psf": 480,
+            "rawVariants": [
+              "number:200",
+              "string:\"200\"",
+              "string:\"0006\"",
+              "string:\"Retired choice (legacy)\"",
+              "string:\"นอกตัวเลือก 😀 & <legacy>\"",
+              "object:[\"6\",\"200\"]",
+              "string:\"Yes\"",
+              "string:\"No\"",
+              "number:6",
+              "string:\"6\""
+            ]
+          }
+        ],
+        "unknownStatusPreserved": true
+      }
+    }
+  ],
+  "batches": [
+    {
+      "rows": 5570,
+      "kind": "sync",
+      "concurrency": 1,
+      "wallMs": 2136.1,
+      "jobMedianMs": 2134.9,
+      "healthSamples": 21,
+      "healthP95Ms": 16.9,
+      "healthMaxMs": 17.4,
+      "nodePeakRssMiB": 606,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-0-actor-0.xlsx",
+          "totalMs": 2134.9,
+          "bytes": 2380347,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 686
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "sync",
+      "concurrency": 1,
+      "wallMs": 2124.8,
+      "jobMedianMs": 2123.1,
+      "healthSamples": 21,
+      "healthP95Ms": 16.3,
+      "healthMaxMs": 30,
+      "nodePeakRssMiB": 615.1,
+      "files": [
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-1-actor-1.xlsx",
+          "totalMs": 2123.1,
+          "bytes": 2313592,
+          "checkedCells": 423396,
+          "blankCells": 115176,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+          "verifyMs": 633.1
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "sync",
+      "concurrency": 1,
+      "wallMs": 2066.7,
+      "jobMedianMs": 2065,
+      "healthSamples": 20,
+      "healthP95Ms": 6.5,
+      "healthMaxMs": 14.7,
+      "nodePeakRssMiB": 672.5,
+      "files": [
+        {
+          "actorIndex": 2,
+          "role": "setup_owner",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-2-actor-2.xlsx",
+          "totalMs": 2065,
+          "bytes": 2380347,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 659.3
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "sync",
+      "concurrency": 2,
+      "wallMs": 2954.5,
+      "jobMedianMs": 2857.6,
+      "healthSamples": 27,
+      "healthP95Ms": 45.8,
+      "healthMaxMs": 106.6,
+      "nodePeakRssMiB": 963.3,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-3-actor-0.xlsx",
+          "totalMs": 2953,
+          "bytes": 2380347,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 621.9
+        },
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-3-actor-1.xlsx",
+          "totalMs": 2762.1,
+          "bytes": 2313592,
+          "checkedCells": 423396,
+          "blankCells": 115176,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+          "verifyMs": 628.3
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "sync",
+      "concurrency": 4,
+      "wallMs": 5513.2,
+      "jobMedianMs": 5384.2,
+      "healthSamples": 51,
+      "healthP95Ms": 112,
+      "healthMaxMs": 192.2,
+      "nodePeakRssMiB": 1516.6,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-4-actor-0.xlsx",
+          "totalMs": 5512.3,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 648
+        },
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-4-actor-1.xlsx",
+          "totalMs": 5409.5,
+          "bytes": 2313591,
+          "checkedCells": 423396,
+          "blankCells": 115176,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+          "verifyMs": 660.7
+        },
+        {
+          "actorIndex": 2,
+          "role": "setup_owner",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-4-actor-2.xlsx",
+          "totalMs": 5358.8,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 660.3
+        },
+        {
+          "actorIndex": 3,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-sync/batch-4-actor-3.xlsx",
+          "totalMs": 5298.3,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 644
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "queue",
+      "concurrency": 1,
+      "wallMs": 3275.5,
+      "jobMedianMs": 3274.3,
+      "healthSamples": 32,
+      "healthP95Ms": 18.3,
+      "healthMaxMs": 26,
+      "nodePeakRssMiB": 630.6,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-0-actor-0.xlsx",
+          "totalMs": 3274.3,
+          "readyMs": 3252.1,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 635.8
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "queue",
+      "concurrency": 1,
+      "wallMs": 2221.8,
+      "jobMedianMs": 2220.1,
+      "healthSamples": 22,
+      "healthP95Ms": 20,
+      "healthMaxMs": 35.1,
+      "nodePeakRssMiB": 657.3,
+      "files": [
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-1-actor-1.xlsx",
+          "totalMs": 2220.1,
+          "readyMs": 2203.9,
+          "bytes": 2313591,
+          "checkedCells": 423396,
+          "blankCells": 115176,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+          "verifyMs": 628.6
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "queue",
+      "concurrency": 1,
+      "wallMs": 2309,
+      "jobMedianMs": 2307.9,
+      "healthSamples": 23,
+      "healthP95Ms": 10.3,
+      "healthMaxMs": 10.4,
+      "nodePeakRssMiB": 685.9,
+      "files": [
+        {
+          "actorIndex": 2,
+          "role": "setup_owner",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-2-actor-2.xlsx",
+          "totalMs": 2307.9,
+          "readyMs": 2294.5,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 631.4
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "queue",
+      "concurrency": 2,
+      "wallMs": 5420.1,
+      "jobMedianMs": 3968.4,
+      "healthSamples": 54,
+      "healthP95Ms": 12.7,
+      "healthMaxMs": 21,
+      "nodePeakRssMiB": 685.9,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-3-actor-0.xlsx",
+          "totalMs": 2518.1,
+          "readyMs": 2499.7,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 649.5
+        },
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-3-actor-1.xlsx",
+          "totalMs": 5418.7,
+          "readyMs": 5403.8,
+          "bytes": 2313591,
+          "checkedCells": 423396,
+          "blankCells": 115176,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+          "verifyMs": 616.6
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "queue",
+      "concurrency": 4,
+      "wallMs": 11871.5,
+      "jobMedianMs": 7228.1,
+      "healthSamples": 118,
+      "healthP95Ms": 8.8,
+      "healthMaxMs": 21,
+      "nodePeakRssMiB": 688.7,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-4-actor-0.xlsx",
+          "totalMs": 5733.4,
+          "readyMs": 5719.5,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 694.3
+        },
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-4-actor-1.xlsx",
+          "totalMs": 8722.7,
+          "readyMs": 8708.1,
+          "bytes": 2313591,
+          "checkedCells": 423396,
+          "blankCells": 115176,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+          "verifyMs": 626.8
+        },
+        {
+          "actorIndex": 2,
+          "role": "setup_owner",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-4-actor-2.xlsx",
+          "totalMs": 2708.6,
+          "readyMs": 2694.5,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 622.7
+        },
+        {
+          "actorIndex": 3,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-queue/batch-4-actor-3.xlsx",
+          "totalMs": 11869.8,
+          "readyMs": 11854.5,
+          "bytes": 2380346,
+          "checkedCells": 423396,
+          "blankCells": 75529,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+          "verifyMs": 716.8
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "sync",
+      "concurrency": 1,
+      "wallMs": 42749.2,
+      "jobMedianMs": 42725.1,
+      "healthSamples": 424,
+      "healthP95Ms": 14.4,
+      "healthMaxMs": 103.9,
+      "nodePeakRssMiB": 2353.8,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-sync/batch-0-actor-0.xlsx",
+          "totalMs": 42725.1,
+          "bytes": 43473093,
+          "checkedCells": 7600076,
+          "blankCells": 1355819,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+          "verifyMs": 11726.7
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "sync",
+      "concurrency": 1,
+      "wallMs": 40478.1,
+      "jobMedianMs": 40386.6,
+      "healthSamples": 402,
+      "healthP95Ms": 14.1,
+      "healthMaxMs": 82.9,
+      "nodePeakRssMiB": 2390.6,
+      "files": [
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-sync/batch-1-actor-1.xlsx",
+          "totalMs": 40386.6,
+          "bytes": 42215240,
+          "checkedCells": 7600076,
+          "blankCells": 2067591,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "406b140f4c02c20436d71ba8c6f22ee522cab4e5635058b56c6ce28f472ca3bd",
+          "verifyMs": 11638.8
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "sync",
+      "concurrency": 1,
+      "wallMs": 40437.5,
+      "jobMedianMs": 40389.1,
+      "healthSamples": 402,
+      "healthP95Ms": 15.4,
+      "healthMaxMs": 61.3,
+      "nodePeakRssMiB": 2390.6,
+      "files": [
+        {
+          "actorIndex": 2,
+          "role": "setup_owner",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-sync/batch-2-actor-2.xlsx",
+          "totalMs": 40389.1,
+          "bytes": 43473093,
+          "checkedCells": 7600076,
+          "blankCells": 1355819,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+          "verifyMs": 12185.8
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "sync",
+      "concurrency": 2,
+      "wallMs": 56933.5,
+      "jobMedianMs": 56038.1,
+      "healthSamples": 561,
+      "healthP95Ms": 40,
+      "healthMaxMs": 129.5,
+      "nodePeakRssMiB": 3822.5,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-sync/batch-3-actor-0.xlsx",
+          "totalMs": 56850.2,
+          "bytes": 43473093,
+          "checkedCells": 7600076,
+          "blankCells": 1355819,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+          "verifyMs": 11923.1
+        },
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-sync/batch-3-actor-1.xlsx",
+          "totalMs": 55225.9,
+          "bytes": 42215240,
+          "checkedCells": 7600076,
+          "blankCells": 2067591,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "406b140f4c02c20436d71ba8c6f22ee522cab4e5635058b56c6ce28f472ca3bd",
+          "verifyMs": 11333.9
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "queue",
+      "concurrency": 1,
+      "wallMs": 43245.3,
+      "jobMedianMs": 43215.8,
+      "healthSamples": 430,
+      "healthP95Ms": 13.8,
+      "healthMaxMs": 70.8,
+      "nodePeakRssMiB": 2119.1,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-queue/batch-0-actor-0.xlsx",
+          "totalMs": 43215.8,
+          "readyMs": 42760,
+          "bytes": 43473093,
+          "checkedCells": 7600076,
+          "blankCells": 1355819,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+          "verifyMs": 11895.4
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "queue",
+      "concurrency": 1,
+      "wallMs": 43356.3,
+      "jobMedianMs": 43316.2,
+      "healthSamples": 430,
+      "healthP95Ms": 14,
+      "healthMaxMs": 105.9,
+      "nodePeakRssMiB": 2119.1,
+      "files": [
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-queue/batch-1-actor-1.xlsx",
+          "totalMs": 43316.2,
+          "readyMs": 42801.2,
+          "bytes": 42215240,
+          "checkedCells": 7600076,
+          "blankCells": 2067591,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "406b140f4c02c20436d71ba8c6f22ee522cab4e5635058b56c6ce28f472ca3bd",
+          "verifyMs": 11419.6
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "queue",
+      "concurrency": 1,
+      "wallMs": 42235.3,
+      "jobMedianMs": 42146.9,
+      "healthSamples": 419,
+      "healthP95Ms": 20,
+      "healthMaxMs": 85.3,
+      "nodePeakRssMiB": 2396.5,
+      "files": [
+        {
+          "actorIndex": 2,
+          "role": "setup_owner",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-queue/batch-2-actor-2.xlsx",
+          "totalMs": 42146.9,
+          "readyMs": 41566.8,
+          "bytes": 43473093,
+          "checkedCells": 7600076,
+          "blankCells": 1355819,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+          "verifyMs": 11589.1
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "queue",
+      "concurrency": 2,
+      "wallMs": 85477.5,
+      "jobMedianMs": 64390.6,
+      "healthSamples": 849,
+      "healthP95Ms": 16.1,
+      "healthMaxMs": 100.8,
+      "nodePeakRssMiB": 2517.1,
+      "files": [
+        {
+          "actorIndex": 0,
+          "role": "admin",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-queue/batch-3-actor-0.xlsx",
+          "totalMs": 43392,
+          "readyMs": 42602.6,
+          "bytes": 43473093,
+          "checkedCells": 7600076,
+          "blankCells": 1355819,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+          "verifyMs": 11363
+        },
+        {
+          "actorIndex": 1,
+          "role": "requester",
+          "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-queue/batch-3-actor-1.xlsx",
+          "totalMs": 85389.1,
+          "readyMs": 84832.3,
+          "bytes": 42215239,
+          "checkedCells": 7600076,
+          "blankCells": 2067591,
+          "diffs": 0,
+          "lineEndingDiffs": 0,
+          "otherDiffs": 0,
+          "strictPass": true,
+          "differenceExamples": [],
+          "logicalSha256": "406b140f4c02c20436d71ba8c6f22ee522cab4e5635058b56c6ce28f472ca3bd",
+          "verifyMs": 11419.4
+        }
+      ]
+    }
+  ],
+  "mutations": [
+    {
+      "rows": 5570,
+      "checkedCells": 423396,
+      "blankCells": 75529,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+      "verifyMs": 649.4,
+      "actorIndex": 0,
+      "role": "admin",
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/5570-snapshot-mutation/snapshot.xlsx",
+      "totalMs": 2129.8,
+      "bytes": 2380347,
+      "proof": {
+        "reordered": true,
+        "deleted": true,
+        "inserted": true,
+        "canonical_changed": true,
+        "psf_changed": true,
+        "schema_changed": true
+      }
+    },
+    {
+      "rows": 100000,
+      "checkedCells": 7600076,
+      "blankCells": 1355819,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+      "verifyMs": 17139.3,
+      "actorIndex": 0,
+      "role": "admin",
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-app-integration/verified/100000-snapshot-mutation/snapshot.xlsx",
+      "totalMs": 41583.8,
+      "bytes": 43473092,
+      "proof": {
+        "reordered": true,
+        "deleted": true,
+        "inserted": true,
+        "canonical_changed": true,
+        "psf_changed": true,
+        "schema_changed": true
+      }
+    }
+  ],
+  "allFilesCorrect": true,
+  "summary": {
+    "verifiedFiles": 30,
+    "checkedCells": 91645360,
+    "diffs": 0,
+    "lineEndingDiffs": 0,
+    "roles": ["admin", "requester", "setup_owner"],
+    "nonMutationBatches": 18,
+    "mutationCases": 2
+  },
+  "baseCommit": "ad564fac1b443462662d87c6d0c43ee5f8b74d0e",
+  "branch": "export/correctness-100k",
+  "node": "v24.19.0",
+  "databaseStorage": "owned disposable PostgreSQL on output-directory disk; Unix sockets disabled, loopback TCP only",
+  "sources": {
+    "backend/src/requests/search-index.service.ts": "c70d9164ce8415250a469b030941cef1a975c0903d93fb8e4ca0b151e8c21375",
+    "backend/src/admin/form_schema.service.ts": "5746e6ee1de8c22811ff6821d288265c7668d8c2963e0f6ae340ac1e9a2d9351",
+    "backend/src/export/excel_export.service.ts": "e51784fdebd77dc237abfab6dd92dc03cafd7d08af64af239dc24f7dbec6cadf",
+    "backend/src/export/export-workbook.ts": "4fb34815773fb1beee11d0456bd280a9558c3a2debe0548578de1230b3be4ae6",
+    "backend/scripts/verify-export-app.ts": "4ffd941ffe58dbbcd0216112251222ec7378f8b245f628feedaca93cd97ff39d",
+    "backend/test/fixtures/export-scale.ts": "215dc3af8335b5a916aad9d22fb024dd33e526a9601d63f499684a06b2bb16e6",
+    "backend/test/fixtures/export-columns.tsv": "3356f03f3ecd5397edea348fcf4e6387a699413ef05d6d99948e52ea71874761"
+  },
+  "cohorts": [
+    {
+      "rows": 5570,
+      "kind": "sync",
+      "snapshots": [
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        }
+      ]
+    },
+    {
+      "rows": 5570,
+      "kind": "queue",
+      "snapshots": [
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "sync",
+      "snapshots": [
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "kind": "queue",
+      "snapshots": [
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        },
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        }
+      ]
+    }
+  ],
+  "snapshotMutationMetrics": [
+    {
+      "rows": 5570,
+      "snapshots": [
+        {
+          "pages": 12,
+          "countWindows": 1,
+          "committed": true
+        }
+      ],
+      "mutation": {
+        "reordered": true,
+        "deleted": true,
+        "inserted": true,
+        "canonical_changed": true,
+        "psf_changed": true,
+        "schema_changed": true
+      }
+    },
+    {
+      "rows": 100000,
+      "snapshots": [
+        {
+          "pages": 200,
+          "countWindows": 1,
+          "committed": true
+        }
+      ],
+      "mutation": {
+        "reordered": true,
+        "deleted": true,
+        "inserted": true,
+        "canonical_changed": true,
+        "psf_changed": true,
+        "schema_changed": true
+      }
+    }
+  ],
+  "cgroupMemoryEventsAtCompletion": {
+    "low": 0,
+    "high": 0,
+    "max": 1045,
+    "oom": 0,
+    "oom_kill": 0,
+    "oom_group_kill": 0
+  },
+  "regression": {
+    "suites": 46,
+    "tests": 723,
+    "allPassed": true,
+    "build": "passed before compiled HTTP run",
+    "eslint": "passed on changed source/tests/runners",
+    "prettier": "passed on changed source/tests/runners",
+    "readOnlyReview": "No mandatory correctness fixes found."
+  }
+}
