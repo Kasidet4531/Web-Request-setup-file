@@ -13,6 +13,8 @@ for the scope of this review.
 
 > **Export Preview pages, 21 October 2026:** the Export Preview table could not be scrolled sideways, so every column past the window was cut off: a rule from when the preview had five columns hid the table's overflow. The table now scrolls both ways inside the window, with the header row and Request No pinned. The preview shows the file 100 rows a page, as the request list does, with "1–100 of N requests" and Previous / Next; a page stays in place, back at its top, while the next one loads, and changing a filter returns to the first page. `GET /api/requests/export-preview` takes `offset` and `limit` (whole numbers; `limit` at most 100) and returns them with the page. See the [verification record](verification/2026-10-21-export-preview-pages.md); checks ran in Chromium against a throwaway local database.
 
+> **Export dates in Bangkok time, 21 October 2026:** the Excel file and the Export Preview showed Request Date and Updated At as UTC ISO timestamps (`2025-09-01T03:42:29.000Z`). Both now read `2025-09-01 10:42:29`: the same moment in Asia/Bangkok, as the request list's Updated column and Audit History show it, year first so the columns still sort as text. They stay text cells: [ADR 0013](adr/0013-excel-export-schema-alignment.md) asked for Excel Date cells without the time, which was never built. See the [verification record](verification/2026-10-21-export-bangkok-time.md).
+
 > **Export transfer, 21 October 2026:** export rows no longer carry their captured form snapshots. Each row carries a content key per snapshot, the MD5 of its JSONB text, which `psf_requests` stores as the generated columns `schema_snapshot_key` and `psf_created_schema_snapshot_key` (startup adds them to an existing database), and each distinct snapshot is read once per export from one request that captured it, inside the export's snapshot. The Export Preview finds its columns by grouping those keys and reads no snapshot again for its rows. On a simulated 25 ms, 24 Mbit/s link a 5,570-request export fell from 33.4–34.1 s and 92.2 MB to 8.7–8.8 s and 18.3 MB, and a 10-row preview from about 1 s to 0.4–0.5 s (issue #102; a 100-row page takes 0.53–0.61 s). See the [verification record](verification/2026-10-21-export-transfer.md); Fook's Tailscale path was not measured.
 
 > **NAS folder names and export files, 21 October 2026:** a request's Attachment folder is named as the SharePoint export named the Imported Requests' folders: Product_Description is cut to its first 100 characters and stripped of trailing dots and spaces before `_[ID]` ([ADR 0018](adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). The export's `ItemInfo.txt` and `_export_complete.txt` are system files: never listed as Attachments and refused on upload. No folder or file on the NAS is renamed. See [Request Attachments](request-attachments.md) (issue #97). Checks ran on in-memory PostgreSQL and a temporary directory; the folder check has not been re-run against the NAS share.
@@ -309,7 +311,8 @@ over the cap fails alone with HTTP 413 or a failed job carrying that message;
 failed jobs are not retried.
 Columns combine every field of the active and captured form versions by
 canonical key (the `exportable` flag no longer selects them): five system
-columns (Request No, Status, Request Date, Updated At, Modified By), requester
+columns (Request No, Status, Request Date, Updated At, Modified By; both times
+as `YYYY-MM-DD HH:mm:ss` text in Asia/Bangkok), requester
 fields in active-form order, fields only older versions have, then PSF Created
 Information. Modified By is read from the key every save records, so a form
 version's own Modified By field never adds a second column. Cells come from each request's
