@@ -39,7 +39,7 @@ run the repository's PostgreSQL 15 Compose service from the repository root.
 | `EXPORT_SYNC_THRESHOLD` | XLSX sync/background boundary; default 2000 |
 | `EXPORT_JOB_POLL_INTERVAL_MS`, `EXPORT_JOB_STALE_AFTER_MS`, `EXPORT_JOB_MAXIMUM_ATTEMPTS` | Optional background-job processor settings |
 | `ATTACHMENT_STORAGE_PATH` | Root of the request Attachment folders: mapped drive, UNC path or local directory. Unset disables Attachments (503) |
-| `ATTACHMENT_MAX_BYTES` | Largest Attachment file in bytes; default 52428800 (50 MB) |
+| `ATTACHMENT_MAX_BYTES` | Largest Attachment file in bytes; default 52428800 (50 MB). Served by `GET /api/attachment-policy`, so the pickers show it after a restart |
 
 Source: [pool](src/database/database.module.ts), [bootstrap](src/main.ts),
 [LDAP service](src/auth/auth.service.ts), [mock service](src/auth/development-auth.service.ts),

@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReactElement } from 'react'
+import { createElement, type FunctionComponent, type ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RequestDetailShell,
@@ -32,6 +32,7 @@ const requestDetailApi = vi.hoisted(() => ({
   submitPsfRequest: vi.fn(),
   updatePsfCreatedData: vi.fn(),
   updatePsfRequestStatus: vi.fn(),
+  fetchAttachmentPolicy: vi.fn(),
   fetchRequestAttachments: vi.fn(),
   uploadRequestAttachments: vi.fn(),
   deleteRequestAttachment: vi.fn(),
@@ -2415,11 +2416,21 @@ describe('Request Attachments', () => {
     navigation.blocker = null
     navigation.navigate.mockReset()
     navigation.resolver.status = 'idle'
-    for (const mock of [requestDetailApi.fetchPsfRequest, requestDetailApi.fetchRequestAttachments, requestDetailApi.uploadRequestAttachments, requestDetailApi.deleteRequestAttachment]) mock.mockReset()
+    for (const mock of [requestDetailApi.fetchPsfRequest, requestDetailApi.fetchAttachmentPolicy, requestDetailApi.fetchRequestAttachments, requestDetailApi.uploadRequestAttachments, requestDetailApi.deleteRequestAttachment]) mock.mockReset()
     requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
     requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
+    // Not the default limit or list: the pickers must show what the server says.
+    requestDetailApi.fetchAttachmentPolicy.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, blockedExtensions: ['.exe', '.js'] })
     requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, layout] })
   })
+
+  /** The text the picker's file input is described by, or null when it has no hint. */
+  function pickerHint(panel: unknown, label: string): string | null {
+    const picker = requireRenderedElement(panel, (element) => element.props.label === label)
+    const describedBy = /aria-describedby="([^"]+)"/.exec(renderToStaticMarkup(createElement(picker.type as FunctionComponent, picker.props)))?.[1]
+    if (!describedBy) return null
+    return requireRenderedElement(panel, (element) => element.props.id === describedBy).props.children as string
+  }
 
   async function loadDetail(request: PsfRequestResponse) {
     requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
@@ -2616,6 +2627,78 @@ describe('Request Attachments', () => {
     ]} />)
     expect(html).toContain('<strong>Attachment uploaded: layout.dpl</strong><span>Fook · requester</span>')
     expect(html).toContain('<strong>Attachment deleted: old.png</strong><span>Owner · setup_owner</span>')
+  })
+
+  it('states the per-file limit and blocked file types from the server beside the saved-request picker', async () => {
+    const panel = await loadPanel()
+    expect(requestDetailApi.fetchAttachmentPolicy).toHaveBeenCalledTimes(1)
+    expect(pickerHint(panel, 'Upload files')).toBe('Up to 5.0 MB per file · Not allowed: .exe, .js')
+  })
+
+  function renderStaged(files: File[], onChange: (files: File[]) => void) {
+    requestDetailHookHarness.beginRender()
+    return StagedAttachmentsPanel({ files, onChange })
+  }
+
+  async function loadStaged(files: File[], onChange: (files: File[]) => void) {
+    renderStaged(files, onChange)
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    return renderStaged(files, onChange)
+  }
+
+  function chooseStaged(panel: unknown, files: File[]) {
+    ;(requireRenderedElement(panel, (element) => element.props.label === 'Add files').props.onSelect as (files: File[]) => void)(files)
+  }
+
+  function errorNotices(panel: unknown): unknown[] {
+    return findAllRenderedElements(panel, (element) => element.type === AsyncNotice && element.props.kind === 'error').map((notice) => notice.props.title)
+  }
+
+  it('refuses an oversized or blocked file on New Request the moment it is chosen, stating the limits beside the picker', async () => {
+    const onChange = vi.fn()
+    const staged = new File(['pcsf'], 'pcsf.pdf')
+    let panel = await loadStaged([staged], onChange)
+    expect(pickerHint(panel, 'Add files')).toBe('Up to 5.0 MB per file · Not allowed: .exe, .js')
+
+    chooseStaged(panel, [new File(['x'], 'job.lay'), new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'wafer-map.zip')])
+    panel = renderStaged([staged], onChange)
+    expect(errorNotices(panel)).toEqual(['wafer-map.zip is larger than the 5.0 MB attachment limit.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    chooseStaged(panel, [new File(['x'], 'Setup.JS')])
+    panel = renderStaged([staged], onChange)
+    expect(errorNotices(panel)).toEqual(['Setup.JS cannot be attached: executable and script files are not allowed.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    // Exactly the limit is allowed, as on the server; the last refusal clears.
+    const atLimit = new File([new Uint8Array(5 * 1024 * 1024)], 'wafer-map.zip')
+    chooseStaged(panel, [atLimit])
+    panel = renderStaged([staged], onChange)
+    expect(errorNotices(panel)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([staged, atLimit])
+  })
+
+  it('keeps both pickers working without hints or a client-side check when the policy cannot be loaded', async () => {
+    requestDetailApi.fetchAttachmentPolicy.mockRejectedValue(new ApiError('Internal server error', 500, 'Internal Server Error', null))
+    const saved = await loadPanel()
+    expect(pickerHint(saved, 'Upload files')).toBeNull()
+    expect(findRenderedElement(saved, (element) => element.type === AsyncNotice)).toBeNull()
+    const file = new File(['dpl'], 'new.dpl')
+    requestDetailApi.uploadRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, layout] })
+    ;(requireRenderedElement(saved, (element) => element.props.label === 'Upload files').props.onSelect as (files: File[]) => void)([file])
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file], expect.any(Function))
+
+    requestDetailHookHarness.reset()
+    const onChange = vi.fn()
+    let staged = await loadStaged([], onChange)
+    expect(pickerHint(staged, 'Add files')).toBeNull()
+    // The server refuses these when they are uploaded after the Draft is saved.
+    const files = [new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'huge.zip'), new File(['x'], 'tool.exe')]
+    chooseStaged(staged, files)
+    staged = renderStaged([], onChange)
+    expect(errorNotices(staged)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(files)
   })
 
   it('offers no upload or delete where the server grants read access only', async () => {
