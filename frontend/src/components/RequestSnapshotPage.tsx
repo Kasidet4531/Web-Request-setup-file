@@ -31,8 +31,10 @@ function fieldChangesOf(metadata: Record<string, unknown>): FieldChange[] {
 
 type SnapshotForm = 'requester' | 'psf'
 
-const fieldRowId = (form: SnapshotForm, fieldKey: string) => `request-snapshot-${form}-field-${fieldKey}`
-const removedRowId = (fieldKey: string) => `request-snapshot-removed-field-${fieldKey}`
+// Schema keys are only required to be non-blank, so encode them for use in ids and fragments.
+const fieldRowId = (form: SnapshotForm, fieldKey: string) => `request-snapshot-${form}-field-${encodeURIComponent(fieldKey)}`
+const removedRowId = (fieldKey: string) => `request-snapshot-removed-field-${encodeURIComponent(fieldKey)}`
+const fieldCount = (count: number, what: string) => `${count} ${count === 1 ? 'field' : 'fields'} ${what}`
 
 /** A blank value reads "Not provided"; the stored value is left as it is. */
 function StoredValue({ value }: { value: unknown }) {
@@ -58,6 +60,8 @@ function JumpLink({ targetId, children }: { targetId: string; children: ReactNod
       className="request-snapshot__jump"
       href={`#${targetId}`}
       onClick={(event) => {
+        // A modified click keeps the browser's own handling, such as opening a new tab.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         const target = document.getElementById(targetId)
         if (!target) return
         event.preventDefault()
@@ -72,15 +76,16 @@ function JumpLink({ targetId, children }: { targetId: string; children: ReactNod
 
 /** One form of the Request Snapshot: every field of its Form Schema of that time, label beside value. */
 function SnapshotFormPanel({ form, title, schema, data, changes }: { form: SnapshotForm; title: string; schema: FormSchema; data: Record<string, unknown>; changes: FieldChange[] }) {
+  const changeOf = new Map(changes.map((change) => [change.fieldKey, change]))
   return (
     <section aria-labelledby={`request-snapshot-${form}-heading`} className="request-snapshot__panel" id={`request-snapshot-${form}`}>
       <h2 id={`request-snapshot-${form}-heading`}>{title}</h2>
-      {schema.sections.map((section) => (
-        <section aria-labelledby={`request-snapshot-${form}-section-${section.sectionKey}`} className="request-snapshot__section" key={section.sectionKey}>
-          <h3 id={`request-snapshot-${form}-section-${section.sectionKey}`}>{section.title}</h3>
+      {schema.sections.map((section) => {
+        const headingId = `request-snapshot-${form}-section-${encodeURIComponent(section.sectionKey)}`
+        const rows = (
           <dl className="request-snapshot__rows">
             {section.fields.map((field) => {
-              const change = changes.find((candidate) => candidate.fieldKey === field.fieldKey)
+              const change = changeOf.get(field.fieldKey)
               return (
                 <div
                   className={`request-snapshot__row${change ? ' request-snapshot__row--changed' : ''}`}
@@ -98,8 +103,17 @@ function SnapshotFormPanel({ form, title, schema, data, changes }: { form: Snaps
               )
             })}
           </dl>
-        </section>
-      ))}
+        )
+        // A lone section named like its form would only repeat the panel heading.
+        return schema.sections.length === 1 && section.title === title
+          ? <div className="request-snapshot__section request-snapshot__section--untitled" key={section.sectionKey}>{rows}</div>
+          : (
+            <section aria-labelledby={headingId} className="request-snapshot__section" key={section.sectionKey}>
+              <h3 id={headingId}>{section.title}</h3>
+              {rows}
+            </section>
+          )
+      })}
     </section>
   )
 }
@@ -112,13 +126,15 @@ export function RequestSnapshotView({ requestSnapshot }: { requestSnapshot: Requ
   const changes = psfEntry && !psfCreatedDataVisible ? [] : fieldChangesOf(entry.metadata)
   const changedSchema = psfEntry ? requestSnapshot.psfCreatedInformationSchema : requestSnapshot.schemaSnapshot
   const shownKeys = new Set(changedSchema.sections.flatMap((section) => section.fields.map((field) => field.fieldKey)))
+  const edited = changes.filter((change) => shownKeys.has(change.fieldKey))
   // A Form Version upgrade drops fields the newer Form Schema no longer has.
   const removed = changes.filter((change) => !shownKeys.has(change.fieldKey))
   const changedForm: SnapshotForm = psfEntry ? 'psf' : 'requester'
   const previousStatus = typeof entry.metadata.fromStatus === 'string' ? entry.metadata.fromStatus : null
   const statusChanged = previousStatus !== null && previousStatus !== requestSnapshot.status
   const editsHeading = [
-    changes.length ? `${changes.length} ${changes.length === 1 ? 'field' : 'fields'} edited` : null,
+    edited.length ? fieldCount(edited.length, 'edited') : null,
+    removed.length ? fieldCount(removed.length, 'removed') : null,
     statusChanged ? 'Work Status changed' : null,
   ].filter(Boolean).join(' · ') || 'No edits recorded'
 
@@ -136,21 +152,23 @@ export function RequestSnapshotView({ requestSnapshot }: { requestSnapshot: Requ
         <span className="request-snapshot__read-only"><LockKeyhole aria-hidden="true" size={14} /> Read only</span>
       </header>
 
-      <nav aria-label="Changes in this update" className="request-snapshot__changes">
-        <h2>{editsHeading}</h2>
+      <section aria-labelledby="request-snapshot-changes-heading" className="request-snapshot__changes" id="request-snapshot-changes">
+        <h2 id="request-snapshot-changes-heading">{editsHeading}</h2>
         {statusChanged || changes.length ? (
-          <ul>
-            {statusChanged ? <li><JumpLink targetId="request-snapshot-status">Work Status</JumpLink></li> : null}
-            {changes.filter((change) => shownKeys.has(change.fieldKey)).map((change) => (
-              <li key={change.fieldKey}><JumpLink targetId={fieldRowId(changedForm, change.fieldKey)}>{change.fieldLabel}</JumpLink></li>
-            ))}
-            {removed.map((change) => (
-              <li key={change.fieldKey}><JumpLink targetId={removedRowId(change.fieldKey)}>{change.fieldLabel} (removed)</JumpLink></li>
-            ))}
-          </ul>
+          <nav aria-label="Changes in this update">
+            <ul>
+              {statusChanged ? <li><JumpLink targetId="request-snapshot-status">Work Status</JumpLink></li> : null}
+              {edited.map((change) => (
+                <li key={change.fieldKey}><JumpLink targetId={fieldRowId(changedForm, change.fieldKey)}>{change.fieldLabel}</JumpLink></li>
+              ))}
+              {removed.map((change) => (
+                <li key={change.fieldKey}><JumpLink targetId={removedRowId(change.fieldKey)}>{change.fieldLabel} (removed)</JumpLink></li>
+              ))}
+            </ul>
+          </nav>
         ) : null}
-        {changes.length ? null : <p>No form-field edits were recorded for this update. The full form is shown below.</p>}
-      </nav>
+        {edited.length ? null : <p>No form-field edits were recorded for this update. The full form is shown below.</p>}
+      </section>
 
       <section
         aria-labelledby="request-snapshot-status-heading"
@@ -167,14 +185,14 @@ export function RequestSnapshotView({ requestSnapshot }: { requestSnapshot: Requ
         ) : <p>{requestSnapshot.status}</p>}
       </section>
 
-      <SnapshotFormPanel changes={psfEntry ? [] : changes} data={requestSnapshot.requesterData} form="requester" schema={requestSnapshot.schemaSnapshot} title="Requester Information" />
+      <SnapshotFormPanel changes={psfEntry ? [] : edited} data={requestSnapshot.requesterData} form="requester" schema={requestSnapshot.schemaSnapshot} title="Requester Information" />
 
       {psfCreatedDataVisible
-        ? <SnapshotFormPanel changes={psfEntry ? changes : []} data={requestSnapshot.psfCreatedData} form="psf" schema={requestSnapshot.psfCreatedInformationSchema} title="PSF Created Information" />
+        ? <SnapshotFormPanel changes={psfEntry ? edited : []} data={requestSnapshot.psfCreatedData} form="psf" schema={requestSnapshot.psfCreatedInformationSchema} title="PSF Created Information" />
         : (
           <section aria-labelledby="request-snapshot-psf-unavailable" className="request-snapshot__panel">
             <h2 id="request-snapshot-psf-unavailable">PSF Created Information</h2>
-            <p className="request-snapshot__note" role="status">{PSF_CREATED_INFORMATION_PLACEHOLDER}</p>
+            <p role="status">{PSF_CREATED_INFORMATION_PLACEHOLDER}</p>
           </section>
         )}
 

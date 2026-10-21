@@ -29,8 +29,8 @@ this change.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend tests | `cd frontend && npx vitest run` | 39 files, 535 tests passed (base: 531) |
-| Request Snapshot tests | `cd frontend && npx vitest run src/components/RequestSnapshotPage.test.tsx` | 13 passed |
+| Frontend tests | `cd frontend && npx vitest run` | 39 files, 537 tests passed (base: 531) |
+| Request Snapshot tests | `cd frontend && npx vitest run src/components/RequestSnapshotPage.test.tsx` | 16 passed |
 | Frontend type check | `cd frontend && npx tsc -b --force` | Passed |
 | Frontend lint | `cd frontend && npx eslint .` | 1 error, present on the base: `GlobalHistoryPage.test.tsx:389` `no-useless-assignment` |
 | Frontend build | `cd frontend && npm run build` | Passed |
@@ -42,12 +42,19 @@ this change.
 The Request Snapshot tests cover: full historical values in Form Schema order
 with identity fields, blank and multiline values; a requester edit marked with
 its earlier value; the edit count and jump links; a PSF Created Information
-edit whose field key collides with a requester field; a Status change with both
-complete names and an unmarked form; a Work Status with no recorded earlier
-Status; fields removed by a Form Version upgrade; PSF Created Information that
+edit whose field key collides with a requester field; a Draft creation entry
+(every value set, earlier value "Not provided"); an entry with no edits (no
+change links); a Status change with both complete names and an unmarked form;
+a Work Status with no recorded earlier Status; fields removed by a Form Version
+upgrade, counted as removed; a lone section named like its form (no repeated
+heading); PSF Created Information that
 the reader may not see (no values, Form Version or edits); the recorded context;
 request identity and the Request History link while loading and once loaded;
 that the page never fetches the current request; loading, failure and Retry.
+
+`DynamicFormRenderer`'s `previousValues` prop, used only by the old Request
+Snapshot page, was removed with its test and CSS; the other renderer tests are
+unchanged.
 
 The browser system test opens a Request Snapshot from the request's History tab
 and from Audit History on the normal route. It checks the edited Title row is the
@@ -99,6 +106,12 @@ After, the Status-only update in light and dark:
 ![After: Status change, dark](assets/2026-10-22-request-snapshot-layout/after-status-dark.png)
 
 ## Limits
+
+The server fills in Modified By on a Status change and on a PSF Created
+Information save without recording it in the entry's `fieldChanges`, so a
+Request Snapshot of such an update shows the new Modified By unmarked. Marking
+it would need the backend to record that change; this ticket did not change the
+backend.
 
 These checks ran on a throwaway local database with synthetic data. They are
 not deployment acceptance, a usability study or a full accessibility audit.

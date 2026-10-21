@@ -168,7 +168,7 @@ on the controls' line, so switching a request between viewing and editing keeps
 ordinary rows at the same height; radio groups and text areas may grow while
 editing. A radio group is a `role="radiogroup"` element named by its row's label
 cell and keeps its required, invalid and described-by state. The required marker,
-field error, Auto-fill status and "Previous" value stay in the field's row.
+field error and Auto-fill status stay in the field's row.
 Detail keeps 16px section headings. Request
 Owner / Dept metadata has been removed.
 An editable form ends in an action bar that is `position: sticky` at the bottom of
@@ -265,7 +265,11 @@ light and dark themes. When the entry records a `fromStatus` that differs from t
 stored Status, the Work Status block is marked the same way and shows both
 complete names; no earlier Status is shown otherwise. Changes to fields the
 Form Schema of that time no longer has (a Form Version upgrade) are listed in
-a separate "Fields removed in this update" panel. When PSF Created Information
+a separate "Fields removed in this update" panel and counted as removed, not
+edited. A section that is a form's only one and has the form's name gets no
+heading of its own. Fields the server fills in without recording them in
+`fieldChanges` (Modified By on a Status change or a PSF Created Information
+save) show their value of that time unmarked. When PSF Created Information
 is not visible to the reader, its panel shows the usual notice and neither its
 values, its Form Version nor its edits appear.
 Sources: [capture and read](../backend/src/audit/audit_log.service.ts),

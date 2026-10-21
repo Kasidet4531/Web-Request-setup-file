@@ -95,6 +95,12 @@ function panel(html: string, form: 'requester' | 'psf'): string {
   return html.slice(start, next < 0 ? undefined : next)
 }
 const labels = (html: string, form: 'requester' | 'psf') => [...panel(html, form).matchAll(/<dt[^>]*>(.*?)<\/dt>/g)].map((match) => text(match[1]).replace(' Changed in this update', ''))
+/** The summary of the update's edits: its markup up to the Work Status block. */
+function summary(html: string): string {
+  const at = html.indexOf('id="request-snapshot-changes"')
+  return at < 0 ? '' : html.slice(html.lastIndexOf('<section', at), html.indexOf('</section>', at))
+}
+const summaryLinks = (html: string) => [...summary(html).matchAll(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/g)].map((link) => [link[1], text(link[2])])
 /** One field row: its opening tag and the text a reader sees in it. */
 function row(html: string, form: 'requester' | 'psf', fieldKey: string): { tag: string; text: string } {
   const at = html.indexOf(`id="request-snapshot-${form}-field-${fieldKey}"`)
@@ -136,9 +142,9 @@ describe('RequestSnapshotView', () => {
       ] },
     }))
 
-    const summary = html.slice(html.indexOf('<nav aria-label="Changes in this update"'), html.indexOf('</nav>'))
-    expect(text(summary)).toContain('2 fields edited')
-    expect([...summary.matchAll(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/g)].map((link) => [link[1], text(link[2])])).toEqual([
+    expect(text(summary(html))).toBe('2 fields edited Title Note')
+    expect(html).toContain('<nav aria-label="Changes in this update">')
+    expect(summaryLinks(html)).toEqual([
       ['#request-snapshot-requester-field-title', 'Title'],
       ['#request-snapshot-requester-field-note', 'Note'],
     ])
@@ -174,9 +180,8 @@ describe('RequestSnapshotView', () => {
     const status = statusBlock(html)
     expect(status.tag).toContain('request-snapshot__status--changed')
     expect(status.text).toBe('Work Status Changed in this update Before this update 10% -- Test Engineer Data Entry After this update 20% -- PSF File Creating')
-    const summary = text(html.slice(html.indexOf('<nav aria-label="Changes in this update"'), html.indexOf('</nav>')))
-    expect(summary).toBe('Work Status changed Work Status No form-field edits were recorded for this update. The full form is shown below.')
-    expect(html).toContain('href="#request-snapshot-status"')
+    expect(text(summary(html))).toBe('Work Status changed Work Status No form-field edits were recorded for this update. The full form is shown below.')
+    expect(summaryLinks(html)).toEqual([['#request-snapshot-status', 'Work Status']])
     expect(html).not.toContain('request-snapshot__row--changed')
     expect(labels(html, 'requester')).toEqual(['Title', 'Requester', 'Modified By', 'Note', 'Due Date'])
   })
@@ -200,7 +205,8 @@ describe('RequestSnapshotView', () => {
     expect(text(removed.slice(0, removed.indexOf('</section>')))).toBe(
       'Fields removed in this update Form Version 2 no longer has these fields, so their values were dropped. Legacy Field Before this update dropped value',
     )
-    expect(html).toMatch(/href="#request-snapshot-removed-field-legacy"[^>]*>.*?Legacy Field \(removed\)<\/a>/)
+    expect(text(summary(html))).toBe('1 field removed Legacy Field (removed) No form-field edits were recorded for this update. The full form is shown below.')
+    expect(summaryLinks(html)).toEqual([['#request-snapshot-removed-field-legacy', 'Legacy Field (removed)']])
     expect(render(requestSnapshot())).not.toContain('request-snapshot-removed')
   })
 
@@ -225,10 +231,40 @@ describe('RequestSnapshotView', () => {
   it('names the update: when it was recorded in ICT, by whom, what it did and the Form Versions of that time', () => {
     const html = render(requestSnapshot())
 
-    expect(text(html.slice(0, html.indexOf('<nav')))).toBe(
+    expect(text(html.slice(0, html.indexOf(summary(html))))).toBe(
       'Recorded on 05 Oct 2026, 06:30:00 ICT (UTC+7) Requester information updated · By Editor (requester) Form Versions: Requester Information 1 · PSF Created Information 3 Read only',
     )
     expect(html).toContain('<time dateTime="2026-10-04T23:30:00Z">')
+  })
+
+  it('shows every value a new request was created with as set by that update', () => {
+    const html = render(requestSnapshot({ status: 'Draft' }, {
+      actionType: 'DRAFT_CREATED',
+      metadata: { fieldChanges: [
+        { fieldKey: 'title', fieldLabel: 'Title', before: null, after: 'Renamed' },
+        { fieldKey: 'requester_name', fieldLabel: 'Requester', before: null, after: 'Ada Requester' },
+      ] },
+    }))
+
+    expect(text(summary(html))).toBe('2 fields edited Title Requester')
+    expect(row(html, 'requester', 'title').text).toBe('Title Changed in this update After this update: Renamed Before this update Not provided')
+    expect(row(html, 'requester', 'requester_name').text).toBe('Requester Changed in this update After this update: Ada Requester Before this update Not provided')
+    expect(row(html, 'requester', 'note').tag).not.toContain('--changed')
+  })
+
+  it('offers no change links when the update recorded neither field edits nor a Status change', () => {
+    const html = render(requestSnapshot({}, { actionType: 'ATTACHMENT_UPLOADED', metadata: { filename: 'map.pdf' } }))
+
+    expect(text(summary(html))).toBe('No edits recorded No form-field edits were recorded for this update. The full form is shown below.')
+    expect(html).not.toContain('<nav')
+  })
+
+  it('does not repeat a form title as the heading of its only section', () => {
+    const html = render(requestSnapshot({ schemaSnapshot: { ...requesterSchema, sections: [{ ...requesterSchema.sections[0], title: 'Requester Information' }] } }))
+
+    expect(text(panel(html, 'requester')).match(/Requester Information/g)).toHaveLength(1)
+    expect(labels(html, 'requester')).toEqual(['Title', 'Requester', 'Modified By', 'Note'])
+    expect(panel(html, 'psf')).toContain('>Setup</h3>')
   })
 })
 

@@ -176,20 +176,12 @@ describe('DynamicFormRenderer rows', () => {
     expect(html.match(/class="ui-error"/g)).toHaveLength(fields.length)
   })
 
-  it('keeps Auto-fill status and the previous value inside the row of the field they describe', () => {
+  it('keeps Auto-fill status inside the row of the field it describes', () => {
     const editable = rowsOf(renderToStaticMarkup(<DynamicFormRenderer schema={allTypesSchema} showSchemaHeader={false}
       fieldStatuses={{ title: 'auto-filled', priority: 'edited-by-user' }} onChange={() => undefined} />))
     expect(editable[1]).toMatch(/<p class="dynamic-form__autofill-status" id="[^"]+" role="status">Auto-filled<\/p>/)
     expect(editable[4]).toMatch(/role="status">Edited by user<\/p>/)
     expect(editable.filter((row) => row.includes('role="status"'))).toHaveLength(2)
-
-    const readOnly = rowsOf(renderToStaticMarkup(<DynamicFormRenderer readOnly schema={allTypesSchema} showSchemaHeader={false}
-      values={{ title: 'Renamed', due_date: '2030-02-01' }} previousValues={{ title: 'Original', due_date: '' }} />))
-    expect(readOnly[1]).toContain('Previous: Original')
-    expect(readOnly[3]).toContain('Previous: Empty')
-    expect(readOnly.filter((row) => row.includes('Previous:'))).toHaveLength(2)
-    const titleOutput = readOnly[1].match(/<output[^>]*>/)?.[0] ?? ''
-    expect(readOnly[1]).toContain(`id="${attribute(titleOutput, 'aria-describedby')}"`)
   })
 })
 
@@ -475,25 +467,6 @@ describe('DynamicFormRenderer action bar', () => {
     expect(bar.match(/<p[^>]*role="status"[^>]*>([^<]*)<\/p>/)?.[1]).toBe('Requester information saved.')
     expect(buttonsOf(bar)).toEqual([])
     expect(actionBarOf(renderToStaticMarkup(<DynamicFormRenderer readOnly schema={schema} />))).toBe('')
-  })
-})
-
-describe('DynamicFormRenderer previous values', () => {
-  it('marks only the fields that changed and shows what each held before', () => {
-    const html = renderToStaticMarkup(<DynamicFormRenderer
-      readOnly
-      schema={schema}
-      values={{ title: 'Renamed', priority: 'Urgent', request_note: 'Kept' }}
-      previousValues={{ title: 'Original', priority: '' }}
-    />)
-
-    expect(html.match(/Previous: /g)).toHaveLength(2)
-    expect(html).toContain('Previous: Original')
-    expect(html).toContain('Previous: Empty')
-    const note = html.slice(html.indexOf('Request Note'))
-    expect(note).not.toContain('Previous:')
-    const titleDescription = html.match(/<output aria-describedby="([^"]+)"[^>]*>Renamed<\/output>/)?.[1]
-    expect(html).toContain(`id="${titleDescription}"`)
   })
 })
 
