@@ -1,5 +1,7 @@
 # Excel export application integration
 
+> Subsequent [Excel formatting update](2026-10-21-export-formatting.md) adds colored headers and alternating row fills. The HTTP timings below describe the earlier unformatted build in commit `69aec6e`.
+
 Worktree: `export/correctness-100k`, based on `ad564fac1b443462662d87c6d0c43ee5f8b74d0e`. The feature stays on this separate branch. No merge, push or deployment is part of this work.
 
 ## Application changes

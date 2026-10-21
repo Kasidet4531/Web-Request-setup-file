@@ -110,7 +110,7 @@ export async function createExportWorkbook(
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
     stream,
     useSharedStrings: true,
-    useStyles: false,
+    useStyles: true,
     zip: { zlib: { level: 1 } },
   });
   const zip = Reflect.get(workbook, 'zip') as {
@@ -177,7 +177,36 @@ export async function createExportWorkbook(
     sheet.columns = headers.map((header, index) => ({
       header,
       key: String(index),
+      width:
+        index === 1
+          ? 36
+          : index === 2 || index === 3
+            ? 26
+            : header.startsWith('12NC')
+              ? 30
+              : Math.min(42, Math.max(22, header.length + 2)),
     }));
+    const headerStyle: Partial<ExcelJS.Style> = {
+      font: { bold: true, color: { argb: 'FFFFFFFF' } },
+      fill: {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1F4E78' },
+      },
+      alignment: { vertical: 'middle', wrapText: true },
+    };
+    // Reuse the same style objects so ExcelJS caches a fixed number of styles,
+    // even for millions of cells. Styles do not change cell values or types.
+    const rowStyles: Partial<ExcelJS.Style>[] = ['FFFFFFFF', 'FFEAF2F8'].map(
+      (argb) => ({
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb } },
+      }),
+    );
+    const header = sheet.getRow(1);
+    header.height = 32;
+    header.eachCell((cell) => {
+      cell.style = headerStyle;
+    });
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
       const canonical =
@@ -192,26 +221,28 @@ export async function createExportWorkbook(
         actor,
         item.psfReleasedAt,
       );
-      sheet
-        .addRow([
-          serializeCanonicalValue(item.requestNo),
-          item.status,
-          serializeCanonicalValue(item.requestDate),
-          serializeCanonicalValue(item.updatedAt),
-          ...requesterFields.map((field) =>
-            exportCell(field, canonical[field.canonicalKey]),
-          ),
-          ...createdFields.map((field) => {
-            const key = mapping.get(field.canonicalKey);
-            return visible
-              ? exportCell(
-                  field,
-                  key === undefined ? undefined : item.psfCreatedData[key],
-                )
-              : '';
-          }),
-        ])
-        .commit();
+      const row = sheet.addRow([
+        serializeCanonicalValue(item.requestNo),
+        item.status,
+        serializeCanonicalValue(item.requestDate),
+        serializeCanonicalValue(item.updatedAt),
+        ...requesterFields.map((field) =>
+          exportCell(field, canonical[field.canonicalKey]),
+        ),
+        ...createdFields.map((field) => {
+          const key = mapping.get(field.canonicalKey);
+          return visible
+            ? exportCell(
+                field,
+                key === undefined ? undefined : item.psfCreatedData[key],
+              )
+            : '';
+        }),
+      ]);
+      row.eachCell((cell) => {
+        cell.style = rowStyles[index % 2];
+      });
+      row.commit();
       if ((index + 1) % 500 === 0)
         await new Promise<void>((done) => setImmediate(done));
     }
