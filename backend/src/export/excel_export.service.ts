@@ -31,6 +31,7 @@ export interface RequestExportWorkbook {
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
 const DEFAULT_WORKER_MAX_MEMORY_MB = 1024;
+const DEFAULT_SYNC_MAX_CONCURRENT = 2;
 // A worker needs roughly 25 MB (70 MB from TypeScript sources) just to load the
 // builder, and a hard limit below what V8 needs to start aborts the whole
 // process. Smaller settings are still enforced by the builder's own check.
@@ -208,6 +209,7 @@ export function formatRequestExportFilename(now: Date): string {
 export class ExcelExportService implements OnModuleDestroy {
   private readonly logger = new Logger(ExcelExportService.name);
   private readonly workers = new Set<WorkbookWorker>();
+  private directExports = 0;
   constructor(
     private readonly searchIndexService: SearchIndexService,
     private readonly formSchemaService: FormSchemaService,
@@ -226,6 +228,28 @@ export class ExcelExportService implements OnModuleDestroy {
     actor: Actor,
   ): Promise<RequestExportWorkbook> {
     return this.exportWorkbook(filters, actor);
+  }
+  // A direct export answers the HTTP request itself. Null means every
+  // EXPORT_SYNC_MAX_CONCURRENT slot is busy, so the caller queues it instead.
+  async tryDirectExport(
+    filters: RequestExportFilters,
+    actor: Actor,
+    maximumRecords?: number,
+  ): Promise<RequestExportWorkbook | null> {
+    if (
+      this.directExports >=
+      this.positiveInteger(
+        'EXPORT_SYNC_MAX_CONCURRENT',
+        DEFAULT_SYNC_MAX_CONCURRENT,
+      )
+    )
+      return null;
+    this.directExports++;
+    try {
+      return await this.exportRequests(filters, actor, maximumRecords);
+    } finally {
+      this.directExports--;
+    }
   }
   async onModuleDestroy() {
     await Promise.all([...this.workers].map((worker) => worker.close()));

@@ -68,4 +68,48 @@ describe('ExcelExportService resource limits', () => {
     const next = await exporter({}).exportAllRequests({}, adminActor);
     expect(next.content.length).toBeGreaterThan(0);
   }, 30_000);
+
+  it('runs at most EXPORT_SYNC_MAX_CONCURRENT direct exports at once and frees the slot when one finishes or fails', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const queryExportRequests = jest
+      .fn()
+      .mockImplementationOnce(() => held.then(() => page))
+      .mockRejectedValueOnce(new Error('database unavailable'))
+      .mockResolvedValue(page);
+    const service = exporter(
+      { EXPORT_SYNC_MAX_CONCURRENT: '1' },
+      queryExportRequests,
+    );
+
+    const first = service.tryDirectExport({}, adminActor);
+    await expect(service.tryDirectExport({}, adminActor)).resolves.toBeNull();
+    release();
+    expect((await first)?.content.length).toBeGreaterThan(0);
+
+    await expect(service.tryDirectExport({}, adminActor)).rejects.toThrow(
+      'database unavailable',
+    );
+    expect(
+      (await service.tryDirectExport({}, adminActor))?.content.length,
+    ).toBeGreaterThan(0);
+  }, 30_000);
+
+  it('allows two direct exports at once when EXPORT_SYNC_MAX_CONCURRENT is not set', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const service = exporter(
+      {},
+      jest.fn(() => held.then(() => page)),
+    );
+
+    const running = [
+      service.tryDirectExport({}, adminActor),
+      service.tryDirectExport({}, adminActor),
+    ];
+    await expect(service.tryDirectExport({}, adminActor)).resolves.toBeNull();
+    release();
+    for (const workbook of await Promise.all(running))
+      expect(workbook?.content.length).toBeGreaterThan(0);
+  }, 30_000);
 });
