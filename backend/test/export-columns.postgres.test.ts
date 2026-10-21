@@ -19,11 +19,18 @@ import {
 let db: PGlite;
 let fixture: Awaited<ReturnType<typeof lifecycleFixture>>;
 let exporter: ExcelExportService;
+// Every value the database returns while recording.
+let received: unknown[] | undefined;
 
 before(
   async () => {
     db = new PGlite();
-    const query = (sql: string, args?: unknown[]) => db.query(sql, args);
+    const query = async (sql: string, args?: unknown[]) => {
+      const result = await db.query<Record<string, unknown>>(sql, args);
+      if (received)
+        for (const row of result.rows) received.push(...Object.values(row));
+      return result;
+    };
     fixture = await lifecycleFixture({
       query,
       connect: () => Promise.resolve({ query, release() {} }),
@@ -61,6 +68,23 @@ async function exportSheet(
       cells(row + 2),
     ),
   };
+}
+
+// How many captured form snapshots came back from the database, however
+// they were encoded.
+function formSnapshotsIn(values: unknown[]): number {
+  return values.filter((value) => {
+    const parsed: unknown =
+      typeof value === 'string' && value.startsWith('{')
+        ? JSON.parse(value)
+        : value;
+    return (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'formKey' in parsed &&
+      'sections' in parsed
+    );
+  }).length;
 }
 
 async function exportRows(actor: AuthenticatedUserProfile) {
@@ -147,5 +171,51 @@ void it('previews the file: its columns, its first 10 rows and its total, for th
   assert.deepEqual(
     none.headers,
     (await exportSheet(admin, { status: other.name })).headers,
+  );
+});
+
+void it('reads each distinct captured form once, telling apart equal version numbers with different content', async () => {
+  for (let n = 1; n <= 12; n++) await fixture.submit(await fixture.draft());
+  // Same form version number, different captured content.
+  await db.query(
+    `UPDATE psf_requests SET schema_snapshot_json = jsonb_set(
+       schema_snapshot_json, '{sections,0,fields}',
+       schema_snapshot_json #> '{sections,0,fields}' ||
+       '[{"fieldKey":"fpc","canonicalKey":"fpc","label":"FPC","type":"text","required":false}]'::jsonb),
+       requester_data_json = requester_data_json || '{"fpc":"FPC-1"}'::jsonb
+     WHERE request_no = (SELECT MIN(request_no) FROM psf_requests)`,
+  );
+  const versions = await db.query<{ version: number; contents: number }>(
+    `SELECT schema_snapshot_json->>'version' AS version,
+       COUNT(DISTINCT schema_snapshot_json)::int AS contents
+     FROM psf_requests GROUP BY 1`,
+  );
+  assert.deepEqual(
+    versions.rows.map((row) => row.contents),
+    [2],
+  );
+  // Two requester contents and one captured PSF form.
+  const distinct = 3;
+
+  received = [];
+  const file = await exportSheet(admin);
+  const exported = formSnapshotsIn(received);
+  received = [];
+  const preview = await exporter.previewRequests({});
+  const previewed = formSnapshotsIn(received);
+  received = undefined;
+
+  const fpc = file.headers.indexOf('FPC');
+  assert.ok(fpc > 0);
+  assert.deepEqual(file.rows.map((row) => row[fpc]).sort(), [
+    'FPC-1',
+    ...Array<string>(11).fill('NA'),
+  ]);
+  assert.deepEqual(preview.headers, file.headers);
+  // The active forms are read from form_definitions, once each.
+  assert.ok(exported <= distinct + 2, `export read ${exported} form snapshots`);
+  assert.ok(
+    previewed <= distinct + 2,
+    `preview read ${previewed} form snapshots`,
   );
 });

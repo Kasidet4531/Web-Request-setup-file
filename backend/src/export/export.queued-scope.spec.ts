@@ -71,6 +71,20 @@ function lifecycle(ownerRole: AuthenticatedUserProfile['role'] = 'admin') {
         expect(sql).toContain('owner_user_id = $2::uuid');
         return { rows: params[1] === ownerId ? [{ ...stored }] : [] };
       }
+      // Captured form snapshots, read once by content key.
+      if (sql.includes('FROM psf_requests WHERE id = ANY'))
+        return {
+          rows: [
+            {
+              key: 'requester-form',
+              schema_json: JSON.stringify(DEFAULT_PSF_REQUEST_SCHEMA),
+            },
+            {
+              key: 'psf-form',
+              schema_json: JSON.stringify(PSF_CREATED_INFORMATION_SCHEMA),
+            },
+          ],
+        };
       if (sql.includes('FROM psf_requests AS request')) {
         const requesterScoped = sql.includes('AND request.requester_user_id =');
         return {
@@ -89,8 +103,8 @@ function lifecycle(ownerRole: AuthenticatedUserProfile['role'] = 'admin') {
               requester_data_json: {},
               psf_created_data_json: { [psfField.fieldKey]: 'UNRELEASED-PSF' },
               psf_released_at: null,
-              psf_created_schema_snapshot_json: PSF_CREATED_INFORMATION_SCHEMA,
-              schema_snapshot_json: DEFAULT_PSF_REQUEST_SCHEMA,
+              psf_created_schema_key: 'psf-form',
+              schema_key: 'requester-form',
               total_count: 1,
             },
           ],

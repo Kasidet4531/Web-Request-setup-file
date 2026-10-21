@@ -85,6 +85,16 @@ const schema: FormSchemaJson = {
   ],
 };
 
+// The database's answer when an export reads captured forms by content key.
+function capturedForms(forms: Record<string, FormSchemaJson>) {
+  return {
+    rows: Object.entries(forms).map(([key, form]) => ({
+      key,
+      schema_json: JSON.stringify(form),
+    })),
+  };
+}
+
 describe('SearchIndexService canonical extraction', () => {
   let pool: { query: jest.Mock };
   let service: SearchIndexService;
@@ -352,17 +362,22 @@ describe('SearchIndexService canonical extraction', () => {
           updated_at: new Date('2026-06-18T01:05:03.000Z'),
           requester_data_json: { legacy_title: 'Legacy title' },
           psf_created_data_json: { psf_setup_file_name: 'final.psf' },
-          psf_created_schema_snapshot_json: null,
-          schema_snapshot_json: {
-            formKey: 'psf-request',
-            version: 1,
-            title: 'PSF Request Form',
-            sections: [],
-          },
+          psf_created_schema_key: null,
+          schema_key: 'requester-form',
           total_count: 1,
         },
       ],
     });
+    pool.query.mockResolvedValueOnce(
+      capturedForms({
+        'requester-form': {
+          formKey: 'psf-request',
+          version: 1,
+          title: 'PSF Request Form',
+          sections: [],
+        },
+      }),
+    );
     const exportQueryService = service as unknown as {
       queryExportRequests: (
         filters: {
@@ -407,7 +422,7 @@ describe('SearchIndexService canonical extraction', () => {
       offset: 0,
     });
 
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query).toHaveBeenCalledTimes(2);
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('FROM psf_requests'),
       ['Submitted', 2000, 0],
@@ -415,8 +430,13 @@ describe('SearchIndexService canonical extraction', () => {
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(query).not.toContain('canonical_submission_values');
     expect(query).toContain('requester_data_json');
-    expect(query).toContain('schema_snapshot_json');
-    expect(query).toContain('psf_created_schema_snapshot_json');
+    // Rows carry content keys; each captured form is read once by request id.
+    expect(query).toContain(
+      'jsonb_hash_extended(request.schema_snapshot_json, 0)',
+    );
+    expect(query).not.toContain('schema_snapshot_json::text');
+    const [, snapshotParams] = pool.query.mock.calls[1] as [string, unknown[]];
+    expect(snapshotParams).toEqual([['request-1'], []]);
     expect(query).not.toContain('AND request.requester_user_id =');
     expect(query).toContain("WHERE request.status <> 'Draft'");
     expect(query).not.toContain('OR request.requester_user_id');
@@ -474,12 +494,15 @@ describe('SearchIndexService canonical extraction', () => {
           updated_at: new Date('2026-06-18T01:05:03.000Z'),
           requester_data_json: {},
           psf_created_data_json: { legacy_setup_name: 'old.psf' },
-          psf_created_schema_snapshot_json: storedSchema,
-          schema_snapshot_json: schema,
+          psf_created_schema_key: 'psf-form',
+          schema_key: 'requester-form',
           total_count: 1,
         },
       ],
     });
+    pool.query.mockResolvedValueOnce(
+      capturedForms({ 'requester-form': schema, 'psf-form': storedSchema }),
+    );
 
     const result = await service.queryExportRequests({});
 
@@ -828,13 +851,18 @@ describe('SearchIndexService canonical extraction', () => {
             requester_data_json: { title_v2: 'Visible requester title' },
             psf_created_data_json: { psf_setup_file_name: 'private.psf' },
             psf_released_at: release,
-            psf_created_schema_snapshot_json:
-              LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
-            schema_snapshot_json: schema,
+            psf_created_schema_key: 'psf-form',
+            schema_key: 'requester-form',
             total_count: 1,
           },
         ],
       });
+      pool.query.mockResolvedValueOnce(
+        capturedForms({
+          'requester-form': schema,
+          'psf-form': LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
+        }),
+      );
       const result = await service.queryExportRequests({});
       expect(result.items[0]).toMatchObject({
         psfReleasedAt: release,

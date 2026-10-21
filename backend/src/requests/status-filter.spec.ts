@@ -123,10 +123,14 @@ describe('verbatim catalog status filter production paths', () => {
               requester_data_json: {},
               psf_created_data_json: {},
               psf_released_at: null,
-              schema_snapshot_json: SCHEMA,
-              canonical_values_json: {},
+              schema_key: 'requester-form',
+              psf_created_schema_key: null,
               total_count: 1,
             },
+          ];
+        } else if (sql.includes('FROM psf_requests WHERE id = ANY')) {
+          rows = [
+            { key: 'requester-form', schema_json: JSON.stringify(SCHEMA) },
           ];
         }
         return Promise.resolve({ rows, rowCount: 1 });

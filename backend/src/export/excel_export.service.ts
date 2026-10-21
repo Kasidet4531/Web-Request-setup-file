@@ -244,11 +244,12 @@ export class ExcelExportService implements OnModuleDestroy {
   ): Promise<RequestExportPreview> {
     return this.searchIndexService.withExportSnapshot(
       async (search, runner) => {
+        // Discovering every captured form first lets the page reuse them.
+        const captured = await search.queryExportSchemas(filters);
         const page = await search.queryExportRequests(
           { ...filters, limit: rowLimit, offset: 0 },
           rowLimit,
         );
-        const captured = await search.queryExportSchemas(filters);
         // One snapshot connection runs one query at a time.
         const requesterSchema = await this.formSchemaService.getActiveSchema(
           'psf-request',
