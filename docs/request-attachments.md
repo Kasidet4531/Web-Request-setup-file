@@ -214,6 +214,17 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
   Request refusal of an oversized file (a file of exactly the limit is
   accepted) and of a blocked type from the server's list, the fallback without
   the policy, and the client's request to `/api/attachment-policy`.
+- In Chromium 141 against the built backend with `ATTACHMENT_MAX_BYTES=2097152`
+  on a disposable PostgreSQL 16 cluster and a temporary attachment directory
+  (not the configured database or a NAS share): the route answered 401 signed
+  out and `{"maxBytes":2097152,...}` to requester, Setup File Owner and Admin;
+  both pickers showed "Up to 2.0 MB per file · Not allowed: …" as their
+  input's description; New Request refused a 3 MB file and a `.ps1` file at
+  selection and staged a file of exactly 2 MB; a Draft upload still worked;
+  the 390px page had no horizontal scroll. Screenshots:
+  [New Request refusal, desktop/light](verification/assets/2026-10-21-attachment-policy/new-request-oversized-desktop-light.png),
+  [Draft picker, desktop/light](verification/assets/2026-10-21-attachment-policy/draft-attachments-desktop-light.png),
+  [New Request hint, phone/dark](verification/assets/2026-10-21-attachment-policy/new-request-hint-mobile-dark.png).
 
 20 October 2026, on the feature branch:
 
