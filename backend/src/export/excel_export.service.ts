@@ -32,8 +32,9 @@ export interface RequestExportWorkbook {
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
 export const DEFAULT_SYNC_THRESHOLD = 10000;
-// The most rows one Export Preview page holds, as on the request list.
-export const EXPORT_PREVIEW_ROWS = 100;
+// The most rows one Export Preview page holds, and its default, as on the
+// request list.
+export const EXPORT_PREVIEW_PAGE_SIZE = 100;
 
 export interface RequestExportPreviewPage {
   offset?: number;
@@ -244,11 +245,14 @@ export class ExcelExportService implements OnModuleDestroy {
   ): Promise<RequestExportWorkbook> {
     return this.exportWorkbook(filters, actor);
   }
-  // The Export Preview: the file's own columns and its first rows, read from
-  // one snapshot, so it matches the file the same filters download.
+  // The Export Preview: the file's own columns and one page of its rows, read
+  // from one snapshot, so it matches the file the same filters download.
   async previewRequests(
     filters: RequestExportFilters,
-    { offset = 0, limit = EXPORT_PREVIEW_ROWS }: RequestExportPreviewPage = {},
+    {
+      offset = 0,
+      limit = EXPORT_PREVIEW_PAGE_SIZE,
+    }: RequestExportPreviewPage = {},
   ): Promise<RequestExportPreview> {
     return this.searchIndexService.withExportSnapshot(
       async (search, runner) => {
@@ -256,7 +260,7 @@ export class ExcelExportService implements OnModuleDestroy {
         const captured = await search.queryExportSchemas(filters);
         const page = await search.queryExportRequests(
           { ...filters, limit, offset },
-          EXPORT_PREVIEW_ROWS,
+          EXPORT_PREVIEW_PAGE_SIZE,
         );
         // One snapshot connection runs one query at a time.
         const requesterSchema = await this.formSchemaService.getActiveSchema(
@@ -273,8 +277,14 @@ export class ExcelExportService implements OnModuleDestroy {
           [requesterSchema.schema, ...captured.requester],
           [createdSchema.schema, ...captured.created],
         );
+        // A page past the end, when requests left the filters since the last
+        // page, still says how many requests the file holds.
+        const total =
+          page.items.length === 0 && page.offset > 0
+            ? await search.countExportRequests(filters)
+            : page.total;
         return {
-          total: page.total,
+          total,
           offset: page.offset,
           limit: page.limit,
           headers: table.headers,

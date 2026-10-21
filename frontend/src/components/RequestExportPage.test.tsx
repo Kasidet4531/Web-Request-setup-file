@@ -370,7 +370,9 @@ describe("request export URL", () => {
       html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0] ?? "";
 
     const middle = page(100);
-    expect(middle).toContain('aria-label="Request preview pagination"');
+    expect(middle).toContain('aria-label="Export Preview pagination"');
+    expect(middle).not.toContain("aria-live");
+    expect(middle).toContain('<p role="status">250 requests in the file.</p>');
     expect(middle).toContain("101–200 of 250 requests");
     expect(button(middle, "Previous")).not.toContain("disabled");
     expect(button(middle, "Next")).not.toContain("disabled");
@@ -383,6 +385,25 @@ describe("request export URL", () => {
     expect(loading).toContain("PSF-100");
     expect(loading).toContain('aria-busy="true"');
     expect(button(loading, "Next")).toContain("disabled");
+
+    // Past the end, or after a failed page, the way back stays.
+    for (const error of [null, "Unable to load the export preview (500)."]) {
+      const empty = renderToStaticMarkup(
+        RequestExportPageModule.RequestExportPreview({
+          error,
+          headers: ["Request No", "Status"],
+          rows: [],
+          loading: false,
+          total: error ? 0 : 250,
+          offset: 300,
+          limit: 100,
+          onPageChange: () => {},
+        }) as never,
+      );
+      expect(empty).toContain("0 requests");
+      expect(empty).not.toContain("No requests match these filters");
+      expect(button(empty, "Previous")).not.toContain("disabled");
+    }
   });
 
   it("replaces the route placeholder with the request export page", () => {

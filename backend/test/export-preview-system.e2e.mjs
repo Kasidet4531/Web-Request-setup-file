@@ -84,7 +84,7 @@ test(
       path: join(system.evidence, 'export-preview-scrolled.png'),
     });
 
-    const pagination = page.getByLabel('Request preview pagination');
+    const pagination = page.getByLabel('Export Preview pagination');
     await expect(pagination).toContainText('1–100 of 101 requests');
     // Down to the page's last row, then on to the next page from its top.
     await page.mouse.wheel(0, 100_000);
@@ -118,5 +118,13 @@ test(
     await pagination.getByRole('button', { name: 'Previous' }).click();
     await expect(pagination).toContainText('1–100 of 101 requests');
     await expect(preview.locator('tbody tr')).toHaveCount(100);
+
+    // Changing a filter starts again from the first page.
+    await pagination.getByRole('button', { name: 'Next' }).click();
+    await expect(pagination).toContainText('101–101 of 101 requests');
+    await page
+      .getByRole('combobox', { name: 'Status' })
+      .selectOption(open.name);
+    await expect(pagination).toContainText('1–100 of 101 requests');
   },
 );

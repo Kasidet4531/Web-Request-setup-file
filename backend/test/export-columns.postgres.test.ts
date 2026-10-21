@@ -167,10 +167,11 @@ void it('previews the file a page at a time: its columns, the rows at that place
       [preview.total, preview.offset, preview.limit],
       [13, 0, 100],
     );
-    for (const offset of [5, 10]) {
+    for (const offset of [5, 10, 15]) {
       const page = await exporter.previewRequests({}, { offset, limit: 5 });
       assert.deepEqual(page.headers, file.headers);
       assert.deepEqual(page.rows, file.rows.slice(offset, offset + 5));
+      // A page past the end still counts the file's requests.
       assert.deepEqual([page.total, page.offset, page.limit], [13, offset, 5]);
     }
   }

@@ -120,16 +120,15 @@
 .request-export__preview { display: grid; gap: var(--list-gap); }
 
 /* The table itself is the card. */
-.queue-surface .data-table, .request-export__preview .data-table,
+.queue-surface .data-table,
 .admin-workflow-transition__table, .admin-autofill-rules__table {
   background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
 }
-/* The Export Preview shows every column of the file, 100 rows a page. The table
-   scrolls both ways inside the viewport, so its sideways scrollbar stays in
-   reach, with the header row and Request No pinned. */
-.request-export__preview .data-table { overflow: auto; max-height: min(70vh, 720px); }
-.request-export__preview .data-table > table > thead > tr > th { position: sticky; top: 0; z-index: 2; }
-.request-export__preview .data-table > table > thead > tr > th.request-export__pinned { z-index: 3; }
+/* The Export Preview shows every column of the file, 100 rows a page, so it
+   scrolls both ways inside the window and its sideways scrollbar stays in reach. */
+.request-export__preview .data-table {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: min(70vh, 720px);
+}
 
 /* Filters are a separate card. */
 .queue-filters, .dashboard-filters {

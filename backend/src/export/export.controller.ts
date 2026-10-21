@@ -98,8 +98,8 @@ export class ExportController {
     response.end(exportResult.content);
   }
 
-  // The Export to Excel page's preview: the file's columns, first rows and
-  // total for the same filters.
+  // The Export to Excel page's preview: the file's columns, one page of its
+  // rows and its total for the same filters.
   @Get('export-preview')
   async previewRequests(
     @Query() query: Record<string, unknown>,

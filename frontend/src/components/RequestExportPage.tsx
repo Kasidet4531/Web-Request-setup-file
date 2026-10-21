@@ -107,7 +107,8 @@ type RequestExportPreviewState = RequestExportPreviewValue & {
 
 // The file itself a page at a time: the same columns, values and NA cells,
 // with Request No pinned while the other columns scroll. A page stays in
-// place while the next one loads, as on the request list.
+// place while the next one loads, and an empty or failed page keeps its way
+// back, as on the request list. Only the count is announced, not the table.
 export function RequestExportPreview({
   error,
   headers,
@@ -123,23 +124,22 @@ export function RequestExportPreview({
   tableRef?: Ref<HTMLDivElement>;
 }) {
   return (
-    <section className="request-export__preview" aria-live="polite">
+    <section className="request-export__preview">
       <div className="request-export__preview-header">
         <div>
           <h2>Request preview</h2>
-          <p>{loading ? "Loading filtered requests…" : `${total} request${total === 1 ? "" : "s"} in the file.`}</p>
+          <p role="status">{loading ? "Loading filtered requests…" : `${total} request${total === 1 ? "" : "s"} in the file.`}</p>
           <p>The download includes every submitted request that matches these filters, never Drafts, with the same columns shown here.</p>
         </div>
       </div>
       {error ? <AsyncNotice kind="error" title={error} /> : null}
-      {!loading && !error && rows.length === 0 ? (
+      {!loading && !error && total === 0 ? (
         <div className="table-empty">
           <h3>No requests match these filters</h3>
           <p>Adjust the filters to preview different requests.</p>
         </div>
       ) : null}
       {!error && rows.length > 0 ? (
-        <>
         <div className="request-export__preview-table" inert={loading} aria-busy={loading}>
         <p className="table-scroll__hint">Scroll horizontally to see every column in the file.</p>
         <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0} ref={tableRef}>
@@ -162,14 +162,15 @@ export function RequestExportPreview({
           </table>
         </div>
         </div>
-        <div className="table-footer" aria-label="Request preview pagination" aria-busy={loading}>
-          <span>{`${offset + 1}–${Math.min(offset + rows.length, total)} of ${total} requests`}</span>
+      ) : null}
+      {rows.length > 0 || offset > 0 ? (
+        <div className="table-footer" aria-label="Export Preview pagination" aria-busy={loading}>
+          <span>{rows.length ? `${offset + 1}–${Math.min(offset + rows.length, total)} of ${total} requests` : "0 requests"}</span>
           {offset > 0 || total > limit ? <div className="toolbar__actions">
             <button className="btn-secondary" disabled={loading || offset === 0} onClick={() => onPageChange(Math.max(0, offset - limit))} type="button">Previous</button>
             <button className="btn-secondary" disabled={loading || offset + limit >= total} onClick={() => onPageChange(offset + limit)} type="button">Next</button>
           </div> : null}
         </div>
-        </>
       ) : null}
     </section>
   );
