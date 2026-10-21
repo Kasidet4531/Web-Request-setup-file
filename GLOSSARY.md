@@ -43,6 +43,10 @@ _Avoid_: Setup Information, Completed Info
 A named lifecycle stage in the administrator-managed status catalog, classified as draft, open, completed, or cancelled.
 _Avoid_: Percentage stage
 
+**Status Email Policy**:
+The administrator's choice, per Work Status, of who is emailed when a PSF Request enters it: fixed addresses in To and CC, and optionally the request's own Requester in To or CC.
+_Avoid_: Notification subscription, mailing list
+
 **PSF Visibility Release**:
 A permanent release milestone granted when a PSF Request enters a configured trigger Work Status, making PSF Created Information visible to Requesters.
 

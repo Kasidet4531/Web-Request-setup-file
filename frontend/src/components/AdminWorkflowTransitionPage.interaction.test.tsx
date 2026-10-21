@@ -448,4 +448,41 @@ describe('Status email policy interactions', () => {
     expect(fallback.focus).toHaveBeenCalledTimes(1)
   })
 
+  it('saves the Requester in To without a typed To address', async () => {
+    await openEmailEditor()
+    suppress(false)
+    change('Send to the Requester', 'to')
+    add('CC', 'lead@example.com')
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'rename', id: 'open-id', name: config.entries[1].name, psfAccessTrigger: false, emailPolicy: { enabled: true, to: [], cc: ['lead@example.com'], requester: 'to' }, expectedUpdatedAt: config.updatedAt })
+  })
+
+  it('still requires a typed To address when the Requester is in CC', async () => {
+    await openEmailEditor()
+    suppress(false)
+    change('Send to the Requester', 'cc')
+    ;(button('Save changes').props.onClick as () => void)(); await flush()
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
+    expect(find(render(), (element) => element.props.role === 'alert' && String(element.props.children).includes('At least one To address is required'))).not.toBeNull()
+  })
+
+  it('shows where a status sends to the Requester in the catalog and when editing it', async () => {
+    const requesterConfig = { ...enabledConfig, entries: enabledConfig.entries.map((entry) => entry.kind === 'draft' ? entry : { ...entry, emailPolicy: { ...entry.emailPolicy, requester: 'cc' } }) }
+    await openEmailEditor(requesterConfig)
+    expect(find(render(), (element) => element.type === 'span' && String(element.props.children).includes('Requester in CC'))).not.toBeNull()
+    expect(control('Send to the Requester').props.value).toBe('cc')
+    suppress(true)
+    expect(control('Send to the Requester').props.disabled).toBe(true)
+  })
+
+  it("names each request's Requester among the destination recipients before bulk deletion", async () => {
+    const replacementConfig = { ...enabledConfig, entries: [...enabledConfig.entries, { id: 'replacement', name: 'Other work', kind: 'open', requestCount: 0, emailPolicy: { enabled: true, to: [], cc: ['copy@example.com'], requester: 'to' } }] }
+    workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(replacementConfig)
+    render(); hookState.effect?.(); await flush()
+    ;(button('Delete').props.onClick as () => void)()
+    const replacement = find(render(), (element) => element.type === 'label' && find(element.props.children, (child) => child.type === 'span' && child.props.children === 'Replacement status') !== null)!
+    ;(find(replacement, (element) => element.type === 'select')!.props.onChange as (event: unknown) => void)({ target: { value: 'replacement' } })
+    expect(find(render(), (element) => element.type === 'p' && String(element.props.children) === "To: each request's Requester")).not.toBeNull()
+  })
+
 })

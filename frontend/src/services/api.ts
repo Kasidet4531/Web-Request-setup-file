@@ -97,10 +97,14 @@ export interface UpdateDraftRequesterDataPayload extends PsfRequestPayload {
 
 export type WorkflowStatusKind = 'draft' | 'open' | 'completed' | 'cancelled'
 
+export type RequesterPlacement = 'to' | 'cc'
+
 export interface StatusEmailPolicy {
   enabled: boolean
   to: string[]
   cc: string[]
+  /** Absent when the request's Requester is not emailed. */
+  requester?: RequesterPlacement
 }
 
 export interface StatusCatalogEntry {
