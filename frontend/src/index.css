@@ -209,6 +209,8 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .dynamic-form__label { padding-top: 8px; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--foreground); overflow-wrap: anywhere; }
 .dynamic-form__control { display: grid; gap: 6px; min-width: 0; }
 .dynamic-form__control > .dynamic-form__autofill-status, .dynamic-form__control > .dynamic-form__previous { margin: 0; }
+/* Chromium's calendar button makes a date input 2px taller than the other controls; hold it to the shared line. */
+.dynamic-form__control input[type="date"] { height: 36px; }
 /* A changed row (Request Snapshot) is tinted edge to edge; the stripe sits in the gutter so the label column stays aligned. */
 .dynamic-form__row--changed { margin-inline: -12px; padding-inline: 9px 12px; background: var(--secondary); border-left: 3px solid var(--warning); }
 .dynamic-form__previous { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
