@@ -25,6 +25,7 @@ test(
     assert.ok(open);
     // One more request than a page holds; the newest is first in the file.
     const requestNos = [];
+    let newest;
     for (let n = 1; n <= 101; n++) {
       const draft = await api(page, 'POST', '/requests', {
         requesterData: {
@@ -49,6 +50,7 @@ test(
         },
       );
       requestNos.push(submitted.requestNo);
+      newest = submitted;
     }
 
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -60,6 +62,23 @@ test(
     await expect(preview.locator('tbody th').first()).toHaveText(
       requestNos.at(-1),
     );
+    // Request Date and Updated At read in Thai time (UTC+7), year first.
+    const thaiTime = (iso) =>
+      new Date(Date.parse(iso) + 7 * 3600_000)
+        .toISOString()
+        .slice(0, 19)
+        .replace('T', ' ');
+    const headerTexts = await preview.locator('thead th').allTextContents();
+    const firstRow = preview.locator('tbody tr').first().locator('th, td');
+    await expect(firstRow.nth(headerTexts.indexOf('Request Date'))).toHaveText(
+      thaiTime(newest.createdAt),
+    );
+    await expect(firstRow.nth(headerTexts.indexOf('Updated At'))).toHaveText(
+      thaiTime(newest.updatedAt),
+    );
+    await preview.screenshot({
+      path: join(system.evidence, 'export-preview-dates.png'),
+    });
 
     // The table fits the window, so its sideways scrollbar is in reach; a
     // sideways wheel over it reaches the file's last column, and the page

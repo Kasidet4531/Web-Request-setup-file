@@ -8,6 +8,7 @@ import {
   serializeCanonicalValue,
   type RequestExportItem,
 } from '../requests/search-index.service';
+import { bangkokDateTime } from './bangkok-time';
 
 export type ExportCell = string | number;
 
@@ -30,6 +31,16 @@ export function exportCell(
 ): ExportCell {
   const text = serializeCanonicalValue(value);
   return field.type === 'number' && isNumericText(text) ? Number(text) : text;
+}
+
+// Request Date and Updated At in Thai time, year first so the column still
+// sorts as text: 2025-09-01 10:42:29.
+function exportDateTime(value: Date | string | null): string {
+  const date = value === null ? undefined : new Date(value);
+  if (!date || Number.isNaN(date.getTime()))
+    return serializeCanonicalValue(value);
+  const { year, month, day, hour, minute, second } = bangkokDateTime(date);
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 // Every field of every given form version, once per canonical key, in the
@@ -105,8 +116,8 @@ export function createExportTable(
       const cells: ExportCell[] = [
         serializeCanonicalValue(item.requestNo),
         item.status,
-        serializeCanonicalValue(item.requestDate),
-        serializeCanonicalValue(item.updatedAt),
+        exportDateTime(item.requestDate),
+        exportDateTime(item.updatedAt),
         serializeCanonicalValue(item.requesterData[MODIFIED_BY]),
         ...requesterFields.map((field) =>
           value(item.requesterData, requesterKeys, field),

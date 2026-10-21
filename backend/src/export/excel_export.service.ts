@@ -19,6 +19,7 @@ import {
   type RequestExportItem,
   type RequestSearchFilters,
 } from '../requests/search-index.service';
+import { bangkokDateTime } from './bangkok-time';
 import { createExportTable, type ExportCell } from './export-table';
 
 export type RequestExportFilters = Pick<
@@ -203,22 +204,8 @@ class WorkbookWorker {
 }
 
 export function formatRequestExportFilename(now: Date): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  })
-    .formatToParts(now)
-    .reduce<Record<string, string>>((values, part) => {
-      values[part.type] = part.value;
-      return values;
-    }, {});
-  return `psf_requests_${parts.year}${parts.month}${parts.day}_${parts.hour}${parts.minute}${parts.second}.xlsx`;
+  const { year, month, day, hour, minute, second } = bangkokDateTime(now);
+  return `psf_requests_${year}${month}${day}_${hour}${minute}${second}.xlsx`;
 }
 
 @Injectable()

@@ -194,6 +194,27 @@ describe('Excel export columns', () => {
     ]);
   });
 
+  it('shows Request Date and Updated At in Thai time, year first', async () => {
+    const form = requesterForm(1, [{ fieldKey: 'title' }]);
+
+    const { rows } = await exportSheet(form, [
+      request(
+        'PSF-000001',
+        form,
+        { title: 'A' },
+        {
+          requestDate: '2025-09-01T03:42:29.000Z',
+          updatedAt: '2025-09-01T20:05:00.000Z',
+        },
+      ),
+    ]);
+
+    expect([rows[0]['Request Date'], rows[0]['Updated At']]).toEqual([
+      '2025-09-01 10:42:29',
+      '2025-09-02 03:05:00',
+    ]);
+  });
+
   it('shows Modified By once for requests on form versions with and without the field', async () => {
     const withField = requesterForm(1, [
       { fieldKey: 'product_type', label: 'Request To' },

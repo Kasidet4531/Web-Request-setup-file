@@ -338,6 +338,13 @@ export function source(i: number) {
   };
 }
 
+// Request Date and Updated At are shown in Thai time (UTC+7, no daylight saving).
+const thaiTime = (iso: string) =>
+  new Date(Date.parse(iso) + 7 * 3600_000)
+    .toISOString()
+    .slice(0, 19)
+    .replace('T', ' ');
+
 // Expected cells come from the fixture specification, never exporter mapping/serialization helpers.
 // A cell without a value shows NA.
 export function expectedRow(i: number): Cell[] {
@@ -351,8 +358,8 @@ export function expectedRow(i: number): Cell[] {
   return [
     who.requestNo,
     who.status,
-    who.createdAt,
-    who.updatedAt,
+    thaiTime(who.createdAt),
+    thaiTime(who.updatedAt),
     sample(modifiedByColumn, i).cell,
     ...requester,
     ...historicalColumns.map((c, index) =>
