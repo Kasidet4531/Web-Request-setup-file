@@ -85,6 +85,10 @@ A reserved non-production account used to simulate a specific role and departmen
 The administrative capability to inspect unsubmitted Drafts read-only, check reminder statuses, and permanently delete orphaned Drafts.
 _Avoid_: Draft inspection portal, draft admin console
 
+**Status Email Policy**:
+The administrator's choice, per Work Status, of who is emailed when a PSF Request enters it: fixed addresses in To and CC, and optionally the request's own Requester in To or CC. Imported Requests have no Requester address.
+_Avoid_: Notification subscription, mailing list
+
 **Draft Reminder**:
 A one-time notification sent when a PSF Request remains in Draft seven days after creation.
 

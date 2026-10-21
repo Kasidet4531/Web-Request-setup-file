@@ -53,6 +53,10 @@ _Avoid_: In-progress request, unsaved request
 **Work Status**:
 An Admin-configured catalog entry with immutable identity, verbatim name and explicit open/completed/cancelled classification. The configured database was verified to contain 17 entries on 4 October 2026; use the [complete exact strings](docs/status-catalog-and-manual-updates.md), not old short labels. Percentages are display text, not progression or automation. All authenticated actors may change shared work status through the single Action center. Catalog/request writes preserve opaque microsecond revisions, transactional projections and audit.
 
+**Status Email Policy**:
+The Admin's per-Work Status choice of who is emailed when a PSF Request enters that status: fixed addresses in To and CC, and optionally the request's own Requester in To or CC (21 October 2026). The Requester is reached through the account that created the request, so the Requester of an Imported Request is never emailed. It applies whoever changes the Status, including submission and bulk replacement.
+_Avoid_: Notification subscription, mailing list
+
 **PSF Visibility Release**:
 A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.
 

@@ -380,12 +380,41 @@ describe('workflow destination email policies', () => {
     { enabled: false, to: 'group@example.com', cc: [] },
     { enabled: false, to: [12], cc: [] },
     { enabled: false, to: [], cc: [], extra: true },
+    { enabled: true, to: [], cc: ['copy@example.com'], requester: 'cc' },
+    { enabled: false, to: [], cc: [], requester: 'bcc' },
+    { enabled: false, to: [], cc: [], requester: null },
   ])('rejects malformed policy %p before storage', async (policy) => {
     await expect(
       service.applyOperation(operation(policy), ACTOR),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(connect).not.toHaveBeenCalled();
   });
+
+  it.each(['to', 'cc'] as const)(
+    'saves the Requester in %s and keeps that choice across a rename',
+    async (requester) => {
+      const policy = {
+        enabled: true,
+        to: requester === 'to' ? [] : ['group@example.com'],
+        cc: ['copy@example.com'],
+        requester,
+      };
+      await service.applyOperation(operation(policy), ACTOR);
+      const result = await service.applyOperation(
+        {
+          action: 'rename',
+          id: WORK,
+          name: 'Renamed work',
+          expectedUpdatedAt: REVISION,
+        },
+        ACTOR,
+      );
+      expect(result.entries.find((entry) => entry.id === WORK)).toHaveProperty(
+        'emailPolicy',
+        policy,
+      );
+    },
+  );
 
   it('prevents enabling Draft and accepts a disabled Draft policy', async () => {
     await expect(

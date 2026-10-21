@@ -30,12 +30,6 @@ export class NotificationService {
         throw new Error(
           'APP_BASE_URL must be configured before queuing notification emails',
         );
-      const to = emailAddresses(policy.to.join(','));
-      const cc = emailAddresses(policy.cc.join(',')).filter(
-        (address) => !to.includes(address),
-      );
-      if (!to.length)
-        throw new Error('Enabled notification policy requires To recipients');
       const result = await client.query<RequestEmailMetadata>(
         `SELECT request_no,requester,product_type,requester_data_json,schema_snapshot_json
         FROM psf_requests WHERE id=$1`,
@@ -43,6 +37,25 @@ export class NotificationService {
       );
       if (!result.rows[0])
         throw new Error('Notification request metadata unavailable');
+      const requester = policy.requester
+        ? await this.requesterAddress(client, event.requestId)
+        : undefined;
+      let to = emailAddresses(policy.to.join(','));
+      let cc = emailAddresses(policy.cc.join(','));
+      if (requester && policy.requester === 'to')
+        to = [...new Set([...to, requester])];
+      if (requester && policy.requester === 'cc')
+        cc = [...new Set([...cc, requester])];
+      cc = cc.filter((address) => !to.includes(address));
+      // Without a To, the configured CC recipients receive it as To instead.
+      if (!to.length) [to, cc] = [cc, []];
+      if (!to.length) {
+        this.logger.warn(
+          `No email queued for request ${event.requestId}: its Requester has no usable email address and the status has no other recipients`,
+        );
+        await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+        return;
+      }
       const rendered = renderRequestEmail(
         event,
         result.rows[0],
@@ -77,5 +90,30 @@ export class NotificationService {
       return;
     }
     await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+  }
+  // The Requester's account address as it is now; Imported Requests have no
+  // account, so their Requester is never emailed.
+  private async requesterAddress(
+    client: NotificationClient,
+    requestId: string,
+  ): Promise<string | undefined> {
+    const result = await client.query<{ email: string | null }>(
+      `SELECT account.email FROM psf_requests request
+      JOIN app_users account ON account.id=request.requester_user_id
+      WHERE request.id=$1`,
+      [requestId],
+    );
+    let address: string | undefined;
+    try {
+      const parsed = emailAddresses(result.rows[0]?.email ?? '');
+      if (parsed.length === 1) address = parsed[0];
+    } catch {
+      /* An invalid account address is treated as missing. */
+    }
+    if (!address)
+      this.logger.warn(
+        `The Requester of request ${requestId} has no usable email address`,
+      );
+    return address;
   }
 }

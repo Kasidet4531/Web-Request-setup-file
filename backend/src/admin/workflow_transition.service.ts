@@ -908,7 +908,17 @@ export class WorkflowTransitionService implements OnModuleInit {
         'Email policy requires enabled, To and CC address lists.',
       );
     }
-    this.assertOnlyKeys(input, ['enabled', 'to', 'cc']);
+    this.assertOnlyKeys(input, ['enabled', 'to', 'cc', 'requester']);
+    if (
+      input.requester !== undefined &&
+      input.requester !== 'to' &&
+      input.requester !== 'cc'
+    ) {
+      throw new BadRequestException(
+        'Email policy requester must be To or CC when present.',
+      );
+    }
+    const requester = input.requester;
     const normalize = (addresses: unknown[]): string[] => {
       const result = new Set<string>();
       for (const address of addresses) {
@@ -944,12 +954,17 @@ export class WorkflowTransitionService implements OnModuleInit {
     const to = normalize(input.to);
     const toSet = new Set(to);
     const cc = normalize(input.cc).filter((address) => !toSet.has(address));
-    if (input.enabled && to.length === 0) {
+    if (input.enabled && to.length === 0 && requester !== 'to') {
       throw new BadRequestException(
         'An enabled email policy requires at least one To recipient.',
       );
     }
-    return { enabled: input.enabled, to, cc };
+    return {
+      enabled: input.enabled,
+      to,
+      cc,
+      ...(requester ? { requester } : {}),
+    };
   }
 
   private async persistConfiguration(

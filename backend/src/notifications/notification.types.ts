@@ -4,6 +4,8 @@ export type StatusEmailPolicy = {
   enabled: boolean;
   to: string[];
   cc: string[];
+  // Where the request's Requester is added; absent means they are not emailed.
+  requester?: 'to' | 'cc';
 };
 export type RequestNotificationEvent = {
   eventType: 'REQUEST_SUBMITTED' | 'REQUEST_STATUS_CHANGED';

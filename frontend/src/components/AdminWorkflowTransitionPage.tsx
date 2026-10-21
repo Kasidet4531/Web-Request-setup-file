@@ -38,6 +38,18 @@ function statusEmailPolicy(entry: StatusCatalogEntry): StatusEmailPolicy {
     : entry.emailPolicy
 }
 
+const requesterPlacement = { to: 'To', cc: 'CC' } as const
+
+function recipientSummary(policy: StatusEmailPolicy): string {
+  return `${policy.to.length} To · ${policy.cc.length} CC${policy.requester ? ` · Requester in ${requesterPlacement[policy.requester]}` : ''}`
+}
+
+// The bulk-replacement preview names the Requester beside the fixed addresses.
+function destinationRecipients(policy: StatusEmailPolicy, field: 'to' | 'cc'): string {
+  const addresses = [...policy[field], ...(policy.requester === field ? ["each request's Requester"] : [])]
+  return addresses.length ? addresses.join(', ') : 'None'
+}
+
 function statusPsfAccessTrigger(entry: StatusCatalogEntry, configuration: WorkflowConfiguration | null): boolean {
   if (entry.kind === 'draft') return false
   return entry.psfAccessTrigger ?? (configuration?.psfVisibilityTriggerIds
@@ -60,6 +72,7 @@ export function AdminWorkflowTransitionPage() {
   const [emailEnabled, setEmailEnabled] = useState(false)
   const [emailTo, setEmailTo] = useState<string[]>([])
   const [emailCc, setEmailCc] = useState<string[]>([])
+  const [emailRequester, setEmailRequester] = useState<'' | 'to' | 'cc'>('')
   const [toInput, setToInput] = useState('')
   const [ccInput, setCcInput] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -131,6 +144,7 @@ export function AdminWorkflowTransitionPage() {
     setEmailEnabled(policy.enabled)
     setEmailTo([...policy.to])
     setEmailCc([...policy.cc])
+    setEmailRequester(policy.requester ?? '')
     setToInput('')
     setCcInput('')
     setEmailError(null)
@@ -172,8 +186,8 @@ export function AdminWorkflowTransitionPage() {
     const to = emailTo
     const toSet = new Set(to)
     const cc = emailCc.filter((address) => !toSet.has(address))
-    if (emailEnabled && to.length === 0) {
-      setEmailError('At least one To address is required when email is enabled.')
+    if (emailEnabled && to.length === 0 && emailRequester !== 'to') {
+      setEmailError('At least one To address is required when email is enabled, unless the Requester is in To.')
       return
     }
     if ([...to, ...cc].some((address) => !isValidEmailAddress(address))) {
@@ -181,7 +195,7 @@ export function AdminWorkflowTransitionPage() {
       return
     }
     setEmailError(null)
-    void mutate({ action: 'rename', id: emailEditing.id, name: editName.trim(), psfAccessTrigger, emailPolicy: { enabled: emailEnabled, to, cc } })
+    void mutate({ action: 'rename', id: emailEditing.id, name: editName.trim(), psfAccessTrigger, emailPolicy: { enabled: emailEnabled, to, cc, ...(emailRequester ? { requester: emailRequester } : {}) } })
   }
 
   function closeDialog() {
@@ -218,7 +232,7 @@ export function AdminWorkflowTransitionPage() {
             <tbody>{configuration.entries.map((entry) => <tr key={entry.id}>
               <td><StatusLabel status={entry.name} kind={entry.kind} /></td>
               <td>{entry.kind === 'cancelled' ? 'Cancel' : entry.kind === 'open' ? 'Open work' : entry.kind === 'completed' ? 'Completed' : 'Draft'}</td><td>{entry.requestCount ?? '—'}</td>
-              <td><div className="admin-workflow-transition__email-summary"><span>{statusEmailPolicy(entry).enabled ? 'Enabled' : 'Do not send'}</span>{statusEmailPolicy(entry).enabled ? <span className="ui-help">{statusEmailPolicy(entry).to.length} To · {statusEmailPolicy(entry).cc.length} CC</span> : null}</div></td>
+              <td><div className="admin-workflow-transition__email-summary"><span>{statusEmailPolicy(entry).enabled ? 'Enabled' : 'Do not send'}</span>{statusEmailPolicy(entry).enabled ? <span className="ui-help">{recipientSummary(statusEmailPolicy(entry))}</span> : null}</div></td>
               <td>{statusPsfAccessTrigger(entry, configuration) ? 'Trigger' : '—'}</td>
               <td><div className="admin-workflow-transition__row-actions">{entry.kind === 'draft' ? <span className="ui-help">Protected</span> : <>
                 <button className="ui-button ui-button--secondary" disabled={catalogBusy} aria-label={`Edit ${entry.name}`} ref={(node) => { if (node) emailButtons.current.set(`edit:${entry.id}`, node); else emailButtons.current.delete(`edit:${entry.id}`) }} onClick={() => void editEmailPolicy(entry)} type="button">Edit</button>
@@ -238,12 +252,14 @@ export function AdminWorkflowTransitionPage() {
             </div>
             <p className="ui-help">These recipients apply when a request enters this status, including submission and bulk replacement. Changes take effect after saving.</p>
             <label className="admin-workflow-transition__checkbox"><input type="checkbox" aria-label="Do not send email on entry" checked={!emailEnabled} disabled={busy} onChange={(event) => { setEmailEnabled(!event.target.checked); setEmailError(null) }} />Do not send email on entry</label>
+            <label className="ui-field"><span className="ui-label">Requester of the request</span><select aria-label="Send to the Requester" aria-describedby="email-requester-help" disabled={recipientControlsDisabled} value={emailRequester} onChange={(event) => { setEmailRequester(event.target.value as '' | 'to' | 'cc'); setEmailError(null) }}><option value="">Do not send</option><option value="to">To</option><option value="cc">CC</option></select></label>
+            <p className="ui-help" id="email-requester-help">Sends to the email address of the account that created each request. Imported requests have no account, so their requester is not emailed.</p>
             <p className="ui-help" id="email-recipients-help">Enter an individual or group address, then choose Add. You can paste several addresses separated by commas or semicolons. To takes precedence over CC.</p>
             {usersLoading ? <p className="ui-help" role="status">Loading system users… You can enter addresses now.</p> : null}
             {usersError ? <p className="ui-help" role="status">{`${usersError} — enter email addresses directly, or cancel and reopen to retry.`}</p> : null}
             <div className="admin-workflow-transition__email-fields">
               {(['To', 'CC'] as const).map((field) => <fieldset key={field} className="admin-workflow-transition__recipient-field">
-                <legend className="ui-label">{field}{field === 'To' ? ' (required when enabled)' : ' (optional)'}</legend>
+                <legend className="ui-label">{field}{field === 'CC' ? ' (optional)' : emailRequester === 'to' ? ' (optional, the Requester is in To)' : ' (required when enabled)'}</legend>
 
                 <div className="admin-status-dialog__add-address"><input aria-label={`${field} addresses`} aria-describedby={`email-recipients-help${emailError ? ' email-policy-error' : ''}`} aria-invalid={Boolean(emailError)} disabled={recipientControlsDisabled} value={field === 'To' ? toInput : ccInput} placeholder="name@example.com" onChange={(event) => { (field === 'To' ? setToInput : setCcInput)(event.target.value); setEmailError(null) }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addRecipients(field, field === 'To' ? toInput : ccInput) } }} /><button className="ui-button ui-button--secondary" aria-label={`Add ${field}`} disabled={recipientControlsDisabled || !(field === 'To' ? toInput : ccInput).trim()} type="button" onClick={() => addRecipients(field, field === 'To' ? toInput : ccInput)}>Add {field}</button></div>
                 <label className="ui-field"><span className="ui-label">Add system user to {field}</span><select aria-label={`Add system user to ${field}`} disabled={recipientControlsDisabled || usersLoading || users === null} value="" onChange={(event) => {
@@ -271,7 +287,7 @@ export function AdminWorkflowTransitionPage() {
             {destination && destinationPolicy ? <div className="admin-workflow-transition__delivery-preview" role="status">
               <h3>Email on entry to {destination.name}</h3>
               <p>{destinationPolicy.enabled ? `One email will be queued for each of the ${deleting.requestCount ?? 0} affected requests.` : 'Email is disabled for this destination. No notification emails will be queued.'}</p>
-              {destinationPolicy.enabled ? <><p>{`To: ${destinationPolicy.to.join(', ')}`}</p><p>{`CC: ${destinationPolicy.cc.length ? destinationPolicy.cc.join(', ') : 'None'}`}</p></> : null}
+              {destinationPolicy.enabled ? <><p>{`To: ${destinationRecipients(destinationPolicy, 'to')}`}</p><p>{`CC: ${destinationRecipients(destinationPolicy, 'cc')}`}</p></> : null}
             </div> : null}
             {feedback?.kind === 'error' ? <AsyncNotice kind="error" title={feedback.message} /> : null}
             </div><div className="ui-dialog__actions">
