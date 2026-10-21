@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Centred request column, 21 October 2026:** New Request, Request Detail (Drafts and submitted requests) and Admin Draft detail sit in one column at most 1335px wide (`--request-page-max-width`, one and a half times a card around the 840px `--form-rows-max-width`), centred in the content area, and their form rows, including PSF Created Information, fill the card instead of stopping at 840px; the label column stays 260px. The Admin Form Management preview and Request Snapshots keep the 840px cap. New Request was previously capped at 1120px and the detail pages were not capped. A Draft's Attachments card, also in Draft Management, now sits 16px below Requester Information, as on New Request. See the [verification record](verification/2026-10-21-single-column-form.md#centred-request-column). Checks ran in Chromium against a throwaway local database.
+
 > **Pinned action bar, 21 October 2026:** on every editable form (New Request, Draft and submitted request editing, PSF Created Information editing and the Admin Form Management preview) the action buttons sit in a bar pinned to the bottom of the viewport, or of the preview's scroll region, while the form scrolls; at the end of the form it sits below the last row. It spans the form card with Save as the right-most button at the card's right edge. Saving, saved and save errors of the Requester form and of PSF Created Information appear in the bar, left of the buttons (saving and saved as a status, errors as an alert), instead of at the top of the card or page; the preview's "All required fields are complete." appears there too. Status changes, load errors, Draft schema upgrades and other page-level notices stay at the top. See the [verification record](verification/2026-10-21-single-column-form.md#pinned-action-bar) (issue #90). Checks ran in Chromium against a throwaway local database.
 
 > **Single-column form rows, 21 October 2026:** every rendering of a Form Schema (New Request, Draft and submitted request editing, PSF Created Information viewing and editing, the Admin Form Management preview, read-only Request Detail, Admin Draft detail and Request Snapshots) shows one row per field: the label in a 260px column on the left, the control or stored value on the right, rows separated by a divider and capped at 840px wide. Below 600px wide the label sits above its control. The two-column grid and its full-width text areas, radios, Title and Product Type are gone; field order, sections, labels, required flags and visibility are unchanged. See the [verification record](verification/2026-10-21-single-column-form.md) (issue #88). Checks ran in Chromium against a throwaway local database.
@@ -146,7 +148,9 @@ requester identity uses clearly marked locked sample data. New Request and
 Detail editors use the same configured order without automatic Additional
 details grouping. Every rendering uses the same single-column rows: one row per
 visible field, a 260px label column and a flexible control column, a divider under
-each row, at most 840px wide, and the label above its control below 600px wide.
+each row, and the label above its control below 600px wide. On New Request,
+Request Detail and Admin Draft detail the rows fill the form card in a centred
+column at most 1335px wide; elsewhere they are at most 840px wide.
 Labels are bold 14px in both editable and read-only mode, and read-only values sit
 on the controls' line, so switching a request between viewing and editing keeps
 ordinary rows at the same height; radio groups and text areas may grow while

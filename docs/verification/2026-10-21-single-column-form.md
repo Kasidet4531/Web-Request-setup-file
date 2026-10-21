@@ -256,3 +256,81 @@ roles in the DOM, not with a screen reader. The keyboard check covers Tab
 navigation in Chromium, which honours `scroll-padding-bottom`. Phone captures
 used a desktop browser at phone size, without an on-screen keyboard. Deployment
 and the configured database were not exercised.
+
+## Centred request column
+
+New Request, Request Detail (Drafts and submitted requests) and Admin Draft
+detail in Draft Management sit in one column at most 1335px wide, centred in the
+content area: one and a half times a card around the 840px form rows. The width
+was chosen after comparing four layouts in a throwaway prototype, kept in this
+branch's history (`d634177`, `7890f85`) and removed from the tree in `de99ecd`.
+In that column the form rows, including PSF Created Information, fill the card;
+the label column stays 260px. Below 1335px of content width the column fills
+the content area as before. The Admin Form Management preview and Request
+Snapshots keep rows at most 840px wide. Where Attachments shows under Requester
+Information (a Draft, including in Draft Management) its card now sits 16px
+below, as on New Request; on a submitted request, Attachments is its own tab
+and keeps the tab spacing. CSS only, in [`index.css`](../../frontend/src/index.css):
+`--request-page-max-width` is computed from `--form-rows-max-width` (840px) and
+`--card-padding`.
+
+- Branch `claude/eloquent-goodall-p1sbcp`, based on `main` at `0c2ddef`.
+  Captured from the tree of the commit that adds this section: `de99ecd` with
+  the column width written as that computed token, which leaves every measured
+  width unchanged (all measurements were repeated after the change).
+- Environment as above, with Chromium driven at 1920×1080, 1440×1000 and
+  390×844 in the light theme; a throwaway PostgreSQL 16 cluster under
+  `/var/tmp`, deleted afterwards; the compiled backend with local development
+  identities and no `backend/.env`; the Vite dev server; Google Fonts answered
+  with empty CSS. The configured/shared database was not used.
+
+### Local data
+
+The seeded ten-field Requester Form Version 1 and PSF Created Information Form,
+with one Draft and one request submitted to its first Status, both created
+through the API as the local Requester. PSF Created Information was viewed as
+the local Admin, since a Requester does not see it.
+
+### Test results
+
+| Check | Command | Branch |
+| --- | --- | --- |
+| Frontend tests | `cd frontend && npx vitest run` | 38 files, 523 passed |
+| Frontend type check | `cd frontend && npx tsc -b --force` | Passed |
+| Frontend lint | `cd frontend && npx eslint .` | the same 1 error as on `main` (`GlobalHistoryPage.test.tsx:389`, `no-useless-assignment`) |
+| Frontend build | `cd frontend && npx vite build` | Passed |
+
+The base was not re-run: the change touches no test, script or component. No
+test asserts layout, since jsdom does not compute it, so the change was
+measured in the browser.
+
+### Browser checks
+
+Measured with `getBoundingClientRect` on New Request, the Draft, the submitted
+request and Admin Draft detail.
+
+| Check | 1920×1080 | 1440×1000 | 390×844 |
+| --- | --- | --- | --- |
+| Page column | 1335px, 151px clear on each side | 1156px, fills the content area | 358px, fills the content area |
+| Form rows | 1285px, the card's inner width; label column 260px | 1106px; label column 260px | 308px, label above its control |
+| PSF Created Information rows (submitted request, as Admin) | 1285px; label column 260px | 1106px; label column 260px | not measured |
+| Attachments below Requester Information (Draft, Draft Management, New Request) | 16px | 16px | 16px |
+| Submitted request: tabs to the panel, Requester Information and Attachments tabs | 16px and 16px | 16px and 16px | 16px and 16px |
+| Horizontal overflow | none | none | none |
+
+### Screenshots
+
+| Page | Capture |
+| --- | --- |
+| Submitted request | [1920×1080](assets/2026-10-21-single-column-form/centred-column-request-1920.png) |
+| Submitted request, PSF Created Information (Admin) | [1920×1080](assets/2026-10-21-single-column-form/centred-column-psf-1920.png) |
+| Draft, scrolled to Attachments | [1920×1080](assets/2026-10-21-single-column-form/centred-column-draft-1920.png), [390×844](assets/2026-10-21-single-column-form/centred-column-draft-390.png) |
+| New Request | [1920×1080](assets/2026-10-21-single-column-form/centred-column-new-request-1920.png) |
+| Admin Draft detail (Draft Management) | [1920×1080](assets/2026-10-21-single-column-form/centred-column-admin-draft-1920.png) |
+
+### Limits of the centred column checks
+
+Chromium 141 only, light theme only (the change sets widths and a margin, no
+colours), with the seeded ten-field forms rather than long ones. Widths between
+1440 and 1920 were not captured; the column stops growing at 1335px. Deployment
+and the configured database were not exercised.
