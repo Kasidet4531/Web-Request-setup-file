@@ -1,9 +1,12 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ExportController } from './export.controller';
 
 describe('ExportController', () => {
   let authService: { getProfile: jest.Mock };
-  let excelExportService: { tryDirectExport: jest.Mock };
+  let excelExportService: {
+    tryDirectExport: jest.Mock;
+    previewRequests: jest.Mock;
+  };
   let searchIndexService: { countExportRequests: jest.Mock };
   let exportJobRepository: { enqueue: jest.Mock };
   let configService: { get: jest.Mock };
@@ -12,7 +15,10 @@ describe('ExportController', () => {
 
   beforeEach(() => {
     authService = { getProfile: jest.fn() };
-    excelExportService = { tryDirectExport: jest.fn() };
+    excelExportService = {
+      tryDirectExport: jest.fn(),
+      previewRequests: jest.fn(),
+    };
     searchIndexService = {
       countExportRequests: jest.fn().mockResolvedValue(0),
     };
@@ -222,5 +228,40 @@ describe('ExportController', () => {
       'attachment; filename="psf_requests_20260619_000506.xlsx"',
     );
     expect(response.end).toHaveBeenCalledWith(content);
+  });
+
+  it('returns the Export Preview for the page filters to a signed-in requester', async () => {
+    const preview = {
+      total: 1,
+      headers: ['Request No', 'Status'],
+      rows: [['PSF-000001', 'Submitted']],
+    };
+    authService.getProfile.mockResolvedValue({
+      id: 'requester-1',
+      username: 'requester.demo',
+      displayName: 'Requester Demo',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    excelExportService.previewRequests.mockResolvedValue(preview);
+
+    await expect(
+      controller.previewRequests(
+        { status: 'Submitted', from: '2026-06-01', to: '2026-06-30' },
+        { session: { userId: 'requester-1' } } as never,
+      ),
+    ).resolves.toEqual(preview);
+    expect(excelExportService.previewRequests).toHaveBeenCalledWith({
+      status: 'Submitted',
+      requestDateFrom: '2026-06-01',
+      requestDateTo: '2026-06-30',
+    });
+  });
+
+  it('refuses an Export Preview without a signed-in user', async () => {
+    await expect(
+      controller.previewRequests({}, { session: {} } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(excelExportService.previewRequests).not.toHaveBeenCalled();
   });
 });

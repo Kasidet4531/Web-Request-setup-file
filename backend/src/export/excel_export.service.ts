@@ -19,6 +19,7 @@ import {
   type RequestExportItem,
   type RequestSearchFilters,
 } from '../requests/search-index.service';
+import { createExportTable, type ExportCell } from './export-table';
 
 export type RequestExportFilters = Pick<
   RequestSearchFilters,
@@ -31,6 +32,13 @@ export interface RequestExportWorkbook {
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
 export const DEFAULT_SYNC_THRESHOLD = 10000;
+export const EXPORT_PREVIEW_ROWS = 10;
+
+export interface RequestExportPreview {
+  total: number;
+  headers: string[];
+  rows: ExportCell[][];
+}
 const DEFAULT_SYNC_MAX_CONCURRENT = 2;
 const DEFAULT_WORKER_MAX_MEMORY_MB = 1024;
 // A worker needs roughly 25 MB (70 MB from TypeScript sources) just to load the
@@ -227,6 +235,39 @@ export class ExcelExportService implements OnModuleDestroy {
     actor: Actor,
   ): Promise<RequestExportWorkbook> {
     return this.exportWorkbook(filters, actor);
+  }
+  // The Export Preview: the file's own columns and its first rows, read from
+  // one snapshot, so it matches the file the same filters download.
+  async previewRequests(
+    filters: RequestExportFilters,
+    rowLimit = EXPORT_PREVIEW_ROWS,
+  ): Promise<RequestExportPreview> {
+    return this.searchIndexService.withExportSnapshot(
+      async (search, runner) => {
+        const page = await search.queryExportRequests(
+          { ...filters, limit: rowLimit, offset: 0 },
+          rowLimit,
+        );
+        const captured = await search.queryExportSchemas(filters);
+        const [requesterSchema, createdSchema] = await Promise.all([
+          this.formSchemaService.getActiveSchema('psf-request', false, runner),
+          this.formSchemaService.getActiveSchema(
+            PSF_CREATED_INFORMATION_FORM_KEY,
+            false,
+            runner,
+          ),
+        ]);
+        const table = createExportTable(
+          [requesterSchema.schema, ...captured.requester],
+          [createdSchema.schema, ...captured.created],
+        );
+        return {
+          total: page.total,
+          headers: table.headers,
+          rows: page.items.map((item) => table.row(item)),
+        };
+      },
+    );
   }
   // A Direct Export answers the HTTP request itself. Null means every
   // EXPORT_SYNC_MAX_CONCURRENT slot in this backend process is busy, so the

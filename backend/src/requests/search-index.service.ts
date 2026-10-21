@@ -672,6 +672,63 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
+  // The distinct captured form versions of every request the export holds,
+  // in the export's row order, so its columns can be known without its rows.
+  async queryExportSchemas(filters: RequestSearchFilters): Promise<{
+    requester: FormSchemaJson[];
+    created: FormSchemaJson[];
+  }> {
+    const { whereClause, params } = this.buildExportWhere(filters);
+    const result = await this.pool.query<{
+      form: 'requester' | 'created';
+      schema_json: string | null;
+    }>(
+      `
+        WITH ordered AS (
+          SELECT
+            request.schema_snapshot_json,
+            request.psf_created_schema_snapshot_json,
+            ROW_NUMBER() OVER (
+              ORDER BY request.updated_at DESC, request.request_no DESC
+            ) AS position
+          FROM psf_requests AS request
+          ${whereClause}
+        )
+        SELECT form, schema_json FROM (
+          SELECT 'requester' AS form, schema_snapshot_json::text AS schema_json,
+            MIN(position) AS position
+          FROM ordered GROUP BY schema_snapshot_json
+          UNION ALL
+          SELECT 'created', psf_created_schema_snapshot_json::text, MIN(position)
+          FROM ordered GROUP BY psf_created_schema_snapshot_json
+        ) AS versions
+        ORDER BY form DESC, position
+      `,
+      params,
+    );
+    const schemas =
+      this.exportContext?.schemas || new Map<string, FormSchemaJson>();
+    const parse = (text: string | null) => {
+      if (text === null) return resolvePsfCreatedInformationSchema(null);
+      let schema = schemas.get(text);
+      if (!schema) {
+        schema = JSON.parse(text) as FormSchemaJson;
+        schemas.set(text, schema);
+      }
+      return schema;
+    };
+    return {
+      requester: result.rows
+        .filter((row) => row.form === 'requester')
+        .map((row) => parse(row.schema_json)),
+      created: result.rows
+        .filter((row) => row.form === 'created')
+        .map((row) =>
+          resolvePsfCreatedInformationSchema(parse(row.schema_json)),
+        ),
+    };
+  }
+
   async countExportRequests(filters: RequestSearchFilters): Promise<number> {
     const { whereClause, params } = this.buildExportWhere(filters);
     const result = await this.pool.query<RequestExportCountRow>(

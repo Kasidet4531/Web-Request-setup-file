@@ -10,6 +10,7 @@ import {
   lifecycleFixture,
   ownerA,
   requester,
+  submittedStatus,
 } from './draft-lifecycle.fixture';
 
 // Saves go through the real RequestsService and the export reads the same
@@ -37,25 +38,35 @@ after(async () => {
 });
 beforeEach(() => fixture.reset());
 
-async function exportRows(actor: AuthenticatedUserProfile) {
-  const { content } = await exporter.exportRequests({}, actor);
+async function exportSheet(
+  actor: AuthenticatedUserProfile,
+  filters: { status?: string } = {},
+) {
+  const { content } = await exporter.exportRequests(filters, actor);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(
     content as unknown as Parameters<typeof workbook.xlsx.load>[0],
   );
   const sheet = workbook.getWorksheet('PSF Requests');
   assert.ok(sheet);
-  const headers = Array.from(
-    { length: sheet.columnCount },
-    (_, column) => sheet.getCell(1, column + 1).value as string,
-  );
-  return Array.from({ length: sheet.rowCount - 1 }, (_, row) =>
-    Object.fromEntries(
-      headers.map((header, column) => [
-        header,
-        sheet.getCell(row + 2, column + 1).value,
-      ]),
+  const cells = (row: number) =>
+    Array.from(
+      { length: sheet.columnCount },
+      (_, column) => sheet.getCell(row, column + 1).value as string | number,
+    );
+  const headers = cells(1) as string[];
+  return {
+    headers,
+    rows: Array.from({ length: sheet.rowCount - 1 }, (_, row) =>
+      cells(row + 2),
     ),
+  };
+}
+
+async function exportRows(actor: AuthenticatedUserProfile) {
+  const { headers, rows } = await exportSheet(actor);
+  return rows.map((row) =>
+    Object.fromEntries(headers.map((header, column) => [header, row[column]])),
   );
 }
 
@@ -95,4 +106,46 @@ void it('exports fields without an exportable flag and the latest Modified By af
   const [row] = await exportRows(admin);
   assert.equal(row['Modified By'], ownerA.displayName);
   assert.equal(row.File, 'SETUP_A.psf');
+});
+
+void it('previews the file: its columns, its first 10 rows and its total, for the same filters', async () => {
+  const { entries } = await fixture.workflow.getConfiguration();
+  const other = entries.find(
+    (entry) => entry.kind === 'open' && entry.name !== submittedStatus,
+  );
+  assert.ok(other);
+  for (let n = 1; n <= 13; n++) {
+    const submitted = await fixture.submit(await fixture.draft());
+    if (n % 4 === 0)
+      await fixture.service.updatePsfCreatedData(submitted.id, {
+        actor: ownerA,
+        expectedUpdatedAt: submitted.updatedAt,
+        psfCreatedData: { file: `SETUP_${n}.psf` },
+      });
+  }
+  // A request on an older form version adds its own column to the file.
+  await db.query(
+    `UPDATE psf_requests SET schema_snapshot_json = jsonb_set(
+       schema_snapshot_json, '{sections,0,fields}',
+       schema_snapshot_json #> '{sections,0,fields}' ||
+       '[{"fieldKey":"fpc","canonicalKey":"fpc","label":"FPC","type":"text","required":false}]'::jsonb)
+     WHERE request_no = (SELECT MIN(request_no) FROM psf_requests)`,
+  );
+
+  for (const actor of [requester, admin]) {
+    const file = await exportSheet(actor);
+    const preview = await exporter.previewRequests({});
+    assert.deepEqual(preview.headers, file.headers);
+    assert.ok(preview.headers.includes('FPC'));
+    assert.deepEqual(preview.rows, file.rows.slice(0, 10));
+    assert.equal(preview.total, 13);
+  }
+
+  const none = await exporter.previewRequests({ status: other.name });
+  assert.equal(none.total, 0);
+  assert.deepEqual(none.rows, []);
+  assert.deepEqual(
+    none.headers,
+    (await exportSheet(admin, { status: other.name })).headers,
+  );
 });

@@ -22,6 +22,7 @@ import {
   DEFAULT_SYNC_THRESHOLD,
   ExcelExportService,
   type RequestExportFilters,
+  type RequestExportPreview,
 } from './excel_export.service';
 import { ExportJobRepository, type ExportJob } from './export-job.repository';
 
@@ -94,6 +95,19 @@ export class ExportController {
     );
 
     response.end(exportResult.content);
+  }
+
+  // The Export to Excel page's preview: the file's columns, first rows and
+  // total for the same filters.
+  @Get('export-preview')
+  async previewRequests(
+    @Query() query: Record<string, unknown>,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<RequestExportPreview> {
+    await this.getExportActor(request);
+    return this.excelExportService.previewRequests(
+      this.parseExportFilters(query),
+    );
   }
 
   @Get('export-jobs/:jobId/download')
