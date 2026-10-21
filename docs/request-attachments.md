@@ -1,7 +1,9 @@
 # Request Attachments and request IDs
 
 Implemented in source on 20 October 2026 for issue #78; the Attachment Policy
-route and the picker limits were added on 21 October 2026 for issue #89. Source
+route and the picker limits were added on 21 October 2026 for issue #89, and
+folder names were aligned with the SharePoint export the same day for issue
+#97. Source
 is authoritative; this guide describes the source as of those changes. It is
 not deployment
 evidence: the checks it names ran against disposable databases and a temporary
@@ -69,13 +71,20 @@ Each request has one folder directly under the root:
 
 - `[Product_Description]_[ID]`, or `_[ID]` while Product_Description is blank.
   Product_Description is `requester_data_json.title`, trimmed, with
-  `/ \ : * ? " < > |` and control characters replaced by `_`.
+  `/ \ : * ? " < > |` and control characters replaced by `_`, cut to its first
+  100 characters, then stripped of trailing dots and spaces. That is how the
+  SharePoint export named the Imported Requests' folders, so `Tiger.` with ID
+  703 is `Tiger_703`
+  ([ADR 0018](adr/0018-nas-folder-names-follow-the-sharepoint-export.md)).
 - Files keep their original names (any client path removed, characters Windows
   forbids replaced by `_`). A name already in the folder gets ` (1)`, ` (2)`…
   before its extension; nothing is overwritten.
 - `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.ps1`, `.sh` and `.vbs` files are
-  refused, as are Windows/macOS system files (`Thumbs.db`, `desktop.ini`,
-  `.DS_Store`, `~$…`), which listings also ignore. The extension list is
+  refused, as are system files, which listings also ignore: those of Windows,
+  macOS and Office (`Thumbs.db`, `desktop.ini`, `.DS_Store`, `~$…`) and the
+  SharePoint export's `ItemInfo.txt` and `_export_complete.txt`, in any letter
+  case. The export's files stay in the folder for Windows Explorer; the app
+  does not read them. The extension list is
   defined only in the backend and served by the Attachment Policy route; the
   system files are not part of it.
 - Saving a changed Product_Description renames the folder and updates stored
@@ -238,11 +247,14 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 
 20 October 2026, on the feature branch:
 
-- `npm run test:attachments:postgres` (17 tests): `attachments.postgres.test.ts`
+- `npm run test:attachments:postgres` (21 tests): `attachments.postgres.test.ts`
   runs `RequestsService`, the Attachment service and `AuditLogService` on
   in-memory PostgreSQL with a real temporary directory as
   `ATTACHMENT_STORAGE_PATH`, checks folder paths under Windows path rules
-  (`Z:/attachment`, a `Z:/` drive root, a UNC share) and checks that the
+  (`Z:/attachment`, a `Z:/` drive root, a UNC share), checks folder names
+  against folders the SharePoint export created (a trailing dot, a title cut
+  at 100 characters; issue #97), that the export's files are neither listed
+  nor accepted for upload, and that the
   submission email queued with a real notification service carries the
   `PSF-` number, not the Draft number;
   `check-attachment-folders.test.ts` covers the folder check, before and after

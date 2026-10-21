@@ -1,6 +1,6 @@
 # 18. NAS folder names follow the SharePoint export
 
-Status: accepted (21 October 2026, issue #97); not yet implemented in source.
+Status: accepted and implemented in source (21 October 2026, issue #97); see [Request Attachments](../request-attachments.md).
 
 The Imported Requests' Attachment folders were created by the SharePoint export, which named each one from the request title cut to 100 characters, with a trailing dot dropped, before `_[ID]`. The app derives a request's folder name rather than storing it, so we made `[Product_Description]_[ID]` follow the same rule for every request: Product_Description cut to its first 100 characters, then stripped of trailing dots and spaces. Run against the NAS, the existing rule missed 18 of the export's folders (16 trailing dots, 2 cut titles); the new rule finds them without renaming any folder or file on the NAS.
 
