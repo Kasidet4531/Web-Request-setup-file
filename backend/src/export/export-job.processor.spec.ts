@@ -1,3 +1,4 @@
+import { ExportMemoryLimitException } from './excel_export.service';
 import { ExportJobProcessor } from './export-job.processor';
 
 describe('ExportJobProcessor', () => {
@@ -176,6 +177,23 @@ describe('ExportJobProcessor', () => {
       job.id,
       job.claimToken,
       'Unable to prepare this export. Please try again.',
+    );
+  });
+
+  it('tells the owner when an Export Job stopped at the Export Memory Limit', async () => {
+    repository.claimNext.mockResolvedValueOnce(job);
+    excelExportService.exportAllRequests.mockRejectedValueOnce(
+      new ExportMemoryLimitException(),
+    );
+
+    await processor.processNext();
+
+    expect(repository.fail).toHaveBeenCalledWith(
+      job.id,
+      job.claimToken,
+      expect.stringContaining(
+        'needs more memory than EXPORT_WORKER_MAX_MEMORY_MB allows',
+      ),
     );
   });
 });

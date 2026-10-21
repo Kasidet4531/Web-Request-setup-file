@@ -1,0 +1,17 @@
+[
+  {
+    "mutation": "reject-unlisted-choice",
+    "failedTests": 6,
+    "caught": true
+  },
+  {
+    "mutation": "drop-historical-columns",
+    "failedTests": 6,
+    "caught": true
+  },
+  {
+    "mutation": "replace-captured-schema-with-active",
+    "failedTests": 6,
+    "caught": true
+  }
+]

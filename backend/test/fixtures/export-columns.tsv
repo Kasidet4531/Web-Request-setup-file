@@ -1,0 +1,198 @@
+For	Column Name	Column Name change	Type	Dropdown Option
+Requester	12NC item (CEFT)		Single line of text	
+Requester	12NC item (CEPT)		Single line of text	
+Requester	12NC item (SLDI)		Single line of text	
+Requester	Additional request PSF for MSA		Choice	No
+				Yes
+	Allow to probe on crack pad (bin 103)		Choice	No
+				Yes
+Requester	Amount of site		Single line of text	
+Requester	Auto reprobe bin		Single line of text	
+Creater	Bin assign (No PCM)		Choice	50 ==> Inkless
+				50,244 ==> Laser marking
+				N/A
+Requester	Bump Height (um)		Number	
+Requester	DCC require		Choice	No
+				Yes
+Creater	DCC Setup file name/NNR recipe		Single line of text	
+Creater/Requestor	Description		Multiple lines of text	
+Requester	Diameter (Inch)		Choice	8
+				12
+Creater	Die Size X ( mm )		Single line of text	
+Creater	Die Size Y ( mm )		Single line of text	
+	Due Date		Date and Time	
+	Edge die count of EWM Shipped map at DOWN		Single line of text	
+	Edge die count of EWM Shipped map at LEFT		Single line of text	
+	Edge die count of EWM Shipped map at RIGHT		Single line of text	
+	Edge die count of EWM Shipped map at TOP		Single line of text	
+Creater/Requestor	Enable 5SVC2/Micro touch		Choice	No
+				Yes
+Requester	EWM layer0 Row/Column		Single line of text	
+Requester	Fab.		Single line of text	
+Creater	First Die Ref. ( X,Y )	First Die Position ( X,Y )	Single line of text	
+Creater	Flat / Notch direction		Choice	B : Bottom (TSK=180,EG=0)
+				L : Left       (TSK=270,EG=90)
+				T : Top       (TSK=0,EG=180)
+				R : Right     (TSK=90,EG=270)
+	FPC		Choice	No
+				Yes
+Creater	Job File Name		Single line of text	
+Creater	Merge Template		Choice	Yes
+				Refer Reference (Not change)
+				Review Merge Recipe (Layout change)
+Creater	Move to Network		Choice	No
+				Yes
+Creater	Multi Pass Bin		Number	
+Requester	NNR Recipe for WT1		Choice	No
+				Yes
+Requester	NNR Recipe for WT2		Choice	No
+				Yes
+Requester	NNR Recipe for WT3		Choice	No
+				Yes
+Requester	NNR Recipe for WT4		Choice	No
+				Yes
+	Notch Direction for Probe		Single line of text	
+Creater	Pad Size (Small)	Pad Size	Single line of text	
+Requester	Pad type		Choice	Normal
+				Bump
+				Trench
+Requester	Pass bin(s) : WT1		Single line of text	
+Requester	Pass bin(s) : WT2		Single line of text	
+Requester	Pass bin(s) : WT3		Single line of text	
+Requester	Pass bin(s) : WT4		Single line of text	
+Creater	Physical Wafer		Choice	No
+				Yes
+Creater	Probe & Coordinate Quadrant		Single line of text	
+Requester	Probe card type	Probe Card Technology	Choice	Cobra
+				Epoxy
+				FM-ViP2.1 (3.0mil)
+				FM-ViP2.2 (2.5mil)
+				FM-ViP2.3 (2.0mil)
+				FM-ViP2.4 (1.6mil)
+				FM-V50A(1.6mil)
+				FM-V70A (2.0mil)
+				FM-V85A (2.5 mil)
+				FM-V85B (2.5mil)
+				MPI-Kestrel-80
+				MPI-Osprey-70P
+				SV-Spring-P70
+				SV-Spring-P80
+				TP-T1 (1.5 mil)
+				TP-T5 (1.5 mil)
+				Vprobe 1.6 mil
+				Yokowo-Pogo-Crown
+Requester	Probecard Name		Single line of text	
+Requester	Prober Type		Choice	EG4090
+				TSK
+				TEL
+Requester	Product layout		Choice	New Product Layout
+				Change Layout
+				Refer Reference Layout
+Creater	PSF Setup File Name		Single line of text	
+Requester	Reference OLD PSF name		Single line of text	
+	Remark		Multiple lines of text	
+Requester	Request Excel Probe Pattern		Choice	No
+				Yes
+Requester	Request For		Choice	Production
+				STR
+				Experiment
+				Blind Assembly
+Requester	Request To		Choice	Create new PSF (Require PCSF , E142 or .DPL)
+				Revise from old PSF (Require reference PSF , PCSF , E142 or DPL)
+				Product Transfer (Require PSF , PCSF , .LAY)
+	Start Date		Date and Time	
+	Status		Choice	Draft
+				5% -- Reject (Information not complete)
+				10% -- Test Engineer Data Entry
+				20% -- PSF File Creating
+				40% -- Feedback Requester(Layout mismatch)
+				80% -- Wait for create DCC
+				85 % -- Reject PSF check list
+				90% -- Wait for buyoff PSF check list
+				95% -- Reject (Wrong site location and wafer map)
+				99% -- Wait requestor Buyoff site location and wafer map
+				100% -- Completed
+				0% -- Rejected (Cancel Request)
+Requester	STDF XY of top-left probe die position		Single line of text	
+Requester	System		Choice	NEW WORLD
+				EWFM
+				EWFM/Map Handling
+				EWFM/DCC
+Requester	Test temp for WT1 (c)		Choice	150
+				125
+				105
+				100
+				95
+				85
+				40
+				30
+				25
+				0
+				-26
+				-40
+				-43
+				-45
+Requester	Test temp for WT2 (c)		Choice	150
+				125
+				105
+				100
+				95
+				85
+				40
+				30
+				25
+				0
+				-26
+				-40
+				-43
+				-45
+Requester	Test temp for WT3 (c)		Choice	150
+				125
+				105
+				100
+				95
+				85
+				40
+				30
+				25
+				0
+				-26
+				-40
+				-43
+				-45
+Requester	Test temp for WT4 (c)		Choice	150
+				125
+				105
+				100
+				95
+				85
+				40
+				30
+				25
+				0
+				-26
+				-40
+				-43
+				-45
+Requester	Tester Type		Choice	J750
+				LTX_C
+				MCT
+				PS1600_Digital
+				PS1600_PWR
+				SPEAD
+				SPEAL
+				SPEAL-DOT800
+				UFLEX
+				VQ
+Requester	Title	Product_Description	Single line of text	
+Requester	Total Test Die (Aras)		Single line of text	
+Creater	Total tested die (Wafer Map)		Number	
+Creater	Touch down per wafer		Number	
+Creater	Transfer PSF and Job file to NAS Server		Choice	No
+				Yes
+Requester	Trench Thickness (um)		Number	
+Creater	Wafer ID format	OCR format	Single line of text	
+	Workflow Name		Single line of text	
+Requester	XSC#(EWFM) or Base Type (NewWorld)		Single line of text	
+	Created By		Person or Group	
+	Modified By		Person or Group	

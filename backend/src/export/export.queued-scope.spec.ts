@@ -25,7 +25,7 @@ const jobId = '2b8b2f0b-5ea4-4d2b-8a20-9f99276dfa49';
 const revision = '2026-10-01T00:00:00.123456Z';
 
 // Real controller/repository/processor/mapper/XLSX; only profile/storage are doubled.
-function lifecycle(ownerRole: 'admin' | 'requester' = 'admin') {
+function lifecycle(ownerRole: AuthenticatedUserProfile['role'] = 'admin') {
   let profile: AuthenticatedUserProfile | null = {
     id: ownerId,
     username: 'owner',
@@ -100,6 +100,9 @@ function lifecycle(ownerRole: 'admin' | 'requester' = 'admin') {
       return { rows: [], rowCount: 1 };
     }),
   };
+  Object.assign(pool, {
+    connect: () => Promise.resolve({ query: pool.query, release: () => {} }),
+  });
   const repository = new ExportJobRepository(pool as unknown as Pool);
   const search = new SearchIndexService(pool as unknown as Pool);
   const forms = {
@@ -201,7 +204,7 @@ describe('queued exports current server-profile scope', () => {
     await expectDenied(state, NotFoundException);
   });
 
-  it.each(['requester', 'admin'] as const)(
+  it.each(['requester', 'setup_owner', 'admin'] as const)(
     'allows requester-scope workbook with current %s role and keeps unreleased PSF masked',
     async (role) => {
       const state = lifecycle('requester');
@@ -217,7 +220,7 @@ describe('queued exports current server-profile scope', () => {
     },
   );
 
-  it.each(['admin', 'requester'] as const)(
+  it.each(['admin', 'setup_owner', 'requester'] as const)(
     'denies foreign-owner %s even with compatible job scope',
     async (role) => {
       const state = lifecycle('requester');
@@ -238,6 +241,26 @@ describe('queued exports current server-profile scope', () => {
     state.setRole('setup_owner');
     await expectDenied(state, NotFoundException);
   });
+
+  it.each(['GNTC', 'MFG'] as const)(
+    'exports unreleased PSF for a %s setup owner',
+    async (department) => {
+      const state = lifecycle('setup_owner');
+      state.setProfile({
+        id: ownerId,
+        username: 'owner',
+        displayName: 'Owner',
+        role: 'setup_owner',
+        setupOwnerDepartment: department,
+      });
+      await state.processor.processNext();
+      expect(await cells(state.stored.content!)).toContain('FOREIGN-WORK');
+      expect(await cells(state.stored.content!)).toContain('UNRELEASED-PSF');
+      await expect(state.status()).resolves.toHaveProperty('downloadUrl');
+      await state.download();
+      expect(state.response.end).toHaveBeenCalledWith(state.stored.content);
+    },
+  );
 
   it('denies missing server profile on both endpoints before storage', async () => {
     const state = lifecycle();

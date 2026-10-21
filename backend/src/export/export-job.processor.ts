@@ -5,7 +5,10 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ExcelExportService } from './excel_export.service';
+import {
+  ExcelExportService,
+  ExportMemoryLimitException,
+} from './excel_export.service';
 import { ExportJobRepository } from './export-job.repository';
 
 const EXPORT_JOB_FAILURE_MESSAGE =
@@ -91,11 +94,15 @@ export class ExportJobProcessor
           job.claimToken,
           workbook,
         );
-      } catch {
+      } catch (error) {
+        // Failed jobs are final, so an export over the memory limit does not
+        // run again.
         await this.exportJobRepository.fail(
           job.id,
           job.claimToken,
-          EXPORT_JOB_FAILURE_MESSAGE,
+          error instanceof ExportMemoryLimitException
+            ? error.message
+            : EXPORT_JOB_FAILURE_MESSAGE,
         );
       } finally {
         stopRenewingClaim();

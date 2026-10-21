@@ -1,0 +1,139 @@
+{
+  "timestamp": "2026-10-20T15:40:59.668Z",
+  "node": "v24.19.0",
+  "exceljs": "4.4.0",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "memoryLimitMiB": 8192,
+  "workerHeapLimitMiB": 3072,
+  "fixtureColumns": 73,
+  "outputColumns": 76,
+  "testedRoles": [
+    "setup_owner"
+  ],
+  "historicalFields": [
+    "Allow to probe on crack pad (bin 103)",
+    "Edge die count of EWM Shipped map at DOWN",
+    "Edge die count of EWM Shipped map at LEFT",
+    "Edge die count of EWM Shipped map at RIGHT",
+    "Edge die count of EWM Shipped map at TOP",
+    "FPC",
+    "Notch Direction for Probe"
+  ],
+  "generatedFields": [
+    "Due Date",
+    "Remark",
+    "Start Date",
+    "Status",
+    "Workflow Name",
+    "Created By",
+    "Modified By"
+  ],
+  "datasets": [
+    {
+      "rows": 5570,
+      "drafts": 37,
+      "total": 5607,
+      "canonical_values": 219827,
+      "seedMs": 4008.6
+    },
+    {
+      "rows": 100000,
+      "drafts": 37,
+      "total": 100037,
+      "canonical_values": 3946669,
+      "seedMs": 69816.6
+    }
+  ],
+  "cases": [
+    {
+      "rows": 5570,
+      "role": "setup_owner",
+      "mode": "candidate",
+      "port": 45023,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-correctness-setup-owner/5570-candidate-setup_owner.xlsx",
+      "mutateDuringExport": true,
+      "success": true,
+      "exportMs": 1692.3,
+      "queryMs": 848.3,
+      "queryCount": 12,
+      "renderMs": 470.8,
+      "bytes": 2669105,
+      "writerBytes": 2669105,
+      "internedSchemas": 5,
+      "consistentReadSnapshot": true,
+      "concurrentMutationApplied": true,
+      "concurrentMutationProof": {
+        "reordered": true,
+        "deleted": true,
+        "inserted": true,
+        "canonical_changed": true,
+        "psf_changed": true,
+        "schema_changed": true
+      },
+      "checkedCells": 423396,
+      "blankCells": 68150,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "4b96559299a0af87fe83d4f63e49db41dabd908fa79fb99c09227a26dcf3b848",
+      "verifyMs": 677.3,
+      "maxRssMiB": 322.5
+    },
+    {
+      "rows": 100000,
+      "role": "setup_owner",
+      "mode": "candidate",
+      "port": 45023,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-correctness-setup-owner/100000-candidate-setup_owner.xlsx",
+      "mutateDuringExport": true,
+      "success": true,
+      "exportMs": 39956.5,
+      "queryMs": 23299.6,
+      "queryCount": 200,
+      "renderMs": 10520.9,
+      "bytes": 48615665,
+      "writerBytes": 48615665,
+      "internedSchemas": 5,
+      "consistentReadSnapshot": true,
+      "concurrentMutationApplied": true,
+      "concurrentMutationProof": {
+        "reordered": true,
+        "deleted": true,
+        "inserted": true,
+        "canonical_changed": true,
+        "psf_changed": true,
+        "schema_changed": true
+      },
+      "checkedCells": 7600076,
+      "blankCells": 1223283,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "13f513b03fc4f731da343ef0be9b82c6d2ff15fb337e6c6aa61637675ef257d1",
+      "verifyMs": 11221.5,
+      "maxRssMiB": 1871.5
+    }
+  ],
+  "postgres": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+  "queryChecks": {
+    "filterCases": 4,
+    "versionOnlySubstitutionRejected": true,
+    "concurrentReorder": [
+      {
+        "mode": "current",
+        "duplicatesInFirst20": 1,
+        "consistentSnapshot": false
+      },
+      {
+        "mode": "candidate",
+        "duplicatesInFirst20": 0,
+        "consistentSnapshot": true
+      }
+    ]
+  },
+  "strictCellAcceptancePassed": true
+}

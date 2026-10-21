@@ -1,0 +1,92 @@
+[
+  {
+    "reader": "ExcelJS document",
+    "requests": 5570,
+    "role": "admin",
+    "sheets": 1,
+    "rows": 5571,
+    "checkedCells": 423396,
+    "logicalSha256": "ee9b5d3c2cfb444b3e9897771fa666b4f5de672baf21f858486e9235bcc87673",
+    "matchesIndependentReader": true,
+    "readerUtf8Diffs": 0,
+    "examples": [],
+    "crossReadMs": 1272.6
+  },
+  {
+    "reader": "ExcelJS document",
+    "requests": 5570,
+    "role": "requester",
+    "sheets": 1,
+    "rows": 5571,
+    "checkedCells": 423396,
+    "logicalSha256": "3628466d6ae86e6bad3c8f4140acfefaeae3ae2de7f9b6988f9c48024823a6a2",
+    "matchesIndependentReader": true,
+    "readerUtf8Diffs": 0,
+    "examples": [],
+    "crossReadMs": 1079.9
+  },
+  {
+    "reader": "ExcelJS streaming",
+    "requests": 100000,
+    "role": "admin",
+    "sheets": 1,
+    "rows": 100001,
+    "checkedCells": 7600076,
+    "logicalSha256": "a31baf32cf6bf81c12a53a6259fc6cf052ae6e7fe59007ffe4dbd7fef64dfe16",
+    "matchesIndependentReader": false,
+    "readerUtf8Diffs": 105,
+    "examples": [
+      {
+        "row": 39,
+        "column": "Edge die count of EWM Shipped map at DOWN",
+        "actual": "ทดสอ���ภาษาไทย 😀 & <xml> \"quoted\" 'single'",
+        "expected": "ทดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'"
+      },
+      {
+        "row": 1047,
+        "column": "Notch Direction for Probe",
+        "actual": "ท���สอบภาษาไทย 😀 & <xml> \"quoted\" 'single'",
+        "expected": "ทดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'"
+      },
+      {
+        "row": 4841,
+        "column": "Description",
+        "actual": "ทดสอบภาษา��ทย 😀 & <xml> \"quoted\" 'single'",
+        "expected": "ทดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'"
+      }
+    ],
+    "crossReadMs": 15546.6
+  },
+  {
+    "reader": "ExcelJS streaming",
+    "requests": 100000,
+    "role": "requester",
+    "sheets": 1,
+    "rows": 100001,
+    "checkedCells": 7600076,
+    "logicalSha256": "b036fa4ee0fbaf7b4bfa0b6430b069a68ce85e5dce560a6c42db34aed68ae59d",
+    "matchesIndependentReader": false,
+    "readerUtf8Diffs": 64,
+    "examples": [
+      {
+        "row": 2063,
+        "column": "Amount of site",
+        "actual": "ทดสอบภาษ��ไทย 😀 & <xml> \"quoted\" 'single'",
+        "expected": "ทดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'"
+      },
+      {
+        "row": 5023,
+        "column": "Auto reprobe bin",
+        "actual": "ทดส���บภาษาไทย 😀 & <xml> \"quoted\" 'single'",
+        "expected": "ทดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'"
+      },
+      {
+        "row": 8136,
+        "column": "Edge die count of EWM Shipped map at LEFT",
+        "actual": "���ดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'",
+        "expected": "ทดสอบภาษาไทย 😀 & <xml> \"quoted\" 'single'"
+      }
+    ],
+    "crossReadMs": 12940
+  }
+]

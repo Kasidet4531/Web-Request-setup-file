@@ -1,0 +1,2 @@
+# Preserve the supplied mapping, including CRLF and empty trailing columns.
+backend/test/fixtures/export-columns.tsv -text -whitespace

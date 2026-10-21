@@ -7,6 +7,8 @@ for the scope of this review.
 
 > **Requester as a status email recipient, 21 October 2026:** the Edit status modal in Status Management adds *Send to the Requester*: *Do not send* (the default for existing and new statuses), *To* or *CC*, stored as an optional `requester: 'to' | 'cc'` in the status's `emailPolicy`. When a request enters that status (submission, Status change or bulk replacement, whoever acts), the address of the account that created it (`requester_user_id` → `app_users.email`) at that moment joins the typed To or CC. An enabled status needs a typed To unless the Requester is in To. Imported Requests have no account, so their Requester is not emailed. If the Requester has no usable address the typed recipients still get the email, CC moves to To when To is empty, and with nobody left no job is queued; each case logs a warning and the Status change commits. The catalog shows "Requester in To/CC" and the Replace and delete preview names "each request's Requester". Before, a status could only hold typed or picked addresses. See [email notifications](email-notifications.md#the-requests-requester-as-a-recipient) and the [verification record](verification/2026-10-21-requester-status-email.md). Checks ran on a throwaway local database; no mail was sent.
 
+> **Excel export speed and limits, 21 October 2026:** every export reads one consistent database snapshot, pages the requests before gathering their canonical values, and builds the workbook in a worker with ExcelJS's streaming writer: dark blue headers, alternating white and pale blue rows, and multi-line text that keeps its CRLF. A Direct Export (at most `EXPORT_SYNC_THRESHOLD` requests, now 10,000 by default instead of 2,000) runs only while fewer than `EXPORT_SYNC_MAX_CONCURRENT` (default 2) are in progress in the backend process; otherwise the export becomes an Export Job, which the Export page already follows. Each worker has an Export Memory Limit on its JavaScript heap, `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024): an export that needs more fails on its own with a message saying so (HTTP 413, or a failed Export Job that is not retried). On 5,570 synthetic requests an export took about 2 s instead of 6.2 s and added about 250 MB instead of 730 MB; see [export limits verification](verification/2026-10-21-export-limits.md), [application integration](verification/2026-10-21-export-app-integration.md) and [formatting](verification/2026-10-21-export-formatting.md) (PR #95).
+
 > **NAS folder names and export files, 21 October 2026:** a request's Attachment folder is named as the SharePoint export named the Imported Requests' folders: Product_Description is cut to its first 100 characters and stripped of trailing dots and spaces before `_[ID]` ([ADR 0018](adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). The export's `ItemInfo.txt` and `_export_complete.txt` are system files: never listed as Attachments and refused on upload. No folder or file on the NAS is renamed. See [Request Attachments](request-attachments.md) (issue #97). Checks ran on in-memory PostgreSQL and a temporary directory; the folder check has not been re-run against the NAS share.
 
 > **Request list columns and Modified By, 21 October 2026:** the Requests and Dashboard tables hold one value per column: Product Description (the `title` field), Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date and Requester. My Drafts has Product Description, Request No., Product Type, Updated and Delete. Before, the first column stacked the title, request number and Product Type (on the Dashboard the probe card name followed the number), and PSF file names were not shown. A missing value shows "—"; Product Description no longer falls back to "<Product Type> PSF request". Request No. is the row's link; the whole row still opens the request. The list API adds `jobFileName` beside `psfSetupFileName`, both from PSF Created Information whether or not the field is searchable, and returns both as `null` to a Requester until PSF Visibility Release (`psfSetupFileName` used to reach a Requester before release). Keyword search matches a PSF Setup File Name for a Requester only after release. The search index gains `job_file_name`, and a one-time startup step (`index-psf-file-names-v1`) indexes both names for existing submitted requests. Modified By is now recorded on every individual save (Draft creation, Draft and requester edits, Draft schema upgrade, submission, PSF Created Information saves and Status changes) whether or not the request's form has a Modified By field; before, only forms with that field recorded it, so the seeded form and forms loaded before 19 October left it blank. A Modified By sent with form data is ignored. A one-time startup step (`modified-by-from-audit-history-v1`) fills a blank Modified By from the actor of the request's latest such Audit History entry and keeps any recorded value; bulk Status replacement still records none (ADR 0016), and a request with no such entry stays blank until its next save. See the [verification record](verification/2026-10-21-request-list-columns.md). Checks ran in Chromium against a throwaway local database.
@@ -220,7 +222,7 @@ Unreleased requester PSF values are masked in detail/export and PSF update event
 are omitted from their per-request history.
 Sources: [visibility and release](../backend/src/requests/requests.service.ts),
 [history filtering](../backend/src/audit/audit_log.service.ts),
-[export masking](../backend/src/export/excel_export.service.ts).
+[export masking](../backend/src/export/export-workbook.ts).
 
 ## Autofill, audit and export
 
@@ -281,17 +283,28 @@ Export is backend-generated XLSX, available to every authenticated role and
 covering all requests except other creators' Drafts. Requester actors still get
 blank PSF cells for requests without a PSF Visibility Release. The Export page
 preview list keeps the Dashboard's creator scope for Requesters. Filters include status/from/to. Counts strictly greater than
-`EXPORT_SYNC_THRESHOLD` queue a job; the default is 2000, so exactly 2000 remains
-synchronous. Jobs are owner-scoped and their content is stored as BYTEA.
-Background jobs poll and renew claims; async export fetches pages but accumulates
-records/rows and renders with ExcelJS in a worker. This is not streaming export.
+`EXPORT_SYNC_THRESHOLD` queue an Export Job; the default is 10000, so exactly 10000 remains
+a Direct Export. A Direct Export also needs one of `EXPORT_SYNC_MAX_CONCURRENT`
+slots (default 2, per backend process); when all are busy the export is queued instead. Jobs are
+owner-scoped and their content is stored as BYTEA. Background jobs poll every
+`EXPORT_JOB_POLL_INTERVAL_MS` (default 1 s), run one at a time and renew claims; the
+Export page polls a job every 2 s. Both paths read one `REPEATABLE READ READ ONLY`
+snapshot in pages of 500 and hand each page to a worker that builds the workbook
+with ExcelJS's streaming writer once the snapshot is committed. The worker's
+heap is capped by `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024; the V8 hard limit
+is never below 128 MB, and the builder checks its own heap between pages and rows
+because a process-wide `--max-old-space-size` replaces worker limits; that check
+counts uncollected garbage, so it is approximate). An export
+over the cap fails alone with HTTP 413 or a failed job carrying that message;
+failed jobs are not retried.
 Columns combine active and captured fields by canonical key, respect exportable
-flags and mask unreleased requester PSF values. Six metadata columns precede form
-fields; Product Type is the first default requester-form field, not the first
-XLSX column.
+flags and mask unreleased requester PSF values. Four metadata columns (Request No,
+Status, Request Date, Updated At) precede form fields; Product Type is the first
+default requester-form field, not the first XLSX column.
 Sources: [export routes/policy](../backend/src/export/export.controller.ts),
 [query scope](../backend/src/requests/search-index.service.ts),
-[workbook](../backend/src/export/excel_export.service.ts),
+[export service and worker](../backend/src/export/excel_export.service.ts),
+[workbook](../backend/src/export/export-workbook.ts),
 [job persistence](../backend/src/export/export-job.repository.ts),
 [processor](../backend/src/export/export-job.processor.ts).
 

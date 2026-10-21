@@ -1,0 +1,323 @@
+{
+  "timestamp": "2026-10-20T15:02:58.460Z",
+  "node": "v24.19.0",
+  "exceljs": "4.4.0",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "memoryLimitMiB": 8192,
+  "workerHeapLimitMiB": 3072,
+  "fixtureColumns": 73,
+  "outputColumns": 76,
+  "historicalFields": [
+    "Allow to probe on crack pad (bin 103)",
+    "Edge die count of EWM Shipped map at DOWN",
+    "Edge die count of EWM Shipped map at LEFT",
+    "Edge die count of EWM Shipped map at RIGHT",
+    "Edge die count of EWM Shipped map at TOP",
+    "FPC",
+    "Notch Direction for Probe"
+  ],
+  "generatedFields": [
+    "Due Date",
+    "Remark",
+    "Start Date",
+    "Status",
+    "Workflow Name",
+    "Created By",
+    "Modified By"
+  ],
+  "datasets": [
+    {
+      "rows": 5570,
+      "drafts": 37,
+      "total": 5607,
+      "canonical_values": 219827,
+      "seedMs": 4113.2
+    },
+    {
+      "rows": 100000,
+      "drafts": 37,
+      "total": 100037,
+      "canonical_values": 3946669,
+      "seedMs": 73413
+    }
+  ],
+  "cases": [
+    {
+      "rows": 5570,
+      "role": "admin",
+      "mode": "current",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/5570-current-admin.xlsx",
+      "success": true,
+      "exportMs": 5490.1,
+      "queryMs": 3072.1,
+      "queryCount": 12,
+      "renderMs": null,
+      "bytes": 1810450,
+      "writerBytes": 1810450,
+      "internedSchemas": 0,
+      "checkedCells": 423396,
+      "blankCells": 68150,
+      "diffs": 11987,
+      "lineEndingDiffs": 11987,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "EWM layer0 Row/Column",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "DCC Setup file name/NNR recipe",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 3,
+          "column": "Description",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "ee9b5d3c2cfb444b3e9897771fa666b4f5de672baf21f858486e9235bcc87673",
+      "verifyMs": 1240.9,
+      "maxRssMiB": 1093.5
+    },
+    {
+      "rows": 5570,
+      "role": "requester",
+      "mode": "current",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/5570-current-requester.xlsx",
+      "success": true,
+      "exportMs": 6069.7,
+      "queryMs": 3487.7,
+      "queryCount": 12,
+      "renderMs": null,
+      "bytes": 1772465,
+      "writerBytes": 1772465,
+      "internedSchemas": 0,
+      "checkedCells": 423396,
+      "blankCells": 110115,
+      "diffs": 9880,
+      "lineEndingDiffs": 9880,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "EWM layer0 Row/Column",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "DCC Setup file name/NNR recipe",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 3,
+          "column": "Description",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "3628466d6ae86e6bad3c8f4140acfefaeae3ae2de7f9b6988f9c48024823a6a2",
+      "verifyMs": 746.7,
+      "maxRssMiB": 1085.7
+    },
+    {
+      "rows": 5570,
+      "role": "admin",
+      "mode": "candidate",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/5570-candidate-admin.xlsx",
+      "success": true,
+      "exportMs": 1617.6,
+      "queryMs": 815.5,
+      "queryCount": 12,
+      "renderMs": 441.6,
+      "bytes": 2667933,
+      "writerBytes": 2667933,
+      "internedSchemas": 5,
+      "checkedCells": 423396,
+      "blankCells": 68150,
+      "diffs": 11987,
+      "lineEndingDiffs": 11987,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "EWM layer0 Row/Column",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "DCC Setup file name/NNR recipe",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 3,
+          "column": "Description",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "ee9b5d3c2cfb444b3e9897771fa666b4f5de672baf21f858486e9235bcc87673",
+      "verifyMs": 726.9,
+      "maxRssMiB": 297.3
+    },
+    {
+      "rows": 5570,
+      "role": "requester",
+      "mode": "candidate",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/5570-candidate-requester.xlsx",
+      "success": true,
+      "exportMs": 1635.4,
+      "queryMs": 849.7,
+      "queryCount": 12,
+      "renderMs": 432.2,
+      "bytes": 2596583,
+      "writerBytes": 2596583,
+      "internedSchemas": 5,
+      "checkedCells": 423396,
+      "blankCells": 110115,
+      "diffs": 9880,
+      "lineEndingDiffs": 9880,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "EWM layer0 Row/Column",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "DCC Setup file name/NNR recipe",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 3,
+          "column": "Description",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "3628466d6ae86e6bad3c8f4140acfefaeae3ae2de7f9b6988f9c48024823a6a2",
+      "verifyMs": 647.6,
+      "maxRssMiB": 299.5
+    },
+    {
+      "rows": 100000,
+      "role": "admin",
+      "mode": "current",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/100000-current-admin.xlsx",
+      "success": false,
+      "code": null,
+      "signal": "SIGKILL",
+      "reason": "case exceeded 240 seconds",
+      "maxRssMiB": 919.4
+    },
+    {
+      "rows": 100000,
+      "role": "admin",
+      "mode": "candidate",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/100000-candidate-admin.xlsx",
+      "success": true,
+      "exportMs": 38443.4,
+      "queryMs": 22887.6,
+      "queryCount": 200,
+      "renderMs": 9171.9,
+      "bytes": 48586710,
+      "writerBytes": 48586710,
+      "internedSchemas": 5,
+      "checkedCells": 7600076,
+      "blankCells": 1223283,
+      "diffs": 215172,
+      "lineEndingDiffs": 215172,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "Pass bin(s) : WT1",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Reference OLD PSF name",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "XSC#(EWFM) or Base Type (NewWorld)",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "28cfa4b48e350990b6e4583c563d581852255bd1bddc300c66fc6f9834800fc6",
+      "verifyMs": 11498.9,
+      "maxRssMiB": 1612.5
+    },
+    {
+      "rows": 100000,
+      "role": "requester",
+      "mode": "candidate",
+      "port": 34703,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale/100000-candidate-requester.xlsx",
+      "success": true,
+      "exportMs": 39694.5,
+      "queryMs": 24546.3,
+      "queryCount": 200,
+      "renderMs": 8445,
+      "bytes": 47326634,
+      "writerBytes": 47326634,
+      "internedSchemas": 5,
+      "checkedCells": 7600076,
+      "blankCells": 1976665,
+      "diffs": 177409,
+      "lineEndingDiffs": 177409,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "Pass bin(s) : WT1",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Reference OLD PSF name",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "XSC#(EWFM) or Base Type (NewWorld)",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "46df4e41bbf9b73532497f0b3357fd51542aafd56aa1fc50c58c14356ac27f5d",
+      "verifyMs": 10897.6,
+      "maxRssMiB": 1524.5
+    }
+  ],
+  "postgres": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit"
+}

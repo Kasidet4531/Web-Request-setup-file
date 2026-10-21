@@ -141,6 +141,20 @@ _Avoid_: Old field, deprecated field
 **Column Audience**:
 The workbook's "For" value: Requester columns (`Requester`, `Creater/Requestor`, and core fields `Due Date`, `Created By`, `Modified By`) belong to the requester form; Creater columns belong to PSF Created Information.
 
+## Export vocabulary
+
+**Direct Export**:
+An Excel export built while the person waits and returned as the download. It is used when the export holds at most `EXPORT_SYNC_THRESHOLD` requests (default 10,000) and fewer than `EXPORT_SYNC_MAX_CONCURRENT` Direct Exports (default 2) are running; otherwise the export becomes an Export Job. Limits apply per backend process. Settings and older code call it a synchronous export. Added 21 October 2026.
+_Avoid_: direct download when the queue is meant
+
+**Export Job**:
+An Excel export queued in `psf_export_jobs` and built in the background, one at a time. Only the account that created it can see its status and download it; the Export page follows it until the file is ready. A failed Export Job is final and never retried.
+_Avoid_: async export, background download
+
+**Export Memory Limit**:
+The most JavaScript heap one export's workbook worker may use, `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024). The finished file's bytes are outside it. An export that needs more fails on its own with a message saying so. Added 21 October 2026.
+_Avoid_: RAM cap
+
 ## Audit History vocabulary
 
 **Request Snapshot**:

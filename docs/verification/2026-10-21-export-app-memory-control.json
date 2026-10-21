@@ -1,0 +1,12 @@
+{
+  "guard": "anonymous + tmpfs + kernel > 7.3 GiB",
+  "peakBytes": 7876268032,
+  "killedBenchmarkChild": 16862,
+  "databaseStorage": "/tmp tmpfs (about 2.6 GiB database files in RAM)",
+  "applicationOomKills": 0,
+  "completedLargeFilesBeforeGuard": 3,
+  "largeCompletedCells": 22800228,
+  "largeCompletedDiffs": 0,
+  "interruptedCaseAccepted": false,
+  "followUp": "Database moved to output-directory disk storage; complete bounded matrix rerun. See 2026-10-21-export-app-results.json."
+}

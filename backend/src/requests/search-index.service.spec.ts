@@ -94,6 +94,42 @@ describe('SearchIndexService canonical extraction', () => {
     service = new SearchIndexService(pool as never);
   });
 
+  it('uses one repeatable-read connection for all export reads and commits before release', async () => {
+    const query = jest
+      .fn<Promise<{ rows: never[] }>, [string, unknown[]?]>()
+      .mockResolvedValue({ rows: [] });
+    const release = jest.fn();
+    Object.assign(pool, { connect: () => Promise.resolve({ query, release }) });
+    await service.withExportSnapshot(async (snapshot, runner) => {
+      await snapshot.countExportRequests({});
+      await runner.query('SELECT 1');
+    });
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(query.mock.calls[0][0]).toBe(
+      'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY',
+    );
+    expect(query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back and releases an export snapshot when a page or schema read fails', async () => {
+    const query = jest
+      .fn<Promise<{ rows: never[] }>, [string, unknown[]?]>()
+      .mockResolvedValue({ rows: [] });
+    const release = jest.fn();
+    Object.assign(pool, { connect: () => Promise.resolve({ query, release }) });
+    await expect(
+      service.withExportSnapshot(() =>
+        Promise.reject(new Error('read failed')),
+      ),
+    ).rejects.toThrow('read failed');
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY',
+      'ROLLBACK',
+    ]);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it('extracts canonical values for searchable/exportable requester fields independently of rendering labels', () => {
     const canonicalValues = service.extractCanonicalValues(schema, {
       title_v2: '  Probe card setup  ',
