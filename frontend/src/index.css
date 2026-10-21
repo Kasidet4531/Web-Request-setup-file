@@ -19,6 +19,8 @@
   --shadow-sm: none; --shadow-md: 0 4px 16px #172b3a18; --shadow-lg: 0 8px 32px #172b3a24;
   --shadow-bar: 0 -4px 12px #172b3a14;
   --card-padding: 24px;
+  /* New Request and Request Detail column: one and a half times a card around the 840px form rows. */
+  --request-page-max-width: 1335px;
   /* Room kept clear above the pinned form action bar when keyboard focus scrolls a field into view. */
   --action-bar-clearance: 96px; --action-bar-clearance-preview: 72px;
 }
@@ -570,7 +572,9 @@ dialog::backdrop { background: #10182066; }
 .ui-status__disclosure::backdrop { background: transparent; }
 .ui-notice { padding: 12px; border-radius: 6px; background: var(--secondary); margin-block: 8px; }
 .ui-notice__action { flex-shrink: 0; }
-.request-create-page { max-width: 1120px; margin-inline: auto; }
+.request-create-page, .detail-page { max-width: var(--request-page-max-width); margin-inline: auto; }
+/* In that centred column the form rows fill the card; the label column stays 260px. */
+.request-create-page .dynamic-form__rows, .detail-page .dynamic-form__rows { max-width: none; }
 .request-create-page .active-schema-form, .request-create-page .request-attachments,
 .detail-editors > .workflow-section, .detail-layout__history,
 .request-history-page .request-history { padding: var(--card-padding); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -601,6 +605,8 @@ dialog::backdrop { background: #10182066; }
 .detail-tabs > button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--primary); }
 .detail-editors { min-width: 0; }
 .detail-editors .workflow-section + .workflow-section { margin: 0; border-top: 1px solid var(--border); }
+/* Where Attachments shows under Requester Information (a Draft, also in Draft Management), its card sits 16px below, as on New Request. */
+.detail-editors > .detail-layout__requester:not([hidden]) + .detail-layout__attachments { margin-top: 16px; }
 .psf-created-panel { padding: 0; border: 0; }
 .detail-layout__history { border-left: 1px solid var(--border); }
 .request-history-page .request-history { max-width: none; }

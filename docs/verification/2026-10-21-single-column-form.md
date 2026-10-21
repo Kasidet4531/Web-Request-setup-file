@@ -256,3 +256,69 @@ roles in the DOM, not with a screen reader. The keyboard check covers Tab
 navigation in Chromium, which honours `scroll-padding-bottom`. Phone captures
 used a desktop browser at phone size, without an on-screen keyboard. Deployment
 and the configured database were not exercised.
+
+## Centred request column
+
+New Request, Request Detail (Drafts and submitted requests) and Admin Draft
+detail in Draft Management sit in one column at most 1335px wide, centred in the
+content area: one and a half times a card around the 840px rows, chosen from a
+throwaway prototype of four layouts (variant D). In that column the form rows
+fill the card; the label column stays 260px. Below 1335px of content width the
+column fills the content area as before. The Admin Form Management preview and
+Request Snapshots keep rows at most 840px wide. Where Attachments shows under
+Requester Information (a Draft, including in Draft Management) its card now
+sits 16px below, as on New Request; on a submitted request, Attachments is its
+own tab and keeps the tab spacing. CSS only, in
+[`index.css`](../../frontend/src/index.css) (`--request-page-max-width`).
+
+- Branch `claude/eloquent-goodall-p1sbcp`, based on `main` at `0c2ddef`; the
+  prototype commits on that branch were removed before these captures.
+- Environment as above, with Chromium driven at 1920×1080, 1440×1000 and
+  390×844 in the light theme; a throwaway PostgreSQL 16 cluster under
+  `/var/tmp`; the compiled backend with local development identities and no
+  `backend/.env`; the Vite dev server. The configured/shared database was not
+  used.
+- Local data: the seeded ten-field Requester Form Version 1, one Draft and one
+  request submitted to its first Status, created through the API.
+
+### Test results
+
+| Check | Command | Branch |
+| --- | --- | --- |
+| Frontend tests | `cd frontend && npx vitest run` | 38 files, 523 passed |
+| Frontend type check | `cd frontend && npx tsc -b --force` | Passed |
+| Frontend lint | `cd frontend && npx eslint .` | the same 1 error as on `main` (`GlobalHistoryPage.test.tsx:389`, `no-useless-assignment`) |
+| Frontend build | `cd frontend && npx vite build` | Passed |
+
+No test asserts layout: jsdom does not compute it, so the change was measured
+in the browser.
+
+### Browser checks
+
+Measured with `getBoundingClientRect` on New Request, the Draft, the submitted
+request and Admin Draft detail.
+
+| Check | 1920×1080 | 1440×1000 | 390×844 |
+| --- | --- | --- | --- |
+| Page column | 1335px, 151px clear on each side | 1156px, fills the content area | 358px, fills the content area |
+| Form rows | 1285px, the card's inner width; label column 260px | 1106px; label column 260px | 308px, label above its control |
+| Attachments below Requester Information (Draft, Draft Management, New Request) | 16px | 16px | 16px |
+| Submitted request: tabs to the panel, Requester Information and Attachments tabs | 16px and 16px | 16px and 16px | 16px and 16px |
+| Horizontal overflow | none | none | none |
+
+### Screenshots
+
+| Page | Capture |
+| --- | --- |
+| Submitted request | [1920×1080](assets/2026-10-21-single-column-form/centred-column-request-1920.png) |
+| Draft, scrolled to Attachments | [1920×1080](assets/2026-10-21-single-column-form/centred-column-draft-1920.png), [390×844](assets/2026-10-21-single-column-form/centred-column-draft-390.png) |
+| New Request | [1920×1080](assets/2026-10-21-single-column-form/centred-column-new-request-1920.png) |
+| Admin Draft detail (Draft Management) | [1920×1080](assets/2026-10-21-single-column-form/centred-column-admin-draft-1920.png) |
+
+### Limits of the centred column checks
+
+Chromium 141 only, light theme only (the change sets widths and a margin, no
+colours), with the seeded ten-field form rather than a long one. Widths between
+1440 and 1920 were not captured; the column stops growing at 1335px. Google
+Fonts requests were answered with empty CSS, as above. Deployment and the
+configured database were not exercised.
