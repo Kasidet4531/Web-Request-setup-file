@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type PsfRequestListItem, type WorkflowStatusKind } from "../services/api";
+import { api } from "../services/api";
 import { PageHeader } from './ui/PageHeader';
 import { AsyncNotice } from './ui/AsyncNotice';
-import { StatusLabel } from './ui/StatusLabel';
 import {
   downloadCompletedRequestExport,
   fetchRequestExportJob,
+  fetchRequestExportPreview,
   startRequestExport,
   type RequestExportFilterValues,
 } from "../services/request-export";
@@ -100,70 +100,54 @@ export function RequestExportFeedback({
 
 type RequestExportPreviewState = {
   error: string | null;
-  items: PsfRequestListItem[];
+  headers: string[];
+  rows: Array<Array<string | number>>;
   loading: boolean;
   total: number;
-  statusKinds?: Record<string, WorkflowStatusKind>;
 };
 
-function formatPreviewDate(value: string | null): string {
-  if (!value) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
-}
-
+// The first rows of the file itself: the same columns, values and NA cells,
+// with Request No pinned while the other columns scroll.
 export function RequestExportPreview({
   error,
-  items,
+  headers,
+  rows,
   loading,
   total,
-  statusKinds = {},
 }: RequestExportPreviewState) {
   return (
     <section className="request-export__preview" aria-live="polite">
       <div className="request-export__preview-header">
         <div>
           <h2>Request preview</h2>
-          <p>{loading ? "Loading filtered requests…" : `First ${items.length} of ${total} matching request${total === 1 ? "" : "s"}.`}</p>
-          <p>The download includes submitted requests only, never Drafts. This preview may list fewer for your account; its count is not an exported record count.</p>
+          <p>{loading ? "Loading filtered requests…" : `First ${rows.length} of ${total} request${total === 1 ? "" : "s"} in the file.`}</p>
+          <p>The download includes every submitted request that matches these filters, never Drafts, with the same {headers.length} columns shown here.</p>
         </div>
       </div>
       {error ? <AsyncNotice kind="error" title={error} /> : null}
-      {!loading && !error && items.length === 0 ? (
+      {!loading && !error && rows.length === 0 ? (
         <div className="table-empty">
           <h3>No requests match these filters</h3>
           <p>Adjust the filters to preview different requests.</p>
         </div>
       ) : null}
-      {!loading && !error && items.length > 0 ? (
+      {!loading && !error && rows.length > 0 ? (
         <div className="request-export__preview-table">
-        <p className="table-scroll__hint">Scroll horizontally to see request statuses, requesters, and due dates.</p>
+        <p className="table-scroll__hint">Scroll horizontally to see every column in the file.</p>
         <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0}>
           <table>
             <thead>
               <tr>
-                <th scope="col">Request No.</th>
-                <th scope="col">Title / Product Type</th>
-                <th scope="col">Status</th>
-                <th scope="col">Requester</th>
-                <th scope="col">Due Date</th>
+                {headers.map((header, column) => (
+                  <th key={column} scope="col" className={column === 0 ? "request-export__pinned" : undefined}>{header}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.requestId}>
-                  <td><code>{item.requestNo}</code></td>
-                  <td>
-                    <div className="request-identity">
-                    <span className="request-identity__title">{item.title ?? "Untitled request"}</span>
-                    <span className="request-identity__type">{item.productType ?? "No product type"}</span>
-                    </div>
-                  </td>
-                  <td><StatusLabel status={item.status} kind={Object.hasOwn(statusKinds, item.status) ? statusKinds[item.status] : undefined} /></td>
-                  <td>{item.requester ?? "—"}</td>
-                  <td>{formatPreviewDate(item.dueDate)}</td>
+              {rows.map(([requestNo, ...cells], row) => (
+                <tr key={row}>
+                  <th scope="row" className="request-export__pinned">{requestNo}</th>
+                  {cells.map((cell, column) => <td key={column}>{cell}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -176,8 +160,8 @@ export function RequestExportPreview({
 }
 
 export function RequestExportPage() {
-  const [catalog, setCatalog] = useState<{ statuses: string[]; kinds: Record<string, WorkflowStatusKind>; loading: boolean; error: string | null }>({
-    statuses: [], kinds: {}, loading: true, error: null,
+  const [catalog, setCatalog] = useState<{ statuses: string[]; loading: boolean; error: string | null }>({
+    statuses: [], loading: true, error: null,
   });
   const [filters, setFilters] = useState<RequestExportFilterValues>({
     status: "",
@@ -193,7 +177,8 @@ export function RequestExportPage() {
   );
   const [preview, setPreview] = useState<RequestExportPreviewState>({
     error: null,
-    items: [],
+    headers: [],
+    rows: [],
     loading: true,
     total: 0,
   });
@@ -210,10 +195,10 @@ export function RequestExportPage() {
     let cancelled = false;
     void api.fetchWorkflowStatuses().then(
       (response) => {
-        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), kinds: Object.fromEntries(response.entries.map((entry) => [entry.name, entry.kind])), loading: false, error: null });
+        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), loading: false, error: null });
       },
       (error: unknown) => {
-        if (!cancelled) setCatalog({ statuses: [], kinds: {}, loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
+        if (!cancelled) setCatalog({ statuses: [], loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
       },
     );
     return () => { cancelled = true; };
@@ -222,22 +207,18 @@ export function RequestExportPage() {
   useEffect(() => {
     let cancelled = false;
 
-    void api.queryPsfRequests({
-      limit: 10,
-      requestDateFrom: filters.from || undefined,
-      requestDateTo: filters.to || undefined,
-      status: filters.status || undefined,
-    }).then(
+    void fetchRequestExportPreview(filters).then(
       (response) => {
         if (!cancelled) {
-          setPreview({ error: null, items: response.items, loading: false, total: response.total });
+          setPreview({ error: null, ...response, loading: false });
         }
       },
       (error: unknown) => {
         if (!cancelled) {
           setPreview({
             error: error instanceof Error ? error.message : "Unable to load export preview.",
-            items: [],
+            headers: [],
+            rows: [],
             loading: false,
             total: 0,
           });
@@ -370,7 +351,7 @@ export function RequestExportPage() {
             jobStatus={pendingJob?.status ?? null}
           />
         </section>
-        <RequestExportPreview {...preview} statusKinds={catalog.kinds} />
+        <RequestExportPreview {...preview} />
       </div>
     </article>
   );

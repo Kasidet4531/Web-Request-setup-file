@@ -250,49 +250,65 @@ describe("request export URL", () => {
     expect(errorHtml).toContain('role="alert"');
   });
 
-  it("renders the filtered server-backed preview with its requested columns", () => {
-    const RequestExportPreview = Reflect.get(
-      RequestExportPageModule,
-      "RequestExportPreview",
-    ) as (props: {
-      error: string | null;
-      items: Array<{
-        dueDate: string | null;
-        productType: string | null;
-        requestId: string;
-        requestNo: string;
-        requester: string | null;
-        status: string;
-        title: string | null;
-      }>;
-      loading: boolean;
-      total: number;
-    }) => unknown;
+  it("fetches the Export Preview for the page filters", async () => {
+    const preview = {
+      total: 12,
+      headers: ["Request No", "Status", "PSF Setup File Name"],
+      rows: [["PSF-000012", "Submitted", "NA"]],
+    };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify(preview), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
+    await expect(
+      RequestExportClient.fetchRequestExportPreview({
+        status: "Submitted",
+        from: "2026-06-01",
+        to: " ",
+      }),
+    ).resolves.toEqual(preview);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/requests/export-preview?status=Submitted&from=2026-06-01",
+      { credentials: "include", method: "GET" },
+    );
+  });
+
+  it("previews every exported column, one value per cell, with Request No pinned", () => {
     const html = renderToStaticMarkup(
-      RequestExportPreview({
+      RequestExportPageModule.RequestExportPreview({
         error: null,
-        items: [{
-          dueDate: "2026-06-30",
-          productType: "New Product",
-          requestId: "request-1",
-          requestNo: "PSF-001",
-          requester: "Request Owner",
-          status: "Submitted",
-          title: "Probe card update",
-        }],
+        headers: [
+          "Request No",
+          "Status",
+          "Product_Description",
+          "Request To",
+          "Bump Height (um)",
+          "PSF Setup File Name",
+        ],
+        rows: [
+          ["PSF-000002", "Submitted", "Probe card update", "Create new PSF", 12.5, "NA"],
+          ["PSF-000001", "Completed", "Chip A", "Product Transfer", "NA", "SETUP_A.psf"],
+        ],
         loading: false,
-        total: 1,
+        total: 2,
       }) as never,
     );
 
     expect(html).toContain("Request preview");
-    expect(html).toContain("submitted requests only, never Drafts");
-    expect(html).not.toContain("only requests permitted");
-    expect(html).toContain("Request No.");
-    expect(html).toContain("Title / Product Type");
-    expect(html).toContain("Requester");
-    expect(html).toContain("PSF-001");
+    expect(html).toContain("First 2 of 2 requests in the file.");
+    expect(html).not.toContain("may list fewer");
+    expect(html).not.toContain("Title / Product Type");
+    for (const header of ["Product_Description", "Request To", "Bump Height (um)", "PSF Setup File Name"])
+      expect(html).toContain(`<th scope="col">${header}</th>`);
+    expect(html).toContain('<th scope="col" class="request-export__pinned">Request No</th>');
+    expect(html).toContain('<th scope="row" class="request-export__pinned">PSF-000002</th>');
+    expect(html).toContain("<td>Probe card update</td><td>Create new PSF</td><td>12.5</td><td>NA</td>");
+    expect(html).toContain("<td>SETUP_A.psf</td>");
   });
 
   it("replaces the route placeholder with the request export page", () => {

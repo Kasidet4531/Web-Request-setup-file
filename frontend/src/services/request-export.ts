@@ -30,6 +30,13 @@ export interface RequestExportJobStatus {
   downloadUrl?: string;
 }
 
+// The file's own columns, its first rows and the number of requests it holds.
+export interface RequestExportPreview {
+  total: number;
+  headers: string[];
+  rows: Array<Array<string | number>>;
+}
+
 export type RequestExportStartResult =
   | { kind: "downloaded" }
   | { kind: "queued"; job: RequestExportQueuedJob };
@@ -37,6 +44,7 @@ export type RequestExportStartResult =
 export function buildRequestExportUrl(
   filters: RequestExportFilterValues,
   resolveUrl: (path: string) => string = api.resolveUrl,
+  route = "/requests/export.xlsx",
 ): string {
   const query = new URLSearchParams();
   const status = filters.status;
@@ -56,9 +64,7 @@ export function buildRequestExportUrl(
   }
 
   const serializedQuery = query.toString();
-  const path = serializedQuery
-    ? `/requests/export.xlsx?${serializedQuery}`
-    : "/requests/export.xlsx";
+  const path = serializedQuery ? `${route}?${serializedQuery}` : route;
 
   return resolveUrl(path);
 }
@@ -113,6 +119,30 @@ export async function startRequestExport(
     kind: "queued",
     job: readQueuedJob(await readJsonResponse(response)),
   };
+}
+
+export async function fetchRequestExportPreview(
+  filters: RequestExportFilterValues,
+): Promise<RequestExportPreview> {
+  const response = await fetch(
+    buildRequestExportUrl(filters, api.resolveUrl, "/requests/export-preview"),
+    { credentials: "include", method: "GET" },
+  );
+
+  if (!response.ok) {
+    throw new Error(await exportErrorMessage(response));
+  }
+
+  const body = await readJsonResponse(response);
+  if (
+    !isRecord(body) ||
+    typeof body.total !== "number" ||
+    !Array.isArray(body.headers) ||
+    !Array.isArray(body.rows)
+  ) {
+    throw new Error("Expected an export preview response.");
+  }
+  return body as unknown as RequestExportPreview;
 }
 
 export async function fetchRequestExportJob(
@@ -186,13 +216,13 @@ function isXlsxResponse(response: Response): boolean {
 
 async function readJsonResponse(response: Response): Promise<unknown> {
   if (!response.headers.get("Content-Type")?.includes("application/json")) {
-    throw new Error("Expected a JSON export job response.");
+    throw new Error("Expected a JSON export response.");
   }
 
   try {
     return await response.json();
   } catch {
-    throw new Error("Expected a JSON export job response.");
+    throw new Error("Expected a JSON export response.");
   }
 }
 
