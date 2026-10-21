@@ -156,7 +156,7 @@ The most JavaScript heap one export's workbook worker may use, `EXPORT_WORKER_MA
 _Avoid_: RAM cap
 
 **Export Preview**:
-The first 10 rows of an Excel export, shown on the Export to Excel page with the file's own columns, values (including `NA`) and request count for the same filters. Request No stays pinned while the other columns scroll. Added 21 October 2026.
+An Excel export shown on the Export to Excel page 100 rows a page, in the file's order, with the file's own columns, values (including `NA`) and request count for the same filters. The header row and Request No stay pinned while the table scrolls both ways; Previous and Next move between pages as on the request list. Added 21 October 2026; paged the same day.
 _Avoid_: request preview list, dashboard preview
 
 ## Audit History vocabulary

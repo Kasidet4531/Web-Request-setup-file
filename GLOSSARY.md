@@ -91,7 +91,7 @@ The most JavaScript heap one export's workbook worker may use (`EXPORT_WORKER_MA
 _Avoid_: RAM cap
 
 **Export Preview**:
-The first rows of an Excel export, shown on the Export to Excel page with the file's own columns, values and request count for the same filters.
+An Excel export shown 100 rows a page, in the file's order, on the Export to Excel page, with the file's own columns, values and request count for the same filters.
 _Avoid_: request preview list, dashboard preview
 
 ## Administration and Auditing
