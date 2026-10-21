@@ -1,0 +1,40 @@
+/*
+ * PROTOTYPE, throwaway: issue 2 of the draft/request detail UI review.
+ * Question: the single-column form rows stop at 840px and sit left inside a wider
+ * card, so the page looks heavy on the left. Which single-column layout balances it?
+ * Variants (switch with the floating bar, or ?variant=current|a|b|c):
+ *   current: today's layout, for comparison.
+ *   a: the page column narrows to the form's width and centres (card fits the form).
+ *   b: the rows drop their 840px cap and fill the card's width.
+ *   c: the card keeps its width; the form content is centred inside it at 840px.
+ * Every variant also carries issue 1 (16px between the Draft's
+ * Requester Information and Attachments cards, as on New Request).
+ */
+
+/* Issue 1, in every variant. */
+html[data-layout-prototype] .detail-editors > .workflow-section + .workflow-section { margin-top: 16px; }
+
+/* a: the card fits the form and the column centres. 840px rows + card padding + borders. */
+html[data-layout-prototype="a"] .detail-page,
+html[data-layout-prototype="a"] .request-create-page { max-width: calc(840px + 2 * var(--card-padding) + 2px); margin-inline: auto; }
+
+/* b: rows fill the card. */
+html[data-layout-prototype="b"] .dynamic-form__rows { max-width: none; }
+
+/* c: the card keeps its width; its content is centred at the rows' width. */
+html[data-layout-prototype="c"] .dynamic-form__header,
+html[data-layout-prototype="c"] .dynamic-form > .ui-help,
+html[data-layout-prototype="c"] .dynamic-form__section-header,
+html[data-layout-prototype="c"] .dynamic-form__rows,
+html[data-layout-prototype="c"] .active-schema-form__identity,
+html[data-layout-prototype="c"] .active-schema-form > .ui-help,
+html[data-layout-prototype="c"] .request-attachments { width: 100%; max-width: 840px; margin-inline: auto; }
+
+.layout-prototype-switcher {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 1000;
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: #111; color: #fff; border: 2px dashed #f5c542; border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35); font: 600 13px/1.2 system-ui, sans-serif;
+}
+.layout-prototype-switcher button { border: 0; border-radius: 999px; background: #333; color: #fff; width: 32px; height: 32px; cursor: pointer; }
+.layout-prototype-switcher span { min-width: 260px; text-align: center; }
