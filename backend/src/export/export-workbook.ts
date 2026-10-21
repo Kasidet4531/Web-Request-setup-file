@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { PassThrough, Transform } from 'node:stream';
+import { getHeapStatistics } from 'node:v8';
 import type {
   FormSchemaField,
   FormSchemaJson,
@@ -22,12 +23,26 @@ export function exportCell(
   return field.type === 'number' && isNumericText(text) ? Number(text) : text;
 }
 
+export class ExportMemoryLimitError extends Error {}
+
+// The worker's resourceLimits is the hard cap, but a process-wide
+// --max-old-space-size (for example in NODE_OPTIONS) silently replaces it,
+// so the builder also checks its own heap between pages and rows.
+export function assertWithinMemoryLimit(memoryLimitMb?: number) {
+  if (
+    memoryLimitMb !== undefined &&
+    getHeapStatistics().used_heap_size > memoryLimitMb * 1024 * 1024
+  )
+    throw new ExportMemoryLimitError();
+}
+
 // Structured clone preserves references within a page. Intern only each distinct
 // page schema by its complete content; version equality is never sufficient.
 export function appendExportItems(
   target: RequestExportItem[],
   page: RequestExportItem[],
   cache: Map<string, FormSchemaJson>,
+  memoryLimitMb?: number,
 ) {
   const pageSchemas = new Map<FormSchemaJson, FormSchemaJson>();
   const intern = (schema: FormSchemaJson) => {
@@ -47,6 +62,7 @@ export function appendExportItems(
     );
     target.push(item);
   }
+  assertWithinMemoryLimit(memoryLimitMb);
 }
 
 function fields(
@@ -76,6 +92,7 @@ export async function createExportWorkbook(
   activeRequester: FormSchemaJson,
   activeCreated: FormSchemaJson,
   actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
+  memoryLimitMb?: number,
 ): Promise<Buffer> {
   const requesterSchemas = new Set([activeRequester]);
   const createdSchemas = new Set([activeCreated]);
@@ -243,10 +260,13 @@ export async function createExportWorkbook(
         cell.style = rowStyles[index % 2];
       });
       row.commit();
-      if ((index + 1) % 500 === 0)
+      if ((index + 1) % 500 === 0) {
+        assertWithinMemoryLimit(memoryLimitMb);
         await new Promise<void>((done) => setImmediate(done));
+      }
     }
     sheet.commit();
+    assertWithinMemoryLimit(memoryLimitMb);
     await workbook.commit();
     return await collected;
   } catch (error) {

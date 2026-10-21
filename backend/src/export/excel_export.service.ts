@@ -1,8 +1,11 @@
 import {
   Injectable,
+  Logger,
   OnModuleDestroy,
+  Optional,
   PayloadTooLargeException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import {
@@ -27,23 +30,37 @@ export interface RequestExportWorkbook {
 }
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
+const DEFAULT_WORKER_MAX_MEMORY_MB = 1024;
+// A worker needs roughly 25 MB (70 MB from TypeScript sources) just to load the
+// builder, and a hard limit below what V8 needs to start aborts the whole
+// process. Smaller settings are still enforced by the builder's own check.
+const MINIMUM_WORKER_HARD_LIMIT_MB = 128;
+
+export class ExportMemoryLimitException extends PayloadTooLargeException {
+  constructor() {
+    super(
+      'This export needs more memory than EXPORT_WORKER_MAX_MEMORY_MB allows. Narrow the filters, or ask an administrator to raise EXPORT_WORKER_MAX_MEMORY_MB.',
+    );
+  }
+}
+
 const WORKER_SOURCE = `
   const { parentPort, workerData } = require('node:worker_threads');
-  const { appendExportItems, createExportWorkbook } = require(workerData.builderPath);
+  const { appendExportItems, createExportWorkbook, ExportMemoryLimitError } = require(workerData.builderPath);
   const items = [], schemas = new Map();
   parentPort.on('message', async (message) => {
     try {
       if (message.type === 'page') {
-        appendExportItems(items, message.items, schemas);
+        appendExportItems(items, message.items, schemas, workerData.memoryLimitMb);
         parentPort.postMessage({ type: 'accepted' });
       } else if (message.type === 'finish') {
-        const content = await createExportWorkbook(items, workerData.requesterSchema, workerData.createdSchema, workerData.actor);
+        const content = await createExportWorkbook(items, workerData.requesterSchema, workerData.createdSchema, workerData.actor, workerData.memoryLimitMb);
         const bytes = Uint8Array.from(content);
         parentPort.postMessage({ type: 'complete', content: bytes }, [bytes.buffer]);
         parentPort.close();
       }
-    } catch {
-      parentPort.postMessage({ type: 'error' });
+    } catch (error) {
+      parentPort.postMessage({ type: error instanceof ExportMemoryLimitError ? 'memory-limit' : 'error' });
       parentPort.close();
     }
   });
@@ -63,12 +80,25 @@ class WorkbookWorker {
     requesterSchema: FormSchemaJson,
     createdSchema: FormSchemaJson,
     actor: Actor,
+    memoryLimitMb: number,
   ) {
     const builderPath = require.resolve('./export-workbook');
     const typescript = builderPath.endsWith('.ts');
     this.worker = new Worker(WORKER_SOURCE, {
       eval: true,
-      workerData: { builderPath, requesterSchema, createdSchema, actor },
+      workerData: {
+        builderPath,
+        requesterSchema,
+        createdSchema,
+        actor,
+        memoryLimitMb,
+      },
+      resourceLimits: {
+        maxOldGenerationSizeMb: Math.max(
+          memoryLimitMb,
+          MINIMUM_WORKER_HARD_LIMIT_MB,
+        ),
+      },
       // Development/test execution uses TS sources; compiled production workers
       // resolve the sibling JS module and need no runtime TypeScript dependency.
       execArgv: typescript
@@ -88,6 +118,8 @@ class WorkbookWorker {
     this.worker.on(
       'message',
       (message: { type?: string; content?: Uint8Array }) => {
+        if (message.type === 'memory-limit')
+          return this.fail(new ExportMemoryLimitException());
         if (message.type === 'error') return this.fail();
         if (!this.pending || message.type !== this.pending.type)
           return this.fail();
@@ -107,7 +139,13 @@ class WorkbookWorker {
         } else pending.resolve(undefined);
       },
     );
-    this.worker.once('error', () => this.fail());
+    this.worker.once('error', (error: { code?: string }) =>
+      this.fail(
+        error.code === 'ERR_WORKER_OUT_OF_MEMORY'
+          ? new ExportMemoryLimitException()
+          : undefined,
+      ),
+    );
     this.worker.once('exit', () => {
       if (!this.complete) this.fail();
     });
@@ -116,8 +154,9 @@ class WorkbookWorker {
   private error() {
     return new Error('Unable to render export workbook.');
   }
-  private fail() {
-    this.failure = this.error();
+  // The first failure is the cause; the worker's exit that follows keeps it.
+  private fail(error: Error = this.error()) {
+    this.failure ??= error;
     this.pending?.reject(this.failure);
     this.pending = undefined;
   }
@@ -167,10 +206,12 @@ export function formatRequestExportFilename(now: Date): string {
 
 @Injectable()
 export class ExcelExportService implements OnModuleDestroy {
+  private readonly logger = new Logger(ExcelExportService.name);
   private readonly workers = new Set<WorkbookWorker>();
   constructor(
     private readonly searchIndexService: SearchIndexService,
     private readonly formSchemaService: FormSchemaService,
+    @Optional() private readonly configService?: ConfigService,
   ) {}
 
   exportRequests(
@@ -224,6 +265,10 @@ export class ExcelExportService implements OnModuleDestroy {
             requesterSchema.schema,
             createdSchema.schema,
             actor,
+            this.positiveInteger(
+              'EXPORT_WORKER_MAX_MEMORY_MB',
+              DEFAULT_WORKER_MAX_MEMORY_MB,
+            ),
           );
           this.workers.add(worker);
           let offset = 0;
@@ -247,11 +292,23 @@ export class ExcelExportService implements OnModuleDestroy {
       if (!worker) throw new Error('Unable to initialize export workbook.');
       const content = await worker.finish();
       return { content, filename: formatRequestExportFilename(new Date()) };
+    } catch (error) {
+      if (error instanceof ExportMemoryLimitException)
+        this.logger.warn(
+          'An export stopped at the EXPORT_WORKER_MAX_MEMORY_MB limit.',
+        );
+      throw error;
     } finally {
       if (worker) {
         this.workers.delete(worker);
         await worker.close();
       }
     }
+  }
+
+  // Empty or invalid settings fall back to the default.
+  private positiveInteger(key: string, fallback: number): number {
+    const value = Number(this.configService?.get<string | number>(key));
+    return Number.isInteger(value) && value > 0 ? value : fallback;
   }
 }
