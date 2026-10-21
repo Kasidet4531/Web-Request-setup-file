@@ -247,7 +247,7 @@ async function runBatch(batch: Batch) {
         assert.equal(stored.rows.length, 1);
         await writeFile(job.output, stored.rows[0].content);
       }
-      job.verification = await verify(job.output, batch.rows, job.role);
+      job.verification = await verify(job.output, batch.rows);
       assert.ok(job.verification.strictPass && job.verification.diffs === 0);
       log('file-verified', {
         rows: batch.rows,

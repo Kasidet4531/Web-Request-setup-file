@@ -386,7 +386,7 @@ async function cohort(
       assert.equal(healthErrors.length, 0, healthErrors.join('\n'));
       const verified = [];
       for (const file of files) {
-        const correctness = await verify(file.output, rows, file.role);
+        const correctness = await verify(file.output, rows);
         assert.ok(correctness.strictPass && correctness.diffs === 0);
         verified.push({ ...file, ...correctness });
       }
@@ -538,7 +538,7 @@ async function main() {
           join(mutationDirectory, 'snapshot.xlsx'),
           'sync',
         );
-        const correctness = await verify(file.output, rows, 'admin');
+        const correctness = await verify(file.output, rows);
         assert.ok(correctness.strictPass);
         mutationResult = { rows, ...correctness, ...file };
       } finally {

@@ -43,12 +43,10 @@ function item(i: number): RequestExportItem {
   const row = source(i);
   const requesterData: Record<string, unknown> = {};
   const psfCreatedData: Record<string, unknown> = {};
-  const canonicalValues: Record<string, unknown> = {};
   for (const field of row.requesterSchema.sections.flatMap((s) => s.fields)) {
     const column = columns.find((c) => c.key === field.canonicalKey)!;
     const value = storedValue(column, i);
     requesterData[field.fieldKey] = value;
-    canonicalValues[column.key] = value;
   }
   for (const field of row.createdSchema.sections.flatMap((s) => s.fields)) {
     const column = columns.find((c) => c.key === field.canonicalKey)!;
@@ -67,12 +65,12 @@ function item(i: number): RequestExportItem {
     schemaSnapshot: row.requesterSchema,
     psfCreatedInformationSchema: row.createdSchema,
     psfReleasedAt: row.releasedAt,
-    canonicalValues: i % 5 === 0 ? null : canonicalValues,
   };
 }
 
 // Version membership is specified independently from source/schema constructors.
-function expected(i: number, role: UserRole): Array<string | number> {
+// Every role gets the same cells (ADR 0018); a cell without a value shows NA.
+function expected(i: number): Array<string | number> {
   const row = source(i);
   return [
     row.requestNo,
@@ -89,13 +87,12 @@ function expected(i: number, role: UserRole): Array<string | number> {
       i % 4 === 0 || (i % 4 === 2 && index < 3) ? exportedValue(c, i) : '',
     ),
     ...createdColumns.map((c) =>
-      (role === 'requester' && i % 2 !== 0) ||
       (c.name === 'Physical Wafer' && i % 3 === 0) ||
       (c.name === 'Wafer ID format' && i % 3 !== 2)
         ? ''
         : exportedValue(c, i),
     ),
-  ];
+  ].map((cell) => (cell === '' ? 'NA' : cell));
 }
 
 function exportedValue(column: Column, i: number): string | number {
@@ -172,7 +169,7 @@ describe('export stored values across choices and form versions', () => {
           cells: actual,
         }).toEqual({
           requestNo: items[count - i].requestNo,
-          cells: expected(i, role),
+          cells: expected(i),
         });
       }
     },

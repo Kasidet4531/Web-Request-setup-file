@@ -128,7 +128,6 @@ export interface RequestExportItem {
   psfReleasedAt: string | null;
   psfCreatedInformationSchema?: FormSchemaJson;
   schemaSnapshot: FormSchemaJson;
-  canonicalValues: CanonicalValues | null;
 }
 
 export interface RequestExportResult {
@@ -197,7 +196,6 @@ interface RequestExportRow {
   requester_user_id: string | null;
   psf_created_schema_snapshot_json?: FormSchemaJson | string | null;
   schema_snapshot_json: FormSchemaJson | string;
-  canonical_values_json: CanonicalValues | null;
   total_count: number;
 }
 
@@ -620,9 +618,9 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
+  // Every role exports the same submitted requests and values (ADR 0018).
   async queryExportRequests(
     filters: RequestSearchFilters,
-    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
     maximumLimit = 100,
   ): Promise<RequestExportResult> {
     const limit = this.normalizeLimit(filters.limit, maximumLimit);
@@ -655,14 +653,8 @@ export class SearchIndexService implements OnModuleInit {
           request.requester_user_id,
           request.psf_created_schema_snapshot_json::text AS psf_created_schema_snapshot_json,
           request.schema_snapshot_json::text AS schema_snapshot_json,
-          canonical_values.canonical_values_json,
           ${knownTotal === undefined ? 'request.total_count' : `${knownTotal}::int AS total_count`}
         FROM export_page AS request
-        LEFT JOIN LATERAL (
-          SELECT jsonb_object_agg(canonical_key, value_json) AS canonical_values_json
-          FROM canonical_submission_values
-          WHERE request_id = request.id
-        ) AS canonical_values ON TRUE
         ORDER BY request.updated_at DESC, request.request_no DESC
       `,
       [...params, limit, offset],
@@ -673,7 +665,7 @@ export class SearchIndexService implements OnModuleInit {
     const schemas =
       this.exportContext?.schemas || new Map<string, FormSchemaJson>();
     return {
-      items: result.rows.map((row) => this.mapExportRow(row, actor, schemas)),
+      items: result.rows.map((row) => this.mapExportRow(row, schemas)),
       total,
       limit,
       offset,
@@ -1048,7 +1040,6 @@ export class SearchIndexService implements OnModuleInit {
 
   private mapExportRow(
     row: RequestExportRow,
-    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
     schemas: Map<string, FormSchemaJson>,
   ): RequestExportItem {
     const schema = (value: FormSchemaJson | string): FormSchemaJson => {
@@ -1060,9 +1051,6 @@ export class SearchIndexService implements OnModuleInit {
       }
       return parsed;
     };
-    const psfVisible =
-      actor.role !== 'requester' ||
-      (row.psf_released_at !== null && row.psf_released_at !== undefined);
     return {
       requestId: row.request_id,
       requestNo: row.request_no,
@@ -1072,7 +1060,7 @@ export class SearchIndexService implements OnModuleInit {
       requestDate: this.serializeTimestamp(row.request_date),
       updatedAt: this.serializeTimestamp(row.updated_at),
       requesterData: row.requester_data_json ?? {},
-      psfCreatedData: psfVisible ? (row.psf_created_data_json ?? {}) : {},
+      psfCreatedData: row.psf_created_data_json ?? {},
       psfReleasedAt: this.serializeNullableTimestamp(row.psf_released_at),
       psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
         row.psf_created_schema_snapshot_json == null
@@ -1080,7 +1068,6 @@ export class SearchIndexService implements OnModuleInit {
           : schema(row.psf_created_schema_snapshot_json),
       ),
       schemaSnapshot: schema(row.schema_snapshot_json),
-      canonicalValues: row.canonical_values_json,
     };
   }
 

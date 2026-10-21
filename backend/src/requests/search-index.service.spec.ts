@@ -359,15 +359,10 @@ describe('SearchIndexService canonical extraction', () => {
             title: 'PSF Request Form',
             sections: [],
           },
-          canonical_values_json: { title: 'Current title' },
           total_count: 1,
         },
       ],
     });
-    const actor = {
-      id: 'requester-1',
-      role: 'requester' as const,
-    };
     const exportQueryService = service as unknown as {
       queryExportRequests: (
         filters: {
@@ -376,12 +371,11 @@ describe('SearchIndexService canonical extraction', () => {
           limit?: number;
           offset?: number;
         },
-        actor: { id: string; role: 'requester' },
         maximumLimit?: number,
       ) => Promise<{
         items: Array<{
           requestId: string;
-          canonicalValues: Record<string, unknown> | null;
+          requesterData: Record<string, unknown>;
           psfCreatedInformationSchema: FormSchemaJson;
         }>;
         total: number;
@@ -398,14 +392,13 @@ describe('SearchIndexService canonical extraction', () => {
           limit: 2000,
           offset: 0,
         },
-        actor,
         2000,
       ),
     ).resolves.toMatchObject({
       items: [
         {
           requestId: 'request-1',
-          canonicalValues: { title: 'Current title' },
+          requesterData: { legacy_title: 'Legacy title' },
           psfCreatedInformationSchema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
         },
       ],
@@ -420,7 +413,7 @@ describe('SearchIndexService canonical extraction', () => {
       ['Submitted', 2000, 0],
     );
     const [query] = pool.query.mock.calls[0] as [string, unknown[]];
-    expect(query).toContain('canonical_submission_values');
+    expect(query).not.toContain('canonical_submission_values');
     expect(query).toContain('requester_data_json');
     expect(query).toContain('schema_snapshot_json');
     expect(query).toContain('psf_created_schema_snapshot_json');
@@ -429,16 +422,11 @@ describe('SearchIndexService canonical extraction', () => {
     expect(query).not.toContain('OR request.requester_user_id');
   });
 
-  it('does not apply requester ownership scoping to an admin export query', async () => {
+  it('never scopes an export query to one requester', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
-    const adminActor = {
-      id: 'admin-1',
-      role: 'admin' as const,
-    };
 
     await service.queryExportRequests(
       { status: 'Submitted', limit: 2000, offset: 0 },
-      adminActor,
       2000,
     );
 
@@ -488,16 +476,12 @@ describe('SearchIndexService canonical extraction', () => {
           psf_created_data_json: { legacy_setup_name: 'old.psf' },
           psf_created_schema_snapshot_json: storedSchema,
           schema_snapshot_json: schema,
-          canonical_values_json: null,
           total_count: 1,
         },
       ],
     });
 
-    const result = await service.queryExportRequests(
-      {},
-      { id: 'admin-1', role: 'admin' },
-    );
+    const result = await service.queryExportRequests({});
 
     expect(result.items[0]).toMatchObject({
       psfCreatedData: { legacy_setup_name: 'old.psf' },
@@ -823,21 +807,12 @@ describe('SearchIndexService canonical extraction', () => {
   });
 
   it.each([
-    { status: 'Completed', release: null, visible: false },
-    { status: 'PSF Created', release: null, visible: false },
-    {
-      status: 'Renamed release status',
-      release: '2026-06-18T01:05:03.000001Z',
-      visible: true,
-    },
-    {
-      status: 'Submitted',
-      release: '2026-06-18T01:05:03.000001Z',
-      visible: true,
-    },
+    { status: 'Completed', release: null },
+    { status: 'PSF Created', release: null },
+    { status: 'Submitted', release: '2026-06-18T01:05:03.000001Z' },
   ])(
-    'masks export PSF raw values using only sticky release: $status / $release',
-    async ({ status, release, visible }) => {
+    'exports PSF raw values whether or not they are released (ADR 0018): $status / $release',
+    async ({ status, release }) => {
       pool.query.mockResolvedValueOnce({
         rows: [
           {
@@ -856,21 +831,17 @@ describe('SearchIndexService canonical extraction', () => {
             psf_created_schema_snapshot_json:
               LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
             schema_snapshot_json: schema,
-            canonical_values_json: { title: 'Visible requester title' },
             total_count: 1,
           },
         ],
       });
-      const result = await service.queryExportRequests(
-        {},
-        { id: 'server-actor', role: 'requester' },
-      );
+      const result = await service.queryExportRequests({});
       expect(result.items[0]).toMatchObject({
         psfReleasedAt: release,
-        psfCreatedData: visible ? { psf_setup_file_name: 'private.psf' } : {},
+        psfCreatedData: { psf_setup_file_name: 'private.psf' },
+        requesterData: { title_v2: 'Visible requester title' },
         schemaSnapshot: schema,
         psfCreatedInformationSchema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
-        canonicalValues: { title: 'Visible requester title' },
       });
     },
   );

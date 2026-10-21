@@ -56,7 +56,7 @@ const WORKER_SOURCE = `
         appendExportItems(items, message.items, schemas, workerData.memoryLimitMb);
         parentPort.postMessage({ type: 'accepted' });
       } else if (message.type === 'finish') {
-        const content = await createExportWorkbook(items, workerData.requesterSchema, workerData.createdSchema, workerData.actor, workerData.memoryLimitMb);
+        const content = await createExportWorkbook(items, workerData.requesterSchema, workerData.createdSchema, workerData.memoryLimitMb);
         const bytes = Uint8Array.from(content);
         parentPort.postMessage({ type: 'complete', content: bytes }, [bytes.buffer]);
         parentPort.close();
@@ -81,7 +81,6 @@ class WorkbookWorker {
   constructor(
     requesterSchema: FormSchemaJson,
     createdSchema: FormSchemaJson,
-    actor: Actor,
     memoryLimitMb: number,
   ) {
     const builderPath = require.resolve('./export-workbook');
@@ -92,7 +91,6 @@ class WorkbookWorker {
         builderPath,
         requesterSchema,
         createdSchema,
-        actor,
         memoryLimitMb,
       },
       resourceLimits: {
@@ -273,7 +271,6 @@ export class ExcelExportService implements OnModuleDestroy {
           const limit = Math.min(maximumRecords ?? 500, 500);
           let result = await search.queryExportRequests(
             { ...filters, limit, offset: 0 },
-            actor,
             limit,
           );
           const total = result.total;
@@ -294,7 +291,6 @@ export class ExcelExportService implements OnModuleDestroy {
           worker = new WorkbookWorker(
             requesterSchema.schema,
             createdSchema.schema,
-            actor,
             memoryLimitMb,
           );
           this.workers.add(worker);
@@ -309,7 +305,6 @@ export class ExcelExportService implements OnModuleDestroy {
             if (offset >= total) break;
             result = await search.queryExportRequests(
               { ...filters, limit, offset },
-              actor,
               limit,
             );
           }

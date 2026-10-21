@@ -111,7 +111,7 @@ function checkCell(actual: Cell | undefined, expected: Cell, location: string) {
 }
 
 // An independent ZIP + strict XML reader; no ExcelJS reader or exporter helpers.
-export async function verify(file: string, rows: number, role: Role) {
+export async function verify(file: string, rows: number) {
   const start = performance.now();
   const zip = await unzipper.Open.file(file);
   assert.equal(
@@ -228,7 +228,7 @@ export async function verify(file: string, rows: number, role: Role) {
       }
       if (name === 'row') {
         const expected =
-          rowNumber === 1 ? headers : expectedRow(rows - rowNumber + 2, role);
+          rowNumber === 1 ? headers : expectedRow(rows - rowNumber + 2);
         for (let c = 0; c < headers.length; c++) {
           const actual = row[c] === undefined ? '' : row[c];
           const wanted = expected[c];
@@ -326,9 +326,7 @@ export async function runCase(c: Case, sharedPool?: Pool) {
     const bytes = result.content.length;
     result.content = Buffer.alloc(0);
     if (!c.deferVerification) global.gc?.();
-    const verified = c.deferVerification
-      ? {}
-      : await verify(c.output, c.rows, c.role);
+    const verified = c.deferVerification ? {} : await verify(c.output, c.rows);
     const output = {
       ...c,
       success: true,
@@ -686,7 +684,6 @@ export async function mutateFixture(port: number, rows: number) {
 }
 
 async function queryChecks(pool: Pool, rows: number) {
-  const actor = { id: 'synthetic-actor', role: 'admin' as const };
   const original = new SearchIndexService(pool);
   const filters: RequestSearchFilters[] = [
     { limit: 7, offset: 4 },
@@ -711,9 +708,9 @@ async function queryChecks(pool: Pool, rows: number) {
       expected.push(i);
     }
     assert.equal(total, expected.length);
-    const a = await original.queryExportRequests(filter, actor, 7);
+    const a = await original.queryExportRequests(filter, 7);
     const b = await original.withExportSnapshot((search) =>
-      search.queryExportRequests(filter, actor, 7),
+      search.queryExportRequests(filter, 7),
     );
     assert.deepEqual(a, b, 'Candidate changed filtered query results.');
     assert.deepEqual(
@@ -736,7 +733,6 @@ async function queryChecks(pool: Pool, rows: number) {
       const search = original;
       const first = await search.queryExportRequests(
         { limit: 10, offset: 0 },
-        actor,
         10,
       );
       await writer.query(
@@ -745,7 +741,6 @@ async function queryChecks(pool: Pool, rows: number) {
       );
       const second = await search.queryExportRequests(
         { limit: 10, offset: 10 },
-        actor,
         10,
       );
       const all = [...first.items, ...second.items].map(
@@ -882,9 +877,7 @@ async function main() {
         rows++;
         const values = headers.map((_, i) => row.getCell(i + 1).value ?? '');
         const expected =
-          row.number === 1
-            ? headers
-            : expectedRow(c.rows - row.number + 2, c.role);
+          row.number === 1 ? headers : expectedRow(c.rows - row.number + 2);
         expected.forEach((cell, i) => {
           const wanted =
             typeof cell === 'string' && !c.strictPass

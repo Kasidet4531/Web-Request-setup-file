@@ -36,12 +36,8 @@ export interface Column {
 }
 export type Cell = string | number;
 export type Role = UserRole;
-const PSF_VISIBLE_WITHOUT_RELEASE: Record<Role, boolean> = {
-  admin: true,
-  setup_owner: true,
-  requester: false,
-};
-export const EXPORT_ROLES = Object.keys(PSF_VISIBLE_WITHOUT_RELEASE) as Role[];
+// Every role gets the same cells, released or not (ADR 0018).
+export const EXPORT_ROLES: Role[] = ['admin', 'setup_owner', 'requester'];
 export const columns: Column[] = [];
 let current: Column | undefined;
 for (const line of readFileSync(join(__dirname, 'export-columns.tsv'), 'utf8')
@@ -316,6 +312,8 @@ export function source(i: number) {
             ? raw
             : null;
   }
+  // A stored projection that disagrees with the request data must not reach
+  // the export: cells come from the data itself.
   if (i % 31 === 0) canonical.title = `CANONICAL:${i}`;
   for (const field of createdSchema.sections.flatMap((s) => s.fields)) {
     const c = columns.find((c) => c.key === field.canonicalKey)!;
@@ -332,15 +330,14 @@ export function source(i: number) {
 }
 
 // Expected cells come from the fixture specification, never exporter mapping/serialization helpers.
-export function expectedRow(i: number, role: Role): Cell[] {
+// A cell without a value shows NA.
+export function expectedRow(i: number): Cell[] {
   const who = identity(i);
   const requester = requesterColumns.map((c) => {
     // Specify version membership independently of the schema/source constructors.
     if (c.name === 'Trench Thickness (um)' && [0, 2].includes(i % 4)) return '';
     if (c.name === 'Request For' && i % 4 === 0) return '';
-    return c.name === 'Title' && i % 31 === 0 && i % 5 !== 0
-      ? `CANONICAL:${i}`
-      : sample(c, i).cell;
+    return sample(c, i).cell;
   });
   return [
     who.requestNo,
@@ -352,11 +349,10 @@ export function expectedRow(i: number, role: Role): Cell[] {
       i % 4 === 0 || (i % 4 === 2 && index < 3) ? sample(c, i).cell : '',
     ),
     ...createdColumns.map((c) =>
-      (!PSF_VISIBLE_WITHOUT_RELEASE[role] && who.releasedAt === null) ||
       (c.name === 'Wafer ID format' && i % 3 !== 2) ||
       (c.name === 'Physical Wafer' && i % 3 === 0)
         ? ''
         : sample(c, i).cell,
     ),
-  ];
+  ].map((cell) => (cell === '' ? 'NA' : cell));
 }
