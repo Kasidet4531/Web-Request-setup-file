@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Single-column form rows, 21 October 2026:** every rendering of a Form Schema (New Request, Draft and submitted request editing, PSF Created Information viewing and editing, the Admin Form Management preview, read-only Request Detail, Admin Draft detail and Request Snapshots) shows one row per field: the label in a 260px column on the left, the control or stored value on the right, rows separated by a divider and capped at 840px wide. Below 600px wide the label sits above its control. The two-column grid and its full-width text areas, radios, Title and Product Type are gone; field order, sections, labels, required flags and visibility are unchanged. See the [verification record](verification/2026-10-21-single-column-form.md) (issue #88). Checks ran in Chromium against a throwaway local database.
+
 > **Attachment policy, 21 October 2026:** `GET /api/attachment-policy` gives any signed-in role `{ maxBytes, blockedExtensions }` from the storage configuration uploads are checked against; both Attachment pickers show the per-file limit and blocked file types from it, and New Request refuses an oversized file at selection as it does a blocked type. The frontend no longer keeps its own blocked-extension list; without the policy the pickers work with no hint or client-side check. See [Request Attachments](request-attachments.md#access-and-api) (issue #89). Checked by controller, application-module and frontend tests only.
 
 > **Input border contrast, 21 October 2026:** in the light theme the `--input-border` token is `#858b88` (previously `#a7adaa`), so text input, select and text area borders measure 3.47:1 against the card and 3.19:1 against the page background (WCAG 2.1 SC 1.4.11). Secondary buttons, radio options, dialog borders and the other elements that share the token darken with it; the dark theme is unchanged (4.38:1 against the card). See the [verification record](verification/2026-10-21-input-border-contrast.md) (issue #87). Checks ran in Chromium against a throwaway local database.
@@ -140,8 +142,17 @@ reset when changing version/family, do not dirty the config, and invoke neither
 request writes nor runtime autofill/mail. Required-field checking is local;
 requester identity uses clearly marked locked sample data. New Request and
 Detail editors use the same configured order without automatic Additional
-details grouping. Detail alone uses bold 14px field labels, thin read-mode
-separators and 16px section headings. Request Owner / Dept metadata has been removed.
+details grouping. Every rendering uses the same single-column rows: one row per
+visible field, a 260px label column and a flexible control column, a divider under
+each row, at most 840px wide, and the label above its control below 600px wide.
+Labels are bold 14px in both editable and read-only mode, and read-only values sit
+on the controls' line, so switching a request between viewing and editing keeps
+ordinary rows at the same height; radio groups and text areas may grow while
+editing. A radio group is a `role="radiogroup"` element named by its row's label
+cell and keeps its required, invalid and described-by state. The required marker,
+field error, Auto-fill status and "Previous" value stay in the field's row; a
+Request Snapshot tints changed rows. Detail keeps 16px section headings. Request
+Owner / Dept metadata has been removed.
 New requests capture both active schemas. Requester Draft schema upgrades are
 explicit and do not upgrade the captured PSF schema. Legacy PSF records resolve
 through the fixed original descriptor. Required fields may be incomplete on
@@ -152,7 +163,9 @@ for reuse/publishing rather than silently exposed.
 Sources: [schema constants](../backend/src/admin/form_schema.constants.ts),
 [schema service](../backend/src/admin/form_schema.service.ts),
 [request service](../backend/src/requests/requests.service.ts),
-[form validation](../backend/src/requests/form-data-validation.ts).
+[form validation](../backend/src/requests/form-data-validation.ts),
+[form renderer](../frontend/src/components/DynamicFormRenderer.tsx),
+[row styles](../frontend/src/index.css).
 
 Status Management uses immutable catalog identities, verbatim names and
 `draft`/`open`/`completed`/`cancelled` kinds. The seed has 17 entries, including

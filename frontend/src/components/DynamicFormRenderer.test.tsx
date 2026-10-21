@@ -47,6 +47,144 @@ const schema: FormSchema = {
   ],
 }
 
+// One field of every type, with required flags mixed in, to check the row layout for each control.
+const allTypesSchema: FormSchema = {
+  formKey: 'psf-request',
+  version: 2,
+  title: 'PSF Request Form',
+  sections: [{
+    sectionKey: 'requester_information',
+    title: 'Requester Information',
+    fields: [
+      { fieldKey: 'request_to', canonicalKey: 'product_type', label: 'Request To', type: 'radio', required: true, options: ['New Product (GNTC)', 'Transfer Product (MFG)'] },
+      { fieldKey: 'title', canonicalKey: 'title', label: 'Title', type: 'text', required: true },
+      { fieldKey: 'die_count', canonicalKey: 'die_count', label: 'Die Count', type: 'number', required: false },
+      { fieldKey: 'due_date', canonicalKey: 'due_date', label: 'Due Date', type: 'date', required: true },
+      { fieldKey: 'priority', canonicalKey: 'priority', label: 'Priority', type: 'select', required: false, options: ['Normal', 'Urgent'] },
+      { fieldKey: 'description', canonicalKey: 'description', label: 'Description', type: 'textarea', required: false },
+    ],
+  }],
+}
+
+/** Returns the markup of each field row, in document order, by matching the row's balanced <div>. */
+function rowsOf(html: string): string[] {
+  const rows: string[] = []
+  const start = /<div class="dynamic-form__row[" ]/g
+  for (const match of html.matchAll(start)) {
+    const tags = /<div[\s>]|<\/div>/g
+    tags.lastIndex = match.index
+    let depth = 0
+    for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+      depth += tag[0] === '</div>' ? -1 : 1
+      if (depth === 0) {
+        rows.push(html.slice(match.index, tag.index + tag[0].length))
+        break
+      }
+    }
+  }
+  return rows
+}
+
+function attribute(markup: string, name: string): string | undefined {
+  return markup.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1]
+}
+
+describe('DynamicFormRenderer rows', () => {
+  it('renders every editable field as one row holding its label and its associated control', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={allTypesSchema} showSchemaHeader={false} onChange={() => undefined} />)
+    const rows = rowsOf(html)
+
+    expect(rows).toHaveLength(6)
+    const controls = [
+      /<input[^>]*type="text"[^>]*>/,
+      /<input[^>]*type="number"[^>]*>/,
+      /<input[^>]*type="date"[^>]*>/,
+      /<select[^>]*>/,
+      /<textarea[^>]*>/,
+    ]
+    const labelled = [rows[1], rows[2], rows[3], rows[4], rows[5]]
+    const labels = ['Title', 'Die Count', 'Due Date', 'Priority', 'Description']
+    labelled.forEach((row, index) => {
+      const label = row.match(/<label[^>]*>[\s\S]*?<\/label>/)?.[0] ?? ''
+      expect(label).toContain(labels[index])
+      const control = row.match(controls[index])?.[0] ?? ''
+      expect(control).not.toBe('')
+      expect(attribute(control, 'id')).toBe(attribute(label, 'for'))
+    })
+    expect(rows[0]).toContain('Request To')
+    expect(rows[0].match(/type="radio"/g)).toHaveLength(2)
+  })
+
+  it('renders every read-only field as one row holding its label and the stored value it names', () => {
+    const values = {
+      request_to: 'Transfer Product (MFG)',
+      title: 'Probe card update',
+      die_count: '1200',
+      due_date: '2030-01-15',
+      priority: 'Urgent',
+      description: 'Line one\nLine two',
+    }
+    const html = renderToStaticMarkup(<DynamicFormRenderer readOnly schema={allTypesSchema} showSchemaHeader={false} values={values} />)
+    const rows = rowsOf(html)
+
+    expect(rows).toHaveLength(6)
+    allTypesSchema.sections[0].fields.forEach((field, index) => {
+      const row = rows[index]
+      const label = row.match(/<label[^>]*>[\s\S]*?<\/label>/)?.[0] ?? ''
+      expect(label).toContain(field.label)
+      const output = row.match(/<output[^>]*>([\s\S]*?)<\/output>/)
+      expect(output?.[1]).toBe(values[field.fieldKey as keyof typeof values])
+      expect(attribute(output?.[0] ?? '', 'aria-labelledby')).toBe(attribute(label, 'id'))
+      expect(attribute(output?.[0] ?? '', 'id')).toBe(attribute(label, 'for'))
+      expect(row).not.toMatch(/<input|<select|<textarea|role="radiogroup"/)
+    })
+    const empty = rowsOf(renderToStaticMarkup(<DynamicFormRenderer readOnly schema={allTypesSchema} showSchemaHeader={false} />))
+    for (const row of empty) expect(row).toMatch(/<output[^>]*>Not provided<\/output>/)
+  })
+
+  it('keeps each required marker and field error inside its own row and on its control', () => {
+    const fields = allTypesSchema.sections[0].fields
+    const errors = Object.fromEntries(fields.map((field) => [field.fieldKey, `${field.label} needs attention.`]))
+    const html = renderToStaticMarkup(<DynamicFormRenderer errors={errors} schema={allTypesSchema} showSchemaHeader={false} onChange={() => undefined} />)
+    const rows = rowsOf(html)
+
+    fields.forEach((field, index) => {
+      const row = rows[index]
+      const labelCell = row.slice(0, row.indexOf('<div class="dynamic-form__control"'))
+      expect(labelCell).toContain(field.label)
+      expect(labelCell.includes('aria-hidden="true" class="dynamic-form__required">*</span>')).toBe(field.required)
+      const errorId = row.match(/<p class="ui-error" id="([^"]+)">([^<]*)<\/p>/)
+      expect(errorId?.[2]).toBe(`${field.label} needs attention.`)
+      const control = row.match(field.type === 'radio' ? /<div[^>]*role="radiogroup"[^>]*>/ : /<(?:input|select|textarea)[^>]*>/)?.[0] ?? ''
+      expect(attribute(control, 'aria-invalid')).toBe('true')
+      expect(attribute(control, 'aria-describedby')?.split(' ')).toContain(errorId?.[1])
+      if (field.type === 'radio') {
+        expect(attribute(control, 'aria-required')).toBe('true')
+        for (const radio of row.match(/<input[^>]*type="radio"[^>]*>/g) ?? []) expect(radio).toContain('required=""')
+      } else {
+        expect(control.includes('required=""')).toBe(field.required)
+      }
+    })
+    expect(html.match(/class="ui-error"/g)).toHaveLength(fields.length)
+  })
+
+  it('keeps Auto-fill status and the previous value inside the row of the field they describe', () => {
+    const editable = rowsOf(renderToStaticMarkup(<DynamicFormRenderer schema={allTypesSchema} showSchemaHeader={false}
+      fieldStatuses={{ title: 'auto-filled', priority: 'edited-by-user' }} onChange={() => undefined} />))
+    expect(editable[1]).toMatch(/<p class="dynamic-form__autofill-status" id="[^"]+" role="status">Auto-filled<\/p>/)
+    expect(editable[4]).toMatch(/role="status">Edited by user<\/p>/)
+    expect(editable.filter((row) => row.includes('role="status"'))).toHaveLength(2)
+
+    const readOnly = rowsOf(renderToStaticMarkup(<DynamicFormRenderer readOnly schema={allTypesSchema} showSchemaHeader={false}
+      values={{ title: 'Renamed', due_date: '2030-02-01' }} previousValues={{ title: 'Original', due_date: '' }} />))
+    expect(readOnly[1]).toContain('Previous: Original')
+    expect(readOnly[3]).toContain('Previous: Empty')
+    expect(readOnly.filter((row) => row.includes('Previous:'))).toHaveLength(2)
+    const titleOutput = readOnly[1].match(/<output[^>]*>/)?.[0] ?? ''
+    expect(readOnly[1]).toContain(`id="${attribute(titleOutput, 'aria-describedby')}"`)
+  })
+})
+
 describe('DynamicFormRenderer', () => {
   it('suppresses only a single section title that duplicates the supplied pane title', () => {
     const html = renderToStaticMarkup(<DynamicFormRenderer schema={schema} headerTitle="Requester Information" showSchemaHeader={false} />)
@@ -77,13 +215,22 @@ describe('DynamicFormRenderer', () => {
     const html = renderToStaticMarkup(<DynamicFormRenderer schema={customSchema}
       errors={{ product_type: 'Choose a manufacturing route.' }}
       fieldStatuses={{ product_type: 'auto-filled' }} />)
-    const group = html.match(/<fieldset[^>]*role="radiogroup"[^>]*>([\s\S]*?)<\/fieldset>/)
-    expect(group).not.toBeNull()
-    expect(group?.[1]).toContain(label)
-    const describedBy = group?.[0].match(/aria-describedby="([^"]+)"/)?.[1].split(' ')
+    const [row] = rowsOf(html)
+    expect(row).not.toContain('<fieldset')
+    expect(row).not.toContain('<legend')
+    const group = row.match(/<[a-z]+[^>]*role="radiogroup"[^>]*>/)?.[0] ?? ''
+    expect(group).not.toBe('')
+    const labelId = attribute(group, 'aria-labelledby')
+    const labelCell = row.match(new RegExp(`<([a-z]+)[^>]*id="${labelId}"[^>]*>([\\s\\S]*?)</\\1>`))
+    expect(labelCell?.[2]).toContain(label)
+    expect(row.indexOf(`id="${labelId}"`)).toBeLessThan(row.indexOf('role="radiogroup"'))
+    const describedBy = attribute(group, 'aria-describedby')?.split(' ')
     expect(describedBy).toHaveLength(2)
-    for (const id of describedBy ?? []) expect(html).toContain(`id="${id}"`)
-    expect(group?.[0]).toContain('aria-invalid="true"')
+    for (const id of describedBy ?? []) expect(row).toContain(`id="${id}"`)
+    expect(group).toContain('aria-invalid="true"')
+    expect(group).toContain('aria-required="true"')
+    expect(row).toContain('Choose a manufacturing route.')
+    expect(row).toContain('Auto-filled')
   })
 
   it('keeps labels and radio selection independent when two forms share field keys', () => {
@@ -165,7 +312,7 @@ describe('DynamicFormRenderer', () => {
     form.props.onSubmit({ preventDefault: vi.fn() })
     expect(onSubmit).toHaveBeenCalledWith(values)
   })
-  it('renders product type prominently before the rest of the schema-driven fields', () => {
+  it('renders product type, title and the text area as ordinary rows in their configured place', () => {
     const html = renderToStaticMarkup(
       <DynamicFormRenderer
         schema={schema}
@@ -173,13 +320,16 @@ describe('DynamicFormRenderer', () => {
         onChange={() => undefined}
       />,
     )
+    const rows = rowsOf(html)
 
-    expect(html.indexOf('dynamic-form__product-type')).toBeGreaterThan(-1)
-    expect(html.indexOf('Product Type')).toBeLessThan(html.indexOf('Title'))
-    expect(html).toContain('type="radio"')
-    expect(html).toContain('<select')
-    expect(html).toContain('<textarea')
-    expect(html).toContain('dynamic-form__field dynamic-form__field--textarea')
+    expect(rows).toHaveLength(4)
+    // No field is singled out to span the form: every row opens the same way.
+    for (const row of rows) expect(row.slice(0, row.indexOf('>') + 1)).toBe('<div class="dynamic-form__row">')
+    expect(rows[0]).toContain('Product Type')
+    expect(rows[0]).toContain('type="radio"')
+    expect(rows[1]).toContain('Title')
+    expect(rows[2]).toContain('<select')
+    expect(rows[3]).toContain('<textarea')
   })
 
   it('can omit the schema-preview header when an enclosing requester screen supplies context', () => {
