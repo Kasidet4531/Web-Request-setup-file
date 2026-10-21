@@ -63,7 +63,9 @@ PGlite suite passes; frontend 527 on main, 531 on the branch; both builds pass
 and lint is unchanged. API integration gives 16 of 21 on main and on the
 branch: the five export tests fail on main itself with HTTP 500, because the
 test's Excel export mock has no `tryDirectExport`, which the export controller
-now calls. That is not touched here.
+now calls. That is not touched here. After merging main at `325ef2b`, which
+carries that fix (PR #101), API integration passes 21 of 21 on the branch;
+backend unit tests (744) and the notification PGlite suites (21) still pass.
 
 The new PGlite tests drive the real request, workflow and notification services
 and read the queued jobs back through the outbox listing. They cover the
