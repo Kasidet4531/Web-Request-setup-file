@@ -334,7 +334,10 @@ describe('RequestsService audit baseline', () => {
       [
         draftRow.id,
         'Transfer Product',
-        updatedRow.requester_data_json,
+        {
+          ...updatedRow.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
         draftRow.form_version,
         CURRENT_REVISION,
       ],
@@ -443,7 +446,10 @@ describe('RequestsService audit baseline', () => {
     ).toHaveBeenCalledWith(
       draftRow.id,
       activeSchema.schema,
-      draftRow.requester_data_json,
+      {
+        ...draftRow.requester_data_json,
+        modified_by: requesterActor.displayName,
+      },
       dbClient,
     );
     expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
@@ -461,7 +467,10 @@ describe('RequestsService audit baseline', () => {
         draftRow.id,
         'Submitted',
         'New Product',
-        draftRow.requester_data_json,
+        {
+          ...draftRow.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
         false,
         false,
         CURRENT_REVISION,
@@ -512,7 +521,10 @@ describe('RequestsService audit baseline', () => {
     ).toHaveBeenCalledWith(
       draftRow.id,
       activeSchema.schema,
-      draftRow.requester_data_json,
+      {
+        ...draftRow.requester_data_json,
+        modified_by: requesterActor.displayName,
+      },
       dbClient,
     );
     expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
@@ -527,7 +539,10 @@ describe('RequestsService audit baseline', () => {
         draftRow.id,
         'PSF Created',
         'New Product',
-        draftRow.requester_data_json,
+        {
+          ...draftRow.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
         false,
         true,
         CURRENT_REVISION,
@@ -668,7 +683,18 @@ describe('RequestsService audit baseline', () => {
     expect(dbClient.query).toHaveBeenNthCalledWith(
       3,
       expect.stringContaining('psf_released_at = CASE WHEN $4::boolean'),
-      [draftRow.id, 'PSF Created', false, true, 'Submitted', CURRENT_REVISION],
+      [
+        draftRow.id,
+        'PSF Created',
+        false,
+        true,
+        'Submitted',
+        CURRENT_REVISION,
+        {
+          ...draftRow.requester_data_json,
+          modified_by: setupOwnerActor.displayName,
+        },
+      ],
     );
     expect(dbClient.query).toHaveBeenNthCalledWith(
       3,
