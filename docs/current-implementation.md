@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Excel export speed and limits, 21 October 2026:** every export reads one consistent database snapshot, pages the requests before gathering their canonical values, and builds the workbook in a worker with ExcelJS's streaming writer: dark blue headers, alternating white and pale blue rows, and multi-line text that keeps its CRLF. A Direct Export (at most `EXPORT_SYNC_THRESHOLD` requests, now 10,000 by default instead of 2,000) runs only while fewer than `EXPORT_SYNC_MAX_CONCURRENT` (default 2) are in progress; otherwise the export becomes an Export Job, which the Export page already follows. Each worker has an Export Memory Limit, `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024): an export that needs more fails on its own with a message saying so (HTTP 413, or a failed Export Job that is not retried). On 5,570 synthetic requests an export took about 2 s instead of 6.2 s and added about 250 MB instead of 730 MB; see [export limits verification](verification/2026-10-21-export-limits.md), [application integration](verification/2026-10-21-export-app-integration.md) and [formatting](verification/2026-10-21-export-formatting.md) (PR #95).
+
 > **Request list columns and Modified By, 21 October 2026:** the Requests and Dashboard tables hold one value per column: Product Description (the `title` field), Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date and Requester. My Drafts has Product Description, Request No., Product Type, Updated and Delete. Before, the first column stacked the title, request number and Product Type (on the Dashboard the probe card name followed the number), and PSF file names were not shown. A missing value shows "—"; Product Description no longer falls back to "<Product Type> PSF request". Request No. is the row's link; the whole row still opens the request. The list API adds `jobFileName` beside `psfSetupFileName`, both from PSF Created Information whether or not the field is searchable, and returns both as `null` to a Requester until PSF Visibility Release (`psfSetupFileName` used to reach a Requester before release). Keyword search matches a PSF Setup File Name for a Requester only after release. The search index gains `job_file_name`, and a one-time startup step (`index-psf-file-names-v1`) indexes both names for existing submitted requests. Modified By is now recorded on every individual save (Draft creation, Draft and requester edits, Draft schema upgrade, submission, PSF Created Information saves and Status changes) whether or not the request's form has a Modified By field; before, only forms with that field recorded it, so the seeded form and forms loaded before 19 October left it blank. A Modified By sent with form data is ignored. A one-time startup step (`modified-by-from-audit-history-v1`) fills a blank Modified By from the actor of the request's latest such Audit History entry and keeps any recorded value; bulk Status replacement still records none (ADR 0016), and a request with no such entry stays blank until its next save. See the [verification record](verification/2026-10-21-request-list-columns.md). Checks ran in Chromium against a throwaway local database.
 
 > **Centred request column, 21 October 2026:** New Request, Request Detail (Drafts and submitted requests) and Admin Draft detail sit in one column at most 1335px wide (`--request-page-max-width`, one and a half times a card around the 840px `--form-rows-max-width`), centred in the content area, and their form rows, including PSF Created Information, fill the card instead of stopping at 840px; the label column stays 260px. The Admin Form Management preview and Request Snapshots keep the 840px cap. New Request was previously capped at 1120px and the detail pages were not capped. A Draft's Attachments card, also in Draft Management, now sits 16px below Requester Information, as on New Request. See the [verification record](verification/2026-10-21-single-column-form.md#centred-request-column). Checks ran in Chromium against a throwaway local database.
@@ -216,7 +218,7 @@ Unreleased requester PSF values are masked in detail/export and PSF update event
 are omitted from their per-request history.
 Sources: [visibility and release](../backend/src/requests/requests.service.ts),
 [history filtering](../backend/src/audit/audit_log.service.ts),
-[export masking](../backend/src/export/excel_export.service.ts).
+[export masking](../backend/src/export/export-workbook.ts).
 
 ## Autofill, audit and export
 
@@ -277,17 +279,27 @@ Export is backend-generated XLSX, available to every authenticated role and
 covering all requests except other creators' Drafts. Requester actors still get
 blank PSF cells for requests without a PSF Visibility Release. The Export page
 preview list keeps the Dashboard's creator scope for Requesters. Filters include status/from/to. Counts strictly greater than
-`EXPORT_SYNC_THRESHOLD` queue a job; the default is 2000, so exactly 2000 remains
-synchronous. Jobs are owner-scoped and their content is stored as BYTEA.
-Background jobs poll and renew claims; async export fetches pages but accumulates
-records/rows and renders with ExcelJS in a worker. This is not streaming export.
+`EXPORT_SYNC_THRESHOLD` queue an Export Job; the default is 10000, so exactly 10000 remains
+a Direct Export. A Direct Export also needs one of `EXPORT_SYNC_MAX_CONCURRENT`
+slots (default 2); when all are busy the export is queued instead. Jobs are
+owner-scoped and their content is stored as BYTEA. Background jobs poll every
+`EXPORT_JOB_POLL_INTERVAL_MS` (default 1 s), run one at a time and renew claims; the
+Export page polls a job every 2 s. Both paths read one `REPEATABLE READ READ ONLY`
+snapshot in pages of 500 and hand each page to a worker that builds the workbook
+with ExcelJS's streaming writer once the snapshot is committed. The worker's
+heap is capped by `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024; the V8 hard limit
+is never below 128 MB, and the builder checks its own heap between pages and rows
+because a process-wide `--max-old-space-size` replaces worker limits). An export
+over the cap fails alone with HTTP 413 or a failed job carrying that message;
+failed jobs are not retried.
 Columns combine active and captured fields by canonical key, respect exportable
-flags and mask unreleased requester PSF values. Six metadata columns precede form
-fields; Product Type is the first default requester-form field, not the first
-XLSX column.
+flags and mask unreleased requester PSF values. Four metadata columns (Request No,
+Status, Request Date, Updated At) precede form fields; Product Type is the first
+default requester-form field, not the first XLSX column.
 Sources: [export routes/policy](../backend/src/export/export.controller.ts),
 [query scope](../backend/src/requests/search-index.service.ts),
-[workbook](../backend/src/export/excel_export.service.ts),
+[export service and worker](../backend/src/export/excel_export.service.ts),
+[workbook](../backend/src/export/export-workbook.ts),
 [job persistence](../backend/src/export/export-job.repository.ts),
 [processor](../backend/src/export/export-job.processor.ts).
 

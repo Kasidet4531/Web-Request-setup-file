@@ -72,6 +72,20 @@ _Avoid_: Auto-complete mapping, field copy rule, smart suggestion
 Standardized reference options embedded within a Form Schema to populate choice fields.
 _Avoid_: Lookup tables, static lists
 
+## Export
+
+**Direct Export**:
+An Excel export returned as the download while the person waits, used up to `EXPORT_SYNC_THRESHOLD` requests while a Direct Export slot is free.
+_Avoid_: synchronous export
+
+**Export Job**:
+An Excel export queued and built in the background one at a time, used above the threshold or when every Direct Export slot is busy.
+_Avoid_: async export, background download
+
+**Export Memory Limit**:
+The most memory one export's workbook worker may use (`EXPORT_WORKER_MAX_MEMORY_MB`); an export that needs more fails on its own.
+_Avoid_: RAM cap
+
 ## Administration and Auditing
 
 **Local Authorization Profile**:
