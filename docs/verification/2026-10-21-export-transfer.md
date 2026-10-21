@@ -88,6 +88,7 @@ form family; adding each column rewrote the 5,607-row table in 0.4–0.5 s.
 | Backend unit tests | `cd backend && npx jest` | 50 suites, 750 passed (after merging `main` at `e6dae03`) |
 | API integration | `cd backend && npm run test:e2e` | 21 passed |
 | All PGlite suites | `node --require ts-node/register --test --test-concurrency=1 test/*.postgres.test.ts test/check-attachment-folders.test.ts` | 112 tests, 111 passed, 1 skipped (configured server only) |
+| Frontend | `cd frontend && npx vitest run` | 533 passed |
 | Export at scale | `runuser -u postgres -- node --require ts-node/register scripts/verify-export-scale.ts --sizes=780,5570` | admin, setup_owner and requester at 780 and 5,570 requests, with requests reordered, deleted, inserted and their forms changed during the export: every cell matches (423,396 at 5,570), and each size's logical hash (`06a03bb…` at 780, `90e3eb2…` at 5,570) equals the same check's on `926fa27` |
 
 ## Not verified
