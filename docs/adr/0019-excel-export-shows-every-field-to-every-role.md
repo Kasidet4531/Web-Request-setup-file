@@ -1,4 +1,4 @@
-# 18. Excel export shows every field to every role
+# 19. Excel export shows every field to every role
 
 Status: accepted (21 October 2026, decided by Fook).
 

@@ -633,7 +633,7 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
-  // Every role exports the same submitted requests and values (ADR 0018).
+  // Every role exports the same submitted requests and values (ADR 0019).
   async queryExportRequests(
     filters: RequestSearchFilters,
     maximumLimit = 100,

@@ -43,7 +43,7 @@ The section containing setup details, editable by backend-authorized Setup File 
 _Avoid_: Setup Information, Completed Info
 
 **PSF Setup File Name** / **Job File Name**:
-The PSF Created Information fields with canonical keys `psf_setup_file_name` and `job_file_name`. The Requests and Dashboard tables show each in its own column, whether or not the field is searchable (21 October 2026). Like all PSF Created Information they are hidden on screen from a Requester-only actor until PSF Visibility Release (Excel exports excepted, ADR 0018), and keyword search matches the PSF Setup File Name only where the actor can see it.
+The PSF Created Information fields with canonical keys `psf_setup_file_name` and `job_file_name`. The Requests and Dashboard tables show each in its own column, whether or not the field is searchable (21 October 2026). Like all PSF Created Information they are hidden on screen from a Requester-only actor until PSF Visibility Release (Excel exports excepted, ADR 0019), and keyword search matches the PSF Setup File Name only where the actor can see it.
 _Avoid_: PSF name (ambiguous with the `reference_psf_name` field)
 
 **Draft**:
@@ -54,7 +54,7 @@ _Avoid_: In-progress request, unsaved request
 An Admin-configured catalog entry with immutable identity, verbatim name and explicit open/completed/cancelled classification. The configured database was verified to contain 17 entries on 4 October 2026; use the [complete exact strings](docs/status-catalog-and-manual-updates.md), not old short labels. Percentages are display text, not progression or automation. All authenticated actors may change shared work status through the single Action center. Catalog/request writes preserve opaque microsecond revisions, transactional projections and audit.
 
 **PSF Visibility Release**:
-A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data or history on screen; authorized PSF team/Admin actors do not wait for release on accessible work. Excel exports and the Export Preview show PSF Created Information to every role, released or not (ADR 0018, 21 October 2026). Backtracking, renaming or changing the trigger does not revoke release.
+A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data or history on screen; authorized PSF team/Admin actors do not wait for release on accessible work. Excel exports and the Export Preview show PSF Created Information to every role, released or not (ADR 0019, 21 October 2026). Backtracking, renaming or changing the trigger does not revoke release.
 
 **Auto-fill Rule**:
 An administrator-managed configuration defining a trigger field and its target fields to populate from a previous completed PSF Request. Active rules participate in autofill; Inactive rules do not. Administrators explicitly choose activation, while publishing an incompatible form may disable a rule for review. Editing an Inactive rule or restoring its fields does not reactivate it.
@@ -84,7 +84,7 @@ A sequential integer within one Form Schema family: `psf-request` or `psf-create
 _Avoid_: Version number, revision
 
 **Attachment**:
-An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]` and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too. Implemented 20 October 2026; see [Request Attachments](docs/request-attachments.md).
+An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]`, named as the SharePoint export named the Imported Requests' folders, and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too, except system files such as those Windows or the SharePoint export leave there. Implemented 20 October 2026; folder naming settled 21 October 2026 ([ADR 0018](docs/adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). See [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
 
 **Attachment Policy**:

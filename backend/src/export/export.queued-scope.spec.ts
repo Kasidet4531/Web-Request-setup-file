@@ -204,7 +204,7 @@ describe('queued exports current server-profile scope', () => {
   });
 
   it.each(['requester', 'setup_owner', 'admin'] as const)(
-    'allows requester-scope workbook with current %s role, unreleased PSF included (ADR 0018)',
+    'allows requester-scope workbook with current %s role, unreleased PSF included (ADR 0019)',
     async (role) => {
       const state = lifecycle('requester');
       state.setRole(role);

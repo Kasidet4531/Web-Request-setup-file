@@ -70,7 +70,7 @@ function item(i: number): RequestExportItem {
 }
 
 // Version membership is specified independently from source/schema constructors.
-// Every role gets the same cells (ADR 0018); a cell without a value shows NA.
+// Every role gets the same cells (ADR 0019); a cell without a value shows NA.
 function expected(i: number): Array<string | number> {
   const row = source(i);
   return [

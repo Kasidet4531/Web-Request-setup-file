@@ -811,7 +811,7 @@ describe('SearchIndexService canonical extraction', () => {
     { status: 'PSF Created', release: null },
     { status: 'Submitted', release: '2026-06-18T01:05:03.000001Z' },
   ])(
-    'exports PSF raw values whether or not they are released (ADR 0018): $status / $release',
+    'exports PSF raw values whether or not they are released (ADR 0019): $status / $release',
     async ({ status, release }) => {
       pool.query.mockResolvedValueOnce({
         rows: [

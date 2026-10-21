@@ -537,7 +537,7 @@ describe('ExcelExportService', () => {
     );
   });
 
-  it('exports all configured form sections and shows a Requester every PSF cell, released or not (ADR 0018)', async () => {
+  it('exports all configured form sections and shows a Requester every PSF cell, released or not (ADR 0019)', async () => {
     const activeSchema = {
       formKey: 'psf-request',
       version: 10,

@@ -70,7 +70,7 @@ function fieldKeysOf(
 // The columns and cells of an export, shared by the workbook and the Export
 // Preview. Values are read from each request's current data through its own
 // form version, so a later save is always reflected. PSF Created Information
-// is exported to every role, released or not (ADR 0018).
+// is exported to every role, released or not (ADR 0019).
 export function createExportTable(
   requesterSchemas: Iterable<FormSchemaJson>,
   createdSchemas: Iterable<FormSchemaJson>,

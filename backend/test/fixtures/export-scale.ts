@@ -36,7 +36,7 @@ export interface Column {
 }
 export type Cell = string | number;
 export type Role = UserRole;
-// Every role gets the same cells, released or not (ADR 0018).
+// Every role gets the same cells, released or not (ADR 0019).
 export const EXPORT_ROLES: Role[] = ['admin', 'setup_owner', 'requester'];
 export const columns: Column[] = [];
 let current: Column | undefined;
