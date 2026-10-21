@@ -180,7 +180,7 @@ describe('ExportJobProcessor', () => {
     );
   });
 
-  it('tells the owner when a queued export stopped at the worker memory limit', async () => {
+  it('tells the owner when an Export Job stopped at the Export Memory Limit', async () => {
     repository.claimNext.mockResolvedValueOnce(job);
     excelExportService.exportAllRequests.mockRejectedValueOnce(
       new ExportMemoryLimitException(),

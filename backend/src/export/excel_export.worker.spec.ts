@@ -4,7 +4,10 @@ jest.mock('node:worker_threads', () => ({
 
 import { Worker } from 'node:worker_threads';
 import { EventEmitter } from 'node:events';
-import { ExcelExportService } from './excel_export.service';
+import {
+  ExcelExportService,
+  ExportMemoryLimitException,
+} from './excel_export.service';
 
 describe('ExcelExportService large export rendering', () => {
   const workerConstructor = Worker as unknown as jest.Mock;
@@ -172,4 +175,45 @@ describe('ExcelExportService large export rendering', () => {
       expect(worker.terminate).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('reports a worker stopped by its hard memory limit as the Export Memory Limit', async () => {
+    const worker = Object.assign(new EventEmitter(), {
+      terminate: jest.fn().mockResolvedValue(0),
+      postMessage: jest.fn(() => {
+        queueMicrotask(() =>
+          worker.emit(
+            'error',
+            Object.assign(new Error('worker out of memory'), {
+              code: 'ERR_WORKER_OUT_OF_MEMORY',
+            }),
+          ),
+        );
+      }),
+    });
+    workerConstructor.mockImplementation(() => worker);
+    const search = {
+      withExportSnapshot: (operation: (search: unknown) => Promise<unknown>) =>
+        operation(search),
+      queryExportRequests: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+    };
+    const forms = {
+      getActiveSchema: jest
+        .fn()
+        .mockResolvedValue({ schema: { sections: [] } }),
+    };
+    const service = Reflect.construct(ExcelExportService, [
+      search,
+      forms,
+    ]) as ExcelExportService;
+
+    await expect(
+      service.exportAllRequests({}, { id: 'admin-1', role: 'admin' }),
+    ).rejects.toBeInstanceOf(ExportMemoryLimitException);
+    expect(workerConstructor).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        resourceLimits: { maxOldGenerationSizeMb: 1024 },
+      }),
+    );
+  });
 });

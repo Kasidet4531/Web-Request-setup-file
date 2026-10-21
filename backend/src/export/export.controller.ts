@@ -19,6 +19,7 @@ import type {
 } from '../auth/session.types';
 import { SearchIndexService } from '../requests/search-index.service';
 import {
+  DEFAULT_SYNC_THRESHOLD,
   ExcelExportService,
   type RequestExportFilters,
 } from './excel_export.service';
@@ -30,7 +31,6 @@ const EXPORT_JOB_NOT_FOUND_MESSAGE = 'Export job not found.';
 const EXPORT_JOB_NOT_READY_MESSAGE = 'Export job is not ready for download.';
 const EXPORT_JOB_FAILURE_MESSAGE =
   'Unable to prepare this export. Please try again.';
-const DEFAULT_SYNC_THRESHOLD = 10000;
 
 type ExportActor = AuthenticatedUserProfile;
 
@@ -63,18 +63,18 @@ export class ExportController {
   ): Promise<void> {
     const actor = await this.getExportActor(request);
     const filters = this.parseExportFilters(query);
-    const synchronousThreshold = this.getSynchronousExportThreshold();
+    const directExportThreshold = this.getDirectExportThreshold();
     const total = await this.searchIndexService.countExportRequests(filters);
 
     // Exports above the threshold, or within it while every direct export
     // slot is busy, run in the queue one at a time.
     const exportResult =
-      total > synchronousThreshold
+      total > directExportThreshold
         ? null
         : await this.excelExportService.tryDirectExport(
             filters,
             actor,
-            synchronousThreshold,
+            directExportThreshold,
           );
 
     if (!exportResult) {
@@ -228,7 +228,7 @@ export class ExportController {
     return this.getAuthenticatedActor(request);
   }
 
-  private getSynchronousExportThreshold(): number {
+  private getDirectExportThreshold(): number {
     const configured = this.configService.get<string | number>(
       'EXPORT_SYNC_THRESHOLD',
       DEFAULT_SYNC_THRESHOLD,

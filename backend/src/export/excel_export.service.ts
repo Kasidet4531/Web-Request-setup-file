@@ -6,7 +6,7 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { resolve } from 'node:path';
+import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import {
   FormSchemaService,
@@ -30,8 +30,9 @@ export interface RequestExportWorkbook {
 }
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
-const DEFAULT_WORKER_MAX_MEMORY_MB = 1024;
+export const DEFAULT_SYNC_THRESHOLD = 10000;
 const DEFAULT_SYNC_MAX_CONCURRENT = 2;
+const DEFAULT_WORKER_MAX_MEMORY_MB = 1024;
 // A worker needs roughly 25 MB (70 MB from TypeScript sources) just to load the
 // builder, and a hard limit below what V8 needs to start aborts the whole
 // process. Smaller settings are still enforced by the builder's own check.
@@ -47,7 +48,7 @@ export class ExportMemoryLimitException extends PayloadTooLargeException {
 
 const WORKER_SOURCE = `
   const { parentPort, workerData } = require('node:worker_threads');
-  const { appendExportItems, createExportWorkbook, ExportMemoryLimitError } = require(workerData.builderPath);
+  const { appendExportItems, createExportWorkbook, WorkbookMemoryLimitError } = require(workerData.builderPath);
   const items = [], schemas = new Map();
   parentPort.on('message', async (message) => {
     try {
@@ -61,7 +62,7 @@ const WORKER_SOURCE = `
         parentPort.close();
       }
     } catch (error) {
-      parentPort.postMessage({ type: error instanceof ExportMemoryLimitError ? 'memory-limit' : 'error' });
+      parentPort.postMessage({ type: error instanceof WorkbookMemoryLimitError ? 'memory-limit' : 'error' });
       parentPort.close();
     }
   });
@@ -84,7 +85,7 @@ class WorkbookWorker {
     memoryLimitMb: number,
   ) {
     const builderPath = require.resolve('./export-workbook');
-    const typescript = builderPath.endsWith('.ts');
+    const fromTypeScript = builderPath.endsWith('.ts');
     this.worker = new Worker(WORKER_SOURCE, {
       eval: true,
       workerData: {
@@ -102,17 +103,17 @@ class WorkbookWorker {
       },
       // Development/test execution uses TS sources; compiled production workers
       // resolve the sibling JS module and need no runtime TypeScript dependency.
-      execArgv: typescript
+      execArgv: fromTypeScript
         ? ['--require', require.resolve('ts-node/register/transpile-only')]
         : [],
       // ts-node otherwise looks for tsconfig.json from the working directory,
       // which need not be the backend when the app starts elsewhere.
-      env: typescript
+      env: fromTypeScript
         ? {
             ...process.env,
             TS_NODE_PROJECT:
               process.env.TS_NODE_PROJECT ??
-              resolve(__dirname, '../../tsconfig.json'),
+              join(__dirname, '../../tsconfig.json'),
           }
         : process.env,
     });
@@ -209,7 +210,7 @@ export function formatRequestExportFilename(now: Date): string {
 export class ExcelExportService implements OnModuleDestroy {
   private readonly logger = new Logger(ExcelExportService.name);
   private readonly workers = new Set<WorkbookWorker>();
-  private directExports = 0;
+  private runningDirectExports = 0;
   constructor(
     private readonly searchIndexService: SearchIndexService,
     private readonly formSchemaService: FormSchemaService,
@@ -219,7 +220,7 @@ export class ExcelExportService implements OnModuleDestroy {
   exportRequests(
     filters: RequestExportFilters,
     actor: Actor,
-    maximumRecords = 2000,
+    maximumRecords = DEFAULT_SYNC_THRESHOLD,
   ): Promise<RequestExportWorkbook> {
     return this.exportWorkbook(filters, actor, maximumRecords);
   }
@@ -229,26 +230,27 @@ export class ExcelExportService implements OnModuleDestroy {
   ): Promise<RequestExportWorkbook> {
     return this.exportWorkbook(filters, actor);
   }
-  // A direct export answers the HTTP request itself. Null means every
-  // EXPORT_SYNC_MAX_CONCURRENT slot is busy, so the caller queues it instead.
+  // A Direct Export answers the HTTP request itself. Null means every
+  // EXPORT_SYNC_MAX_CONCURRENT slot in this backend process is busy, so the
+  // caller queues an Export Job instead.
   async tryDirectExport(
     filters: RequestExportFilters,
     actor: Actor,
     maximumRecords?: number,
   ): Promise<RequestExportWorkbook | null> {
     if (
-      this.directExports >=
+      this.runningDirectExports >=
       this.positiveInteger(
         'EXPORT_SYNC_MAX_CONCURRENT',
         DEFAULT_SYNC_MAX_CONCURRENT,
       )
     )
       return null;
-    this.directExports++;
+    this.runningDirectExports++;
     try {
       return await this.exportRequests(filters, actor, maximumRecords);
     } finally {
-      this.directExports--;
+      this.runningDirectExports--;
     }
   }
   async onModuleDestroy() {
@@ -260,6 +262,10 @@ export class ExcelExportService implements OnModuleDestroy {
     actor: Actor,
     maximumRecords?: number,
   ): Promise<RequestExportWorkbook> {
+    const memoryLimitMb = this.positiveInteger(
+      'EXPORT_WORKER_MAX_MEMORY_MB',
+      DEFAULT_WORKER_MAX_MEMORY_MB,
+    );
     let worker: WorkbookWorker | undefined;
     try {
       await this.searchIndexService.withExportSnapshot(
@@ -289,10 +295,7 @@ export class ExcelExportService implements OnModuleDestroy {
             requesterSchema.schema,
             createdSchema.schema,
             actor,
-            this.positiveInteger(
-              'EXPORT_WORKER_MAX_MEMORY_MB',
-              DEFAULT_WORKER_MAX_MEMORY_MB,
-            ),
+            memoryLimitMb,
           );
           this.workers.add(worker);
           let offset = 0;
@@ -319,7 +322,7 @@ export class ExcelExportService implements OnModuleDestroy {
     } catch (error) {
       if (error instanceof ExportMemoryLimitException)
         this.logger.warn(
-          'An export stopped at the EXPORT_WORKER_MAX_MEMORY_MB limit.',
+          `An export for user ${actor.id} stopped at EXPORT_WORKER_MAX_MEMORY_MB=${memoryLimitMb}.`,
         );
       throw error;
     } finally {
@@ -330,9 +333,12 @@ export class ExcelExportService implements OnModuleDestroy {
     }
   }
 
-  // Empty or invalid settings fall back to the default.
+  // Like EXPORT_SYNC_THRESHOLD: fractions are truncated, and empty or
+  // invalid settings fall back to the default.
   private positiveInteger(key: string, fallback: number): number {
-    const value = Number(this.configService?.get<string | number>(key));
-    return Number.isInteger(value) && value > 0 ? value : fallback;
+    const value = Math.trunc(
+      Number(this.configService?.get<string | number>(key)),
+    );
+    return value > 0 ? value : fallback;
   }
 }

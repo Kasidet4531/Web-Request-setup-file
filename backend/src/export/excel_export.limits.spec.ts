@@ -54,7 +54,7 @@ describe('ExcelExportService resource limits', () => {
     ]) as ExcelExportService;
   }
 
-  it('fails only the export that needs more memory than EXPORT_WORKER_MAX_MEMORY_MB, with a message saying so', async () => {
+  it('fails only the export that goes over the Export Memory Limit, with a message saying so', async () => {
     const error = await exporter({ EXPORT_WORKER_MAX_MEMORY_MB: '1' })
       .exportAllRequests({}, adminActor)
       .catch((failure: unknown) => failure);
@@ -69,7 +69,7 @@ describe('ExcelExportService resource limits', () => {
     expect(next.content.length).toBeGreaterThan(0);
   }, 30_000);
 
-  it('runs at most EXPORT_SYNC_MAX_CONCURRENT direct exports at once and frees the slot when one finishes or fails', async () => {
+  it('runs at most EXPORT_SYNC_MAX_CONCURRENT Direct Exports at once and frees the slot when one finishes or fails', async () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
     const queryExportRequests = jest
@@ -95,7 +95,7 @@ describe('ExcelExportService resource limits', () => {
     ).toBeGreaterThan(0);
   }, 30_000);
 
-  it('allows two direct exports at once when EXPORT_SYNC_MAX_CONCURRENT is not set', async () => {
+  it('allows two Direct Exports at once when EXPORT_SYNC_MAX_CONCURRENT is not set', async () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
     const service = exporter(

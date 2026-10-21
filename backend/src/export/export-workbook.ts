@@ -23,17 +23,15 @@ export function exportCell(
   return field.type === 'number' && isNumericText(text) ? Number(text) : text;
 }
 
-export class ExportMemoryLimitError extends Error {}
+export class WorkbookMemoryLimitError extends Error {}
 
 // The worker's resourceLimits is the hard cap, but a process-wide
 // --max-old-space-size (for example in NODE_OPTIONS) silently replaces it,
-// so the builder also checks its own heap between pages and rows.
-export function assertWithinMemoryLimit(memoryLimitMb?: number) {
-  if (
-    memoryLimitMb !== undefined &&
-    getHeapStatistics().used_heap_size > memoryLimitMb * 1024 * 1024
-  )
-    throw new ExportMemoryLimitError();
+// so the builder also checks its own heap between pages and rows. The heap
+// it reads includes garbage not yet collected, so the check is approximate.
+export function assertWithinMemoryLimit(memoryLimitMb: number) {
+  if (getHeapStatistics().used_heap_size > memoryLimitMb * 1024 * 1024)
+    throw new WorkbookMemoryLimitError();
 }
 
 // Structured clone preserves references within a page. Intern only each distinct
@@ -42,7 +40,7 @@ export function appendExportItems(
   target: RequestExportItem[],
   page: RequestExportItem[],
   cache: Map<string, FormSchemaJson>,
-  memoryLimitMb?: number,
+  memoryLimitMb: number,
 ) {
   const pageSchemas = new Map<FormSchemaJson, FormSchemaJson>();
   const intern = (schema: FormSchemaJson) => {
@@ -92,7 +90,7 @@ export async function createExportWorkbook(
   activeRequester: FormSchemaJson,
   activeCreated: FormSchemaJson,
   actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
-  memoryLimitMb?: number,
+  memoryLimitMb: number,
 ): Promise<Buffer> {
   const requesterSchemas = new Set([activeRequester]);
   const createdSchemas = new Set([activeCreated]);

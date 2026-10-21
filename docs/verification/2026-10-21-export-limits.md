@@ -9,8 +9,8 @@ PR #95 reads each export from one consistent snapshot and builds every workbook 
 | Setting | Default | Effect |
 | --- | --- | --- |
 | `EXPORT_SYNC_THRESHOLD` | 10000 (was 2000) | Exports with at most this many requests are a Direct Export; larger ones become an Export Job |
-| `EXPORT_SYNC_MAX_CONCURRENT` | 2 | At most this many Direct Exports run at once; another export within the threshold becomes an Export Job |
-| `EXPORT_WORKER_MAX_MEMORY_MB` | 1024 | Export Memory Limit for each workbook worker; an export that needs more fails on its own (413, or a failed Export Job) and is not retried |
+| `EXPORT_SYNC_MAX_CONCURRENT` | 2 | At most this many Direct Exports run at once in one backend process; another export within the threshold becomes an Export Job |
+| `EXPORT_WORKER_MAX_MEMORY_MB` | 1024 | Export Memory Limit on each workbook worker's JavaScript heap; an export that needs more fails on its own (413, or a failed Export Job, which is never retried) |
 
 The route also fixes `draft-lifecycle.postgres.test.ts` "renders an export when the app starts outside the backend directory", which failed on PR #95 because the TypeScript worker could not find `tsconfig.json` from another working directory.
 
@@ -48,10 +48,12 @@ Export Memory Limit: the 5,570-request export fails at `EXPORT_WORKER_MAX_MEMORY
 - A process-wide `--max-old-space-size` (flag or `NODE_OPTIONS`) replaces every worker's `resourceLimits`: with it set, a worker given 16 or 64 MB reported an 8,240 MB heap limit and grew to 3.6 GB. The workbook builder therefore also checks its own heap between pages and every 500 rows, which is what enforces the setting in that case.
 - A hard limit below what V8 needs to start a worker aborts the whole process ("Fatal JavaScript out of memory: GC during deserialization" at 1 MB). Loading the builder needs about 25 MB compiled and 52–68 MB from TypeScript sources, so the worker's hard limit is never set below 128 MB; smaller settings are enforced by the builder's own check.
 - When an effective hard limit is reached while the export runs, only the worker stops (`ERR_WORKER_OUT_OF_MEMORY`) and the process keeps running.
+- The builder's check reads the heap including garbage not yet collected, so near the setting it can stop an export slightly early. The 5,570-request export still passed at 96 MB with `NODE_OPTIONS` set, where V8 collects least eagerly.
+- The limit covers the JavaScript heap. The finished file's bytes (about 2.4 MB at 5,570 requests) and zlib buffers are outside it.
 
 ## Tests
 
-- Backend Jest: 49 suites, 738 tests passed, including `src/export/excel_export.limits.spec.ts` (real worker: memory limit, slot limit and default of two slots), the route's queue-when-busy and 10,000 default, and the Export Job's memory-limit message.
+- Backend Jest: 49 suites, 739 tests passed, including `src/export/excel_export.limits.spec.ts` (real worker: memory limit, slot limit and default of two slots), a worker stopped by its hard limit (`ERR_WORKER_OUT_OF_MEMORY`), the route's queue-when-busy and 10,000 default, and the Export Job's memory-limit message.
 - All `test/*.postgres.test.ts` suites and `test/check-attachment-folders.test.ts` passed (97 tests), including the previously failing Draft lifecycle export test.
 - ESLint on the changed files and `nest build` passed.
 

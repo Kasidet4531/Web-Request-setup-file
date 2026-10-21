@@ -150,7 +150,7 @@ describe('ExportController async lifecycle', () => {
     });
   });
 
-  it('sends up to 10,000 requests as a direct download when EXPORT_SYNC_THRESHOLD is not set', async () => {
+  it('serves up to 10,000 requests as a Direct Export when EXPORT_SYNC_THRESHOLD is not set', async () => {
     const content = Buffer.from('xlsx-content');
     configService.get.mockImplementation(
       (_name: string, fallback: unknown) => fallback,
@@ -183,7 +183,7 @@ describe('ExportController async lifecycle', () => {
     expect(response.end).toHaveBeenCalledWith(content);
   });
 
-  it('queues an export within the threshold when every direct export slot is busy', async () => {
+  it('queues an Export Job within the threshold when every Direct Export slot is busy', async () => {
     searchIndexService.countExportRequests.mockResolvedValueOnce(10);
     excelExportService.tryDirectExport.mockResolvedValueOnce(null);
     exportJobRepository.enqueue.mockResolvedValueOnce(queuedJob);

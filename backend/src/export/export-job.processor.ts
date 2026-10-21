@@ -95,7 +95,8 @@ export class ExportJobProcessor
           workbook,
         );
       } catch (error) {
-        // A failed job is final; retrying would only hit the same limit.
+        // Failed jobs are final, so an export over the memory limit does not
+        // run again.
         await this.exportJobRepository.fail(
           job.id,
           job.claimToken,

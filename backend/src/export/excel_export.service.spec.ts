@@ -867,8 +867,8 @@ describe('ExcelExportService', () => {
   it('rejects an export exceeding the synchronous record ceiling instead of returning a partial workbook', async () => {
     searchIndexService.queryExportRequests.mockResolvedValueOnce({
       items: [],
-      total: 2001,
-      limit: 2000,
+      total: 10001,
+      limit: 500,
       offset: 0,
     });
 

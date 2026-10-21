@@ -168,7 +168,7 @@ Sources: [export controller](../backend/src/export/export.controller.ts),
 [processor](../backend/src/export/export-job.processor.ts),
 [job storage](../backend/src/export/export-job.repository.ts).
 Default threshold is 10000; exactly 10000 is a Direct Export. At most
-`EXPORT_SYNC_MAX_CONCURRENT` (default 2) Direct Exports run at once; each worker
+`EXPORT_SYNC_MAX_CONCURRENT` (default 2) Direct Exports run at once per backend process; each worker
 is limited by `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024), and an export over it
 fails alone. Export applies requester PSF masking and is available to every
 authenticated role. The worker streams the XLSX it writes but still holds all
