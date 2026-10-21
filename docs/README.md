@@ -55,6 +55,8 @@ current behavior.
 
 | Document | Use/scope |
 | --- | --- |
+| [Request Snapshot reading prototype](design/2026-10-21-request-snapshot-prototype.md) | Selected layout A with event highlights, before/after Status and a synthetic preview; current-request comparison removed; production view unchanged |
+| [Request Snapshot readability research](design/2026-10-21-request-snapshot-readability-research.md) | Verified primary-source research for reading the complete historical form (Thai): WCAG, design guidance and two original studies; design hypotheses and limitations, not approved requirements |
 | [Form UX and color accessibility research](design/2026-10-20-form-ux-accessibility-research.md) | General guidance on dynamic-form structure, input errors, request lists and WCAG contrast (Thai); sources not yet verified against the originals |
 
 ## Agent and tracker conventions

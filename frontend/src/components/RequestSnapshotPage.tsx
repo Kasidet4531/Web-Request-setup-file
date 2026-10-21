@@ -1,5 +1,5 @@
-import { useContext, useEffect, useState } from 'react'
-import { useParams } from '@tanstack/react-router'
+import { lazy, Suspense, useContext, useEffect, useState } from 'react'
+import { useParams, useSearch } from '@tanstack/react-router'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { RequestBreadcrumbContext, type RequestBreadcrumb } from './requestBreadcrumb'
 import { PSF_CREATED_INFORMATION_PLACEHOLDER } from './RequestsWorkspace'
@@ -9,6 +9,9 @@ import { PageHeader } from './ui/PageHeader'
 import { formatHistoryDateTime } from './ui/historyDateTime'
 import { api, type RequestSnapshotResponse } from '../services/api'
 import type { DynamicFormValues, FormSchema } from '../types/forms'
+import type { SnapshotPrototypeVariant } from './RequestSnapshotPrototype'
+
+const SnapshotPrototype = import.meta.env.DEV ? lazy(() => import('./RequestSnapshotPrototype')) : null
 
 interface FieldChange { fieldKey: string; fieldLabel: string; before: string }
 
@@ -107,7 +110,7 @@ export function RequestSnapshotView({ requestSnapshot }: { requestSnapshot: Requ
 
 interface RequestSnapshotState { key: string; error: string | null; data: RequestSnapshotResponse | null }
 
-export function RequestSnapshotPage({ requestId, entryId, onIdentityResolved }: { requestId: string; entryId: string; onIdentityResolved?: (value: RequestBreadcrumb | null) => void }) {
+export function RequestSnapshotPage({ requestId, entryId, onIdentityResolved, variant }: { requestId: string; entryId: string; onIdentityResolved?: (value: RequestBreadcrumb | null) => void; variant?: SnapshotPrototypeVariant }) {
   const key = `${requestId}/${entryId}`
   const [state, setState] = useState<RequestSnapshotState>({ key, error: null, data: null })
   const [retry, setRetry] = useState(0)
@@ -127,6 +130,10 @@ export function RequestSnapshotPage({ requestId, entryId, onIdentityResolved }: 
     return () => onIdentityResolved?.(null)
   }, [data, requestId, onIdentityResolved])
 
+  if (data && variant && SnapshotPrototype) return <Suspense fallback={<AsyncNotice kind="loading" title="Loading design prototype…" />}>
+    <SnapshotPrototype requestSnapshot={data} requestId={requestId} />
+  </Suspense>
+
   return (
     <article className="workflow-page request-requestSnapshot-page">
       <PageHeader title="Request Snapshot" description={data ? `${data.requestNo} as it stood after this entry. Read only.` : 'A request as it stood after one history entry.'} />
@@ -139,6 +146,7 @@ export function RequestSnapshotPage({ requestId, entryId, onIdentityResolved }: 
 
 export function RequestSnapshotRoutePage() {
   const { requestId, entryId } = useParams({ from: '/requests/$requestId/history_/$entryId' })
+  const { variant } = useSearch({ from: '/requests/$requestId/history_/$entryId' })
   const setRequestBreadcrumb = useContext(RequestBreadcrumbContext)
-  return <RequestSnapshotPage requestId={requestId} entryId={entryId} onIdentityResolved={setRequestBreadcrumb} />
+  return <RequestSnapshotPage requestId={requestId} entryId={entryId} onIdentityResolved={setRequestBreadcrumb} variant={variant} />
 }

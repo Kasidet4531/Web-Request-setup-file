@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>Historical form: layout preview</title>
+<style>
+:root { color-scheme:light; --bg:#f6f5f2; --paper:#fff; --ink:#24282c; --muted:#62686c; --line:#e2e3de; --strong:#9a9f9d; --accent:#006f95; --soft:#eeefea; font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+:root.dark { color-scheme:dark; --bg:#181a1c; --paper:#242629; --ink:#f4f3ee; --muted:#b7bab8; --line:#3b3e40; --strong:#858b8b; --accent:#73d5ee; --soft:#303335; }
+:root { --event-bg:#fff2df; --event-ink:#8a4700; --event-label:#fff; }
+:root.dark { --event-bg:#362b1f; --event-ink:#ffc36b; --event-label:#181a1c; }
+* { box-sizing:border-box; } body { margin:0; color:var(--ink); background:var(--bg); } h1,h2,h3,p { margin:0; } a { color:var(--accent); text-underline-offset:3px; } button { font:inherit; cursor:pointer; color:inherit; } button:hover { background:var(--soft); } :focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 28px; border-bottom:1px solid var(--line); background:var(--paper); }
+.topbar strong { font-size:15px; } .topbar button { border:1px solid var(--strong); border-radius:4px; padding:6px 12px; background:var(--paper); }
+main { max-width:1230px; margin:auto; padding:28px 32px 32px; } .sample { padding:10px 14px; margin-bottom:20px; background:var(--soft); border:1px solid var(--line); border-radius:4px; font-size:13px; }
+h1 { font-size:28px; line-height:1.3; font-weight:650; letter-spacing:-.02em; } .subtitle { color:var(--muted); margin-top:6px; }
+.recorded { margin-top:24px; padding:20px 0; border-block:1px solid var(--strong); } .recorded h2 { font-size:16px; } .recorded p { color:var(--muted); margin-top:4px; font-size:14px; }
+.status { display:flex; flex-wrap:wrap; gap:24px 40px; margin:16px 0; } .status dt { font-size:12px; color:var(--muted); } dd { margin:0; min-width:0; } .key { font-size:13px; color:var(--muted); margin-bottom:24px; }
+.detail { display:grid; gap:24px; } .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:24px; min-width:0; } .panel>h2 { font-size:18px; padding-bottom:18px; border-bottom:1px solid var(--line); } .panel section { margin-top:26px; } .panel h3 { font-size:15px; margin-bottom:10px; }
+dl { margin:0; } .row { display:grid; grid-template-columns:260px minmax(0,1fr); gap:24px; padding:15px 0; border-bottom:1px solid var(--line); } .row:last-child { border-bottom:0; } dt { overflow-wrap:anywhere; } .row dt { font-weight:600; }
+.value { display:block; white-space:pre-wrap; overflow-wrap:anywhere; } .previous { margin-top:12px; padding-top:10px; border-top:1px dashed var(--strong); color:var(--muted); font-size:14px; } .previous strong { display:block; margin-bottom:3px; font-size:12px; }
+.end { display:flex; justify-content:space-between; gap:20px; margin-top:30px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:14px; }
+@media(max-width:760px) { main { padding:20px 18px 32px; } .row { grid-template-columns:minmax(0,1fr); gap:6px; } .panel { padding:20px; } .topbar { padding:12px 18px; } }
+@media print { .topbar,.controls { display:none; } main { padding:0; } }
+.changes { margin:20px 0; } .changes h2 { font-size:16px; margin-bottom:10px; } .changes>div { display:flex; flex-wrap:wrap; gap:8px; } .changes p { color:var(--muted); font-size:14px; }
+.jump { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; color:var(--event-ink); border:1px solid var(--event-ink); background:var(--event-bg); border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; } .jump:hover { text-decoration:underline; }
+.badge { display:inline-flex; width:fit-content; align-items:center; gap:5px; padding:3px 7px; border-radius:4px; background:var(--event-ink); color:var(--event-label); font-size:12px; line-height:18px; font-weight:600; }
+.icon { width:14px; height:14px; vertical-align:middle; flex-shrink:0; } .row dt>.badge { display:flex; margin-top:10px; }
+.row.changed { padding:14px 12px; margin-inline:-12px; border:1px solid var(--event-ink); border-radius:6px; background:var(--event-bg); } .row.changed:last-child { border-bottom:1px solid var(--event-ink); }
+.changed .previous,.changed .previous strong { color:var(--event-ink); border-color:var(--event-ink); }
+.controls { display:flex; flex-wrap:wrap; align-items:end; gap:16px; margin-bottom:20px; } .controls label { display:grid; gap:5px; font-size:13px; font-weight:600; } .controls select,.controls button { font:inherit; color:var(--ink); background:var(--paper); min-height:38px; padding:6px 12px; border:1px solid var(--strong); border-radius:4px; } .controls button:hover { background:var(--soft); }
+.status-panel { padding:16px; border:1px solid var(--strong); border-radius:6px; margin-bottom:14px; } .status-panel.changed { background:var(--event-bg); border-color:var(--event-ink); } .status-title { display:flex; gap:16px; align-items:center; } .status-title h2 { font-size:16px; }
+.status-panel .status { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:0; } .status-panel.changed dt { color:var(--event-ink); }
+.row[id] { scroll-margin-top:24px; }
+</style>
+</head>
+<body>
+<header class="topbar"><strong>Historical form · Reading preview</strong><button id="theme" type="button">Dark mode</button></header>
+<main id="top">
+<p class="sample">These values are examples. This preview runs without an account or internet connection.</p>
+<h1>Request Snapshot</h1><p class="subtitle">REQ-0042 · Full request after this update · Read only</p>
+<div class="recorded"><h2>Recorded on <time id="recorded-time" datetime="2026-10-21T07:30:00Z">21 Oct 2026, 14:30:00 ICT (UTC+7)</time></h2><p id="recorded-action">Request information updated · By Sample reviewer</p><p>Form versions: Request 2 · Delivery 1</p></div>
+<nav class="changes" aria-label="Changes in this update"><h2 id="changes-title"></h2><div id="change-links"></div></nav>
+<div class="controls"><label>Choose an example<select id="scenario"><option value="fields">Request fields edited</option><option value="status">Status changed</option></select></label></div>
+<section id="snapshot-status" class="status-panel" aria-labelledby="status-title"><div class="status-title"><h2 id="status-title">Status</h2><span id="status-badge"></span></div><dl class="status" id="status-values"></dl></section>
+<p class="key" id="reading-key"></p>
+<div id="layout"></div>
+<footer class="end"><p>End of snapshot · REQ-0042</p><a href="#top">Back to top</a></footer>
+</main>
+
+<script>
+'use strict';
+// This portable sample contains only generic, invented fields and values.
+const forms = [
+ {id:'request',title:'Requester Information',sections:[
+  {id:'details',title:'Request details',fields:[
+   ['Request type','Product transfer'],
+   ['Description','Sample equipment transfer — revised configuration','Sample equipment transfer'],
+   ['Target date','2026-11-15'],['Requester','Sample requester'],['Modified by','Sample reviewer']]},
+  {id:'equipment',title:'Product and equipment',fields:[
+   ['Product','Sample Product A'],['Site','Sample Site'],['Equipment','Equipment 7781'],['Line','Sample Line 4'],['Reference file','SAMPLE_REFERENCE_REV03.cfg']]},
+  {id:'instructions',title:'Request instructions',fields:[
+   ['Request note','Keep the reference orientation.\nReplace the earlier equipment with Equipment 7781.\nConfirm the revised configuration before handover.','Use the reference file.\nConfirm the orientation before handover.'],
+   ['Technical requirements','Preserve the reference origin and alignment settings. Keep the existing numbering and disabled-position list.\n\nCompare the first sample against the reference before release. Record any differences in the validation note.'],
+   ['Additional details','']]}
+ ]},
+ {id:'delivery',title:'Delivery Information',sections:[
+  {id:'files',title:'Delivery files',fields:[['Configuration file','SAMPLE_PRODUCT_A_LINE4_EQUIPMENT7781_TRANSFER_REV04_CONFIGURATION.cfg'],['Job file','SAMPLE_PRODUCT_A_LINE4.job'],['Revision','04']]},
+  {id:'validation',title:'Validation and handover',fields:[['Validation result','Reference comparison completed'],['Validation date','2026-10-20'],['Validation note','Orientation matches the reference.\nThe replacement equipment uses the revised configuration.\nNo disabled positions were added.'],['Handover note','']]}
+ ]}
+];
+const escape = value => String(value || 'Not provided').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const eventIcon = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>';
+const badge = '<span class="badge">'+eventIcon+'Changed in this update</span>';
+const params = new URL(location.href).searchParams;
+let scenario = params.get('entry') === 'status' ? 'status' : 'fields';
+function saveSelection() {
+ const url = new URL(location.href);
+ url.searchParams.set('entry',scenario);
+ url.searchParams.delete('variant');
+ url.searchParams.delete('compare');
+ url.hash = '';
+ try { history.replaceState(null,'',url); } catch { /* Local-file selection remains usable in memory. */ }
+}
+const fieldId = (form,section,index) => form.id+'-'+section.id+'-field-'+index;
+function fieldHtml(field,changed) {
+ return '<dt>'+escape(field[0])+(changed?badge:'')+'</dt><dd><span class="sr-only">After this update: </span><span class="value">'+escape(field[1])+'</span>'+(changed?'<div class="previous"><strong>Before this update</strong><span class="value">'+escape(field[2])+'</span></div>':'')+'</dd>';
+}
+function render() {
+ const panels = forms.map(form => '<section class="panel" id="'+form.id+'" aria-labelledby="'+form.id+'-title"><h2 id="'+form.id+'-title">'+form.title+'</h2>'+form.sections.map(section => '<section id="'+form.id+'-'+section.id+'" aria-labelledby="'+form.id+'-'+section.id+'-title"><h3 id="'+form.id+'-'+section.id+'-title">'+section.title+'</h3><dl>'+section.fields.map((field,index) => {const changed = scenario==='fields'&&field.length>2; return '<div id="'+fieldId(form,section,index)+'" class="row'+(changed?' changed':'')+'">'+fieldHtml(field,changed)+'</div>';}).join('')+'</dl></section>').join('')+'</section>').join('');
+ document.getElementById('layout').innerHTML = '<div class="detail">'+panels+'</div>';
+ const statusChanged = scenario==='status';
+ document.getElementById('scenario').value = scenario;
+ const time = document.getElementById('recorded-time');
+ time.textContent = '21 Oct 2026, '+(statusChanged?'15:00:00':'14:30:00')+' ICT (UTC+7)';
+ time.dateTime = statusChanged?'2026-10-21T08:00:00Z':'2026-10-21T07:30:00Z';
+ document.getElementById('recorded-action').textContent = (statusChanged?'Status changed':'Request information updated')+' · By Sample reviewer';
+ document.getElementById('changes-title').textContent = statusChanged?'0 fields edited · Status changed':'2 fields edited · Status unchanged';
+ const links = [];
+ if(statusChanged) links.push('<a class="jump" href="#snapshot-status">'+eventIcon+'Status</a><p>No field edits were recorded for this update. The full form is below.</p>');
+ else forms.forEach(form=>form.sections.forEach(section=>section.fields.forEach((field,index)=>{if(field.length>2)links.push('<a class="jump" href="#'+fieldId(form,section,index)+'">'+eventIcon+escape(field[0])+'</a>');})));
+ document.getElementById('change-links').innerHTML = links.join('');
+ document.getElementById('snapshot-status').classList.toggle('changed',statusChanged);
+ document.getElementById('status-badge').innerHTML = statusChanged?badge:'';
+ const selectedStatus = statusChanged?'In preparation':'Under review';
+ document.getElementById('status-values').innerHTML = (statusChanged?'<div><dt>Before this update</dt><dd>Under review</dd></div>':'')+'<div><dt>After this update</dt><dd>'+selectedStatus+'</dd></div>';
+ document.getElementById('reading-key').innerHTML = eventIcon+' Orange marks edits in this update. The full form is shown below.';
+ document.title = 'Historical form: Detail layout';
+}
+document.getElementById('scenario').addEventListener('change',event=>{scenario=event.target.value;saveSelection();render();});
+document.getElementById('theme').addEventListener('click',()=>{
+ const dark = document.documentElement.classList.toggle('dark');
+ document.getElementById('theme').textContent = dark ? 'Light mode' : 'Dark mode';
+});
+render();
+</script>
+</body>
+</html>
