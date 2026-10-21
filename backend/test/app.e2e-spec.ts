@@ -949,6 +949,30 @@ describe('AppController (e2e)', () => {
     }
   });
 
+  it('serves the Attachment policy to a signed-in user even without attachment storage', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    activeUserId = undefined;
+    await request(server).get('/api/attachment-policy').expect(401);
+
+    activeUserId = 'requester-1';
+    authService.getProfile.mockResolvedValue({
+      id: activeUserId,
+      username: 'requester.demo',
+      displayName: 'Test User',
+      role: 'requester',
+      setupOwnerDepartment: null,
+    });
+    await request(server)
+      .get('/api/attachment-policy')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual({
+          maxBytes: expect.any(Number) as unknown,
+          blockedExtensions: expect.arrayContaining(['.exe', '.sh']) as unknown,
+        });
+      });
+  });
+
   it('registers admin autofill rules that validate canonical keys, persist atomically, and are readable through the runtime service', async () => {
     const activeDefinition: FormDefinitionRow = {
       form_key: 'psf-request',
