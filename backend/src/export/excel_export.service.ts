@@ -3,6 +3,7 @@ import {
   OnModuleDestroy,
   PayloadTooLargeException,
 } from '@nestjs/common';
+import { resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import {
   FormSchemaService,
@@ -64,14 +65,25 @@ class WorkbookWorker {
     actor: Actor,
   ) {
     const builderPath = require.resolve('./export-workbook');
+    const typescript = builderPath.endsWith('.ts');
     this.worker = new Worker(WORKER_SOURCE, {
       eval: true,
       workerData: { builderPath, requesterSchema, createdSchema, actor },
       // Development/test execution uses TS sources; compiled production workers
       // resolve the sibling JS module and need no runtime TypeScript dependency.
-      execArgv: builderPath.endsWith('.ts')
+      execArgv: typescript
         ? ['--require', require.resolve('ts-node/register/transpile-only')]
         : [],
+      // ts-node otherwise looks for tsconfig.json from the working directory,
+      // which need not be the backend when the app starts elsewhere.
+      env: typescript
+        ? {
+            ...process.env,
+            TS_NODE_PROJECT:
+              process.env.TS_NODE_PROJECT ??
+              resolve(__dirname, '../../tsconfig.json'),
+          }
+        : process.env,
     });
     this.worker.on(
       'message',
