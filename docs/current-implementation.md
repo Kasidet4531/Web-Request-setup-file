@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Request Snapshot reading layout, 22 October 2026:** a Request Snapshot (`/requests/$requestId/history/$entryId`) now reads like Request Detail (issue #103, layout A of the archived [prototype](https://github.com/Kasidet4531/Web-Request-setup-file/tree/prototype/request-snapshot-a-2026-10-21)): a centred column at most 1335px wide with a "Request History" link, the recorded date and time in ICT (UTC+7), the action, the actor and role, the Form Version numbers of that time and "Read only"; then a summary of the update's edits with a link to each; the Work Status of that time; and Requester Information and PSF Created Information in separate panels, every field of the stored Form Schema in order (identity fields such as Requester Name and Modified By included), label in a 260px column beside the full value, line breaks kept, a blank value shown as "Not provided". Only the fields the update changed are marked: orange background, one-pixel outline, an icon and "Changed in this update", with the earlier value under "Before this update". A Status change shows the complete stored names before and after the update; a Status-only update says no form-field edits were recorded. Fields a Form Version upgrade removed are listed in their own panel. There is no comparison with the current request. Before, the page showed a short summary list (Work Status with "Previous:", changed field names) above the two forms in the 840px read-only renderer, which hid the identity fields, and marked changes only with "Previous:". Reads, access checks and unavailable entries are unchanged. See the [verification record](verification/2026-10-22-request-snapshot-layout.md).
+
 > **Requester as a status email recipient, 21 October 2026:** the Edit status modal in Status Management adds *Send to the Requester*: *Do not send* (the default for existing and new statuses), *To* or *CC*, stored as an optional `requester: 'to' | 'cc'` in the status's `emailPolicy`. When a request enters that status (submission, Status change or bulk replacement, whoever acts), the address of the account that created it (`requester_user_id` → `app_users.email`) at that moment joins the typed To or CC. An enabled status needs a typed To unless the Requester is in To. Imported Requests have no account, so their Requester is not emailed. If the Requester has no usable address the typed recipients still get the email, CC moves to To when To is empty, and with nobody left no job is queued; each case logs a warning and the Status change commits. The catalog shows "Requester in To/CC" and the Replace and delete preview names "each request's Requester". Before, a status could only hold typed or picked addresses. See [email notifications](email-notifications.md#the-requests-requester-as-a-recipient) and the [verification record](verification/2026-10-21-requester-status-email.md). Checks ran on a throwaway local database; no mail was sent.
 
 > **Excel export speed and limits, 21 October 2026:** every export reads one consistent database snapshot, pages the requests before gathering their canonical values, and builds the workbook in a worker with ExcelJS's streaming writer: dark blue headers, alternating white and pale blue rows, and multi-line text that keeps its CRLF. A Direct Export (at most `EXPORT_SYNC_THRESHOLD` requests, now 10,000 by default instead of 2,000) runs only while fewer than `EXPORT_SYNC_MAX_CONCURRENT` (default 2) are in progress in the backend process; otherwise the export becomes an Export Job, which the Export page already follows. Each worker has an Export Memory Limit on its JavaScript heap, `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024): an export that needs more fails on its own with a message saying so (HTTP 413, or a failed Export Job that is not retried). On 5,570 synthetic requests an export took about 2 s instead of 6.2 s and added about 250 MB instead of 730 MB; see [export limits verification](verification/2026-10-21-export-limits.md), [application integration](verification/2026-10-21-export-app-integration.md) and [formatting](verification/2026-10-21-export-formatting.md) (PR #95).
@@ -158,14 +160,16 @@ details grouping. Every rendering uses the same single-column rows: one row per
 visible field, a 260px label column and a flexible control column, a divider under
 each row, and the label above its control below 600px wide. On New Request,
 Request Detail and Admin Draft detail the rows fill the form card in a centred
-column at most 1335px wide; elsewhere they are at most 840px wide.
+column at most 1335px wide; elsewhere they are at most 840px wide. A Request
+Snapshot lays out its own read-only rows the same way in that 1335px column (see
+[Autofill, audit and export](#autofill-audit-and-export)).
 Labels are bold 14px in both editable and read-only mode, and read-only values sit
 on the controls' line, so switching a request between viewing and editing keeps
 ordinary rows at the same height; radio groups and text areas may grow while
 editing. A radio group is a `role="radiogroup"` element named by its row's label
 cell and keeps its required, invalid and described-by state. The required marker,
-field error, Auto-fill status and "Previous" value stay in the field's row; a
-Request Snapshot tints changed rows. Detail keeps 16px section headings. Request
+field error, Auto-fill status and "Previous" value stay in the field's row.
+Detail keeps 16px section headings. Request
 Owner / Dept metadata has been removed.
 An editable form ends in an action bar that is `position: sticky` at the bottom of
 the window (in the Admin preview, of its "Preview fields" scroll region), so it stays
@@ -244,6 +248,26 @@ renders with the Form Version of that time. History entries now carry an `id`
 and `hasRequestSnapshot`; both are additions, and no earlier field changed. The
 request's History tab reloads after a save or Status change that produced a new
 revision.
+The Request Snapshot page reads only that entry (`GET
+/api/requests/:requestId/history/:entryId`), never the current request. It shows
+the recorded time in ICT (UTC+7), the action, actor and role, the Form Version
+numbers and "Read only"; a summary of the entry's edits with a link to each,
+which scrolls to and focuses the field; the Work Status of that time; and both
+forms in separate panels with every field of the stored Form Schema, identity
+fields included, label beside full value, blanks as "Not provided". The entry's
+`fieldChanges` belong to the form its action edited (PSF Created Information for
+a PSF update, Requester Information otherwise), so a PSF edit never marks a
+requester field with the same key. A changed field is marked with an orange
+background and outline, an icon and "Changed in this update", and shows its
+earlier value under "Before this update"; the colours are tokens in
+[the page's stylesheet](../frontend/src/components/RequestSnapshotPage.css) for
+light and dark themes. When the entry records a `fromStatus` that differs from the
+stored Status, the Work Status block is marked the same way and shows both
+complete names; no earlier Status is shown otherwise. Changes to fields the
+Form Schema of that time no longer has (a Form Version upgrade) are listed in
+a separate "Fields removed in this update" panel. When PSF Created Information
+is not visible to the reader, its panel shows the usual notice and neither its
+values, its Form Version nor its edits appear.
 Sources: [capture and read](../backend/src/audit/audit_log.service.ts),
 [visibility and Form Version lookup](../backend/src/requests/requests.service.ts),
 [bulk replacement exception](../backend/src/admin/workflow_transition.service.ts),

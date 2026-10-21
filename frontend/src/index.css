@@ -222,11 +222,6 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 /* A changed row (Request Snapshot) is tinted edge to edge; the stripe sits in the gutter so the label column stays aligned. */
 .dynamic-form__row--changed { margin-inline: -12px; padding-inline: 9px 12px; background: var(--secondary); border-left: 3px solid var(--warning); }
 .dynamic-form__previous { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
-.request-snapshot { display: grid; gap: 16px; }
-.request-snapshot__summary dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
-.request-snapshot__summary dt { color: var(--muted-foreground); font-size: 12px; line-height: 20px; }
-.request-snapshot__summary dd { margin: 0; overflow-wrap: anywhere; }
-.request-snapshot__summary dd .dynamic-form__previous { margin-left: 8px; }
 .request-snapshot-link { display: block; margin-top: 4px; font-size: 12px; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .dynamic-form__radio-option { display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 28px; cursor: pointer; color: var(--foreground); overflow-wrap: anywhere; min-width: 0; }

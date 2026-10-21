@@ -88,15 +88,36 @@ test(
     await expect(
       page.getByRole('heading', { name: 'Request Snapshot', exact: true }),
     ).toBeVisible();
+    const requester = page.locator('#request-snapshot-requester');
     await expect(
-      page.getByText('Renamed for snapshot', { exact: true }),
+      requester.getByText('Renamed for snapshot', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(/^Previous: /)).toHaveText([
-      'Previous: Snapshot system request',
-    ]);
+    // Identity fields of the Form Schema are part of the form.
+    await expect(
+      requester.getByText('Requester Name', { exact: true }),
+    ).toBeVisible();
+    // Only the edited field is marked, with its value before the update.
+    const edited = page.locator('.request-snapshot__row--changed');
+    await expect(edited).toHaveCount(1);
+    await expect(edited).toContainText('Changed in this update');
+    await expect(edited).toContainText('Before this update');
+    await expect(edited).toContainText('Snapshot system request');
+    await expect(page.getByText(/^Previous: /)).toHaveCount(0);
+    await expect(page.getByText(/current request/i)).toHaveCount(0);
+    // The summary link moves the reader to the edited field.
+    await page
+      .getByRole('navigation', { name: 'Changes in this update' })
+      .getByRole('link', { name: 'Title' })
+      .click();
+    await expect(edited).toBeFocused();
     await expect(
       page
         .getByRole('navigation', { name: 'Breadcrumbs' })
+        .getByRole('link', { name: 'Request History', exact: true }),
+    ).toHaveAttribute('href', `/requests/${draft.id}/history`);
+    await expect(
+      page
+        .getByRole('main')
         .getByRole('link', { name: 'Request History', exact: true }),
     ).toHaveAttribute('href', `/requests/${draft.id}/history`);
     await page.screenshot({
@@ -110,9 +131,12 @@ test(
       .getByRole('link', { name: 'View Request Snapshot', exact: true })
       .nth(1)
       .click();
-    await expect(
-      page.getByRole('heading', { name: 'Request submitted', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(/^Request submitted · By /)).toBeVisible();
+    // Submitting moved the request out of Draft.
+    await expect(page.locator('#request-snapshot-status dd')).toHaveText([
+      'Draft',
+      target.name,
+    ]);
     await expect(
       page.getByText('Snapshot system request', { exact: true }),
     ).toBeVisible();
