@@ -85,7 +85,7 @@ describe('AppController (e2e)', () => {
     updateUser: jest.fn(),
   };
   const excelExportService = {
-    exportRequests: jest.fn(),
+    tryDirectExport: jest.fn(),
     exportAllRequests: jest.fn(),
   };
   const exportJobRepository = {
@@ -168,7 +168,7 @@ describe('AppController (e2e)', () => {
       role: 'admin',
       setupOwnerDepartment: null,
     });
-    excelExportService.exportRequests.mockResolvedValue({
+    excelExportService.tryDirectExport.mockResolvedValue({
       content: Buffer.from('xlsx-content'),
       filename: 'psf_requests_20260619_000506.xlsx',
     });
@@ -286,7 +286,7 @@ describe('AppController (e2e)', () => {
       failureMessage: null,
       claimToken: null,
     };
-    pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
+    pool.query.mockResolvedValueOnce({ rows: [{ total: 10001 }] });
     exportJobRepository.enqueue.mockResolvedValueOnce(queuedJob);
 
     await request(app.getHttpServer() as Parameters<typeof request>[0])
@@ -299,7 +299,7 @@ describe('AppController (e2e)', () => {
           statusUrl: `/requests/export-jobs/${queuedJob.id}`,
         });
       });
-    expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+    expect(excelExportService.tryDirectExport).not.toHaveBeenCalled();
 
     await request(app.getHttpServer() as Parameters<typeof request>[0])
       .get('/api/health')
@@ -1693,7 +1693,7 @@ describe('AppController (e2e)', () => {
       )
       .expect(() => {
         expect(authService.getProfile).toHaveBeenCalledWith('admin-1');
-        expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+        expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
           {
             status: 'Submitted',
             requestDateFrom: '2026-06-01',
@@ -1706,7 +1706,7 @@ describe('AppController (e2e)', () => {
             role: 'admin',
             setupOwnerDepartment: null,
           },
-          2000,
+          10000,
         );
       });
   });
@@ -1727,10 +1727,10 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect(() => {
         expect(authService.getProfile).toHaveBeenCalledWith(requesterActor.id);
-        expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+        expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
           { status: 'Submitted' },
           requesterActor,
-          2000,
+          10000,
         );
       });
   });
@@ -1754,7 +1754,7 @@ describe('AppController (e2e)', () => {
       failureMessage: null,
       claimToken: null,
     };
-    pool.query.mockResolvedValueOnce({ rows: [{ total: 2001 }] });
+    pool.query.mockResolvedValueOnce({ rows: [{ total: 10001 }] });
     exportJobRepository.enqueue.mockResolvedValueOnce(queuedJob);
 
     await request(app.getHttpServer() as Parameters<typeof request>[0])
@@ -1766,7 +1766,7 @@ describe('AppController (e2e)', () => {
           status: 'queued',
           statusUrl: `/requests/export-jobs/${jobId}`,
         });
-        expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+        expect(excelExportService.tryDirectExport).not.toHaveBeenCalled();
       });
 
     exportJobRepository.findOwned.mockResolvedValueOnce(null);
@@ -1834,10 +1834,10 @@ describe('AppController (e2e)', () => {
       )
       .expect(() => {
         expect(authService.getProfile).toHaveBeenCalledWith(setupOwnerActor.id);
-        expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+        expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
           {},
           setupOwnerActor,
-          2000,
+          10000,
         );
       });
   });
