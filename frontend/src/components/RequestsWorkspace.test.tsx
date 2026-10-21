@@ -2690,6 +2690,24 @@ describe('Request Attachments', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith([staged, atLimit])
   })
 
+  it('reads a staged file type the way the server does', async () => {
+    const onChange = vi.fn()
+    let panel = await loadStaged([], onChange)
+
+    // The server stores `build.JS. ` as `build.JS`, which it refuses.
+    chooseStaged(panel, [new File(['x'], 'build.JS. ')])
+    panel = renderStaged([], onChange)
+    expect(errorNotices(panel)).toEqual(['build.JS.  cannot be attached: executable and script files are not allowed.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    // A name that starts with its only dot has no type on the server, so `.js` is accepted there.
+    const dotfile = new File(['x'], '.js')
+    chooseStaged(panel, [dotfile])
+    panel = renderStaged([], onChange)
+    expect(errorNotices(panel)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([dotfile])
+  })
+
   it('stages files chosen while the policy is loading, then refuses those it rules out once it arrives', async () => {
     let arrive: (policy: { maxBytes: number; blockedExtensions: string[] }) => void = () => {}
     requestDetailApi.fetchAttachmentPolicy.mockReturnValue(new Promise((resolve) => { arrive = resolve }))
