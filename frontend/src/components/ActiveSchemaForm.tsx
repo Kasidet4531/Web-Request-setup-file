@@ -183,8 +183,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  // The last save's result, reported in the action bar where the save was started.
+  const [saveFeedback, setSaveFeedback] = useState<DynamicFormActionFeedback>()
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   const [upgradeError, setUpgradeError] = useState<string | null>(null)
   const [submissionConflictError, setSubmissionConflictError] = useState<string | null>(null)
@@ -205,6 +205,12 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     valuesRef.current = nextValues
     setValues(nextValues)
     setHasUnsavedChanges(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current))
+  }
+
+  /** Clears the last save's result from the action bar and a Draft schema upgrade's from the top of the card. */
+  function clearFeedback() {
+    setSaveFeedback(undefined)
+    setUpgradeMessage(null)
   }
 
   function invalidateRuntimeAutofill() {
@@ -249,9 +255,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           const classification = classifyDraftSchemaVersion(mode, request, requestSchema)
           const resolvedSchema = resolveRequestFormSchema(mode, request, requestSchema)
           setLoadError(null)
-          setSaveError(null)
-          setSaveMessage(null)
-          setUpgradeMessage(null)
+          clearFeedback()
           setUpgradeError(null)
           setErrors({})
           setCurrentRequest(request)
@@ -285,9 +289,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         }
 
         setLoadError(null)
-        setSaveError(null)
-        setSaveMessage(null)
-        setUpgradeMessage(null)
+        clearFeedback()
         setUpgradeError(null)
         setErrors({})
         setCurrentRequest(null)
@@ -526,8 +528,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   function startInformationEdit() {
     if (formUnavailable) return
     // The last save's result stays in the action bar until editing starts again.
-    setSaveError(null)
-    setSaveMessage(null)
+    clearFeedback()
     setEditingInformation(true)
   }
 
@@ -539,9 +540,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setAutofillStatuses({})
     setErrors({})
     setAutofillError(null)
-    setSaveError(null)
-    setSaveMessage(null)
-    setUpgradeMessage(null)
+    clearFeedback()
     onDirtyChange?.(false)
     setEditingInformation(false)
   }
@@ -639,9 +638,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         : currentStatuses,
     )
     setAutofillError(null)
-    setSaveError(null)
-    setSaveMessage(null)
-    setUpgradeMessage(null)
+    clearFeedback()
 
     if (
       mode !== 'request' ||
@@ -679,9 +676,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setDraftSchemaDecision('remain')
     setUpgradeError(null)
     setSubmissionConflictError(null)
-    setSaveError(null)
-    setSaveMessage(null)
-    setUpgradeMessage(null)
+    clearFeedback()
   }
 
   function reloadDraftSchema() {
@@ -710,9 +705,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     invalidateRuntimeAutofill()
     setSaving(true)
     onSavingChange?.(true)
-    setSaveError(null)
-    setSaveMessage(null)
-    setUpgradeMessage(null)
+    clearFeedback()
 
     try {
       const savedRequest = currentRequest
@@ -748,7 +741,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setAutofillStatuses({})
       replaceValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
       setEditingInformation(false)
-      setSaveMessage(savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.')
+      setSaveFeedback({ kind: 'success', message: savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.' })
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && currentRequest) {
         try {
@@ -797,12 +790,12 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
               ? 'This Draft schema does not match the active request schema. Your edits are preserved, but it cannot be saved. Reload the Draft.'
               : null,
           )
-          setSaveError('This request changed in another session. Your unsaved requester values are preserved; review them against the latest revision before saving again.')
+          setSaveFeedback({ kind: 'error', message: 'This request changed in another session. Your unsaved requester values are preserved; review them against the latest revision before saving again.' })
         } catch {
-          setSaveError('This request changed in another session. Your unsaved requester values are preserved; reload before saving again.')
+          setSaveFeedback({ kind: 'error', message: 'This request changed in another session. Your unsaved requester values are preserved; reload before saving again.' })
         }
       } else {
-        setSaveError(error instanceof Error ? error.message : 'Unable to save draft request')
+        setSaveFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Unable to save draft request' })
       }
     } finally {
       mutationLock.finish()
@@ -830,9 +823,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setUpgradePending(true)
     onSavingChange?.(true)
     setUpgradeError(null)
-    setSaveError(null)
-    setSaveMessage(null)
-    setUpgradeMessage(null)
+    clearFeedback()
 
     try {
       const upgradedRequest = await api.upgradeDraftSchema(currentRequest.id, {
@@ -876,11 +867,6 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     }
   }
 
-  // A save is reported in the action bar, where it was started.
-  const actionFeedback: DynamicFormActionFeedback | undefined = saving
-    ? { kind: 'pending', message: 'Saving requester information…' }
-    : saveError ? { kind: 'error', message: saveError }
-      : saveMessage ? { kind: 'success', message: saveMessage } : undefined
 
   let editState = currentRequest ? 'Saved' : 'Not saved'
   if (hasUnsavedChanges) editState = 'Unsaved changes'
@@ -962,7 +948,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         ) : null}
       </div>
       <DynamicFormRenderer
-        actionFeedback={actionFeedback}
+        actionFeedback={saving ? { kind: 'pending', message: 'Saving requester information…' } : saveFeedback}
         deleteAction={deleteAction}
         errors={errors}
         footerActions={usesExplicitEdit && editingInformation && !readOnly ? (

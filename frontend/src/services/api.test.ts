@@ -388,7 +388,7 @@ describe('createApiClient', () => {
     }))
   })
 
-  it('reads the Attachment policy from its request-independent route', async () => {
+  it('reads the Attachment Policy from its request-independent route', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ maxBytes: 52428800, blockedExtensions: ['.exe'] }), {
         status: 200,

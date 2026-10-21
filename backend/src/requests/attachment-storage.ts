@@ -41,7 +41,7 @@ const MIME_TYPES: Record<string, string> = {
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
 /** Executable and script files are never Attachments; the pickers show this list. */
-export const BLOCKED_ATTACHMENT_EXTENSIONS: readonly string[] = [
+const BLOCKED_ATTACHMENT_EXTENSIONS: readonly string[] = [
   '.exe',
   '.bat',
   '.cmd',

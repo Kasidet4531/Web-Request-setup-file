@@ -2690,6 +2690,51 @@ describe('Request Attachments', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith([staged, atLimit])
   })
 
+  it('reads a staged file type the way the server does', async () => {
+    const onChange = vi.fn()
+    let panel = await loadStaged([], onChange)
+
+    // The server stores `build.JS. ` as `build.JS`, which it refuses.
+    chooseStaged(panel, [new File(['x'], 'build.JS. ')])
+    panel = renderStaged([], onChange)
+    expect(errorNotices(panel)).toEqual(['build.JS.  cannot be attached: executable and script files are not allowed.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    // A name that starts with its only dot has no type on the server, so `.js` is accepted there.
+    const dotfile = new File(['x'], '.js')
+    chooseStaged(panel, [dotfile])
+    panel = renderStaged([], onChange)
+    expect(errorNotices(panel)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([dotfile])
+  })
+
+  it('stages files chosen while the policy is loading, then refuses those it rules out once it arrives', async () => {
+    let arrive: (policy: { maxBytes: number; blockedExtensions: string[] }) => void = () => {}
+    requestDetailApi.fetchAttachmentPolicy.mockReturnValue(new Promise((resolve) => { arrive = resolve }))
+    const onChange = vi.fn()
+    let panel = renderStaged([], onChange)
+    requestDetailHookHarness.runEffects()
+    expect(pickerHint(panel, 'Add files')).toBeNull()
+
+    // Attaching never waits for the policy.
+    const layout = new File(['x'], 'job.lay')
+    const tool = new File(['x'], 'tool.exe')
+    const huge = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'wafer-map.zip')
+    chooseStaged(panel, [layout, tool, huge])
+    expect(onChange).toHaveBeenLastCalledWith([layout, tool, huge])
+    renderStaged([layout, tool, huge], onChange)
+    requestDetailHookHarness.runEffects()
+
+    arrive({ maxBytes: 5 * 1024 * 1024, blockedExtensions: ['.exe', '.js'] })
+    await flushRequestDetailAsyncWork()
+    expect(onChange).toHaveBeenLastCalledWith([layout])
+    panel = renderStaged([layout], onChange)
+    expect(errorNotices(panel)).toEqual([
+      'tool.exe cannot be attached: executable and script files are not allowed. wafer-map.zip is larger than the 5.0 MB attachment limit.',
+    ])
+    expect(pickerHint(panel, 'Add files')).toBe('Up to 5.0 MB per file · Not allowed: .exe, .js')
+  })
+
   it('keeps both pickers working without hints or a client-side check when the policy cannot be loaded', async () => {
     requestDetailApi.fetchAttachmentPolicy.mockRejectedValue(new ApiError('Internal server error', 500, 'Internal Server Error', null))
     const saved = await loadPanel()

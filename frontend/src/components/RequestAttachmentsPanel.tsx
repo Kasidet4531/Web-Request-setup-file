@@ -9,16 +9,21 @@ import { api, type AttachmentPolicy, type RequestAttachment, type RequestAttachm
 /**
  * The server's per-file limit and blocked file types. Null until loaded, and
  * for good if loading fails: pickers then show no hint and check nothing,
- * and the server still refuses what it always refuses.
+ * and the server still refuses what it always refuses. `onLoaded` runs with
+ * the latest render's props when the policy arrives.
  */
-function useAttachmentPolicy(): AttachmentPolicy | null {
+function useAttachmentPolicy(onLoaded?: (policy: AttachmentPolicy) => void): AttachmentPolicy | null {
   const [policy, setPolicy] = useState<AttachmentPolicy | null>(null)
+  const onLoadedRef = useRef(onLoaded)
+  useEffect(() => { onLoadedRef.current = onLoaded })
   useEffect(() => {
     let active = true
     async function loadPolicy() {
       try {
         const loaded = await api.fetchAttachmentPolicy()
-        if (active) setPolicy(loaded)
+        if (!active) return
+        setPolicy(loaded)
+        onLoadedRef.current?.(loaded)
       } catch {
         // No hint and no client-side check; uploads still work.
       }
@@ -34,13 +39,33 @@ function policyHint(policy: AttachmentPolicy): string {
   return `Up to ${formatFileSize(policy.maxBytes)} per file${blocked}`
 }
 
-/** What the server would answer for the first file it would refuse, as the upload path words it. */
+/**
+ * The file type as the upload path reads it: Node's `path.extname` of the name it stores, which drops
+ * trailing dots and spaces. A name whose only dot comes first, such as `.sh`, has no type there.
+ */
+function storedExtension(name: string): string {
+  const stored = name.trim().replace(/[. ]+$/, '')
+  const dot = stored.lastIndexOf('.')
+  return dot > 0 ? stored.slice(dot).toLowerCase() : ''
+}
+
+/**
+ * Why the upload path would refuse a file, or null. Both messages name the file as chosen. A blocked
+ * type is worded as the server words it; an oversized file states the limit as the picker's hint does
+ * (`formatFileSize`), where the server's message gives the byte count.
+ */
+function fileRefusal(file: File, policy: AttachmentPolicy): string | null {
+  if (policy.blockedExtensions.includes(storedExtension(file.name)))
+    return `${file.name} cannot be attached: executable and script files are not allowed.`
+  if (file.size > policy.maxBytes) return `${file.name} is larger than the ${formatFileSize(policy.maxBytes)} attachment limit.`
+  return null
+}
+
+/** The refusal of the first file in a selection that the upload path would refuse, or null. */
 function refusedFile(files: File[], policy: AttachmentPolicy): string | null {
   for (const file of files) {
-    const name = file.name.toLowerCase()
-    if (policy.blockedExtensions.some((extension) => name.endsWith(extension)))
-      return `${file.name} cannot be attached: executable and script files are not allowed.`
-    if (file.size > policy.maxBytes) return `${file.name} is larger than the ${formatFileSize(policy.maxBytes)} attachment limit.`
+    const refusal = fileRefusal(file, policy)
+    if (refusal) return refusal
   }
   return null
 }
@@ -237,7 +262,13 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
 /** Files chosen on New Request before its Draft exists; uploaded once it is saved. */
 export function StagedAttachmentsPanel({ files, disabled = false, error, onChange }: { files: File[]; disabled?: boolean; error?: string | null; onChange: (files: File[]) => void }) {
   const [rejected, setRejected] = useState<string | null>(null)
-  const policy = useAttachmentPolicy()
+  // Files chosen while the policy was loading are checked when it arrives, so they are not refused only after the Draft is created.
+  const policy = useAttachmentPolicy((loaded) => {
+    const refusals = files.map((file) => fileRefusal(file, loaded))
+    if (!refusals.some(Boolean)) return
+    setRejected(refusals.filter(Boolean).join(' '))
+    onChange(files.filter((_, index) => !refusals[index]))
+  })
   const hint = policy ? policyHint(policy) : null
   const hintId = hint ? 'staged-attachments-policy' : undefined
   return (

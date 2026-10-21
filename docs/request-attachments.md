@@ -1,6 +1,6 @@
 # Request Attachments and request IDs
 
-Implemented in source on 20 October 2026 for issue #78; the Attachment policy
+Implemented in source on 20 October 2026 for issue #78; the Attachment Policy
 route and the picker limits were added on 21 October 2026 for issue #89. Source
 is authoritative; this guide describes the source as of those changes. It is
 not deployment
@@ -51,7 +51,7 @@ unquoted (`ATTACHMENT_STORAGE_PATH=Z:/attachment`): inside double quotes `\n`
 becomes a line break. Restart the backend after changing it.
 `ATTACHMENT_MAX_BYTES` limits each file (default 52428800, 50 MB); uploads are
 held in memory up to that size. The pickers show this limit, read from the
-[Attachment policy](#access-and-api) route, so changing it and restarting the
+[Attachment Policy](#access-and-api) route, so changing it and restarting the
 backend changes the hint with no frontend change.
 
 Any number of files can be attached. The browser sends them in batches of up
@@ -76,7 +76,7 @@ Each request has one folder directly under the root:
 - `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.ps1`, `.sh` and `.vbs` files are
   refused, as are Windows/macOS system files (`Thumbs.db`, `desktop.ini`,
   `.DS_Store`, `~$…`), which listings also ignore. The extension list is
-  defined only in the backend and served by the Attachment policy route; the
+  defined only in the backend and served by the Attachment Policy route; the
   system files are not part of it.
 - Saving a changed Product_Description renames the folder and updates stored
   paths in the same save; if the save fails, the rename is undone. If a folder
@@ -140,7 +140,7 @@ Source: [check script](../backend/scripts/check-attachment-folders.ts).
 | `DELETE /api/requests/:requestId/attachments/:attachmentId` | Same as upload |
 | `GET /api/attachment-policy` → `{ maxBytes, blockedExtensions }` | Anyone signed in, any role; 401 otherwise |
 
-The **Attachment policy** is what the upload path refuses: `maxBytes` is
+The **Attachment Policy** is what the upload path refuses: `maxBytes` is
 `ATTACHMENT_MAX_BYTES` and `blockedExtensions` the blocked extensions in
 lower case with their dot (`[".exe", ".bat", ".cmd", ".com", ".msi", ".ps1",
 ".sh", ".vbs"]`). Both come from the same storage configuration that uploads
@@ -184,7 +184,12 @@ Source: [controller](../backend/src/requests/request-attachments.controller.ts),
   ("`name` is larger than the 50.0 MB attachment limit.") or has a blocked
   type ("`name` cannot be attached: executable and script files are not
   allowed.") is refused at selection, and nothing from that selection is added.
-  On a saved request files upload at once and the server's refusal is shown.
+  The type is read as the server reads it, from the last dot of the name once
+  trailing dots and spaces are dropped, so `tool.exe.` is refused and a file
+  named just `.sh` is not. Files chosen while the policy is still loading are
+  staged, then checked when it arrives: any it rules out leave the list with
+  the same messages. On a saved request files upload at once and the server's
+  refusal is shown.
 - **Without the policy:** if it cannot be loaded, both pickers still work with
   no hint and no client-side check; the server still refuses oversized and
   blocked files, so on New Request they fail after the Draft is saved, with
@@ -225,6 +230,11 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
   [New Request refusal, desktop/light](verification/assets/2026-10-21-attachment-policy/new-request-oversized-desktop-light.png),
   [Draft picker, desktop/light](verification/assets/2026-10-21-attachment-policy/draft-attachments-desktop-light.png),
   [New Request hint, phone/dark](verification/assets/2026-10-21-attachment-policy/new-request-hint-mobile-dark.png).
+- After code review, on the review-fix branch: frontend tests check that files
+  chosen while the policy is loading are staged and, once it arrives, the ones
+  it rules out are removed with their refusals, and that the type is read like
+  the server's `path.extname` (`build.JS. ` refused, `.js` accepted). These
+  two were not re-checked in a browser.
 
 20 October 2026, on the feature branch:
 

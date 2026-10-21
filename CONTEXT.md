@@ -83,7 +83,7 @@ _Avoid_: Version number, revision
 An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]` and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too. Implemented 20 October 2026; see [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
 
-**Attachment policy**:
+**Attachment Policy**:
 What the server refuses on upload: the per-file size limit (`ATTACHMENT_MAX_BYTES`) and the blocked file extensions. It is served to every signed-in role, independent of any request, so each Attachment picker can state it before files are chosen; the backend holds the only copy. Added 21 October 2026; see [Request Attachments](docs/request-attachments.md#access-and-api).
 _Avoid_: Upload rules, file restrictions
 

@@ -20,7 +20,7 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
-| [Request Attachments and request IDs](request-attachments.md) | NAS folder layout, reconciliation, access, request numbering, screens and dated verification scope (issue #78) |
+| [Request Attachments and request IDs](request-attachments.md) | NAS folder layout, reconciliation, access and the Attachment Policy, request numbering, screens and dated verification scope (issues #78 and #89) |
 | [Draft management and reminders](draft-management-and-reminders.md) | Admin readonly inspection, creator/Admin permanent deletion, cleanup, seven-day notification and team filters |
 | [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and dated offline/LAN verification scope; merged into main |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
