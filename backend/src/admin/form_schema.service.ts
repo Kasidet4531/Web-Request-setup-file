@@ -120,9 +120,10 @@ export class FormSchemaService implements OnModuleInit {
   async getActiveSchema(
     formKey: string = PSF_REQUEST_FORM_KEY,
     includeRuntimeAutofill = false,
+    queryRunner: QueryRunner = this.pool,
   ): Promise<ActiveFormSchemaResponse> {
     this.assertSupportedFormKey(formKey);
-    const result = await this.pool.query<FormDefinitionRow>(
+    const result = await queryRunner.query<FormDefinitionRow>(
       `
         SELECT form_key, version, title, description, status, schema_json, published_at
         FROM form_definitions
@@ -142,7 +143,7 @@ export class FormSchemaService implements OnModuleInit {
 
     const schema = this.normalizeSchemaForResponse(activeSchema);
     if (includeRuntimeAutofill && formKey === PSF_REQUEST_FORM_KEY) {
-      const rules = await this.pool.query<{ trigger_canonical_key: string }>(
+      const rules = await queryRunner.query<{ trigger_canonical_key: string }>(
         `
         SELECT trigger_canonical_key FROM autofill_rules
         WHERE form_key = $1 AND status = 'active'

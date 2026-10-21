@@ -19,6 +19,7 @@ import type {
 } from '../auth/session.types';
 import { SearchIndexService } from '../requests/search-index.service';
 import {
+  DEFAULT_SYNC_THRESHOLD,
   ExcelExportService,
   type RequestExportFilters,
 } from './excel_export.service';
@@ -62,10 +63,21 @@ export class ExportController {
   ): Promise<void> {
     const actor = await this.getExportActor(request);
     const filters = this.parseExportFilters(query);
-    const synchronousThreshold = this.getSynchronousExportThreshold();
+    const directExportThreshold = this.getDirectExportThreshold();
     const total = await this.searchIndexService.countExportRequests(filters);
 
-    if (total > synchronousThreshold) {
+    // Exports above the threshold, or within it while every direct export
+    // slot is busy, run in the queue one at a time.
+    const exportResult =
+      total > directExportThreshold
+        ? null
+        : await this.excelExportService.tryDirectExport(
+            filters,
+            actor,
+            directExportThreshold,
+          );
+
+    if (!exportResult) {
       const job = await this.exportJobRepository.enqueue(filters, actor);
       response.status(202).json({
         id: job.id,
@@ -74,12 +86,6 @@ export class ExportController {
       });
       return;
     }
-
-    const exportResult = await this.excelExportService.exportRequests(
-      filters,
-      actor,
-      synchronousThreshold,
-    );
 
     response.setHeader('Content-Type', XLSX_CONTENT_TYPE);
     response.setHeader(
@@ -222,16 +228,16 @@ export class ExportController {
     return this.getAuthenticatedActor(request);
   }
 
-  private getSynchronousExportThreshold(): number {
+  private getDirectExportThreshold(): number {
     const configured = this.configService.get<string | number>(
       'EXPORT_SYNC_THRESHOLD',
-      2000,
+      DEFAULT_SYNC_THRESHOLD,
     );
     const threshold =
       typeof configured === 'number' ? configured : Number(configured);
 
     if (!Number.isFinite(threshold) || threshold < 1) {
-      return 2000;
+      return DEFAULT_SYNC_THRESHOLD;
     }
 
     return Math.trunc(threshold);

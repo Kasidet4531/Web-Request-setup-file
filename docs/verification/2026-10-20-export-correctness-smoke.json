@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-10-20T15:29:56.086Z",
+  "node": "v24.19.0",
+  "exceljs": "4.4.0",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "memoryLimitMiB": 8192,
+  "workerHeapLimitMiB": 3072,
+  "fixtureColumns": 73,
+  "outputColumns": 76,
+  "historicalFields": [
+    "Allow to probe on crack pad (bin 103)",
+    "Edge die count of EWM Shipped map at DOWN",
+    "Edge die count of EWM Shipped map at LEFT",
+    "Edge die count of EWM Shipped map at RIGHT",
+    "Edge die count of EWM Shipped map at TOP",
+    "FPC",
+    "Notch Direction for Probe"
+  ],
+  "generatedFields": [
+    "Due Date",
+    "Remark",
+    "Start Date",
+    "Status",
+    "Workflow Name",
+    "Created By",
+    "Modified By"
+  ],
+  "datasets": [
+    {
+      "rows": 30,
+      "drafts": 37,
+      "total": 67,
+      "canonical_values": 1184,
+      "seedMs": 39.7
+    }
+  ],
+  "cases": [
+    {
+      "rows": 30,
+      "role": "admin",
+      "mode": "candidate",
+      "port": 41403,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-correctness-green/30-candidate-admin.xlsx",
+      "mutateDuringExport": true,
+      "success": true,
+      "exportMs": 59.5,
+      "queryMs": 7.3,
+      "queryCount": 1,
+      "renderMs": 29.5,
+      "bytes": 21699,
+      "writerBytes": 21699,
+      "internedSchemas": 5,
+      "consistentReadSnapshot": true,
+      "concurrentMutationApplied": true,
+      "checkedCells": 2356,
+      "blankCells": 371,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "24539b666d10dab1ddeff2a3841735d251f0900707987c28ab9b375a0f56bcd1",
+      "verifyMs": 24.9,
+      "maxRssMiB": 201.2
+    },
+    {
+      "rows": 30,
+      "role": "requester",
+      "mode": "candidate",
+      "port": 41403,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-correctness-green/30-candidate-requester.xlsx",
+      "mutateDuringExport": true,
+      "success": true,
+      "exportMs": 58.9,
+      "queryMs": 6.9,
+      "queryCount": 1,
+      "renderMs": 30.7,
+      "bytes": 21089,
+      "writerBytes": 21089,
+      "internedSchemas": 5,
+      "consistentReadSnapshot": true,
+      "concurrentMutationApplied": true,
+      "checkedCells": 2356,
+      "blankCells": 596,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "44328f289bc2cf21676d11e8526a3033fa2309e6f4fc6b6781ff18988fd7c1d7",
+      "verifyMs": 21.9,
+      "maxRssMiB": 187.2
+    }
+  ],
+  "postgres": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+  "queryChecks": {
+    "filterCases": 4,
+    "versionOnlySubstitutionRejected": true,
+    "concurrentReorder": [
+      {
+        "mode": "current",
+        "duplicatesInFirst20": 1,
+        "consistentSnapshot": false
+      },
+      {
+        "mode": "candidate",
+        "duplicatesInFirst20": 0,
+        "consistentSnapshot": true
+      }
+    ]
+  },
+  "strictCellAcceptancePassed": true
+}

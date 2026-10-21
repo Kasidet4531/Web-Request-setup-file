@@ -36,7 +36,9 @@ run the repository's PostgreSQL 15 Compose service from the repository root.
 | `INITIAL_ADMIN_USERNAME` | Optional username upserted as local Admin at startup |
 | `DEV_AUTH_ENABLED` | Exact `true` opts into mock login in development/test only |
 | `PORT` | API listen port; default 3000 |
-| `EXPORT_SYNC_THRESHOLD` | XLSX sync/background boundary; default 2000 |
+| `EXPORT_SYNC_THRESHOLD` | Largest export (in requests) served as a Direct Export; larger ones become an Export Job. Default 10000 |
+| `EXPORT_SYNC_MAX_CONCURRENT` | Direct Exports allowed at once in one backend process; another export within the threshold is queued. Default 2 |
+| `EXPORT_WORKER_MAX_MEMORY_MB` | Export Memory Limit on each workbook worker's JavaScript heap; an export over it fails alone. Default 1024 |
 | `EXPORT_JOB_POLL_INTERVAL_MS`, `EXPORT_JOB_STALE_AFTER_MS`, `EXPORT_JOB_MAXIMUM_ATTEMPTS` | Optional background-job processor settings |
 | `ATTACHMENT_STORAGE_PATH` | Root of the request Attachment folders: mapped drive, UNC path or local directory. Unset disables Attachments (503) |
 | `ATTACHMENT_MAX_BYTES` | Largest Attachment file in bytes; default 52428800 (50 MB). Served by `GET /api/attachment-policy`, so the pickers show it after a restart |

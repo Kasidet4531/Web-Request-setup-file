@@ -1,0 +1,79 @@
+{
+  "source": "compiled application service/worker, fixture search paging only",
+  "cases": [
+    {
+      "count": 16,
+      "file": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-format/preview.xlsx",
+      "exportMs": 337,
+      "bytes": 16252,
+      "cellXfs": 4,
+      "checkedCells": 1292,
+      "blankCells": 227,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "6d49c4db050d0a1daac125ff109f4bdd7274d359982e9aa34571a7e4f3079327",
+      "verifyMs": 26.5
+    },
+    {
+      "count": 5570,
+      "file": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-format/5570-styled.xlsx",
+      "exportMs": 1143,
+      "bytes": 2443785,
+      "cellXfs": 4,
+      "checkedCells": 423396,
+      "blankCells": 75529,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+      "verifyMs": 741.5
+    },
+    {
+      "count": 100000,
+      "file": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-format/100000-styled.xlsx",
+      "exportMs": 16353,
+      "bytes": 45250102,
+      "cellXfs": 4,
+      "checkedCells": 7600076,
+      "blankCells": 1355819,
+      "diffs": 0,
+      "lineEndingDiffs": 0,
+      "otherDiffs": 0,
+      "strictPass": true,
+      "differenceExamples": [],
+      "logicalSha256": "a9cc7f4354349d19408c8c62862f5276680fdbf658b42599d18039788b1082f9",
+      "verifyMs": 35561.6
+    }
+  ],
+  "change": "Header color, alternating row fills and readable column widths only",
+  "sourceSha256": "c8646dc168488bf56f193159d8f5166f8d710830bb5adf4d16e44ec33fd45d8a",
+  "previousCommit": "69aec6e",
+  "largeFixtureActor": "admin; all three roles remain covered by the 64-test export regression",
+  "styles": {
+    "header": "#1F4E78 / bold white text, wrap and 32-point height",
+    "dataRows": ["#FFFFFF", "#EAF2F8"],
+    "cellXfs": 4,
+    "columnWidths": "22–42 characters, status 36, dates 26, 12NC identifiers 30"
+  },
+  "writerComparison": {
+    "scope": "single writer-only before/after pair, same 100000 fixture objects; no DB, HTTP or worker handoff",
+    "results": [
+      {
+        "name": "before",
+        "ms": 11798,
+        "bytes": 43473093
+      },
+      {
+        "name": "after",
+        "ms": 12891,
+        "bytes": 45250102
+      }
+    ]
+  },
+  "verificationScope": "Real compiled export service and worker with fixture query paging; independent full-cell oracle and matching pre-formatting logical digests. No PostgreSQL or HTTP re-benchmark for this formatting-only change."
+}

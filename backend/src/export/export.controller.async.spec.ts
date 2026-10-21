@@ -37,7 +37,7 @@ const queuedJob = {
 
 describe('ExportController async lifecycle', () => {
   let authService: { getProfile: jest.Mock };
-  let excelExportService: { exportRequests: jest.Mock };
+  let excelExportService: { tryDirectExport: jest.Mock };
   let searchIndexService: { countExportRequests: jest.Mock };
   let exportJobRepository: {
     enqueue: jest.Mock;
@@ -55,7 +55,7 @@ describe('ExportController async lifecycle', () => {
 
   beforeEach(() => {
     authService = { getProfile: jest.fn().mockResolvedValue(adminActor) };
-    excelExportService = { exportRequests: jest.fn() };
+    excelExportService = { tryDirectExport: jest.fn() };
     searchIndexService = {
       countExportRequests: jest.fn().mockResolvedValue(0),
     };
@@ -86,7 +86,7 @@ describe('ExportController async lifecycle', () => {
   it('keeps exactly-at-threshold exports synchronous and reuses the original XLSX response path', async () => {
     const content = Buffer.from('xlsx-content');
     searchIndexService.countExportRequests.mockResolvedValueOnce(2000);
-    excelExportService.exportRequests.mockResolvedValueOnce({
+    excelExportService.tryDirectExport.mockResolvedValueOnce({
       content,
       filename: 'psf_requests_20260820_070300.xlsx',
     });
@@ -107,7 +107,7 @@ describe('ExportController async lifecycle', () => {
     expect(searchIndexService.countExportRequests).toHaveBeenCalledWith({
       status: 'Submitted',
     });
-    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+    expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
       { status: 'Submitted' },
       adminActor,
       2000,
@@ -141,7 +141,71 @@ describe('ExportController async lifecycle', () => {
       { status: 'Submitted' },
       adminActor,
     );
-    expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+    expect(excelExportService.tryDirectExport).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(202);
+    expect(response.json).toHaveBeenCalledWith({
+      id: queuedJob.id,
+      status: 'queued',
+      statusUrl: `/requests/export-jobs/${queuedJob.id}`,
+    });
+  });
+
+  it('serves up to 10,000 requests as a Direct Export when EXPORT_SYNC_THRESHOLD is not set', async () => {
+    const content = Buffer.from('xlsx-content');
+    configService.get.mockImplementation(
+      (_name: string, fallback: unknown) => fallback,
+    );
+    searchIndexService.countExportRequests.mockResolvedValueOnce(10000);
+    excelExportService.tryDirectExport.mockResolvedValueOnce({
+      content,
+      filename: 'psf_requests_20260820_070300.xlsx',
+    });
+    const exportController = controller as unknown as {
+      exportRequests: (
+        query: Record<string, unknown>,
+        request: { session: { userId?: string } },
+        httpResponse: typeof response,
+      ) => Promise<void>;
+    };
+
+    await exportController.exportRequests(
+      { status: 'Submitted' },
+      { session: { userId: adminActor.id } },
+      response,
+    );
+
+    expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
+      { status: 'Submitted' },
+      adminActor,
+      10000,
+    );
+    expect(exportJobRepository.enqueue).not.toHaveBeenCalled();
+    expect(response.end).toHaveBeenCalledWith(content);
+  });
+
+  it('queues an Export Job within the threshold when every Direct Export slot is busy', async () => {
+    searchIndexService.countExportRequests.mockResolvedValueOnce(10);
+    excelExportService.tryDirectExport.mockResolvedValueOnce(null);
+    exportJobRepository.enqueue.mockResolvedValueOnce(queuedJob);
+    const exportController = controller as unknown as {
+      exportRequests: (
+        query: Record<string, unknown>,
+        request: { session: { userId?: string } },
+        httpResponse: typeof response,
+      ) => Promise<void>;
+    };
+
+    await exportController.exportRequests(
+      { status: 'Submitted' },
+      { session: { userId: adminActor.id } },
+      response,
+    );
+
+    expect(exportJobRepository.enqueue).toHaveBeenCalledWith(
+      { status: 'Submitted' },
+      adminActor,
+    );
+    expect(response.end).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(202);
     expect(response.json).toHaveBeenCalledWith({
       id: queuedJob.id,

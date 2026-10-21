@@ -1,0 +1,233 @@
+{
+  "timestamp": "2026-10-20T15:17:48.733Z",
+  "node": "v24.19.0",
+  "exceljs": "4.4.0",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "memoryLimitMiB": 8192,
+  "workerHeapLimitMiB": 3072,
+  "fixtureColumns": 73,
+  "outputColumns": 76,
+  "historicalFields": [
+    "Allow to probe on crack pad (bin 103)",
+    "Edge die count of EWM Shipped map at DOWN",
+    "Edge die count of EWM Shipped map at LEFT",
+    "Edge die count of EWM Shipped map at RIGHT",
+    "Edge die count of EWM Shipped map at TOP",
+    "FPC",
+    "Notch Direction for Probe"
+  ],
+  "generatedFields": [
+    "Due Date",
+    "Remark",
+    "Start Date",
+    "Status",
+    "Workflow Name",
+    "Created By",
+    "Modified By"
+  ],
+  "datasets": [
+    {
+      "rows": 30,
+      "drafts": 37,
+      "total": 67,
+      "canonical_values": 1184,
+      "seedMs": 41.4
+    }
+  ],
+  "cases": [
+    {
+      "rows": 30,
+      "role": "admin",
+      "mode": "current",
+      "port": 34985,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale-smoke/30-current-admin.xlsx",
+      "success": true,
+      "exportMs": 427.6,
+      "queryMs": 22.3,
+      "queryCount": 1,
+      "renderMs": null,
+      "bytes": 18937,
+      "writerBytes": 18937,
+      "internedSchemas": 0,
+      "checkedCells": 2356,
+      "blankCells": 371,
+      "diffs": 66,
+      "lineEndingDiffs": 66,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "Auto reprobe bin",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Pass bin(s) : WT3",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Edge die count of EWM Shipped map at LEFT",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "efa989f91d05c7e149e30d48facf4fb26bd6f5acbc85db08d23f16eab30d02cb",
+      "verifyMs": 29.6,
+      "maxRssMiB": 305.7
+    },
+    {
+      "rows": 30,
+      "role": "requester",
+      "mode": "current",
+      "port": 34985,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale-smoke/30-current-requester.xlsx",
+      "success": true,
+      "exportMs": 391.2,
+      "queryMs": 24.9,
+      "queryCount": 1,
+      "renderMs": null,
+      "bytes": 18540,
+      "writerBytes": 18540,
+      "internedSchemas": 0,
+      "checkedCells": 2356,
+      "blankCells": 596,
+      "diffs": 54,
+      "lineEndingDiffs": 54,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "Auto reprobe bin",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Pass bin(s) : WT3",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Edge die count of EWM Shipped map at LEFT",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "4dcd0d76540ad71d5a3080de966202e3fe86ff79ad4776cb03a3442281f7bb35",
+      "verifyMs": 33.4,
+      "maxRssMiB": 292.9
+    },
+    {
+      "rows": 30,
+      "role": "admin",
+      "mode": "candidate",
+      "port": 34985,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale-smoke/30-candidate-admin.xlsx",
+      "success": true,
+      "exportMs": 58.8,
+      "queryMs": 7.1,
+      "queryCount": 1,
+      "renderMs": 30.7,
+      "bytes": 21689,
+      "writerBytes": 21689,
+      "internedSchemas": 5,
+      "checkedCells": 2356,
+      "blankCells": 371,
+      "diffs": 66,
+      "lineEndingDiffs": 66,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "Auto reprobe bin",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Pass bin(s) : WT3",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Edge die count of EWM Shipped map at LEFT",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "efa989f91d05c7e149e30d48facf4fb26bd6f5acbc85db08d23f16eab30d02cb",
+      "verifyMs": 24.9,
+      "maxRssMiB": 188.8
+    },
+    {
+      "rows": 30,
+      "role": "requester",
+      "mode": "candidate",
+      "port": 34985,
+      "output": "/workspace/Web-Request-setup-file/.worktrees/export-correctness-100k/.cache/export-scale-smoke/30-candidate-requester.xlsx",
+      "success": true,
+      "exportMs": 55.7,
+      "queryMs": 7.4,
+      "queryCount": 1,
+      "renderMs": 28.3,
+      "bytes": 21049,
+      "writerBytes": 21049,
+      "internedSchemas": 5,
+      "checkedCells": 2356,
+      "blankCells": 596,
+      "diffs": 54,
+      "lineEndingDiffs": 54,
+      "otherDiffs": 0,
+      "strictPass": false,
+      "differenceExamples": [
+        {
+          "row": 2,
+          "column": "Auto reprobe bin",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Pass bin(s) : WT3",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        },
+        {
+          "row": 2,
+          "column": "Edge die count of EWM Shipped map at LEFT",
+          "actual": "line 1\nline 2",
+          "expected": "line 1\r\nline 2"
+        }
+      ],
+      "logicalSha256": "4dcd0d76540ad71d5a3080de966202e3fe86ff79ad4776cb03a3442281f7bb35",
+      "verifyMs": 26.7,
+      "maxRssMiB": 188.7
+    }
+  ],
+  "postgres": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+  "queryChecks": {
+    "filterCases": 4,
+    "versionOnlySubstitutionRejected": true,
+    "concurrentReorder": [
+      {
+        "mode": "current",
+        "duplicatesInFirst20": 1,
+        "consistentSnapshot": false
+      },
+      {
+        "mode": "candidate",
+        "duplicatesInFirst20": 1,
+        "consistentSnapshot": false
+      }
+    ]
+  },
+  "strictCellAcceptancePassed": false
+}

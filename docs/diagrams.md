@@ -149,21 +149,27 @@ flowchart TD
   Export[GET /api/requests/export.xlsx] --> Policy[Resolve actor and export scope]
   Policy --> Count[Count filtered records]
   Count --> Threshold{Count greater than threshold?}
-  Threshold -->|No| Sync[Build XLSX in process]
-  Sync --> Download[Return XLSX]
-  Threshold -->|Yes| Queue[(psf_export_jobs)]
-  Queue --> Poll[Background processor claims job]
-  Poll --> Rows[Fetch pages and accumulate rows]
-  Rows --> Worker[Render XLSX in worker]
-  Worker --> Content[Store workbook content in database]
+  Threshold -->|No| Slot{Direct Export slot free?}
+  Slot -->|Yes| Snapshot[Read pages from one snapshot]
+  Snapshot --> Worker[Build XLSX in worker under the memory limit]
+  Worker --> Download[Return XLSX]
+  Slot -->|No| Queue[(psf_export_jobs)]
+  Threshold -->|Yes| Queue
+  Queue --> Poll[Background processor claims one job at a time]
+  Poll --> JobSnapshot[Read pages from one snapshot]
+  JobSnapshot --> JobWorker[Build XLSX in worker under the memory limit]
+  JobWorker --> Content[Store workbook content in database]
   Content --> Owner[Owner-scoped job status/download]
 ```
 
 Sources: [export controller](../backend/src/export/export.controller.ts),
-[workbook](../backend/src/export/excel_export.service.ts),
+[export service and worker](../backend/src/export/excel_export.service.ts),
+[workbook](../backend/src/export/export-workbook.ts),
 [processor](../backend/src/export/export-job.processor.ts),
 [job storage](../backend/src/export/export-job.repository.ts).
-Default threshold is 2000; exactly 2000 is synchronous. Export applies requester
-PSF masking and is available to Requester/Admin. This is buffered export, not
-streaming. No attachment storage or export-profile CRUD flow is shown because
-those features are not implemented in the current checkout.
+Default threshold is 10000; exactly 10000 is a Direct Export. At most
+`EXPORT_SYNC_MAX_CONCURRENT` (default 2) Direct Exports run at once per backend process; each worker
+is limited by `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024), and an export over it
+fails alone. Export applies requester PSF masking and is available to every
+authenticated role. The worker streams the XLSX it writes but still holds all
+records of one export. Export-profile CRUD is not implemented.

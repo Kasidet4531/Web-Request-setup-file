@@ -1,0 +1,15 @@
+[
+  {
+    "reader": "ExcelJS document",
+    "requests": 5570,
+    "role": "setup_owner",
+    "sheets": 1,
+    "rows": 5571,
+    "checkedCells": 423396,
+    "logicalSha256": "4b96559299a0af87fe83d4f63e49db41dabd908fa79fb99c09227a26dcf3b848",
+    "matchesIndependentReader": true,
+    "readerUtf8Diffs": 0,
+    "examples": [],
+    "crossReadMs": 1210.4
+  }
+]

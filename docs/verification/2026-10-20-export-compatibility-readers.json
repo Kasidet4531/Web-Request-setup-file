@@ -1,0 +1,41 @@
+[
+  {
+    "reader": "ExcelJS document",
+    "requests": 5570,
+    "role": "admin",
+    "sheets": 1,
+    "rows": 5571,
+    "checkedCells": 423396,
+    "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+    "matchesIndependentReader": true,
+    "readerUtf8Diffs": 0,
+    "examples": [],
+    "crossReadMs": 1526.5
+  },
+  {
+    "reader": "ExcelJS document",
+    "requests": 5570,
+    "role": "setup_owner",
+    "sheets": 1,
+    "rows": 5571,
+    "checkedCells": 423396,
+    "logicalSha256": "61b66e7441c926bb4af1ebb5697fcf685c94381ceb44e8974c90efe77bc6c31c",
+    "matchesIndependentReader": true,
+    "readerUtf8Diffs": 0,
+    "examples": [],
+    "crossReadMs": 1581.1
+  },
+  {
+    "reader": "ExcelJS document",
+    "requests": 5570,
+    "role": "requester",
+    "sheets": 1,
+    "rows": 5571,
+    "checkedCells": 423396,
+    "logicalSha256": "cf10dda8fa032412a0eeec30d0ebd3e7018feb00b1597881b9e5fd4111303c70",
+    "matchesIndependentReader": true,
+    "readerUtf8Diffs": 0,
+    "examples": [],
+    "crossReadMs": 1736.8
+  }
+]

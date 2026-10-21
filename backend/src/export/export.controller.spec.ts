@@ -3,7 +3,7 @@ import { ExportController } from './export.controller';
 
 describe('ExportController', () => {
   let authService: { getProfile: jest.Mock };
-  let excelExportService: { exportRequests: jest.Mock };
+  let excelExportService: { tryDirectExport: jest.Mock };
   let searchIndexService: { countExportRequests: jest.Mock };
   let exportJobRepository: { enqueue: jest.Mock };
   let configService: { get: jest.Mock };
@@ -12,7 +12,7 @@ describe('ExportController', () => {
 
   beforeEach(() => {
     authService = { getProfile: jest.fn() };
-    excelExportService = { exportRequests: jest.fn() };
+    excelExportService = { tryDirectExport: jest.fn() };
     searchIndexService = {
       countExportRequests: jest.fn().mockResolvedValue(0),
     };
@@ -40,7 +40,7 @@ describe('ExportController', () => {
       setupOwnerDepartment: 'GNTC' as const,
     };
     authService.getProfile.mockResolvedValue(actor);
-    excelExportService.exportRequests.mockResolvedValue({
+    excelExportService.tryDirectExport.mockResolvedValue({
       content: Buffer.from('xlsx-content'),
       filename: 'psf_requests_20260619_000506.xlsx',
     });
@@ -58,10 +58,10 @@ describe('ExportController', () => {
       response,
     );
 
-    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+    expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
       {},
       actor,
-      2000,
+      10000,
     );
   });
 
@@ -74,7 +74,7 @@ describe('ExportController', () => {
       setupOwnerDepartment: null,
     };
     authService.getProfile.mockResolvedValue(actor);
-    excelExportService.exportRequests.mockResolvedValue({
+    excelExportService.tryDirectExport.mockResolvedValue({
       content: Buffer.from('xlsx-content'),
       filename: 'psf_requests_20260619_000506.xlsx',
     });
@@ -94,10 +94,10 @@ describe('ExportController', () => {
       ),
     ).resolves.toBeUndefined();
 
-    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+    expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
       { status: 'Submitted' },
       actor,
-      2000,
+      10000,
     );
   });
 
@@ -131,7 +131,7 @@ describe('ExportController', () => {
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+      expect(excelExportService.tryDirectExport).not.toHaveBeenCalled();
     },
   );
 
@@ -164,7 +164,7 @@ describe('ExportController', () => {
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(excelExportService.exportRequests).not.toHaveBeenCalled();
+      expect(excelExportService.tryDirectExport).not.toHaveBeenCalled();
     },
   );
 
@@ -178,7 +178,7 @@ describe('ExportController', () => {
       setupOwnerDepartment: null,
     };
     authService.getProfile.mockResolvedValue(actor);
-    excelExportService.exportRequests.mockResolvedValue({
+    excelExportService.tryDirectExport.mockResolvedValue({
       content,
       filename: 'psf_requests_20260619_000506.xlsx',
     });
@@ -202,14 +202,14 @@ describe('ExportController', () => {
       ),
     ).resolves.toBeUndefined();
 
-    expect(excelExportService.exportRequests).toHaveBeenCalledWith(
+    expect(excelExportService.tryDirectExport).toHaveBeenCalledWith(
       {
         status: ' Submitted ',
         requestDateFrom: '2026-06-01',
         requestDateTo: '2026-06-30',
       },
       actor,
-      2000,
+      10000,
     );
     expect(response.setHeader).toHaveBeenNthCalledWith(
       1,
