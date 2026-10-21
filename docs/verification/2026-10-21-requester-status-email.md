@@ -57,6 +57,14 @@ Requester has no email, so `dev.requester@example.com` was written to its
 | Frontend lint | `cd frontend && npm run lint` | 1 error | the same 1 error (`GlobalHistoryPage.test.tsx:389`) |
 | Email system browser suite | `node --test --test-concurrency=1 test/email-system.e2e.mjs test/email-system.fixture.test.mjs test/psf-trigger-system.e2e.mjs`, run as the `postgres` user because embedded PostgreSQL refuses root | 4 passed, 5 failed | the same 4 passed, the same 5 failed |
 
+After merging main at `d2100c3` (PR #95, Excel export) the suites were run
+again: backend unit tests 739 on main, 744 on the branch, all passing; every
+PGlite suite passes; frontend 527 on main, 531 on the branch; both builds pass
+and lint is unchanged. API integration gives 16 of 21 on main and on the
+branch: the five export tests fail on main itself with HTTP 500, because the
+test's Excel export mock has no `tryDirectExport`, which the export controller
+now calls. That is not touched here.
+
 The new PGlite tests drive the real request, workflow and notification services
 and read the queued jobs back through the outbox listing. They cover the
 Requester in To on submission, in CC on a Status change, an account with no
