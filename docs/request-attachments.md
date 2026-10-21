@@ -216,6 +216,17 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 
 ## Verification
 
+21 October 2026, on the feature branch for issue #97:
+
+- `npm run test:attachments:postgres` (20 tests) checks folder names against
+  folders the SharePoint export created on the NAS, as listed in the issue (a
+  trailing dot; titles cut at 100 characters), a cut that ends on a dot, and
+  that `ItemInfo.txt` and `_export_complete.txt` are neither listed nor
+  accepted for upload. The full backend Jest suite passed.
+- `npm run attachments:check` was not re-run against the NAS share. Expected
+  there: `renamed` 18 → 0, `matched` 5,029 → 5,047, `unmatchedFolders`
+  unchanged at 58.
+
 21 October 2026, on the feature branch for issue #89:
 
 - `attachment-policy.controller.spec.ts` checks over HTTP that requester,
@@ -247,14 +258,11 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 
 20 October 2026, on the feature branch:
 
-- `npm run test:attachments:postgres` (21 tests): `attachments.postgres.test.ts`
+- `npm run test:attachments:postgres` (17 tests): `attachments.postgres.test.ts`
   runs `RequestsService`, the Attachment service and `AuditLogService` on
   in-memory PostgreSQL with a real temporary directory as
   `ATTACHMENT_STORAGE_PATH`, checks folder paths under Windows path rules
-  (`Z:/attachment`, a `Z:/` drive root, a UNC share), checks folder names
-  against folders the SharePoint export created (a trailing dot, a title cut
-  at 100 characters; issue #97), that the export's files are neither listed
-  nor accepted for upload, and that the
+  (`Z:/attachment`, a `Z:/` drive root, a UNC share) and checks that the
   submission email queued with a real notification service carries the
   `PSF-` number, not the Draft number;
   `check-attachment-folders.test.ts` covers the folder check, before and after

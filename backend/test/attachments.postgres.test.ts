@@ -119,7 +119,6 @@ void it('names a request folder [Product_Description]_[ID], or _[ID] while blank
   assert.equal(requestFolderName(undefined, 7), '_7');
 });
 
-// Folder names on the NAS, as the SharePoint export created them (#97).
 void it('drops trailing dots and spaces from Product_Description, as the SharePoint export did', () => {
   assert.equal(
     requestFolderName('PSF_REQUEST_TEF662X 8 sites Tiger.', 703),
@@ -431,6 +430,9 @@ void it('lists files already in, added to or removed from the NAS folder directl
   await mkdir(join(root, folder));
   await writeFile(join(root, folder, 'E142.xml'), 'e142');
   await writeFile(join(root, folder, 'Thumbs.db'), 'cache');
+  // Left in every Imported Request's folder by the SharePoint export.
+  await writeFile(join(root, folder, 'ItemInfo.txt'), 'SharePoint Item');
+  await writeFile(join(root, folder, '_export_complete.txt'), 'done');
 
   let listed = await fixture.attachments.list(submitted.id, requester);
   assert.deepEqual(
@@ -448,22 +450,6 @@ void it('lists files already in, added to or removed from the NAS folder directl
   assert.deepEqual(
     listed.items.map((item) => item.filename),
     ['job.lay'],
-  );
-  assert.equal(await rowCount(submitted.id), 1);
-});
-
-void it("never lists the SharePoint export's ItemInfo.txt or _export_complete.txt", async () => {
-  const submitted = await fixture.submit(await fixture.draft());
-  const folder = folderOf(submitted);
-  await mkdir(join(root, folder));
-  await writeFile(join(root, folder, 'MFS01-V02.LAY'), 'lay');
-  await writeFile(join(root, folder, 'ItemInfo.txt'), 'SharePoint Item');
-  await writeFile(join(root, folder, '_export_complete.txt'), 'done');
-
-  const listed = await fixture.attachments.list(submitted.id, requester);
-  assert.deepEqual(
-    listed.items.map((item) => item.filename),
-    ['MFS01-V02.LAY'],
   );
   assert.equal(await rowCount(submitted.id), 1);
 });
@@ -579,6 +565,7 @@ void it("refuses an upload named as the SharePoint export's files, which would n
       BadRequestException,
     );
   assert.equal(await exists(join(root, folderOf(draft))), false);
+  assert.equal(await rowCount(draft.id), 0);
 });
 
 void it('refuses Attachment work while storage is unreachable instead of dropping metadata', async () => {
