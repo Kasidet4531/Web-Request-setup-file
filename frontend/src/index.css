@@ -720,11 +720,6 @@ span.request-attachments__name { color: var(--foreground); cursor: default; }
   .detail-tabs > button { white-space: nowrap; font-size: 12px; }
   .detail-summary__heading > .ui-status { max-width: 100%; }
 }
-.requests-table--drafts th:nth-child(1) { width: 30%; }
-.requests-table--drafts th:nth-child(2) { width: 20%; }
-.requests-table--drafts th:nth-child(3) { width: 14%; }
-.requests-table--drafts th:nth-child(4) { width: 24%; }
-.requests-table--drafts th:nth-child(5) { width: 12%; }
 .summary-card { min-height: 100px; padding: 16px 20px; gap: 8px; }
 .summary-card--open, .summary-card--overdue, .summary-card--completed { border-left: 4px solid var(--summary-accent); }
 .summary-card__icon { width: 24px; height: 24px; }

@@ -374,11 +374,21 @@ export class SearchIndexService implements OnModuleInit {
     if (filters.keyword?.trim()) {
       params.push(`%${filters.keyword.trim()}%`);
       const keywordParam = `$${params.length}`;
+      // A Requester cannot find a request by PSF Created Information it
+      // cannot see yet.
+      const psfSetupFileNameMatch =
+        scope.actorRole === 'requester'
+          ? `(psf_setup_file_name ILIKE ${keywordParam} AND EXISTS (
+              SELECT 1 FROM psf_requests AS released
+              WHERE released.id = psf_request_search_index.request_id
+                AND released.psf_released_at IS NOT NULL
+            ))`
+          : `psf_setup_file_name ILIKE ${keywordParam}`;
       where.push(`(
         request_no ILIKE ${keywordParam}
         OR title ILIKE ${keywordParam}
         OR reference_psf_name ILIKE ${keywordParam}
-        OR psf_setup_file_name ILIKE ${keywordParam}
+        OR ${psfSetupFileNameMatch}
         OR probecard_name ILIKE ${keywordParam}
       )`);
     }

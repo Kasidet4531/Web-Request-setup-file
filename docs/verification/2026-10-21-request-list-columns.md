@@ -44,7 +44,7 @@ database, so its one-time steps ran on data written by the base build.
 | --- | --- | --- | --- |
 | Backend unit tests | `cd backend && npx jest` | 47 suites, 713 passed | 47 suites, 713 passed (expectations now include Modified By) |
 | Modified By | `node --require ts-node/register --test test/modified-by.postgres.test.ts` | the same file on base code: 6 of 8 fail | 8 passed |
-| Request list | `node --require ts-node/register --test test/request-list.postgres.test.ts` | the same file on base code: does not compile (no `jobFileName`) | 3 passed |
+| Request list | `node --require ts-node/register --test test/request-list.postgres.test.ts` | the same file on base code: does not compile (no `jobFileName`) | 4 passed |
 | Other PGlite suites | `node --require ts-node/register --test test/<name>.postgres.test.ts` | — | attachments 15, audit-visibility 8, autofill 15, draft-lifecycle 8, draft-reminders 9, initialize-data 2, notifications 14, request-snapshot 12 (1 skipped, configured server only): all passed |
 | Backend build | `cd backend && npx nest build` | Passed | Passed |
 | Backend lint | `cd backend && npx eslint "{src,test}/**/*.{ts,mjs}"` | 7 errors | the same 7 errors (Prettier, in unchanged lines) |
@@ -59,6 +59,13 @@ form data (ignored), a Status change, a PSF Created Information save, the
 Audit History fill and keeping an already recorded value. On base code the
 five save tests and the Audit History fill fail (`undefined` instead of the
 actor); the form check and keeping a recorded value pass.
+
+The request list tests run on a PSF Created Information form whose file name
+fields are not searchable, as in the seeded form. They cover listing both
+names, hiding them from a Requester until PSF Visibility Release, indexing
+existing requests once, and keyword search: before release a Requester's
+search for the PSF Setup File Name finds nothing while a Setup File Owner's
+finds the request; after release the Requester's finds it too.
 
 ## Browser checks
 

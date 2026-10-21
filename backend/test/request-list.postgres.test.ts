@@ -75,6 +75,30 @@ async function submittedWithPsfFileNames(): Promise<PsfRequestResponse> {
   });
 }
 
+// Moves the request to the Status chosen as the PSF Visibility trigger.
+async function releasePsfCreatedInformation(
+  request: PsfRequestResponse,
+): Promise<void> {
+  const configuration = await fixture.workflow.getConfiguration();
+  const trigger = configuration.entries.find(
+    (entry) => entry.kind === 'open' && entry.name !== submittedStatus,
+  );
+  assert.ok(trigger);
+  await fixture.workflow.applyOperation(
+    {
+      action: 'settings',
+      psfVisibilityTriggerId: trigger.id,
+      expectedUpdatedAt: configuration.updatedAt,
+    },
+    admin,
+  );
+  await fixture.service.updateRequestStatus(request.id, {
+    actor: ownerA,
+    status: trigger.name,
+    expectedUpdatedAt: request.updatedAt,
+  });
+}
+
 void it('lists the PSF Setup File Name and Job File Name of each request', async () => {
   await submittedWithPsfFileNames();
 
@@ -92,24 +116,7 @@ void it('hides PSF file names from a Requester until PSF Visibility Release', as
   assert.equal(before.items[0].psfSetupFileName, null);
   assert.equal(before.items[0].jobFileName, null);
 
-  const configuration = await fixture.workflow.getConfiguration();
-  const trigger = configuration.entries.find(
-    (entry) => entry.kind === 'open' && entry.name !== submittedStatus,
-  );
-  assert.ok(trigger);
-  await fixture.workflow.applyOperation(
-    {
-      action: 'settings',
-      psfVisibilityTriggerId: trigger.id,
-      expectedUpdatedAt: configuration.updatedAt,
-    },
-    admin,
-  );
-  await fixture.service.updateRequestStatus(saved.id, {
-    actor: ownerA,
-    status: trigger.name,
-    expectedUpdatedAt: saved.updatedAt,
-  });
+  await releasePsfCreatedInformation(saved);
 
   const released = await fixture.service.queryRequests({}, requester);
   assert.equal(released.items[0].psfSetupFileName, 'SETUP_A.psf');
@@ -130,4 +137,22 @@ void it('fills in PSF file names for requests listed before the list showed them
   const { items } = await fixture.service.queryRequests({}, ownerA);
   assert.equal(items[0].psfSetupFileName, 'SETUP_A.psf');
   assert.equal(items[0].jobFileName, 'JOB_A.job');
+});
+
+void it('lets a Requester find a request by PSF Setup File Name only after PSF Visibility Release', async () => {
+  const saved = await submittedWithPsfFileNames();
+  const search = { keyword: 'SETUP_A' };
+
+  assert.equal((await fixture.service.queryRequests(search, ownerA)).total, 1);
+  assert.equal(
+    (await fixture.service.queryRequests(search, requester)).total,
+    0,
+  );
+
+  await releasePsfCreatedInformation(saved);
+
+  assert.equal(
+    (await fixture.service.queryRequests(search, requester)).total,
+    1,
+  );
 });

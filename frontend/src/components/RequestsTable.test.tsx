@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { RequestsTable } from './RequestsWorkspace'
 import type { PsfRequestListItem } from '../services/api'
 
-interface Element { type: unknown; props: Record<string, unknown> }
+interface TreeElement { type: unknown; props: Record<string, unknown> }
 
-function elementsOfType(node: unknown, type: string): Element[] {
+function elementsOfType(node: unknown, type: string): TreeElement[] {
   if (Array.isArray(node)) return node.flatMap((child) => elementsOfType(child, type))
   if (!node || typeof node !== 'object' || !('props' in node) || !('type' in node)) return []
-  const element = node as Element
+  const element = node as TreeElement
   return [...(element.type === type ? [element] : []), ...elementsOfType(element.props.children, type)]
 }
 
@@ -15,7 +15,7 @@ function textOf(node: unknown): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node)
   if (Array.isArray(node)) return node.map(textOf).join('')
   if (!node || typeof node !== 'object' || !('props' in node)) return ''
-  return textOf((node as Element).props.children)
+  return textOf((node as TreeElement).props.children)
 }
 
 const headers = (table: unknown) => elementsOfType(table, 'th').map((th) => textOf(th.props.children))

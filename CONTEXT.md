@@ -42,6 +42,10 @@ _Avoid_: Type of product, product category
 The section containing setup details, editable by backend-authorized Setup File Owners and Administrators. Form Management configures the independent `psf-created-information` family through the existing draft/publish lifecycle. New requests capture its active schema; publishing does not alter existing captures. Legacy requests without a PSF snapshot use the immutable original descriptor without rewriting values. Missing required fields may be saved only in Draft; non-Draft PSF saves validate captured requirements. Entry into the configured visibility trigger checks PSF requirements before submission, status updates or bulk replacement, including repeated entry after release.
 _Avoid_: Setup Information, Completed Info
 
+**PSF Setup File Name** / **Job File Name**:
+The PSF Created Information fields with canonical keys `psf_setup_file_name` and `job_file_name`. The Requests and Dashboard tables show each in its own column, whether or not the field is searchable (21 October 2026). Like all PSF Created Information they are hidden from a Requester-only actor until PSF Visibility Release, and keyword search matches the PSF Setup File Name only where the actor can see it.
+_Avoid_: PSF name (ambiguous with the `reference_psf_name` field)
+
 **Draft**:
 A saved PSF Request not yet explicitly submitted. Every authenticated role has `My draft` and can edit/delete their own Drafts. Admin can inspect other creators' Drafts read-only and permanently delete them through Draft Management; ordinary foreign-Draft access remains private. Drafts are excluded from shared lists and operational totals. The detail Action center submits the same record to an explicitly selected work status; ordinary status updates cannot submit a Draft or return shared work to Draft.
 _Avoid_: In-progress request, unsaved request
@@ -92,7 +96,7 @@ The sequential integer identifying a PSF Request, continuing the Imported Reques
 _Avoid_: Draft number (a different, temporary identifier), UUID
 
 **Product_Description**:
-The requester form's `title` field, labelled Product_Description in the Initial Data Load forms. It names a request in Audit History and prefixes its NAS folder; New Request starts it as `Product_Description`.
+The requester form's `title` field, labelled Product_Description in the Initial Data Load forms. It names a request in Audit History and prefixes its NAS folder; New Request starts it as `Product_Description`. The request tables show it in their first column, headed Product Description (21 October 2026).
 _Avoid_: Title alone when the folder or Audit History label is meant
 
 **Master Data**:

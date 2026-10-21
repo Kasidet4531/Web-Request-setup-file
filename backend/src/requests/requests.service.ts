@@ -671,7 +671,7 @@ export class RequestsService implements OnModuleInit {
       );
     }
     await client.query(
-      "INSERT INTO request_data_migrations(key) VALUES('index-psf-file-names-v1')",
+      "INSERT INTO request_data_migrations(key) VALUES('index-psf-file-names-v1') ON CONFLICT DO NOTHING",
     );
   }
 
@@ -718,7 +718,7 @@ export class RequestsService implements OnModuleInit {
         ],
       );
     await client.query(
-      "INSERT INTO request_data_migrations(key) VALUES('modified-by-from-audit-history-v1')",
+      "INSERT INTO request_data_migrations(key) VALUES('modified-by-from-audit-history-v1') ON CONFLICT DO NOTHING",
     );
   }
 
