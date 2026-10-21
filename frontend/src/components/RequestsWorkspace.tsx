@@ -201,7 +201,7 @@ export interface PsfCreatedInformationPanelProps {
   request: PsfRequestResponse
   saving: boolean
   /** The last save's result, reported in the form's action bar until editing starts again. */
-  saveFeedback?: DynamicFormActionFeedback | null
+  saveFeedback?: DynamicFormActionFeedback
   disabled?: boolean
   dirty?: boolean
   editing?: boolean
@@ -242,7 +242,7 @@ export function PsfCreatedInformationPanel({
     <section className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`} aria-labelledby="psf-created-heading">
       <div className="psf-created-panel__header"><h2 id="psf-created-heading">PSF Created Information</h2><div className="toolbar__actions"><span>{canEdit ? saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved' : 'Read only'}</span>{canEdit && editing === false ? <button className="btn-secondary" type="button" onClick={onEdit} disabled={saving || disabled}>Edit information</button> : null}</div></div>
       <DynamicFormRenderer
-        actionFeedback={saving ? { kind: 'pending', message: 'Saving PSF Created Information…' } : saveFeedback ?? undefined}
+        actionFeedback={saving ? { kind: 'pending', message: 'Saving PSF Created Information…' } : saveFeedback}
         onChange={showEditor && !saving && !disabled ? onChange : undefined}
         onSubmit={showEditor && !saving && !disabled ? onSave : undefined}
         readOnly={!showEditor || saving || disabled}
@@ -875,7 +875,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   const [historyRetry, setHistoryRetry] = useState(0)
   const [activeTab, setActiveTab] = useState<'requester' | 'psf' | 'attachments' | 'history' | null>(null)
   const [psfEditing, setPsfEditing] = useState(false)
-  const [psfSaveFeedback, setPsfSaveFeedback] = useState<DynamicFormActionFeedback | null>(null)
+  const [psfSaveFeedback, setPsfSaveFeedback] = useState<DynamicFormActionFeedback>()
   const [statusKinds, setStatusKinds] = useState<Record<string, WorkflowStatusKind>>({})
   useEffect(() => {
     let active = true
@@ -912,7 +912,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           workflowContext.current = { requestId, status: response.status }
           setRequest(response)
           setPsfEditing(false)
-          setPsfSaveFeedback(null)
+          setPsfSaveFeedback(undefined)
           setActiveTab(null)
           psfDraft.current = { values: buildPsfCreatedInformationValues(response), dirty: false }
           setPsfCreatedValues(psfDraft.current.values)
@@ -1061,7 +1061,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     setPsfCreatedDirty(nextDirty)
     setError(null)
     setMessage(null)
-    setPsfSaveFeedback(null)
+    setPsfSaveFeedback(undefined)
   }
 
   async function savePsfCreatedInformation(values: DynamicFormValues) {
@@ -1078,7 +1078,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     setSavingPsfCreatedData(true)
     setError(null)
     setMessage(null)
-    setPsfSaveFeedback(null)
+    setPsfSaveFeedback(undefined)
 
     try {
       const savedRequest = await api.updatePsfCreatedData(request.id, {
@@ -1202,8 +1202,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
             <section className="workflow-section detail-layout__psf" id="detail-panel-psf" role="tabpanel" aria-labelledby="detail-tab-psf" hidden={request.status === 'Draft' || selectedTab !== 'psf'}>
               <PsfCreatedInformationPanel
                 editing={psfEditing}
-                onEdit={() => { if (!mutationPending) { setPsfSaveFeedback(null); setPsfEditing(true) } }}
-                onCancel={() => { if (!mutationPending) { setPsfCreatedValues(buildPsfCreatedInformationValues(request)); setPsfCreatedDirty(false); setPsfSaveFeedback(null); setPsfEditing(false) } }}
+                onEdit={() => { if (!mutationPending) { setPsfSaveFeedback(undefined); setPsfEditing(true) } }}
+                onCancel={() => { if (!mutationPending) { setPsfCreatedValues(buildPsfCreatedInformationValues(request)); setPsfCreatedDirty(false); setPsfSaveFeedback(undefined); setPsfEditing(false) } }}
                 onChange={updatePsfCreatedInformation}
                 onSave={(values) => void savePsfCreatedInformation(values)}
                 request={request}
