@@ -72,7 +72,7 @@ function lifecycle(ownerRole: AuthenticatedUserProfile['role'] = 'admin') {
         return { rows: params[1] === ownerId ? [{ ...stored }] : [] };
       }
       // Captured form snapshots, read once by content key.
-      if (sql.includes('FROM psf_requests WHERE id = ANY'))
+      if (sql.includes('WHERE request.id = ANY'))
         return {
           rows: [
             {

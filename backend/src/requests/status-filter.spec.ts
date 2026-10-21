@@ -128,7 +128,7 @@ describe('verbatim catalog status filter production paths', () => {
               total_count: 1,
             },
           ];
-        } else if (sql.includes('FROM psf_requests WHERE id = ANY')) {
+        } else if (sql.includes('WHERE request.id = ANY')) {
           rows = [
             { key: 'requester-form', schema_json: JSON.stringify(SCHEMA) },
           ];

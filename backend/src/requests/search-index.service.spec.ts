@@ -431,10 +431,8 @@ describe('SearchIndexService canonical extraction', () => {
     expect(query).not.toContain('canonical_submission_values');
     expect(query).toContain('requester_data_json');
     // Rows carry content keys; each captured form is read once by request id.
-    expect(query).toContain(
-      'jsonb_hash_extended(request.schema_snapshot_json, 0)',
-    );
-    expect(query).not.toContain('schema_snapshot_json::text');
+    expect(query).toContain('md5(request.schema_snapshot_json::text)');
+    expect(query).not.toContain('AS schema_snapshot_json');
     const [, snapshotParams] = pool.query.mock.calls[1] as [string, unknown[]];
     expect(snapshotParams).toEqual([['request-1'], []]);
     expect(query).not.toContain('AND request.requester_user_id =');

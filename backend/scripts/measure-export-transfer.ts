@@ -1,6 +1,6 @@
 /** Measures Export Preview and Excel export over a slow database link.
- * Run: node --require ts-node/register scripts/measure-export-transfer.ts
- *   [--rows=5570] [--runs=3] [--latency-ms=25] [--mbps=24] [--output=report.json]
+ * Run: npm run test:export:transfer -- [--rows=5570] [--runs=3]
+ *   [--latency-ms=25] [--mbps=24] [--output=report.json]
  * Seeds a throwaway embedded PostgreSQL with the synthetic export fixture and
  * puts a TCP proxy in front of it that delays each packet by --latency-ms in
  * each direction and caps throughput at --mbps, counting the bytes PostgreSQL
@@ -11,20 +11,26 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer, connect, type Server, type Socket } from 'node:net';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { FormSchemaService } from '../src/admin/form_schema.service';
 import { ExcelExportService } from '../src/export/excel_export.service';
 import { SearchIndexService } from '../src/requests/search-index.service';
-import { createFixtureTables, seed } from './verify-export-scale';
+import { createFixtureTables, poolFor, seed } from './verify-export-scale';
 
 const flag = (name: string, fallback: string) =>
-  process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split('=')[1] ??
-  fallback;
+  process.argv
+    .find((arg) => arg.startsWith(`--${name}=`))
+    ?.slice(name.length + 3) ?? fallback;
 const rows = Number(flag('rows', '5570'));
 const runs = Number(flag('runs', '3'));
 const latencyMs = Number(flag('latency-ms', '25'));
 const bytesPerMs = (Number(flag('mbps', '24')) * 1_000_000) / 8 / 1000;
-const output = resolve(flag('output', '../.cache/export-transfer/report.json'));
+const output = resolve(
+  flag(
+    'output',
+    resolve(__dirname, '../../.cache/export-transfer/report.json'),
+  ),
+);
 const round = (n: number) => Math.round(n * 10) / 10;
 
 async function freePort(): Promise<number> {
@@ -124,13 +130,7 @@ async function main() {
   let proxy: Server | undefined;
   const pools: Pool[] = [];
   try {
-    const connection = {
-      host: '127.0.0.1',
-      database: 'postgres',
-      user: 'postgres',
-      password: 'synthetic-export-fixture',
-    };
-    const direct = new Pool({ ...connection, port: databasePort });
+    const direct = poolFor(databasePort);
     pools.push(direct);
     await createFixtureTables(direct);
     const dataset = await seed(direct, rows);
@@ -139,10 +139,10 @@ async function main() {
     await new Promise<void>((done) =>
       proxy!.listen(proxyPort, '127.0.0.1', done),
     );
-    const remote = new Pool({ ...connection, port: proxyPort, max: 4 });
-    const health = new Pool({ ...connection, port: proxyPort, max: 1 });
-    pools.push(remote, health);
-    await health.query('SELECT 1');
+    // The application's pool: the export holds one connection of it.
+    const remote = poolFor(proxyPort, 4);
+    pools.push(remote);
+    await remote.query('SELECT 1');
     let phase: Phase;
     const exporter = new ExcelExportService(
       new SearchIndexService(instrumentedPool(remote, () => phase)),
@@ -158,13 +158,13 @@ async function main() {
         otherMs: 0,
         committedAt: 0,
       };
-      // An ordinary query on its own connection while the export runs.
+      // An ordinary query through the same pool while the export runs.
       let healthMaxMs = 0;
       let running = true;
       const healthLoop = (async () => {
         while (running) {
           const start = performance.now();
-          await health.query('SELECT 1');
+          await remote.query('SELECT 1');
           healthMaxMs = Math.max(healthMaxMs, performance.now() - start);
           await new Promise((done) => setTimeout(done, 100));
         }

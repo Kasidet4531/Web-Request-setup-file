@@ -174,28 +174,39 @@ void it('previews the file: its columns, its first 10 rows and its total, for th
   );
 });
 
-void it('reads each distinct captured form once, telling apart equal version numbers with different content', async () => {
+void it('reads each distinct captured form once, telling apart forms of the same Form Version with different content', async () => {
   for (let n = 1; n <= 12; n++) await fixture.submit(await fixture.draft());
-  // Same form version number, different captured content.
+  // The oldest request, exported last, captured a requester form and a PSF
+  // form of the same Form Versions as the others, each with one more field.
   await db.query(
-    `UPDATE psf_requests SET schema_snapshot_json = jsonb_set(
-       schema_snapshot_json, '{sections,0,fields}',
-       schema_snapshot_json #> '{sections,0,fields}' ||
-       '[{"fieldKey":"fpc","canonicalKey":"fpc","label":"FPC","type":"text","required":false}]'::jsonb),
-       requester_data_json = requester_data_json || '{"fpc":"FPC-1"}'::jsonb
+    `UPDATE psf_requests SET
+       schema_snapshot_json = jsonb_set(
+         schema_snapshot_json, '{sections,0,fields}',
+         schema_snapshot_json #> '{sections,0,fields}' ||
+         '[{"fieldKey":"fpc","canonicalKey":"fpc","label":"FPC","type":"text","required":false}]'::jsonb),
+       requester_data_json = requester_data_json || '{"fpc":"FPC-1"}'::jsonb,
+       psf_created_schema_snapshot_json = jsonb_set(
+         psf_created_schema_snapshot_json, '{sections,0,fields}',
+         psf_created_schema_snapshot_json #> '{sections,0,fields}' ||
+         '[{"fieldKey":"probe_card","canonicalKey":"probe_card","label":"Probe Card","type":"text","required":false}]'::jsonb),
+       psf_created_data_json = psf_created_data_json || '{"probe_card":"PC-1"}'::jsonb
      WHERE request_no = (SELECT MIN(request_no) FROM psf_requests)`,
   );
-  const versions = await db.query<{ version: number; contents: number }>(
-    `SELECT schema_snapshot_json->>'version' AS version,
+  const versions = await db.query<{ versions: number; contents: number }>(
+    `SELECT COUNT(DISTINCT schema_snapshot_json->>'version')::int AS versions,
        COUNT(DISTINCT schema_snapshot_json)::int AS contents
-     FROM psf_requests GROUP BY 1`,
+     FROM psf_requests
+     UNION ALL
+     SELECT COUNT(DISTINCT psf_created_schema_snapshot_json->>'version')::int,
+       COUNT(DISTINCT psf_created_schema_snapshot_json)::int
+     FROM psf_requests`,
   );
-  assert.deepEqual(
-    versions.rows.map((row) => row.contents),
-    [2],
-  );
-  // Two requester contents and one captured PSF form.
-  const distinct = 3;
+  assert.deepEqual(versions.rows, [
+    { versions: 1, contents: 2 },
+    { versions: 1, contents: 2 },
+  ]);
+  // Two requester forms, two PSF forms, and the two active forms.
+  const forms = 6;
 
   received = [];
   const file = await exportSheet(admin);
@@ -205,17 +216,101 @@ void it('reads each distinct captured form once, telling apart equal version num
   const previewed = formSnapshotsIn(received);
   received = undefined;
 
-  const fpc = file.headers.indexOf('FPC');
-  assert.ok(fpc > 0);
-  assert.deepEqual(file.rows.map((row) => row[fpc]).sort(), [
-    'FPC-1',
-    ...Array<string>(11).fill('NA'),
-  ]);
+  for (const [label, value] of [
+    ['FPC', 'FPC-1'],
+    ['Probe Card', 'PC-1'],
+  ]) {
+    const column = file.headers.indexOf(label);
+    assert.ok(column > 0, label);
+    assert.deepEqual(
+      file.rows.map((row) => row[column]),
+      [...Array<string>(11).fill('NA'), value],
+    );
+  }
   assert.deepEqual(preview.headers, file.headers);
-  // The active forms are read from form_definitions, once each.
-  assert.ok(exported <= distinct + 2, `export read ${exported} form snapshots`);
-  assert.ok(
-    previewed <= distinct + 2,
-    `preview read ${previewed} form snapshots`,
+  assert.equal(exported, forms);
+  assert.equal(previewed, forms);
+
+  // A form first met on a later page is read then, for that page's request.
+  const pages = await fixture.index.withExportSnapshot(async (search) => {
+    const read: string[][] = [];
+    for (let offset = 0; offset < 12; offset += 5) {
+      const page = await search.queryExportRequests({ limit: 5, offset }, 5);
+      read.push(
+        page.items.map((item) =>
+          [
+            ...item.schemaSnapshot.sections,
+            ...(item.psfCreatedInformationSchema?.sections ?? []),
+          ]
+            .flatMap((section) => section.fields)
+            .filter((field) => ['fpc', 'probe_card'].includes(field.fieldKey))
+            .map((field) => field.fieldKey)
+            .join(),
+        ),
+      );
+    }
+    return read;
+  });
+  assert.deepEqual(pages, [
+    Array<string>(5).fill(''),
+    Array<string>(5).fill(''),
+    ['', 'fpc,probe_card'],
+  ]);
+});
+
+void it('maps each request through its own captured form when two forms of the same Form Version differ only in which answer feeds which column', async () => {
+  const [first, second] = [
+    await fixture.submit(await fixture.draft()),
+    await fixture.submit(await fixture.draft()),
+  ];
+  const field = (n: number, fieldKey: string, canonicalKey: string) => ({
+    fieldKey,
+    canonicalKey,
+    label: `Field ${n}`,
+    type: 'text',
+    required: false,
+    exportable: true,
+    placeholder: '',
+    helpText: '',
+  });
+  const form = (fields: ReturnType<typeof field>[]) => ({
+    formKey: 'psf-request',
+    version: 1,
+    title: 'Request',
+    sections: [{ sectionKey: 'request', title: 'Request', fields }],
+  });
+  const capture = (id: string, fields: ReturnType<typeof field>[]) =>
+    db.query(
+      `UPDATE psf_requests SET schema_snapshot_json = $2::jsonb,
+         requester_data_json = '{"answer_a":"A","answer_b":"B","answer_c":"C"}'::jsonb
+       WHERE id = $1`,
+      [id, JSON.stringify(form(fields))],
+    );
+  await capture(first.id, [
+    field(1, 'answer_a', 'first'),
+    field(2, 'answer_b', 'second'),
+    field(3, 'answer_c', 'third'),
+  ]);
+  await capture(second.id, [
+    field(1, 'answer_c', 'first'),
+    field(2, 'answer_b', 'second'),
+    field(3, 'answer_a', 'third'),
+  ]);
+
+  const rows = await exportRows(admin);
+  const cells = (requestNo: string) => {
+    const row = rows.find((candidate) => candidate['Request No'] === requestNo);
+    assert.ok(row);
+    return [row['Field 1'], row['Field 2'], row['Field 3']];
+  };
+  assert.deepEqual(cells(first.requestNo), ['A', 'B', 'C']);
+  assert.deepEqual(cells(second.requestNo), ['C', 'B', 'A']);
+  const preview = await exporter.previewRequests({});
+  const fields = ['Field 1', 'Field 2', 'Field 3'].map((label) =>
+    preview.headers.indexOf(label),
+  );
+  assert.deepEqual(
+    preview.rows.map((row) => fields.map((column) => row[column])),
+    rows.map((row) => [row['Field 1'], row['Field 2'], row['Field 3']]),
   );
 });
