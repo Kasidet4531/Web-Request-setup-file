@@ -19,8 +19,9 @@
   --shadow-sm: none; --shadow-md: 0 4px 16px #172b3a18; --shadow-lg: 0 8px 32px #172b3a24;
   --shadow-bar: 0 -4px 12px #172b3a14;
   --card-padding: 24px;
-  /* New Request and Request Detail column: one and a half times a card around the 840px form rows. */
-  --request-page-max-width: 1335px;
+  --form-rows-max-width: 840px;
+  /* New Request, Request Detail and Admin Draft detail column: one and a half times a card around the form rows (1335px). */
+  --request-page-max-width: calc(1.5 * (var(--form-rows-max-width) + 2 * var(--card-padding) + 2px));
   /* Room kept clear above the pinned form action bar when keyboard focus scrolls a field into view. */
   --action-bar-clearance: 96px; --action-bar-clearance-preview: 72px;
 }
@@ -211,7 +212,7 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 /* One row per field: label cell left, control or stored value right, capped for reading. Editable and
    read-only rows share the label type and the control line (text 8px below the row top on a 36px line),
    so switching a request between viewing and editing keeps ordinary rows in place. */
-.dynamic-form__rows { display: grid; min-width: 0; max-width: 840px; border-top: 1px solid var(--border); }
+.dynamic-form__rows { display: grid; min-width: 0; max-width: var(--form-rows-max-width); border-top: 1px solid var(--border); }
 .dynamic-form__row { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 4px 24px; align-items: start; min-width: 0; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .dynamic-form__label { padding-top: 8px; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--foreground); overflow-wrap: anywhere; }
 .dynamic-form__control { display: grid; gap: 6px; min-width: 0; }
