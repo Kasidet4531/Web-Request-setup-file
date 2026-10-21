@@ -315,7 +315,7 @@ void it('maps each request through its own captured form when two forms of the s
   );
 });
 
-void it('keeps a content key beside each captured form, and gives an existing database those keys at startup', async () => {
+void it('keeps a content key beside each schema snapshot, and gives an existing database those keys at startup', async () => {
   for (let n = 1; n <= 3; n++) await fixture.submit(await fixture.draft());
   // A database from before the keys were stored.
   await db.exec(
@@ -330,7 +330,7 @@ void it('keeps a content key beside each captured form, and gives an existing da
     );
   assert.deepEqual((await unkeyed()).rows, [{ count: 0 }]);
 
-  // A changed form gets a new key, and the export reads it.
+  // A changed schema snapshot gets a new key, and the export reads it.
   await db.query(
     `UPDATE psf_requests SET schema_snapshot_json = jsonb_set(
        schema_snapshot_json, '{sections,0,fields}',

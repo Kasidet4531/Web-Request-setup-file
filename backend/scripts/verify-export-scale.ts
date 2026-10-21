@@ -17,8 +17,8 @@ import { Pool } from 'pg';
 import { SaxesParser } from 'saxes';
 import { ExcelExportService } from '../src/export/excel_export.service';
 import {
-  SCHEMA_SNAPSHOT_KEY_STORAGE,
   SearchIndexService,
+  ensureSchemaSnapshotKeyStorage,
   type RequestSearchFilters,
 } from '../src/requests/search-index.service';
 import {
@@ -365,8 +365,7 @@ export async function createFixtureTables(pool: Pool) {
   CREATE TABLE form_definitions (form_key text, version int, status text, schema_json jsonb,
     title text NOT NULL DEFAULT 'Synthetic', description text, published_at timestamptz,
     PRIMARY KEY(form_key,version))`);
-  for (const statement of SCHEMA_SNAPSHOT_KEY_STORAGE)
-    await pool.query(statement);
+  await ensureSchemaSnapshotKeyStorage(pool);
 }
 
 // The request columns an INSERT may write: PostgreSQL computes the rest.
@@ -374,7 +373,8 @@ async function writableRequestColumns(pool: Pool): Promise<string> {
   const result = await pool.query<{ list: string }>(
     `SELECT string_agg(quote_ident(column_name), ',' ORDER BY ordinal_position) AS list
      FROM information_schema.columns
-     WHERE table_name = 'psf_requests' AND is_generated = 'NEVER'`,
+     WHERE table_schema = 'public' AND table_name = 'psf_requests'
+       AND is_generated = 'NEVER'`,
   );
   return result.rows[0].list;
 }

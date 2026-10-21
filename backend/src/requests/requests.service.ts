@@ -33,8 +33,8 @@ import {
   RequestSearchFilters,
   RequestSearchResult,
   RequestScopeFilters,
-  SCHEMA_SNAPSHOT_KEY_STORAGE,
   SearchIndexService,
+  ensureSchemaSnapshotKeyStorage,
 } from './search-index.service';
 import {
   assertValidRequiredFormData,
@@ -1911,8 +1911,7 @@ export class RequestsService implements OnModuleInit {
       ADD COLUMN IF NOT EXISTS psf_created_schema_snapshot_json JSONB NULL
     `);
 
-    for (const statement of SCHEMA_SNAPSHOT_KEY_STORAGE)
-      await queryRunner.query(statement);
+    await ensureSchemaSnapshotKeyStorage(queryRunner);
 
     await queryRunner.query(`
       ALTER TABLE psf_requests

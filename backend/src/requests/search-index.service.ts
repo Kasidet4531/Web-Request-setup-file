@@ -31,15 +31,14 @@ export function serializeCanonicalValue(value: unknown): string {
   return Array.isArray(normalized) ? normalized.join(', ') : '';
 }
 
-// The column each Form Schema family's schema snapshot is captured in, and
-// the column its content key is stored in.
+// The columns each Form Schema family's schema snapshot is captured in and
+// its content key is stored in.
 const SCHEMA_SNAPSHOT_COLUMNS = {
-  requester: 'schema_snapshot_json',
-  created: 'psf_created_schema_snapshot_json',
-} as const;
-const SCHEMA_KEY_COLUMNS = {
-  requester: 'schema_snapshot_key',
-  created: 'psf_created_schema_snapshot_key',
+  requester: { snapshot: 'schema_snapshot_json', key: 'schema_snapshot_key' },
+  created: {
+    snapshot: 'psf_created_schema_snapshot_json',
+    key: 'psf_created_schema_snapshot_key',
+  },
 } as const;
 type FormFamily = keyof typeof SCHEMA_SNAPSHOT_COLUMNS;
 const FORM_FAMILIES = Object.keys(SCHEMA_SNAPSHOT_COLUMNS) as FormFamily[];
@@ -47,15 +46,21 @@ const FORM_FAMILIES = Object.keys(SCHEMA_SNAPSHOT_COLUMNS) as FormFamily[];
 // Identifies a schema snapshot by its whole content, so an export reads each
 // distinct schema snapshot once instead of once per request: the MD5 of its
 // JSONB text, which is canonical, so equal content gets the same key.
-// PostgreSQL keeps it beside the snapshot, so finding an export's distinct
-// snapshots never decompresses each request's.
-export const SCHEMA_SNAPSHOT_KEY_STORAGE = FORM_FAMILIES.map(
-  (family) =>
-    `ALTER TABLE psf_requests ADD COLUMN IF NOT EXISTS ${SCHEMA_KEY_COLUMNS[family]} TEXT
-      GENERATED ALWAYS AS (md5(${SCHEMA_SNAPSHOT_COLUMNS[family]}::text)) STORED`,
-);
+// PostgreSQL stores the key beside its schema snapshot, so finding an
+// export's distinct schema snapshots never decompresses every request's.
+// Adding both columns in one statement rewrites psf_requests once.
+export async function ensureSchemaSnapshotKeyStorage(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  await queryRunner.query(
+    `ALTER TABLE psf_requests ${FORM_FAMILIES.map((family) => {
+      const { snapshot, key } = SCHEMA_SNAPSHOT_COLUMNS[family];
+      return `ADD COLUMN IF NOT EXISTS ${key} TEXT GENERATED ALWAYS AS (md5(${snapshot}::text)) STORED`;
+    }).join(', ')}`,
+  );
+}
 const contentKey = (family: FormFamily, alias = 'request') =>
-  `${alias}.${SCHEMA_KEY_COLUMNS[family]}`;
+  `${alias}.${SCHEMA_SNAPSHOT_COLUMNS[family].key}`;
 
 interface SchemaSnapshotRef {
   family: FormFamily;
@@ -745,8 +750,8 @@ export class SearchIndexService implements OnModuleInit {
 
   // The distinct schema snapshots of every request the export holds, in the
   // export's row order, so its columns can be known without its rows. Requests
-  // group by content key, and each distinct snapshot is read from the first
-  // request that captured it.
+  // group by content key, and each distinct schema snapshot is read from the
+  // first request that captured it.
   async queryExportSchemas(filters: RequestSearchFilters): Promise<{
     requester: FormSchemaJson[];
     created: FormSchemaJson[];
@@ -754,7 +759,7 @@ export class SearchIndexService implements OnModuleInit {
     const { whereClause, params } = this.buildExportWhere(filters);
     const distinct = (family: FormFamily) => `
       SELECT '${family}' AS family, first.key,
-        request.${SCHEMA_SNAPSHOT_COLUMNS[family]}::text AS schema_json,
+        request.${SCHEMA_SNAPSHOT_COLUMNS[family].snapshot}::text AS schema_json,
         first.position
       FROM (
         SELECT DISTINCT ON (${contentKey(family, 'ordered')})
@@ -818,7 +823,7 @@ export class SearchIndexService implements OnModuleInit {
       FORM_FAMILIES.map(
         (family, index) => `
             SELECT ${contentKey(family)} AS key,
-              request.${SCHEMA_SNAPSHOT_COLUMNS[family]}::text AS schema_json
+              request.${SCHEMA_SNAPSHOT_COLUMNS[family].snapshot}::text AS schema_json
             FROM psf_requests AS request WHERE request.id = ANY($${index + 1}::uuid[])`,
       ).join(' UNION ALL '),
       FORM_FAMILIES.map((family) =>
