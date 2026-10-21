@@ -84,7 +84,7 @@ A sequential integer within one Form Schema family: `psf-request` or `psf-create
 _Avoid_: Version number, revision
 
 **Attachment**:
-An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]` and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too. Implemented 20 October 2026; see [Request Attachments](docs/request-attachments.md).
+An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]`, named as the SharePoint export named the Imported Requests' folders, and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too, except system files such as those Windows or the SharePoint export leave there. Implemented 20 October 2026; folder naming settled 21 October 2026 ([ADR 0018](docs/adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). See [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
 
 **Attachment Policy**:
