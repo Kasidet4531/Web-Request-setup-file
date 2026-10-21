@@ -32,7 +32,7 @@ _Avoid_: Engineer, Owner, Setup Owner
 Shared PSF Requests available to a Setup File Owner, optionally filtered by Product Type-derived Dashboard Team Group. Requester and Admin Dashboard views remain creator-scoped. Drafts are excluded from shared work and operational totals.
 
 **Product Type**:
-The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in the request table's title/product-type column. XLSX places metadata columns before requester-form fields; Product Type is not its first column.
+The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in its own Product Type column of the request tables (21 October 2026; before, under the title). XLSX places metadata columns before requester-form fields; Product Type is not its first column.
 Decided 8 October 2026, implemented in source and loaded into the configured database on 8 October 2026 (with `--lenient`): after the **Initial Data Load** the Product Type field is the **Request To** field, labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint.
 _Avoid_: Type of product, product category
 
@@ -41,6 +41,10 @@ _Avoid_: Type of product, product category
 **PSF Created Information**:
 The section containing setup details, editable by backend-authorized Setup File Owners and Administrators. Form Management configures the independent `psf-created-information` family through the existing draft/publish lifecycle. New requests capture its active schema; publishing does not alter existing captures. Legacy requests without a PSF snapshot use the immutable original descriptor without rewriting values. Missing required fields may be saved only in Draft; non-Draft PSF saves validate captured requirements. Entry into the configured visibility trigger checks PSF requirements before submission, status updates or bulk replacement, including repeated entry after release.
 _Avoid_: Setup Information, Completed Info
+
+**PSF Setup File Name** / **Job File Name**:
+The PSF Created Information fields with canonical keys `psf_setup_file_name` and `job_file_name`. The Requests and Dashboard tables show each in its own column, whether or not the field is searchable (21 October 2026). Like all PSF Created Information they are hidden from a Requester-only actor until PSF Visibility Release, and keyword search matches the PSF Setup File Name only where the actor can see it.
+_Avoid_: PSF name (ambiguous with the `reference_psf_name` field)
 
 **Draft**:
 A saved PSF Request not yet explicitly submitted. Every authenticated role has `My draft` and can edit/delete their own Drafts. Admin can inspect other creators' Drafts read-only and permanently delete them through Draft Management; ordinary foreign-Draft access remains private. Drafts are excluded from shared lists and operational totals. The detail Action center submits the same record to an explicitly selected work status; ordinary status updates cannot submit a Draft or return shared work to Draft.
@@ -80,8 +84,20 @@ A sequential integer within one Form Schema family: `psf-request` or `psf-create
 _Avoid_: Version number, revision
 
 **Attachment**:
-Planned external file linked to a PSF Request (e.g., specification sheets or probe cards layout files). Attachment runtime support is not implemented in the current source baseline; see ADR 0014.
+An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]` and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too. Implemented 20 October 2026; see [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
+
+**Attachment Policy**:
+What the server refuses on upload: the per-file size limit (`ATTACHMENT_MAX_BYTES`) and the blocked file extensions. It is served to every signed-in role, independent of any request, so each Attachment picker can state it before files are chosen; the backend holds the only copy. Added 21 October 2026; see [Request Attachments](docs/request-attachments.md#access-and-api).
+_Avoid_: Upload rules, file restrictions
+
+**Request ID**:
+The sequential integer identifying a PSF Request, continuing the Imported Requests' `ID` (`PSF-000100` is ID 100). It names the request's NAS folder, and a submitted request's number is `PSF-` and the ID padded to six digits. A Draft keeps its `DRAFT-YYYYMMDD-NNNN` number until submitted. IDs are never reused.
+_Avoid_: Draft number (a different, temporary identifier), UUID
+
+**Product_Description**:
+The requester form's `title` field, labelled Product_Description in the Initial Data Load forms. It names a request in Audit History and prefixes its NAS folder; New Request starts it as `Product_Description`. The request tables show it in their first column, headed Product Description (21 October 2026).
+_Avoid_: Title alone when the folder or Audit History label is meant
 
 **Master Data**:
 The standardized reference values (e.g., list of Products, Wafer FABs, or Machines) embedded directly within the Form Schema to populate selection dropdowns, ensuring data consistency.
@@ -111,7 +127,7 @@ _Avoid_: Migration, import
 A PSF Request created by the Initial Data Load. Its Requester (`requester` / `requester_name`) is populated from `Created By` in `Data` with `requester_user_id = NULL` (so it is not tied to any individual Requester account), and its `Modified By` is populated from `Modified By` in `Data`. All cell values from `Data` (including `"NA"` and legacy choice strings) are preserved verbatim, and unchanged legacy choice values remain valid when editing other fields. It has no prior audit history. Its Status is kept verbatim from the workbook even when absent from the replaced Status catalog; such a request is listed and filterable by that Status but counted in no Open, Overdue or Completed total. An Imported Request already at Completed has its PSF Visibility Release set.
 
 **Modified By**:
-The most recent actor to save changes to a PSF Request, displayed alongside Requester in request metadata and as a locked read-only field in the form. It initializes from `Modified By` on Imported Requests (or the creator on new requests) and updates automatically to the acting user's display name whenever the request is modified.
+The most recent actor to save changes to a PSF Request, displayed alongside Requester in request metadata and as a locked read-only field in the form. It initializes from `Modified By` on Imported Requests (or the creator on new requests) and updates automatically to the acting user's display name whenever the request is modified, whether or not its form has a Modified By field; a bulk Status replacement does not set it. Since 21 October 2026; before, only forms with a Modified By field recorded it.
 _Avoid_: Last editor, updater
 
 **Legacy Column**:

@@ -16,7 +16,7 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
   before(async () => {
     database = new PGlite();
     await database.exec(`
-      CREATE TABLE psf_requests (id uuid PRIMARY KEY, request_no text, status text, requester_user_id uuid, psf_released_at timestamptz);
+      CREATE TABLE psf_requests (id uuid PRIMARY KEY, request_no text, status text, requester_user_id uuid, psf_released_at timestamptz, numeric_id int, requester_data_json jsonb);
       CREATE TABLE psf_request_audit_logs (id uuid PRIMARY KEY, request_id uuid, action_type text, actor_username text, actor_display_name text, actor_role text, created_at timestamptz, metadata_json jsonb, request_snapshot_json jsonb);
       INSERT INTO psf_requests VALUES ('${privateId}', 'PRIVATE-DRAFT', 'Draft', '${ownerId}', NULL), ('${submittedId}', 'PSF-PUBLIC', '20% -- PSF File Creating', '${ownerId}', NULL);
       INSERT INTO psf_request_audit_logs VALUES

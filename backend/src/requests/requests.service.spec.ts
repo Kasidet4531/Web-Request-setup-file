@@ -124,6 +124,7 @@ const requesterActor = {
 
 const requestRow = {
   id: 'request-1',
+  numeric_id: 7,
   request_no: 'DRAFT-1',
   form_key: 'psf-request',
   form_version: 3,
@@ -487,6 +488,7 @@ describe('RequestsService draft flow', () => {
         {
           product_type: 'New Product',
           requester_name: requesterActor.displayName,
+          modified_by: requesterActor.displayName,
         },
         activeSchema.schema,
         requestsServiceModule.PSF_CREATED_INFORMATION_SCHEMA,
@@ -887,7 +889,15 @@ describe('RequestsService draft flow', () => {
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.not.stringMatching(/SET[\s\S]*setup_owner\s*=/),
-      ['request-1', updated.status, false, false, current.status, revision],
+      [
+        'request-1',
+        updated.status,
+        false,
+        false,
+        current.status,
+        revision,
+        { ...current.requester_data_json, modified_by: actor.displayName },
+      ],
     );
     expect(searchIndexService.upsertRequestSearchIndex).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -927,7 +937,15 @@ describe('RequestsService draft flow', () => {
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.not.stringMatching(/SET[\s\S]*setup_owner\s*=/),
-      ['request-1', updated.status, false, false, requestRow.status, revision],
+      [
+        'request-1',
+        updated.status,
+        false,
+        false,
+        requestRow.status,
+        revision,
+        { ...requestRow.requester_data_json, modified_by: actor.displayName },
+      ],
     );
     expect(auditLogService.record).toHaveBeenCalledWith(
       expect.objectContaining({ actor, actionType: 'REQUEST_STATUS_CHANGED' }),
@@ -955,6 +973,10 @@ describe('RequestsService draft flow', () => {
         false,
         requestRow.status,
         revision,
+        {
+          ...requestRow.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
       ],
     );
     expect(searchIndexService.upsertRequestSearchIndex).not.toHaveBeenCalled();
@@ -980,7 +1002,18 @@ describe('RequestsService draft flow', () => {
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('completed_at = CASE'),
-      ['request-1', 'Completed', true, false, current.status, revision],
+      [
+        'request-1',
+        'Completed',
+        true,
+        false,
+        current.status,
+        revision,
+        {
+          ...current.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
+      ],
     );
   });
 
@@ -1387,7 +1420,13 @@ describe('RequestsService draft flow', () => {
     ).resolves.toMatchObject({ psfCreatedData: savedData });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('UPDATE psf_requests'),
-      ['request-1', savedData, true, updatedAt.toISOString()],
+      [
+        'request-1',
+        savedData,
+        true,
+        updatedAt.toISOString(),
+        expect.objectContaining({ modified_by: actor.displayName }),
+      ],
     );
   });
 
@@ -2185,6 +2224,7 @@ describe('RequestsService draft flow', () => {
         },
         true,
         currentUpdatedAt.toISOString(),
+        expect.objectContaining({ modified_by: actor.displayName }),
       ],
     );
     const queryCalls = pool.query.mock.calls as unknown as Array<
@@ -2327,6 +2367,7 @@ describe('RequestsService draft flow', () => {
         { psf_setup_file_name: 'stale-setup.psf' },
         true,
         currentUpdatedAt.toISOString(),
+        expect.objectContaining({ modified_by: actor.displayName }),
       ],
     );
   });
@@ -2437,7 +2478,13 @@ describe('RequestsService draft flow', () => {
     });
     expect(pool.query).toHaveBeenLastCalledWith(
       expect.stringContaining('SET psf_created_data_json = $2::jsonb'),
-      ['request-1', data, true, revision],
+      [
+        'request-1',
+        data,
+        true,
+        revision,
+        expect.objectContaining({ modified_by: actor.displayName }),
+      ],
     );
     expect(auditLogService.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2531,6 +2578,7 @@ describe('RequestsService draft flow', () => {
         { psf_setup_file_name: 'admin-corrected.psf' },
         true,
         currentUpdatedAt.toISOString(),
+        expect.objectContaining({ modified_by: actor.displayName }),
       ],
     );
   });
@@ -2600,7 +2648,11 @@ describe('RequestsService draft flow', () => {
       [
         'request-1',
         'Existing Product',
-        { product_type: 'Existing Product', requester_name: 'Fook' },
+        {
+          product_type: 'Existing Product',
+          requester_name: 'Fook',
+          modified_by: 'Fook',
+        },
         3,
         revision,
       ],
@@ -2654,6 +2706,7 @@ describe('RequestsService draft flow', () => {
           updated_at_version: revision,
           psf_released_at: null,
           id: 'request-1',
+          numeric_id: 7,
           form_key: 'psf-request',
           status: 'Draft',
           form_version: 4,
@@ -2720,10 +2773,15 @@ describe('RequestsService draft flow', () => {
         'request-1',
         'Submitted',
         'Existing Product',
-        { product_type: 'Existing Product', requester_name: 'Fook' },
+        {
+          product_type: 'Existing Product',
+          requester_name: 'Fook',
+          modified_by: 'Fook',
+        },
         false,
         false,
         revision,
+        'PSF-000007',
       ],
     );
     expect(
@@ -2734,6 +2792,7 @@ describe('RequestsService draft flow', () => {
       {
         product_type: 'Existing Product',
         requester_name: 'Fook',
+        modified_by: 'Fook',
       },
       dbClient,
     );
@@ -2795,6 +2854,7 @@ describe('RequestsService draft flow', () => {
           updated_at_version: revision,
           psf_released_at: null,
           id: 'request-1',
+          numeric_id: 7,
           form_key: 'psf-request',
           status: 'Draft',
           form_version: 3,
@@ -2863,10 +2923,15 @@ describe('RequestsService draft flow', () => {
         'request-1',
         'Submitted',
         'Existing Product',
-        { product_type: 'Existing Product', requester_name: 'Fook' },
+        {
+          product_type: 'Existing Product',
+          requester_name: 'Fook',
+          modified_by: 'Fook',
+        },
         false,
         false,
         revision,
+        'PSF-000007',
       ],
     );
     expect(
@@ -2877,6 +2942,7 @@ describe('RequestsService draft flow', () => {
       {
         product_type: 'Existing Product',
         requester_name: 'Fook',
+        modified_by: 'Fook',
       },
       dbClient,
     );
@@ -3189,7 +3255,13 @@ describe('RequestsService draft flow', () => {
       });
       expect(pool.query).toHaveBeenLastCalledWith(
         expect.stringContaining('AND form_version = $4'),
-        ['request-1', null, { requester_name: 'Fook' }, 3, revision],
+        [
+          'request-1',
+          null,
+          { requester_name: 'Fook', modified_by: actor.displayName },
+          3,
+          revision,
+        ],
       );
       expect(formSchemaService.getActiveSchema).not.toHaveBeenCalled();
       expect(
@@ -3250,7 +3322,13 @@ describe('RequestsService draft flow', () => {
       ).not.toHaveBeenCalled();
       expect(pool.query).toHaveBeenLastCalledWith(
         expect.stringContaining('psf_created_at = CASE'),
-        ['request-1', { field_3: '2026-10-02' }, true, revision],
+        [
+          'request-1',
+          { field_3: '2026-10-02' },
+          true,
+          revision,
+          expect.objectContaining({ modified_by: actor.displayName }),
+        ],
       );
     },
   );
@@ -3280,7 +3358,15 @@ describe('RequestsService draft flow', () => {
       });
       expect(pool.query).toHaveBeenLastCalledWith(
         expect.stringContaining('COALESCE(psf_released_at, NOW())'),
-        ['request-1', 'Submitted', false, false, 'Completed', revision],
+        [
+          'request-1',
+          'Submitted',
+          false,
+          false,
+          'Completed',
+          revision,
+          { ...current.requester_data_json, modified_by: actor.displayName },
+        ],
       );
     },
   );
@@ -3478,10 +3564,14 @@ describe('RequestsService draft flow', () => {
         'request-1',
         'Submitted',
         'Existing Product',
-        requestRow.requester_data_json,
+        {
+          ...requestRow.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
         false,
         false,
         revision,
+        'PSF-000007',
       ],
     );
     expect(
@@ -3734,20 +3824,21 @@ describe('RequestsService draft flow', () => {
         product_type: 'New Product',
         requester_name: 'Spoofed editor',
       };
+      const actor = {
+        ...requesterActor,
+        displayName: 'Different authenticated editor',
+        role: 'admin' as const,
+      };
       const saved = {
         ...requestRow.requester_data_json,
         product_type: 'New Product',
+        modified_by: actor.displayName,
       };
       pool.query
         .mockResolvedValueOnce({ rows: [current] })
         .mockResolvedValueOnce({
           rows: [{ ...current, status: 'Submitted', updated_at_version: next }],
         });
-      const actor = {
-        ...requesterActor,
-        displayName: 'Different authenticated editor',
-        role: 'admin' as const,
-      };
       const invoke =
         operation === 'requester'
           ? service.updateDraftRequesterData(
@@ -3783,7 +3874,7 @@ describe('RequestsService draft flow', () => {
         schemaSnapshot: activeSchema.schema,
       });
       const [, params] = pool.query.mock.calls[1] as [string, unknown[]];
-      expect(params[params.length - 1]).toBe(exact);
+      expect(params).toContain(exact);
       expect(params).not.toContain(actor.displayName);
       expect(formSchemaService.getActiveSchema).not.toHaveBeenCalled();
       if (operation === 'requester') {

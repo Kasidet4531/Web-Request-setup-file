@@ -22,6 +22,8 @@ export const REQUEST_AUDIT_ACTION = {
   REQUESTER_INFORMATION_UPDATED: 'REQUESTER_INFORMATION_UPDATED',
   PSF_CREATED_INFORMATION_UPDATED: 'PSF_CREATED_INFORMATION_UPDATED',
   WORKFLOW_CATALOG_UPDATED: 'WORKFLOW_CATALOG_UPDATED',
+  ATTACHMENT_UPLOADED: 'ATTACHMENT_UPLOADED',
+  ATTACHMENT_DELETED: 'ATTACHMENT_DELETED',
 } as const;
 
 export type RequestAuditAction =
@@ -69,6 +71,8 @@ export interface GlobalAuditLogEntry {
   hasRequestSnapshot: boolean;
   requestId: string | null;
   requestNo: string | null;
+  // The request's Product_Description, or `Untitled Draft (#ID)` while blank.
+  requestLabel: string | null;
   actionType: string;
   actorDisplayName: string;
   actorRole: AuthenticatedUserProfile['role'];
@@ -91,6 +95,9 @@ interface GlobalAuditLogRow {
   has_request_snapshot: boolean;
   request_id: string | null;
   request_no: string | null;
+  request_status: string | null;
+  request_numeric_id: number | null;
+  request_title: string | null;
   action_type: string;
   actor_display_name: string;
   actor_role: AuthenticatedUserProfile['role'];
@@ -284,6 +291,9 @@ export class AuditLogService implements OnModuleInit {
           audit_log.request_snapshot_json IS NOT NULL AS has_request_snapshot,
           audit_log.request_id,
           psf_request.request_no,
+          psf_request.status AS request_status,
+          psf_request.numeric_id AS request_numeric_id,
+          psf_request.requester_data_json->>'title' AS request_title,
           audit_log.action_type,
           audit_log.actor_display_name,
           audit_log.actor_role,
@@ -303,6 +313,7 @@ export class AuditLogService implements OnModuleInit {
       hasRequestSnapshot: row.has_request_snapshot,
       requestId: row.request_id,
       requestNo: row.request_no,
+      requestLabel: this.requestLabel(row),
       actionType: row.action_type,
       actorDisplayName: row.actor_display_name,
       actorRole: row.actor_role,
@@ -313,6 +324,14 @@ export class AuditLogService implements OnModuleInit {
           ? this.publicCatalogMetadata(row.metadata_json)
           : row.metadata_json,
     }));
+  }
+
+  private requestLabel(row: GlobalAuditLogRow): string | null {
+    if (row.request_numeric_id === null || row.request_numeric_id === undefined)
+      return null;
+    const title = row.request_title?.trim();
+    if (title) return title;
+    return `Untitled ${row.request_status === 'Draft' ? 'Draft' : 'Request'} (#${row.request_numeric_id})`;
   }
 
   private buildGlobalWhere(

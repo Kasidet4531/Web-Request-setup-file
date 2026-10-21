@@ -15,7 +15,18 @@ export type {
 
 export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
 
+/** The latest result of the bar's action (saving, saved, or the error), shown in the bar beside the buttons. */
+export interface DynamicFormActionFeedback {
+  kind: 'pending' | 'success' | 'error'
+  message: string
+}
+
 export interface DynamicFormRendererProps {
+  /**
+   * Shown in the action bar, left of the buttons. While it is pending the buttons stay in place, disabled, even
+   * though the form is read-only; once the form is read-only the bar keeps showing it without buttons.
+   */
+  actionFeedback?: DynamicFormActionFeedback
   deleteAction?: ReactNode
   footerActions?: ReactNode
   headerTitle?: string
@@ -33,14 +44,18 @@ export interface DynamicFormRendererProps {
   onSubmit?: (values: DynamicFormValues) => void
 }
 
-const PRODUCT_TYPE_FIELD_KEY = 'product_type'
 const HEADER_METADATA_FIELD_KEYS = new Set(['requester_name', 'modified_by', 'start_date'])
 
 function isHeaderMetadataField(field: FormSchemaField): boolean {
   return HEADER_METADATA_FIELD_KEYS.has(field.fieldKey) || field.canonicalKey === 'modified_by' || field.canonicalKey === 'start_date'
 }
 
+/**
+ * Lays out every Form Schema rendering: one row per visible field, the label on the left and the
+ * control (or, read-only, the stored value) on the right. Fields keep their configured order.
+ */
 export function DynamicFormRenderer({
+  actionFeedback,
   deleteAction,
   errors = {},
   fieldStatuses = {},
@@ -57,6 +72,12 @@ export function DynamicFormRenderer({
   values = {},
 }: DynamicFormRendererProps) {
   const visibleFields = (fields: FormSchemaField[]) => fields.filter((field) => !isHeaderMetadataField(field))
+  // A form locked while its save runs keeps its buttons (disabled), so the bar does not change shape;
+  // a form that turned read-only after its action keeps the bar for the result, without buttons.
+  const showButtons = !readOnly || actionFeedback?.kind === 'pending'
+  // Progress and success are announced politely; an error is announced as an alert.
+  const errorFeedback = actionFeedback?.kind === 'error' ? actionFeedback : undefined
+  const politeFeedback = actionFeedback?.kind === 'error' ? undefined : actionFeedback
   const hasRequiredFields = schema.sections.some((section) => visibleFields(section.fields).some((field) => field.required))
 
   function handleFieldChange(fieldKey: string) {
@@ -67,7 +88,7 @@ export function DynamicFormRenderer({
   }
 
   function renderField(field: FormSchemaField) {
-    return <FieldControl
+    return <FieldRow
       errors={errors}
       field={field}
       fieldStatus={fieldStatuses[field.fieldKey]}
@@ -119,7 +140,7 @@ export function DynamicFormRenderer({
               <span aria-hidden="true" className="dynamic-form__section-number">{String(sectionIndex + 1).padStart(2, '0')}</span>
               <h3 className="dynamic-form__section-title">{section.title}</h3>
             </div>}
-            <div className="dynamic-form__grid">
+            <div className="dynamic-form__rows">
               {visibleFields(section.fields).map(renderField)}
             </div>
 
@@ -128,20 +149,27 @@ export function DynamicFormRenderer({
         })}
       </div>
 
-      {!readOnly ? (
+      {showButtons || actionFeedback ? (
         <div className="dynamic-form__actions">
-          {deleteAction}
-          <button className="ui-button ui-button--primary" type="submit">
-            {submitLabel}
-          </button>
-          {footerActions}
+          {/* The status region stays mounted, empty when idle, so a message placed in it is announced. */}
+          <p className={`dynamic-form__status${politeFeedback ? ` dynamic-form__status--${politeFeedback.kind}` : ''}`} role="status">{politeFeedback?.message}</p>
+          {errorFeedback ? <p className="dynamic-form__status dynamic-form__status--error" role="alert">{errorFeedback.message}</p> : null}
+          {showButtons ? (
+            <div className="dynamic-form__buttons">
+              {deleteAction}
+              {footerActions}
+              <button className="ui-button ui-button--primary" disabled={readOnly} type="submit">
+                {submitLabel}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </form>
   )
 }
 
-interface FieldControlProps {
+interface FieldRowProps {
   errors: DynamicFormErrors
   field: FormSchemaField
   fieldStatus?: DynamicFormFieldStatus
@@ -151,7 +179,8 @@ interface FieldControlProps {
   value: string
 }
 
-function FieldControl({ errors, field, fieldStatus, onChange, previousValue, readOnly, value }: FieldControlProps) {
+/** One field's row: a label cell, then a control cell holding the control or value and the field's notes. */
+function FieldRow({ errors, field, fieldStatus, onChange, previousValue, readOnly, value }: FieldRowProps) {
   const instanceId = useId()
   const error = errors[field.fieldKey]
   const fieldId = `dynamic-field-${instanceId}-${field.fieldKey}`
@@ -167,44 +196,36 @@ function FieldControl({ errors, field, fieldStatus, onChange, previousValue, rea
     <span>{field.label}</span>
     {field.required ? <span aria-hidden="true" className="dynamic-form__required">*</span> : null}
   </>
-  const input = <FieldInput
-    describedBy={describedBy}
-    error={Boolean(error)}
-    field={field}
-    fieldId={fieldId}
-    onChange={onChange}
-    readOnly={readOnly}
-    value={value}
-  />
-  const isProductType = field.fieldKey === PRODUCT_TYPE_FIELD_KEY || field.canonicalKey === PRODUCT_TYPE_FIELD_KEY
-  const isWide = field.type === 'textarea' || field.type === 'radio' || field.fieldKey === 'title' || field.canonicalKey === 'title'
+  // A radio group has no single control for a <label> to point at; the group names itself from this cell.
+  const labelsGroup = !readOnly && field.type === 'radio'
 
   return (
-    <div
-      className={`dynamic-form__field${field.type === 'textarea' ? ' dynamic-form__field--textarea' : ''}${isWide ? ' dynamic-form__field--wide' : ''}${isProductType ? ' dynamic-form__product-type' : ''}${changed ? ' dynamic-form__field--changed' : ''}`}
-    >
-      {readOnly ? <>
-        <label className="dynamic-form__label" htmlFor={fieldId} id={labelId}>{label}</label>
-        <output aria-describedby={describedBy} aria-labelledby={labelId} className="dynamic-form__readonly" id={fieldId}>
-          {value || 'Not provided'}
-        </output>
-      </> : field.type === 'radio' ? (
-        <fieldset aria-describedby={describedBy} aria-invalid={Boolean(error) || undefined} aria-required={field.required || undefined}
-          aria-labelledby={labelId} className="dynamic-form__choice-fieldset" role="radiogroup">
-          <legend className="dynamic-form__label" id={labelId}>{label}</legend>
-          {input}
-        </fieldset>
-      ) : <>
-        <label className="dynamic-form__label" htmlFor={fieldId} id={labelId}>{label}</label>
-        {input}
-      </>}
-      {error ? <p className="ui-error" id={errorId}>{error}</p> : null}
-      {fieldStatus ? (
-        <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
-          {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
-        </p>
-      ) : null}
-      {changed ? <p className="dynamic-form__previous" id={previousId}>Previous: {previousValue || 'Empty'}</p> : null}
+    <div className={`dynamic-form__row${changed ? ' dynamic-form__row--changed' : ''}`}>
+      {labelsGroup ? <span className="dynamic-form__label" id={labelId}>{label}</span>
+        : <label className="dynamic-form__label" htmlFor={fieldId} id={labelId}>{label}</label>}
+      <div className="dynamic-form__control">
+        {readOnly ? (
+          <output aria-describedby={describedBy} aria-labelledby={labelId} className="dynamic-form__readonly" id={fieldId}>
+            {value || 'Not provided'}
+          </output>
+        ) : <FieldInput
+          describedBy={describedBy}
+          error={Boolean(error)}
+          field={field}
+          fieldId={fieldId}
+          labelId={labelId}
+          onChange={onChange}
+          readOnly={readOnly}
+          value={value}
+        />}
+        {error ? <p className="ui-error" id={errorId}>{error}</p> : null}
+        {fieldStatus ? (
+          <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
+            {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
+          </p>
+        ) : null}
+        {changed ? <p className="dynamic-form__previous" id={previousId}>Previous: {previousValue || 'Empty'}</p> : null}
+      </div>
     </div>
   )
 }
@@ -214,12 +235,14 @@ interface FieldInputProps {
   error: boolean
   field: FormSchemaField
   fieldId: string
+  /** Names the radio group, since a legend cannot sit in the row's label cell. */
+  labelId: string
   onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
   readOnly: boolean
   value: string
 }
 
-function FieldInput({ describedBy, error, field, fieldId, onChange, readOnly, value }: FieldInputProps) {
+function FieldInput({ describedBy, error, field, fieldId, labelId, onChange, readOnly, value }: FieldInputProps) {
   const commonProps = {
     'aria-describedby': describedBy,
     'aria-invalid': error || undefined,
@@ -256,7 +279,8 @@ function FieldInput({ describedBy, error, field, fieldId, onChange, readOnly, va
 
   if (field.type === 'radio') {
     return (
-      <div className="dynamic-form__radio-group">
+      <div aria-describedby={describedBy} aria-invalid={error || undefined} aria-labelledby={labelId}
+        aria-required={field.required || undefined} className="dynamic-form__radio-group" role="radiogroup">
         {options.map((option, index) => (
           <label className={`dynamic-form__radio-option${value === option ? ' dynamic-form__radio-option--selected' : ''}`} key={option}>
             <input

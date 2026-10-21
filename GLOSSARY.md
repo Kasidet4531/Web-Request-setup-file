@@ -21,7 +21,7 @@ The creator of a PSF Request (`Created By` on Imported Requests) who provides th
 _Avoid_: Requester Role, applicant
 
 **Modified By**:
-The most recent actor to save changes to a PSF Request, initialized from the workbook's `Modified By` column for Imported Requests and updated automatically on every subsequent request modification.
+The most recent actor to save changes to a PSF Request, initialized from the workbook's `Modified By` column for Imported Requests and updated automatically on every subsequent request modification, whether or not the request's form has a Modified By field.
 _Avoid_: Last editor, updater
 
 **Setup File Owner**:

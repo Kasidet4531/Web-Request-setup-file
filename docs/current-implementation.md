@@ -5,6 +5,20 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Request list columns and Modified By, 21 October 2026:** the Requests and Dashboard tables hold one value per column: Product Description (the `title` field), Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date and Requester. My Drafts has Product Description, Request No., Product Type, Updated and Delete. Before, the first column stacked the title, request number and Product Type (on the Dashboard the probe card name followed the number), and PSF file names were not shown. A missing value shows "—"; Product Description no longer falls back to "<Product Type> PSF request". Request No. is the row's link; the whole row still opens the request. The list API adds `jobFileName` beside `psfSetupFileName`, both from PSF Created Information whether or not the field is searchable, and returns both as `null` to a Requester until PSF Visibility Release (`psfSetupFileName` used to reach a Requester before release). Keyword search matches a PSF Setup File Name for a Requester only after release. The search index gains `job_file_name`, and a one-time startup step (`index-psf-file-names-v1`) indexes both names for existing submitted requests. Modified By is now recorded on every individual save (Draft creation, Draft and requester edits, Draft schema upgrade, submission, PSF Created Information saves and Status changes) whether or not the request's form has a Modified By field; before, only forms with that field recorded it, so the seeded form and forms loaded before 19 October left it blank. A Modified By sent with form data is ignored. A one-time startup step (`modified-by-from-audit-history-v1`) fills a blank Modified By from the actor of the request's latest such Audit History entry and keeps any recorded value; bulk Status replacement still records none (ADR 0016), and a request with no such entry stays blank until its next save. See the [verification record](verification/2026-10-21-request-list-columns.md). Checks ran in Chromium against a throwaway local database.
+
+> **Centred request column, 21 October 2026:** New Request, Request Detail (Drafts and submitted requests) and Admin Draft detail sit in one column at most 1335px wide (`--request-page-max-width`, one and a half times a card around the 840px `--form-rows-max-width`), centred in the content area, and their form rows, including PSF Created Information, fill the card instead of stopping at 840px; the label column stays 260px. The Admin Form Management preview and Request Snapshots keep the 840px cap. New Request was previously capped at 1120px and the detail pages were not capped. A Draft's Attachments card, also in Draft Management, now sits 16px below Requester Information, as on New Request. See the [verification record](verification/2026-10-21-single-column-form.md#centred-request-column). Checks ran in Chromium against a throwaway local database.
+
+> **Pinned action bar, 21 October 2026:** on every editable form (New Request, Draft and submitted request editing, PSF Created Information editing and the Admin Form Management preview) the action buttons sit in a bar pinned to the bottom of the viewport, or of the preview's scroll region, while the form scrolls; at the end of the form it sits below the last row. It spans the form card with Save as the right-most button at the card's right edge. Saving, saved and save errors of the Requester form and of PSF Created Information appear in the bar, left of the buttons (saving and saved as a status, errors as an alert), instead of at the top of the card or page; the preview's "All required fields are complete." appears there too. Status changes, load errors, Draft schema upgrades and other page-level notices stay at the top. See the [verification record](verification/2026-10-21-single-column-form.md#pinned-action-bar) (issue #90). Checks ran in Chromium against a throwaway local database.
+
+> **Single-column form rows, 21 October 2026:** every rendering of a Form Schema (New Request, Draft and submitted request editing, PSF Created Information viewing and editing, the Admin Form Management preview, read-only Request Detail, Admin Draft detail and Request Snapshots) shows one row per field: the label in a 260px column on the left, the control or stored value on the right, rows separated by a divider and capped at 840px wide. Below 600px wide the label sits above its control. The two-column grid and its full-width text areas, radios, Title and Product Type are gone; field order, sections, labels, required flags and visibility are unchanged. See the [verification record](verification/2026-10-21-single-column-form.md) (issue #88). Checks ran in Chromium against a throwaway local database.
+
+> **Attachment Policy, 21 October 2026:** `GET /api/attachment-policy` gives any signed-in role `{ maxBytes, blockedExtensions }` from the storage configuration uploads are checked against; both Attachment pickers show the per-file limit and blocked file types from it, and New Request refuses an oversized file at selection as it does a blocked type, reading the type as the server does. A file chosen there while the policy is still loading is staged and checked when the policy arrives. The frontend no longer keeps its own blocked-extension list; without the policy the pickers work with no hint or client-side check. See [Request Attachments](request-attachments.md#access-and-api) (issue #89). Checks ran in Chromium against a throwaway local database and a temporary attachment directory, alongside controller, application-module and frontend tests; the check of files chosen before the policy loads and the server-style type reading are covered by frontend tests only.
+
+> **Input border contrast, 21 October 2026:** in the light theme the `--input-border` token is `#858b88` (previously `#a7adaa`), so text input, select and text area borders measure 3.47:1 against the card and 3.19:1 against the page background (WCAG 2.1 SC 1.4.11). Secondary buttons, radio options, dialog borders and the other elements that share the token darken with it; the dark theme is unchanged (4.38:1 against the card). See the [verification record](verification/2026-10-21-input-border-contrast.md) (issue #87). Checks ran in Chromium against a throwaway local database.
+
+> **Attachments and request IDs, 20 October 2026:** every request has a sequential integer ID continuing the Imported Requests' numbering; a submitted Draft is renumbered `PSF-` and its six-digit ID; New Request starts Product_Description as `Product_Description`. Attachments live in a `[Product_Description]_[ID]` folder under `ATTACHMENT_STORAGE_PATH` (the NAS), with metadata in `psf_request_attachments` reconciled on every read, an Attachments tab on submitted Request Detail and a section below Requester Information on Drafts and New Request. Audit History shows Product_Description instead of Draft numbers and records `ATTACHMENT_UPLOADED`/`ATTACHMENT_DELETED`. See [Request Attachments and request IDs](request-attachments.md) (issue #78). Checks ran on disposable databases and a temporary directory, not the configured database or a NAS share.
+
 > **Request Snapshot, 11 October 2026:** an Audit History entry tied to a request now stores a Request Snapshot, opened read-only through "View Request Snapshot" in the request's History tab or on the Audit History page ([ADR 0016](adr/0016-full-request-snapshot-per-audit-history-entry.md), issue #74). Bulk Status replacement entries and entries recorded before this change have none. This is a source change; the dated checks, including a run on the configured PostgreSQL server inside session-temporary tables, are in the [verification record](verification/2026-10-11-request-snapshot.md). The configured tables were not written and no deployment was exercised.
 
 > **Initial Data Load, number fields and export scope, 8 October 2026:** the [Initial Data Load script](initial-data-load.md) reloads forms, the Status catalog and requests from the PSF form detail workbook. Form fields may be `number` (validated as plain decimals, exported as numeric cells), Dashboard Team Group also reads the Request To options, and every authenticated role exports all submitted (non-Draft) requests, never any Draft, not even their own. The load script was run against the configured database on 8 October 2026 with `--lenient` (read-back counts only); see [Initial Data Load](initial-data-load.md).
@@ -134,8 +148,38 @@ reset when changing version/family, do not dirty the config, and invoke neither
 request writes nor runtime autofill/mail. Required-field checking is local;
 requester identity uses clearly marked locked sample data. New Request and
 Detail editors use the same configured order without automatic Additional
-details grouping. Detail alone uses bold 14px field labels, thin read-mode
-separators and 16px section headings. Request Owner / Dept metadata has been removed.
+details grouping. Every rendering uses the same single-column rows: one row per
+visible field, a 260px label column and a flexible control column, a divider under
+each row, and the label above its control below 600px wide. On New Request,
+Request Detail and Admin Draft detail the rows fill the form card in a centred
+column at most 1335px wide; elsewhere they are at most 840px wide.
+Labels are bold 14px in both editable and read-only mode, and read-only values sit
+on the controls' line, so switching a request between viewing and editing keeps
+ordinary rows at the same height; radio groups and text areas may grow while
+editing. A radio group is a `role="radiogroup"` element named by its row's label
+cell and keeps its required, invalid and described-by state. The required marker,
+field error, Auto-fill status and "Previous" value stay in the field's row; a
+Request Snapshot tints changed rows. Detail keeps 16px section headings. Request
+Owner / Dept metadata has been removed.
+An editable form ends in an action bar that is `position: sticky` at the bottom of
+the window (in the Admin preview, of its "Preview fields" scroll region), so it stays
+on screen while the form scrolls and the last row still scrolls clear of it. In a form
+card it spans the card edge to edge; buttons are right-aligned with Save last (Delete
+Draft or Cancel before it), and below 600px wide they share their own line, stacking
+when they do not fit. The bar's status area, left of the buttons, reports the form's
+action: the Requester form shows "Saving requester information…", then "Draft
+DRAFT-… saved." or "Requester information saved.", or the save error; PSF Created
+Information shows "Saving PSF Created Information…", then "PSF Created Information
+for PSF-… saved." or the error (including the 409 conflict messages); the preview
+shows "All required fields are complete.". Saving and saved are a polite
+`role="status"` region that stays mounted, errors a `role="alert"`. While a save runs
+the form is read-only and the buttons stay in the bar, disabled. A save error keeps
+the form editable. After a successful explicit-edit save (submitted Requester
+Information, PSF Created Information) the form returns to read-only and the bar
+keeps only the saved message, until "Edit information", a field change or Cancel
+clears it; a Draft stays editable with the message beside its buttons until the next
+edit. A Draft schema upgrade is started at the top of the card and still reports
+there. Keyboard focus scrolled into view stops above the bar (`scroll-padding-bottom`).
 New requests capture both active schemas. Requester Draft schema upgrades are
 explicit and do not upgrade the captured PSF schema. Legacy PSF records resolve
 through the fixed original descriptor. Required fields may be incomplete on
@@ -146,7 +190,9 @@ for reuse/publishing rather than silently exposed.
 Sources: [schema constants](../backend/src/admin/form_schema.constants.ts),
 [schema service](../backend/src/admin/form_schema.service.ts),
 [request service](../backend/src/requests/requests.service.ts),
-[form validation](../backend/src/requests/form-data-validation.ts).
+[form validation](../backend/src/requests/form-data-validation.ts),
+[form renderer](../frontend/src/components/DynamicFormRenderer.tsx),
+[row styles](../frontend/src/index.css).
 
 Status Management uses immutable catalog identities, verbatim names and
 `draft`/`open`/`completed`/`cancelled` kinds. The seed has 17 entries, including
@@ -261,6 +307,8 @@ query parameters. This table lists routes, not full payload schemas.
 | Request reads      | `GET /api/requests/:requestId/history`, `GET /api/requests/:requestId/history/:entryId` (Request Snapshot), `GET /api/requests/:requestId/status-options`     | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Draft management | `GET /api/admin/drafts`, `GET /api/admin/drafts/:id`, `GET /api/admin/draft-deletions`, `DELETE /api/requests/:id` | [Admin controller](../backend/src/requests/admin-drafts.controller.ts), [request controller](../backend/src/requests/requests.controller.ts) |
 | Draft reminders | `GET /api/admin/draft-reminders` | [reminder inspection](../backend/src/notifications/draft-reminders.controller.ts) |
+| Attachments        | `GET/POST /api/requests/:requestId/attachments`, `GET /api/requests/:requestId/attachments/:attachmentId/download`, `DELETE /api/requests/:requestId/attachments/:attachmentId` | [RequestAttachmentsController](../backend/src/requests/request-attachments.controller.ts) |
+| Attachment Policy  | `GET /api/attachment-policy` returns `{maxBytes,blockedExtensions}` to any authenticated role (no request ID)                                                     | [AttachmentPolicyController](../backend/src/requests/attachment-policy.controller.ts)  |
 | Request edits      | `PUT /api/requests/:requestId/requester-data`, `PUT /api/requests/:requestId/psf-created-data`, `PUT /api/requests/:requestId/status`                            | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Submission/upgrade | `POST /api/requests/:requestId/submit`, `POST /api/requests/:requestId/upgrade-schema`                                                                           | [RequestsController](../backend/src/requests/requests.controller.ts)                   |
 | Status reads       | `GET /api/workflow/statuses`                                                                                                                                     | [WorkflowStatusController](../backend/src/admin/workflow_transition.controller.ts)     |
@@ -281,7 +329,8 @@ standalone migration command in the backend package scripts.
 | Tables                                                    | Initializer/source                                                               |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `app_users`                                               | [AuthService](../backend/src/auth/auth.service.ts)                               |
-| `psf_requests`                                            | [RequestsService](../backend/src/requests/requests.service.ts)                   |
+| `psf_requests` (with `numeric_id` and `psf_request_numeric_id_seq`) | [RequestsService](../backend/src/requests/requests.service.ts)                   |
+| `psf_request_attachments`                                 | [RequestAttachmentsService](../backend/src/requests/request-attachments.service.ts) |
 | `form_definitions`                                        | [FormSchemaService](../backend/src/admin/form_schema.service.ts)                 |
 | `workflow_transition_config`                              | [WorkflowTransitionService](../backend/src/admin/workflow_transition.service.ts) |
 | `autofill_rules`                                          | [AutofillRuleService](../backend/src/admin/autofill_rule.service.ts)             |
@@ -315,7 +364,7 @@ Credentials belong in ignored local configuration.
 
 Source: [file routes](../frontend/src/routes),
 [navigation permissions](../frontend/src/components/navigationState.ts).
-Request Detail includes Requester Information, PSF Created Information and History tabs for submitted work; its explicit form Edit/Save/Cancel controls remain separate from Save Status. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
+Request Detail includes Requester Information, PSF Created Information, Attachments and History tabs for submitted work (Drafts show Attachments below Requester Information; see [Request Attachments](request-attachments.md)). Each Attachment picker, there and on New Request, states the server's per-file limit and blocked file types from `/api/attachment-policy`, and New Request refuses an oversized or blocked file when it is chosen (or, for a file chosen before the policy loaded, when the policy arrives). Request Detail's explicit form Edit/Save/Cancel controls remain separate from Save Status: a form save reports in that form's pinned action bar, while Status changes, workflow-option refresh errors and load errors report at the top of the page. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
 Form editing uses application components, including a textarea-based advanced
 JSON editor, rather than Monaco/CodeMirror.
 Sources: [visual form editor](../frontend/src/components/AdminFormConfigEditor.tsx),
@@ -361,7 +410,7 @@ and the [form-management](../backend/test/form-management-system.e2e.mjs) /
 [historical request-assignment](https://github.com/Kasidet4531/Web-Request-setup-file/blob/43f6d6abe3245662300e17b25742f71e68fe739c/backend/test/request-assignment-system.e2e.mjs) test sources (the assignment source is pinned to its pre-removal commit)
 are available for historical reproduction; they do not replace the missing original run report.
 
-- No attachment runtime, export-profile CRUD, tracked Nginx deployment configuration,
+- No export-profile CRUD, tracked Nginx deployment configuration,
   or advanced third-party schema editor is implemented in this checkout.
 - Sessions use the default in-memory store; `main.ts` has a development fallback
   secret. Mock auth being blocked in production is not a production readiness audit.

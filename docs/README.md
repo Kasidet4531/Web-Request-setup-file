@@ -20,6 +20,7 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
+| [Request Attachments and request IDs](request-attachments.md) | NAS folder layout, reconciliation, access and the Attachment Policy, request numbering, screens and dated verification scope (issues #78 and #89) |
 | [Draft management and reminders](draft-management-and-reminders.md) | Admin readonly inspection, creator/Admin permanent deletion, cleanup, seven-day notification and team filters |
 | [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and dated offline/LAN verification scope; merged into main |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
@@ -47,6 +48,15 @@ behavior and test outcomes.
 | [Auto-fill Rules and Status recipient design](specs/2026-10-07-autofill-admin-dialogs-design.md) | Active/Inactive selection, modal editing, field labels and recipient layout requirements |
 | [Auto-fill Admin Dialogs plan](plans/2026-10-07-autofill-admin-dialogs.md) | Implementation checklist using `/implement` and `/code-review` |
 
+## Research inputs
+
+External research that feeds requirement interviews. It does not describe
+current behavior.
+
+| Document | Use/scope |
+| --- | --- |
+| [Form UX and color accessibility research](design/2026-10-20-form-ux-accessibility-research.md) | General guidance on dynamic-form structure, input errors, request lists and WCAG contrast (Thai); sources not yet verified against the originals |
+
 ## Agent and tracker conventions
 
 | Document | Use/scope |
@@ -67,7 +77,7 @@ behavior and test outcomes.
 | [docs/adr/0005-manual-workflow-status-transitions.md](adr/0005-manual-workflow-status-transitions.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0006-local-database-authentication.md](adr/0006-local-database-authentication.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0007-admin-json-schema-editor.md](adr/0007-admin-json-schema-editor.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
-| [docs/adr/0008-local-filesystem-attachment-storage.md](adr/0008-local-filesystem-attachment-storage.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
+| [docs/adr/0008-local-filesystem-attachment-storage.md](adr/0008-local-filesystem-attachment-storage.md) | Original design; the 20 October 2026 implementation keeps original file names in per-request NAS folders instead, see [Request Attachments](request-attachments.md) |
 | [docs/adr/0009-autofill-resolution-strategy.md](adr/0009-autofill-resolution-strategy.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0010-shared-setup-queue-visibility.md](adr/0010-shared-setup-queue-visibility.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
 | [docs/adr/0011-key-by-key-diff-request-audit-logs.md](adr/0011-key-by-key-diff-request-audit-logs.md) | Original design/backlog/baseline snapshot; status notice points to current implementation |
@@ -91,6 +101,9 @@ behavior and test outcomes.
 | [docs/plans/production-ui-integration-execution-plan.md](plans/production-ui-integration-execution-plan.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/psf-created-information-editing.md](plans/psf-created-information-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/superpowers/plans/2026-09-01-ldap-api-login.md](superpowers/plans/2026-09-01-ldap-api-login.md) | Original scoped plan; not a current execution instruction |
+| [Request list columns and Modified By verification](verification/2026-10-21-request-list-columns.md) | One value per request-list column with Product Description first and PSF Setup File Name / Job File Name added, their release masking and one-time indexing, and Modified By recorded on every save with a one-time fill from Audit History: suites against base `9a051ff`, before/after screenshots on a throwaway local database; not deployment acceptance |
+| [Single-column form verification](verification/2026-10-21-single-column-form.md) | Single-column field rows in all seven form renderings (issue #88) and the pinned action bar with save results in it (issue #90), then the centred 1335px request column and the Draft's Attachments spacing: renderer and interaction tests, measured row-height parity between viewing and editing, accessible names, bar position and roles, and desktop/phone light/dark screenshots on a throwaway local database; not deployment acceptance |
+| [Input border contrast verification](verification/2026-10-21-input-border-contrast.md) | Light-mode input border token at 3:1 against card and page (issue #87): before/after browser-measured ratios, field states and light/dark screenshots on a throwaway local database; not deployment acceptance |
 | [Request Snapshot verification](verification/2026-10-11-request-snapshot.md) | Suites against the `main` baseline, real-browser flow, and a run on the configured PostgreSQL inside session-temporary tables; not deployment acceptance |
 | [Draft lifecycle verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md) | Public browser/HTTP/mail, SQL races and regression evidence |
 | [docs/verification/2026-10-07-admin-autofill-dialogs.md](verification/2026-10-07-admin-autofill-dialogs.md) | Rule activation, modal editing and recipient-layout regression tests, browser evidence and two-axis review |

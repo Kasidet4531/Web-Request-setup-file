@@ -38,11 +38,15 @@ run the repository's PostgreSQL 15 Compose service from the repository root.
 | `PORT` | API listen port; default 3000 |
 | `EXPORT_SYNC_THRESHOLD` | XLSX sync/background boundary; default 2000 |
 | `EXPORT_JOB_POLL_INTERVAL_MS`, `EXPORT_JOB_STALE_AFTER_MS`, `EXPORT_JOB_MAXIMUM_ATTEMPTS` | Optional background-job processor settings |
+| `ATTACHMENT_STORAGE_PATH` | Root of the request Attachment folders: mapped drive, UNC path or local directory. Unset disables Attachments (503) |
+| `ATTACHMENT_MAX_BYTES` | Largest Attachment file in bytes; default 52428800 (50 MB). Served by `GET /api/attachment-policy`, so the pickers show it after a restart |
 
 Source: [pool](src/database/database.module.ts), [bootstrap](src/main.ts),
 [LDAP service](src/auth/auth.service.ts), [mock service](src/auth/development-auth.service.ts),
-[export controller](src/export/export.controller.ts) and
-[job processor](src/export/export-job.processor.ts).
+[export controller](src/export/export.controller.ts),
+[job processor](src/export/export-job.processor.ts) and
+[attachment storage](src/requests/attachment-storage.ts); see
+[Request Attachments](../docs/request-attachments.md).
 
 ## Run
 
@@ -83,6 +87,13 @@ store in `main.ts`, so restarting the process discards sessions.
 `npm run db:initialize -- <workbook.xlsx> [--yes] [--lenient]` clears request data and form
 configuration and reloads them from the PSF form detail workbook. It is a dry run
 without `--yes`. See [Initial Data Load](../docs/initial-data-load.md) before using it.
+It clears Attachment metadata but never touches the NAS folders, which are
+listed again when each request is opened.
+
+`npm run attachments:check [-- --csv report.csv] [--root <folder>]` compares the
+existing NAS folders with the `[Product_Description]_[ID]` names the app looks
+for, without changing anything. See
+[checking existing NAS folders](../docs/request-attachments.md#checking-existing-nas-folders).
 
 ## Checks
 
@@ -97,6 +108,9 @@ The `test:e2e` suite uses mocked database/services; it is not live PostgreSQL or
 LDAP acceptance. Some HTTP tests open temporary local ports. The bare lint script
 includes `--fix`; append `--no-fix` for a read-only check. Existing verification
 results are dated records under [docs/verification](../docs/README.md).
+
+The Attachment database tests (`test/attachments.postgres.test.ts`) use an
+in-memory PostgreSQL and a temporary directory as `ATTACHMENT_STORAGE_PATH`.
 
 The Request Snapshot database tests run on an in-memory PostgreSQL by default and
 can run on the configured server without writing to its tables:

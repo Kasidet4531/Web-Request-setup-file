@@ -295,7 +295,7 @@ describe.each(['text', 'textarea'] as const)(
         const update = calls.find(([sql]) =>
           sql.includes('UPDATE psf_requests'),
         )!;
-        expect(update[1]!.at(-1)).toBe(revision);
+        expect(update[1]!).toContain(revision);
         expect(
           calls
             .filter(([sql]) => /^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))

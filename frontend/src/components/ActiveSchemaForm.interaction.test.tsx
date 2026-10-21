@@ -369,6 +369,22 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     expect(getFormRenderer(page).props.footerActions).toBeFalsy()
   })
 
+  it('pre-fills Product_Description on a new request as its saved baseline and sends it on save', async () => {
+    const withTitle = structuredClone(currentActiveRequestSchema)
+    withTitle.schema.sections[0].fields.unshift({ fieldKey: 'title', canonicalKey: 'title', label: 'Product_Description', type: 'text', required: true })
+    requestApi.fetchActiveFormSchema.mockResolvedValue(withTitle)
+    requestApi.createDraftRequest.mockResolvedValue(buildDraft({ requesterData: { title: 'Product_Description', product_type: '', legacy_note: '' } }))
+    const page = await loadNewDraftForm()
+    const values = getFormRenderer(page).props.values as Record<string, string>
+    expect(values.title).toBe('Product_Description')
+    expect(values.legacy_note).toBe('')
+    // The default is not an unsaved change of the user's.
+    expect(findRenderedElement(page, (element) => element.props.children === 'Not saved')).not.toBeNull()
+    ;(getFormRenderer(page).props.onSubmit as (values: Record<string, string>) => void)(values)
+    await flushAsyncWork()
+    expect(requestApi.createDraftRequest).toHaveBeenCalledWith({ requesterData: expect.objectContaining({ title: 'Product_Description' }) })
+  })
+
   it('retains a committed new draft and its runtime triggers without requiring another schema fetch', async () => {
     const current = structuredClone(currentActiveRequestSchema)
     current.schema.sections[0].fields[0].autofillTrigger = true
@@ -506,6 +522,42 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
       expectedUpdatedAt: 'opaque-requester-revision-1',
       requesterData: { product_type: 'New Product', title: 'Edited title' },
     })
+  })
+
+  it('reports a Draft save in the action bar while it runs and once saved, not at the top of the card', async () => {
+    const current = buildDraft({
+      formVersion: 2,
+      schemaSnapshot: activeRequestSchema.schema,
+      requesterData: { product_type: 'New Product', title: 'Saved title' },
+    })
+    const saved = buildDraft({ ...current, requesterData: { product_type: 'New Product', title: 'Edited title' }, updatedAt: '2026-08-08T00:00:01.000Z' })
+    let resolveSave: ((request: PsfRequestResponse) => void) | undefined
+    requestApi.fetchPsfRequest.mockResolvedValue(current)
+    requestApi.updateDraftRequesterData.mockImplementationOnce(
+      () => new Promise<PsfRequestResponse>((resolve) => { resolveSave = resolve }),
+    )
+    renderDraftForm()
+    hookHarness.runEffects()
+    await flushAsyncWork()
+    let page = renderDraftForm()
+    ;(getFormRenderer(page).props.onSubmit as (values: Record<string, string>) => void)({ product_type: 'New Product', title: 'Edited title' })
+    page = renderDraftForm()
+
+    expect(getFormRenderer(page).props.actionFeedback).toEqual({ kind: 'pending', message: 'Saving requester information…' })
+    expect(findRenderedElement(page, (element) => element.props.title === 'Saving requester information…')).toBeNull()
+
+    if (!resolveSave) throw new Error('Expected requester save to remain pending')
+    resolveSave(saved)
+    await flushAsyncWork()
+    page = renderDraftForm()
+
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect(getFormRenderer(page).props.actionFeedback).toEqual({ kind: 'success', message: 'Draft DRAFT-0001 saved.' })
+    expect(findRenderedElement(page, (element) => element.props.title === 'Draft DRAFT-0001 saved.')).toBeNull()
+
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('title', 'Edited again')
+    page = renderDraftForm()
+    expect(getFormRenderer(page).props.actionFeedback).toBeUndefined()
   })
 
   it('upgrades only once and leaves Draft submission to the Action center', async () => {
@@ -1196,7 +1248,39 @@ describe('ActiveSchemaForm explicit submitted editing', () => {
     expect(requestApi.updateDraftRequesterData).toHaveBeenCalledWith('request-1', { formVersion: 1, expectedUpdatedAt: '2026-08-08T00:00:00.000Z', requesterData: { ...submittedValues, legacy_note: 'Edited note' } })
   })
 
-  it('retains edit mode and local values after a failed save, then Cancel clears the error and restores saved values', async () => {
+  it('keeps Cancel in the action bar, disabled, while an explicit save runs', async () => {
+    let page = await loadSubmittedForm()
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm()
+    requestApi.updateDraftRequesterData.mockImplementationOnce(() => new Promise<PsfRequestResponse>(() => undefined))
+    void (getFormRenderer(page).props.onSubmit as (values: unknown) => Promise<void>)(getFormRenderer(page).props.values)
+    page = renderExplicitForm()
+
+    expect(getFormRenderer(page).props.actionFeedback).toEqual({ kind: 'pending', message: 'Saving requester information…' })
+    expect(getFormRenderer(page).props.submitLabel).toBe('Saving information…')
+    const cancel = requireRenderedElement(getFormRenderer(page).props.footerActions, (element) => element.type === 'button' && element.props.children === 'Cancel')
+    expect(cancel.props.disabled).toBe(true)
+  })
+
+  it('keeps the saved result in the action bar after the form returns to view mode, until editing starts again', async () => {
+    let page = await loadSubmittedForm()
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm()
+    requestApi.updateDraftRequesterData.mockResolvedValueOnce(buildDraft({ status: 'In progress', schemaSnapshot: submittedSchema, requesterData: submittedValues }))
+    await (getFormRenderer(page).props.onSubmit as (values: unknown) => Promise<void>)(getFormRenderer(page).props.values)
+    page = renderExplicitForm()
+
+    expect(getFormRenderer(page).props.readOnly).toBe(true)
+    expect(getFormRenderer(page).props.actionFeedback).toEqual({ kind: 'success', message: 'Requester information saved.' })
+    expect(findRenderedElement(page, (element) => element.props.title === 'Requester information saved.')).toBeNull()
+
+    clickButton(page, 'Edit information')
+    page = renderExplicitForm()
+    expect(getFormRenderer(page).props.readOnly).toBe(false)
+    expect(getFormRenderer(page).props.actionFeedback).toBeUndefined()
+  })
+
+  it('retains edit mode and local values after a failed save, reports the error in the action bar, then Cancel clears it and restores saved values', async () => {
     const onDirtyChange = vi.fn()
     const props = { onDirtyChange }
     let page = await loadSubmittedForm(props)
@@ -1209,12 +1293,13 @@ describe('ActiveSchemaForm explicit submitted editing', () => {
     page = renderExplicitForm(props)
     expect(getFormRenderer(page).props.readOnly).toBe(false)
     expect((getFormRenderer(page).props.values as Record<string, string>).legacy_note).toBe('Unsaved note')
-    expect(findRenderedElement(page, (element) => element.props.title === 'Save unavailable')).not.toBeNull()
+    expect(getFormRenderer(page).props.actionFeedback).toEqual({ kind: 'error', message: 'Save unavailable' })
+    expect(findRenderedElement(page, (element) => element.props.title === 'Save unavailable')).toBeNull()
     clickButton(page, 'Cancel')
     page = renderExplicitForm(props)
     expect(getFormRenderer(page).props.values).toEqual(submittedValues)
     expect(getFormRenderer(page).props.readOnly).toBe(true)
-    expect(findRenderedElement(page, (element) => element.props.title === 'Save unavailable')).toBeNull()
+    expect(getFormRenderer(page).props.actionFeedback).toBeUndefined()
     expect(onDirtyChange).toHaveBeenLastCalledWith(false)
     expect(requestApi.fetchPsfRequest).toHaveBeenCalledOnce()
   })

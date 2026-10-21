@@ -2,6 +2,8 @@
 
 > **Historical decision record (2026-10-02 audit):** The original decision and rationale are retained below; they do not certify all described features as implemented. [Current implementation](../current-implementation.md) takes precedence for present behavior, including where older implementation amendments differ. Filesystem upload/storage below remains a target decision; the current form uses text attachment references. See [current form descriptors](../../backend/src/admin/form_schema.constants.ts).
 
+> **Amendment, 20 October 2026:** Attachments are implemented on a Windows-mapped NAS share (`ATTACHMENT_STORAGE_PATH`) in one `[Product_Description]_[ID]` folder per request, keeping original file names (suffixed ` (1)`, ` (2)` on collision) rather than unique generated names, so engineers can use the same folders in Windows Explorer. Metadata in PostgreSQL is reconciled with each folder when read. See [Request Attachments](../request-attachments.md). The decision body below is kept as written.
+
 We decided to store uploaded attachments on the local server filesystem for the MVP, and register their metadata in the PostgreSQL database, while abstracting the storage operations via an interface to allow clean future migration to cloud object storage.
 
 ## Context

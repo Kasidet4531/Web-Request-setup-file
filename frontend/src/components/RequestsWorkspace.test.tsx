@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReactElement } from 'react'
+import { createElement, type FunctionComponent, type ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RequestDetailShell,
@@ -13,6 +13,7 @@ import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { AsyncNotice } from './ui/AsyncNotice'
+import { ImagePreviewModal, RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 
 const navigation = vi.hoisted(() => ({ blocker: null as { shouldBlockFn: (location: { current: { pathname: string }; next: { pathname: string } }) => boolean; enableBeforeUnload: boolean; withResolver?: boolean } | null, navigate: vi.fn(), resolver: { status: 'idle' as 'idle' | 'blocked', proceed: vi.fn(), reset: vi.fn() } }))
 vi.mock('@tanstack/react-router', async (load) => ({
@@ -31,6 +32,11 @@ const requestDetailApi = vi.hoisted(() => ({
   submitPsfRequest: vi.fn(),
   updatePsfCreatedData: vi.fn(),
   updatePsfRequestStatus: vi.fn(),
+  fetchAttachmentPolicy: vi.fn(),
+  fetchRequestAttachments: vi.fn(),
+  uploadRequestAttachments: vi.fn(),
+  deleteRequestAttachment: vi.fn(),
+  requestAttachmentDownloadUrl: vi.fn((requestId: string, attachmentId: string) => `/api/requests/${requestId}/attachments/${attachmentId}/download`),
 }))
 
 const requestDetailHookHarness = vi.hoisted(() => {
@@ -195,6 +201,24 @@ function findRenderedElement(
   return null
 }
 
+function findAllRenderedElements(
+  node: unknown,
+  matches: (element: RenderedElement) => boolean,
+  found: RenderedElement[] = [],
+): RenderedElement[] {
+  if (Array.isArray(node)) {
+    node.forEach((child) => findAllRenderedElements(child, matches, found))
+    return found
+  }
+  if (!node || typeof node !== 'object' || !('props' in node) || !('type' in node) || typeof node.props !== 'object' || node.props === null) {
+    return found
+  }
+  const element: RenderedElement = { key: 'key' in node ? (node.key as string | null) : null, props: node.props as Record<string, unknown>, type: node.type }
+  if (matches(element)) found.push(element)
+  findAllRenderedElements(element.props.children, matches, found)
+  return found
+}
+
 function requireRenderedElement(
   node: unknown,
   matches: (element: RenderedElement) => boolean,
@@ -349,6 +373,12 @@ type PsfCreatedInformationPanel = (props: {
   saving: boolean
   values: Record<string, string>
 }) => ReactElement
+
+/** Renders a PSF Created Information panel element and returns what its form's action bar reports. */
+function psfActionFeedback(panelElement: { type: unknown; props: Record<string, unknown> }): unknown {
+  const tree = (panelElement.type as (props: Record<string, unknown>) => ReactElement)(panelElement.props)
+  return requireRenderedElement(tree, (element) => element.type === DynamicFormRenderer).props.actionFeedback
+}
 
 function getPsfCreatedInformationPanel(): PsfCreatedInformationPanel | undefined {
   const panel = Reflect.get(
@@ -1681,6 +1711,7 @@ describe('RequestDetailShell workflow actions', () => {
     expect(renderer.props.readOnly).toBe(true)
     expect(renderer.props.onChange).toBeUndefined()
     expect(renderer.props.onSubmit).toBeUndefined()
+    expect(renderer.props.actionFeedback).toEqual({ kind: 'pending', message: 'Saving PSF Created Information…' })
     expect(requestDetailApi.updatePsfRequestStatus).not.toHaveBeenCalled()
 
     if (!resolveSave) throw new Error('Expected PSF save to remain pending')
@@ -1688,7 +1719,7 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
   })
 
-  it('saves editable PSF Created Information and refreshes the local detail state', async () => {
+  it('saves editable PSF Created Information, refreshes the local detail state and reports the save in the action bar', async () => {
     const setupOwnerRequest = {
       ...buildSubmittedRequest(),
       status: 'Setup In Progress',
@@ -1729,7 +1760,6 @@ describe('RequestDetailShell workflow actions', () => {
     await flushRequestDetailAsyncWork()
     shell = renderRequestDetailShell()
     panelElement = requireRenderedElement(shell, (element) => element.type === panel)
-    const success = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
@@ -1740,10 +1770,15 @@ describe('RequestDetailShell workflow actions', () => {
       updatedAt: '2026-08-01T00:00:01.000Z',
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'saved-setup.psf' })
-    expect(success.props.title).toBe('PSF Created Information for PSF-0001 saved.')
+    expect(psfActionFeedback(panelElement)).toEqual({ kind: 'success', message: 'PSF Created Information for PSF-0001 saved.' })
+    expect(findRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'success')).toBeNull()
+
+    ;(panelElement.props.onEdit as () => void)()
+    shell = renderRequestDetailShell()
+    expect(psfActionFeedback(requireRenderedElement(shell, (element) => element.type === panel))).toBeUndefined()
   })
 
-  it('keeps editable PSF Created Information values and exposes save failures through an alert', async () => {
+  it('keeps editable PSF Created Information values and reports save failures in the action bar as an alert', async () => {
     const setupOwnerRequest = {
       ...buildSubmittedRequest(),
       status: 'Setup In Progress',
@@ -1787,14 +1822,14 @@ describe('RequestDetailShell workflow actions', () => {
     shell = renderRequestDetailShell()
 
     panelElement = requireRenderedElement(shell, (element) => element.type === panel)
-    const alert = requireRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
 
     expect(requestDetailApi.updatePsfCreatedData).toHaveBeenCalledWith('request-1', {
       expectedUpdatedAt: '2026-08-01T00:00:00.000Z',
       psfCreatedData: { psf_setup_file_name: 'retry-setup.psf' },
     })
     expect(panelElement.props.values).toEqual({ psf_setup_file_name: 'retry-setup.psf' })
-    expect(alert.props.title).toBe('PSF data validation failed')
+    expect(psfActionFeedback(panelElement)).toEqual({ kind: 'error', message: 'PSF data validation failed' })
+    expect(findRenderedElement(shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')).toBeNull()
   })
 
   it('keeps real requester and PSF edits when a PSF conflict refresh changes status', async () => {
@@ -1861,7 +1896,6 @@ describe('RequestDetailShell workflow actions', () => {
     rendered = renderRequestDetailWithRequesterChild()
     requesterRenderer = requireRenderedElement(rendered.requesterForm, (element) => element.type === DynamicFormRenderer)
     const form = requireRenderedElement(rendered.shell, (element) => element.type === ActiveSchemaForm)
-    const alert = requireRenderedElement(rendered.shell, (element) => element.type === AsyncNotice && element.props.kind === 'error')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
 
@@ -1888,9 +1922,10 @@ describe('RequestDetailShell workflow actions', () => {
     expect((requesterRenderer.props.values as Record<string, string>).request_title_v4).toBe('LOCAL requester title')
     expect(requesterRenderer.props.readOnly).toBe(true)
     expect(requesterRenderer.props.onSubmit).toBeUndefined()
-    expect(alert.props.title).toBe(
-      'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
-    )
+    expect(psfActionFeedback(panelElement)).toEqual({
+      kind: 'error',
+      message: 'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
+    })
   })
 
   it('keeps workflow detail stable and exposes a status update failure through an alert', async () => {
@@ -2300,7 +2335,7 @@ describe('Private draft table presentation', () => {
   it('shows the persisted update timestamp, opens a draft from its row, and offers Delete as a button', () => {
     requestDetailHookHarness.beginRender()
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
-      referencePsfName: null, psfSetupFileName: null, probecardName: null, status: 'Draft',
+      referencePsfName: null, psfSetupFileName: null, jobFileName: null, probecardName: null, status: 'Draft',
       priority: 'Normal', requester: 'Engineer',
       productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
     const onOpenItem = vi.fn()
@@ -2381,4 +2416,352 @@ describe('Product Type team Dashboard', () => {
   expect(html).toContain('<span>Requester</span><strong>Creator User</strong>')
   expect(html).toContain('<span>Modified By</span><strong>Editor User</strong>')
  })
+})
+
+describe('Request Attachments', () => {
+  const image = { id: 'image-id', filename: 'wafer.png', mimeType: 'image/png', sizeBytes: 2048, isImage: true, uploadedByDisplayName: 'Fook', createdAt: '2026-10-20T01:00:00.000Z' }
+  const layout = { id: 'layout-id', filename: 'layout.dpl', mimeType: 'application/octet-stream', sizeBytes: 12, isImage: false, uploadedByDisplayName: null, createdAt: '2026-10-19T01:00:00.000Z' }
+
+  beforeEach(() => {
+    requestDetailHookHarness.reset()
+    navigation.blocker = null
+    navigation.navigate.mockReset()
+    navigation.resolver.status = 'idle'
+    for (const mock of [requestDetailApi.fetchPsfRequest, requestDetailApi.fetchAttachmentPolicy, requestDetailApi.fetchRequestAttachments, requestDetailApi.uploadRequestAttachments, requestDetailApi.deleteRequestAttachment]) mock.mockReset()
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: [] })
+    // Not the default limit or list: the pickers must show what the server says.
+    requestDetailApi.fetchAttachmentPolicy.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, blockedExtensions: ['.exe', '.js'] })
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, layout] })
+  })
+
+  /** The text the picker's file input is described by, or null when it has no hint. */
+  function pickerHint(panel: unknown, label: string): string | null {
+    const picker = requireRenderedElement(panel, (element) => element.props.label === label)
+    const describedBy = /aria-describedby="([^"]+)"/.exec(renderToStaticMarkup(createElement(picker.type as FunctionComponent, picker.props)))?.[1]
+    if (!describedBy) return null
+    return requireRenderedElement(panel, (element) => element.props.id === describedBy).props.children as string
+  }
+
+  async function loadDetail(request: PsfRequestResponse) {
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(request)
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    return renderRequestDetailShell()
+  }
+
+  function renderPanel(onChanged?: () => void) {
+    requestDetailHookHarness.beginRender()
+    return RequestAttachmentsPanel({ requestId: 'request-1', onChanged })
+  }
+
+  async function loadPanel(onChanged?: () => void) {
+    renderPanel(onChanged)
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    return renderPanel(onChanged)
+  }
+
+  it('places the Attachments tab between PSF Created Information and History on submitted work', async () => {
+    let shell = await loadDetail(buildSubmittedRequest())
+    const tabs = findAllRenderedElements(shell, (element) => element.props.role === 'tab')
+    expect(tabs.map((tab) => tab.props.children)).toEqual(['Requester Information', 'PSF Created Information', 'Attachments', 'History'])
+    const attachmentsPanel = () => requireRenderedElement(shell, (element) => element.props.id === 'detail-panel-attachments')
+    expect(attachmentsPanel().props.role).toBe('tabpanel')
+    expect(attachmentsPanel().props['aria-labelledby']).toBe('detail-tab-attachments')
+    expect(attachmentsPanel().props.hidden).toBe(true)
+    expect(requireRenderedElement(attachmentsPanel().props.children, (element) => element.type === RequestAttachmentsPanel).props.requestId).toBe('request-1')
+
+    ;(tabs[2].props.onClick as () => void)()
+    shell = renderRequestDetailShell()
+    expect(attachmentsPanel().props.hidden).toBe(false)
+    expect(requireRenderedElement(shell, (element) => element.props.id === 'detail-panel-history').props.hidden).toBe(true)
+  })
+
+  it('shows Attachments directly below Requester Information on a Draft', async () => {
+    const shell = await loadDetail(buildDraftRequest())
+    expect(findAllRenderedElements(shell, (element) => element.props.role === 'tab')).toEqual([])
+    const editors = requireRenderedElement(shell, (element) => element.props.className === 'detail-editors')
+    const panels = findAllRenderedElements(editors.props.children, (element) => typeof element.props.id === 'string' && element.props.id.startsWith('detail-panel-'))
+    expect(panels.map((panel) => panel.props.id).slice(0, 2)).toEqual(['detail-panel-requester', 'detail-panel-attachments'])
+    expect(panels[1].props.hidden).toBe(false)
+    expect(panels[1].props.role).toBeUndefined()
+  })
+
+  it('uploads files chosen on New Request right after the Draft is created, then opens it', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const file = new File(['pcsf'], 'pcsf.pdf', { type: 'application/pdf' })
+    let page = render()
+    const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
+    const staged = requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel)
+    // Attachments render below Requester Information.
+    expect(findAllRenderedElements(page, (element) => element.type === ActiveSchemaForm || element.type === StagedAttachmentsPanel).map((element) => element.type)).toEqual([ActiveSchemaForm, StagedAttachmentsPanel])
+    ;(staged.props.onChange as (files: File[]) => void)([file])
+    page = render()
+    requestDetailHookHarness.runEffects()
+    expect(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.files).toEqual([file])
+    // Chosen files are unsaved work until uploaded.
+    expect(navigation.blocker?.enableBeforeUnload).toBe(true)
+
+    let finishUpload: (value: unknown) => void = () => undefined
+    requestDetailApi.uploadRequestAttachments.mockReturnValue(new Promise((resolve) => { finishUpload = resolve }))
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file], expect.any(Function))
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).not.toHaveBeenCalled()
+
+    finishUpload({ folderName: 'Product_Description_5571', canManage: true, items: [] })
+    await flushRequestDetailAsyncWork()
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+    expect(navigation.blocker?.enableBeforeUnload).toBe(false)
+  })
+
+  it('retries only the staged files whose batch was not uploaded', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const files = Array.from({ length: 12 }, (_, index) => new File(['x'], `layout-${index}.dpl`))
+    let page = render()
+    ;(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.onChange as (files: File[]) => void)(files)
+    page = render()
+    requestDetailHookHarness.runEffects()
+    // The first batch of ten goes through, then the NAS stops answering.
+    requestDetailApi.uploadRequestAttachments.mockImplementationOnce(async (_requestId: string, sent: File[], onBatchUploaded: (uploaded: File[], list: unknown) => void) => {
+      onBatchUploaded(sent.slice(0, 10), { folderName: 'x', canManage: true, items: [] })
+      throw new ApiError('Attachment storage is unreachable. Try again later.', 503, 'Service Unavailable', null)
+    })
+    const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    await flushRequestDetailAsyncWork()
+    page = render()
+    expect(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.files).toEqual(files.slice(10))
+
+    requestDetailApi.uploadRequestAttachments.mockResolvedValueOnce({ folderName: 'x', canManage: true, items: [] })
+    ;(requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Retry attachment upload').props.onClick as () => void)()
+    await flushRequestDetailAsyncWork()
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenLastCalledWith('request-1', files.slice(10), expect.any(Function))
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+  })
+
+  it('keeps staged files and offers a retry when their upload fails after the Draft is saved', async () => {
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const file = new File(['lay'], 'job.lay')
+    let page = render()
+    ;(requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel).props.onChange as (files: File[]) => void)([file])
+    page = render()
+    requestDetailHookHarness.runEffects()
+    requestDetailApi.uploadRequestAttachments.mockRejectedValueOnce(new ApiError('Attachment storage is unreachable. Try again later.', 503, 'Service Unavailable', null))
+    const form = requireRenderedElement(page, (element) => element.type === ActiveSchemaForm)
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    await flushRequestDetailAsyncWork()
+    page = render()
+    requestDetailHookHarness.runEffects()
+    expect(navigation.navigate).not.toHaveBeenCalled()
+    const staged = requireRenderedElement(page, (element) => element.type === StagedAttachmentsPanel)
+    expect(staged.props.files).toEqual([file])
+    expect(staged.props.error).toContain('Draft DRAFT-0001 was saved, but its attachments were not uploaded: Attachment storage is unreachable.')
+
+    requestDetailApi.uploadRequestAttachments.mockResolvedValueOnce({ folderName: 'x', canManage: true, items: [] })
+    const retry = requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Retry attachment upload')
+    ;(retry.props.onClick as () => void)()
+    await flushRequestDetailAsyncWork()
+    render()
+    requestDetailHookHarness.runEffects()
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledTimes(2)
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+  })
+
+  it('opens image attachments in a preview modal and downloads other files directly', async () => {
+    let panel = await loadPanel()
+    expect(requestDetailApi.fetchRequestAttachments).toHaveBeenCalledWith('request-1')
+    expect(JSON.stringify(panel)).toContain('Chip A_5571')
+    const fileLink = requireRenderedElement(panel, (element) => element.type === 'a' && element.props.download === 'layout.dpl')
+    expect(fileLink.props.href).toBe('/api/requests/request-1/attachments/layout-id/download')
+    expect(findRenderedElement(panel, (element) => element.type === 'a' && element.props.download === 'wafer.png')).toBeNull()
+    expect(findRenderedElement(panel, (element) => element.type === ImagePreviewModal)).toBeNull()
+
+    const imageButton = requireRenderedElement(panel, (element) => element.type === 'button' && element.props.className === 'request-attachments__name')
+    ;(imageButton.props.onClick as () => void)()
+    panel = renderPanel()
+    const modal = requireRenderedElement(panel, (element) => element.type === ImagePreviewModal)
+    expect(modal.props.attachment).toEqual(image)
+    expect(modal.props.downloadUrl).toBe('/api/requests/request-1/attachments/image-id/download')
+    const html = renderToStaticMarkup(<ImagePreviewModal {...(modal.props as Parameters<typeof ImagePreviewModal>[0])} />)
+    expect(html).toContain('<img class="image-preview-dialog__image" src="/api/requests/request-1/attachments/image-id/download" alt="wafer.png"/>')
+    expect(html).toMatch(/<a [^>]*href="\/api\/requests\/request-1\/attachments\/image-id\/download" download="wafer.png">.*Download<\/a>/)
+
+    ;(modal.props.onClose as () => void)()
+    expect(findRenderedElement(renderPanel(), (element) => element.type === ImagePreviewModal)).toBeNull()
+  })
+
+  it('deletes an attachment only after confirmation and uploads chosen files immediately', async () => {
+    const onChanged = vi.fn()
+    let panel = await loadPanel(onChanged)
+    ;(requireRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete layout.dpl').props.onClick as () => void)()
+    panel = renderPanel(onChanged)
+    let confirmation = requireRenderedElement(panel, (element) => element.type === ConfirmDialog)
+    expect(confirmation.props.open).toBe(true)
+    expect(confirmation.props.description).toContain('layout.dpl')
+    expect(requestDetailApi.deleteRequestAttachment).not.toHaveBeenCalled()
+
+    requestDetailApi.deleteRequestAttachment.mockResolvedValue({ deleted: true })
+    ;(confirmation.props.onConfirm as () => void)()
+    await flushRequestDetailAsyncWork()
+    panel = renderPanel(onChanged)
+    expect(requestDetailApi.deleteRequestAttachment).toHaveBeenCalledExactlyOnceWith('request-1', 'layout-id')
+    expect(findRenderedElement(panel, (element) => element.props.download === 'layout.dpl')).toBeNull()
+    confirmation = requireRenderedElement(panel, (element) => element.type === ConfirmDialog)
+    expect(confirmation.props.open).toBe(false)
+    expect(onChanged).toHaveBeenCalledTimes(1)
+
+    const file = new File(['dpl'], 'new.dpl')
+    requestDetailApi.uploadRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, { ...layout, id: 'new-id', filename: 'new.dpl' }] })
+    ;(requireRenderedElement(panel, (element) => element.props.label === 'Upload files').props.onSelect as (files: File[]) => void)([file])
+    await flushRequestDetailAsyncWork()
+    panel = renderPanel(onChanged)
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file], expect.any(Function))
+    expect(findRenderedElement(panel, (element) => element.props.download === 'new.dpl')).not.toBeNull()
+    expect(onChanged).toHaveBeenCalledTimes(2)
+  })
+
+  it('names the file of an Attachment upload or deletion in the request History', () => {
+    const html = renderToStaticMarkup(<RequestsWorkspace.RequestHistoryPanel requestId="request-1" error={null} loading={false} entries={[
+      { id: 'entry-1', hasRequestSnapshot: false, actionType: 'ATTACHMENT_UPLOADED', actorDisplayName: 'Fook', actorRole: 'requester', createdAt: '2026-10-20T01:00:00.000Z', metadata: { filename: 'layout.dpl', sizeBytes: 12, mimeType: 'application/octet-stream' } },
+      { id: 'entry-2', hasRequestSnapshot: false, actionType: 'ATTACHMENT_DELETED', actorDisplayName: 'Owner', actorRole: 'setup_owner', createdAt: '2026-10-20T02:00:00.000Z', metadata: { filename: 'old.png', sizeBytes: 10, mimeType: 'image/png' } },
+    ]} />)
+    expect(html).toContain('<strong>Attachment uploaded: layout.dpl</strong><span>Fook · requester</span>')
+    expect(html).toContain('<strong>Attachment deleted: old.png</strong><span>Owner · setup_owner</span>')
+  })
+
+  it('states the per-file limit and blocked file types from the server beside the saved-request picker', async () => {
+    const panel = await loadPanel()
+    expect(requestDetailApi.fetchAttachmentPolicy).toHaveBeenCalledTimes(1)
+    expect(pickerHint(panel, 'Upload files')).toBe('Up to 5.0 MB per file · Not allowed: .exe, .js')
+  })
+
+  function renderStaged(files: File[], onChange: (files: File[]) => void) {
+    requestDetailHookHarness.beginRender()
+    return StagedAttachmentsPanel({ files, onChange })
+  }
+
+  async function loadStaged(files: File[], onChange: (files: File[]) => void) {
+    renderStaged(files, onChange)
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    return renderStaged(files, onChange)
+  }
+
+  function chooseStaged(panel: unknown, files: File[]) {
+    ;(requireRenderedElement(panel, (element) => element.props.label === 'Add files').props.onSelect as (files: File[]) => void)(files)
+  }
+
+  function errorNotices(panel: unknown): unknown[] {
+    return findAllRenderedElements(panel, (element) => element.type === AsyncNotice && element.props.kind === 'error').map((notice) => notice.props.title)
+  }
+
+  it('refuses an oversized or blocked file on New Request the moment it is chosen, stating the limits beside the picker', async () => {
+    const onChange = vi.fn()
+    const staged = new File(['pcsf'], 'pcsf.pdf')
+    let panel = await loadStaged([staged], onChange)
+    expect(pickerHint(panel, 'Add files')).toBe('Up to 5.0 MB per file · Not allowed: .exe, .js')
+
+    chooseStaged(panel, [new File(['x'], 'job.lay'), new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'wafer-map.zip')])
+    panel = renderStaged([staged], onChange)
+    expect(errorNotices(panel)).toEqual(['wafer-map.zip is larger than the 5.0 MB attachment limit.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    chooseStaged(panel, [new File(['x'], 'Setup.JS')])
+    panel = renderStaged([staged], onChange)
+    expect(errorNotices(panel)).toEqual(['Setup.JS cannot be attached: executable and script files are not allowed.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    // Exactly the limit is allowed, as on the server; the last refusal clears.
+    const atLimit = new File([new Uint8Array(5 * 1024 * 1024)], 'wafer-map.zip')
+    chooseStaged(panel, [atLimit])
+    panel = renderStaged([staged], onChange)
+    expect(errorNotices(panel)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([staged, atLimit])
+  })
+
+  it('reads a staged file type the way the server does', async () => {
+    const onChange = vi.fn()
+    let panel = await loadStaged([], onChange)
+
+    // The server stores `build.JS. ` as `build.JS`, which it refuses.
+    chooseStaged(panel, [new File(['x'], 'build.JS. ')])
+    panel = renderStaged([], onChange)
+    expect(errorNotices(panel)).toEqual(['build.JS.  cannot be attached: executable and script files are not allowed.'])
+    expect(onChange).not.toHaveBeenCalled()
+
+    // A name that starts with its only dot has no type on the server, so `.js` is accepted there.
+    const dotfile = new File(['x'], '.js')
+    chooseStaged(panel, [dotfile])
+    panel = renderStaged([], onChange)
+    expect(errorNotices(panel)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([dotfile])
+  })
+
+  it('stages files chosen while the policy is loading, then refuses those it rules out once it arrives', async () => {
+    let arrive: (policy: { maxBytes: number; blockedExtensions: string[] }) => void = () => {}
+    requestDetailApi.fetchAttachmentPolicy.mockReturnValue(new Promise((resolve) => { arrive = resolve }))
+    const onChange = vi.fn()
+    let panel = renderStaged([], onChange)
+    requestDetailHookHarness.runEffects()
+    expect(pickerHint(panel, 'Add files')).toBeNull()
+
+    // Attaching never waits for the policy.
+    const layout = new File(['x'], 'job.lay')
+    const tool = new File(['x'], 'tool.exe')
+    const huge = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'wafer-map.zip')
+    chooseStaged(panel, [layout, tool, huge])
+    expect(onChange).toHaveBeenLastCalledWith([layout, tool, huge])
+    renderStaged([layout, tool, huge], onChange)
+    requestDetailHookHarness.runEffects()
+
+    arrive({ maxBytes: 5 * 1024 * 1024, blockedExtensions: ['.exe', '.js'] })
+    await flushRequestDetailAsyncWork()
+    expect(onChange).toHaveBeenLastCalledWith([layout])
+    panel = renderStaged([layout], onChange)
+    expect(errorNotices(panel)).toEqual([
+      'tool.exe cannot be attached: executable and script files are not allowed. wafer-map.zip is larger than the 5.0 MB attachment limit.',
+    ])
+    expect(pickerHint(panel, 'Add files')).toBe('Up to 5.0 MB per file · Not allowed: .exe, .js')
+  })
+
+  it('keeps both pickers working without hints or a client-side check when the policy cannot be loaded', async () => {
+    requestDetailApi.fetchAttachmentPolicy.mockRejectedValue(new ApiError('Internal server error', 500, 'Internal Server Error', null))
+    const saved = await loadPanel()
+    expect(pickerHint(saved, 'Upload files')).toBeNull()
+    expect(findRenderedElement(saved, (element) => element.type === AsyncNotice)).toBeNull()
+    const file = new File(['dpl'], 'new.dpl')
+    requestDetailApi.uploadRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [image, layout] })
+    ;(requireRenderedElement(saved, (element) => element.props.label === 'Upload files').props.onSelect as (files: File[]) => void)([file])
+    expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledExactlyOnceWith('request-1', [file], expect.any(Function))
+
+    requestDetailHookHarness.reset()
+    const onChange = vi.fn()
+    let staged = await loadStaged([], onChange)
+    expect(pickerHint(staged, 'Add files')).toBeNull()
+    // The server refuses these when they are uploaded after the Draft is saved.
+    const files = [new File([new Uint8Array(50 * 1024 * 1024 + 1)], 'huge.zip'), new File(['x'], 'tool.exe')]
+    chooseStaged(staged, files)
+    staged = renderStaged([], onChange)
+    expect(errorNotices(staged)).toEqual([])
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(files)
+  })
+
+  it('offers no upload or delete where the server grants read access only', async () => {
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: '_5571', canManage: false, items: [layout] })
+    const panel = await loadPanel()
+    expect(findRenderedElement(panel, (element) => element.props.label === 'Upload files')).toBeNull()
+    expect(findRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete layout.dpl')).toBeNull()
+    expect(findRenderedElement(panel, (element) => element.props.download === 'layout.dpl')).not.toBeNull()
+  })
 })

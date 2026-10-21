@@ -388,6 +388,43 @@ describe('createApiClient', () => {
     }))
   })
 
+  it('reads the Attachment Policy from its request-independent route', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ maxBytes: 52428800, blockedExtensions: ['.exe'] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    await expect(createApiClient({ baseUrl: '/api' }).fetchAttachmentPolicy()).resolves.toEqual({ maxBytes: 52428800, blockedExtensions: ['.exe'] })
+    expect(globalThis.fetch).toHaveBeenCalledExactlyOnceWith('/api/attachment-policy', expect.objectContaining({ method: 'GET' }))
+  })
+
+  it('uploads any number of Attachments in batches the server accepts, reporting each batch', async () => {
+    let call = 0
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ folderName: 'Chip A_5571', canManage: true, items: [], call: ++call }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+    const files = Array.from({ length: 23 }, (_, index) => new File(['x'], `layout-${index}.dpl`))
+    const onBatchUploaded = vi.fn()
+
+    const list = await createApiClient({ baseUrl: '/api' }).uploadRequestAttachments('request 1', files, onBatchUploaded)
+
+    const calls = vi.mocked(globalThis.fetch).mock.calls
+    expect(calls.map(([url]) => url)).toEqual(Array(3).fill('/api/requests/request%201/attachments'))
+    expect(calls.map(([, init]) => (init?.body as FormData).getAll('files').map((file) => (file as File).name))).toEqual([
+      files.slice(0, 10).map((file) => file.name),
+      files.slice(10, 20).map((file) => file.name),
+      files.slice(20).map((file) => file.name),
+    ])
+    expect(calls.every(([, init]) => init?.method === 'POST' && !new Headers(init?.headers).has('content-type'))).toBe(true)
+    expect(onBatchUploaded.mock.calls.map(([batch]) => (batch as File[]).length)).toEqual([10, 10, 3])
+    expect(list).toMatchObject({ call: 3 })
+  })
+
   it('loads and updates a draft request by id', async () => {
     globalThis.fetch = vi
       .fn()

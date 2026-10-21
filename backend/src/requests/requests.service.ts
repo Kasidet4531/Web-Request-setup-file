@@ -40,9 +40,15 @@ import {
   isNumericText,
   validateAndNormalizeFormData,
 } from './form-data-validation';
+import {
+  RequestAttachmentsService,
+  type RegisterUndo,
+} from './request-attachments.service';
 
 const PSF_REQUEST_FORM_KEY = 'psf-request';
 const DRAFT_STATUS = 'Draft';
+// Continues the Imported Requests' integer IDs (PSF-000100 is ID 100).
+const NUMERIC_ID_SEQUENCE = 'psf_request_numeric_id_seq';
 
 const REQUEST_UPDATED_AT_VERSION_SQL = `TO_CHAR(
   updated_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'UTC',
@@ -53,6 +59,15 @@ type QueryRunner = Pick<Pool | PoolClient, 'query'>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Modified By is recorded by the server on every save, whether or not the
+// request's form has a Modified By field, so it is never form input.
+function withoutModifiedBy(requesterData: unknown): unknown {
+  if (!isRecord(requesterData)) return requesterData;
+  const formData = { ...requesterData };
+  delete formData.modified_by;
+  return formData;
 }
 
 export function canActorViewPsfCreatedData(
@@ -124,6 +139,8 @@ export type RequestQueryDto = Omit<RequestSearchFilters, 'requesterUserId'> & {
 
 export interface PsfRequestResponse {
   id: string;
+  // The sequential integer ID shared with the request's NAS folder name.
+  numericId: number;
   requestNo: string;
   formKey: string;
   formVersion: number;
@@ -163,6 +180,7 @@ export interface RequestSnapshotResponse {
 
 interface PsfRequestRow {
   id: string;
+  numeric_id: number;
   request_no: string;
   form_key: string;
   form_version: number;
@@ -195,6 +213,7 @@ export class RequestsService implements OnModuleInit {
     private readonly searchIndexService: SearchIndexService,
     private readonly auditLogService: AuditLogService,
     @Optional() private readonly notificationService?: NotificationService,
+    @Optional() private readonly requestAttachments?: RequestAttachmentsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -202,6 +221,9 @@ export class RequestsService implements OnModuleInit {
       await this.ensureRequestsStorage(client);
       await this.searchIndexService.ensureRequestSearchIndexStorage(client);
       await this.ensureDraftManagementStorage(client);
+      await this.indexListedPsfFileNames(client);
+      await this.recordModifiedByFromAuditHistory(client);
+      await this.requestAttachments?.ensureStorage(client);
     });
   }
 
@@ -214,14 +236,14 @@ export class RequestsService implements OnModuleInit {
       await this.formSchemaService.getActiveSchema(PSF_REQUEST_FORM_KEY);
     const requester = actor.displayName;
     const requesterData = this.withServerRequesterIdentity(
-      validateAndNormalizeFormData(activeSchema.schema, dto.requesterData, {
-        allowMissingRequired: true,
-      }),
+      validateAndNormalizeFormData(
+        activeSchema.schema,
+        withoutModifiedBy(dto.requesterData),
+        { allowMissingRequired: true },
+      ),
       requester,
       this.shouldTrackStartDate(activeSchema.schema) ? new Date().toISOString().slice(0, 10) : undefined,
-      this.shouldTrackModifiedBy(activeSchema.schema)
-        ? actor.displayName
-        : undefined,
+      actor.displayName,
     );
 
     return this.withTransaction(async (client) => {
@@ -236,6 +258,7 @@ export class RequestsService implements OnModuleInit {
         `
           INSERT INTO psf_requests (
             id,
+            numeric_id,
             request_no,
             form_key,
             form_version,
@@ -250,7 +273,7 @@ export class RequestsService implements OnModuleInit {
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
+          VALUES ($1, nextval('${NUMERIC_ID_SEQUENCE}'), $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11::jsonb, NOW(), NOW())
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
         [
@@ -453,7 +476,7 @@ export class RequestsService implements OnModuleInit {
     actor: AuthenticatedUserProfile,
   ): Promise<{ deleted: true }> {
     this.assertExpectedUpdatedAt(expectedUpdatedAt);
-    return this.withTransaction(async (client) => {
+    const deleted = await this.withTransaction(async (client) => {
       const result = await client.query<PsfRequestRow>(
         `SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version FROM psf_requests WHERE id=$1 FOR UPDATE`,
         [id],
@@ -470,6 +493,7 @@ export class RequestsService implements OnModuleInit {
         throw new ConflictException(
           'The Draft changed. Reload before deleting.',
         );
+      await this.requestAttachments?.assertFolderRemovable();
       await client.query(
         'DELETE FROM canonical_submission_values WHERE request_id=$1',
         [id],
@@ -510,9 +534,15 @@ export class RequestsService implements OnModuleInit {
         'INSERT INTO draft_deletion_logs(id,draft_no,actor_id,actor_display_name,actor_role,deleted_at) VALUES($1,$2,$3,$4,$5,NOW())',
         [randomUUID(), row.request_no, actor.id, actor.displayName, actor.role],
       );
+      // Its Attachment rows go with it (ON DELETE CASCADE).
       await client.query('DELETE FROM psf_requests WHERE id=$1', [id]);
-      return { deleted: true };
+      return row;
     });
+    await this.requestAttachments?.removeRequestFolder(
+      deleted.requester_data_json?.title,
+      deleted.numeric_id,
+    );
+    return { deleted: true };
   }
 
   private async ensureDraftManagementStorage(
@@ -606,6 +636,89 @@ export class RequestsService implements OnModuleInit {
       );
     await client.query(
       "INSERT INTO request_data_migrations(key) VALUES('remove-request-assignment-v1') ON CONFLICT DO NOTHING",
+    );
+  }
+
+  // Requests saved before the request list showed PSF file names have no Job
+  // File Name in the search index, and a PSF Setup File Name only where its
+  // field was searchable. Runs once, after ensureDraftManagementStorage.
+  private async indexListedPsfFileNames(client: QueryRunner): Promise<void> {
+    const migrated = await client.query(
+      "SELECT key FROM request_data_migrations WHERE key='index-psf-file-names-v1'",
+    );
+    if (migrated.rows.length) return;
+    const requests = await client.query<
+      Pick<
+        PsfRequestRow,
+        'id' | 'psf_created_schema_snapshot_json' | 'psf_created_data_json'
+      >
+    >(
+      `SELECT id, psf_created_schema_snapshot_json, psf_created_data_json FROM psf_requests WHERE status <> '${DRAFT_STATUS}'`,
+    );
+    for (const request of requests.rows) {
+      const fileNames = this.withPsfFileNameCanonicals(
+        {},
+        request.psf_created_schema_snapshot_json,
+        request.psf_created_data_json,
+      );
+      await client.query(
+        'UPDATE psf_request_search_index SET psf_setup_file_name = COALESCE($2, psf_setup_file_name), job_file_name = COALESCE($3, job_file_name) WHERE request_id = $1',
+        [
+          request.id,
+          fileNames.psf_setup_file_name ?? null,
+          fileNames.job_file_name ?? null,
+        ],
+      );
+    }
+    await client.query(
+      "INSERT INTO request_data_migrations(key) VALUES('index-psf-file-names-v1') ON CONFLICT DO NOTHING",
+    );
+  }
+
+  // Requests saved while Modified By was recorded only on forms with a
+  // Modified By field get the actor of their latest individual save. A bulk
+  // Status replacement does not change request content (ADR 0016), so it
+  // records no Modified By. Runs once, after ensureDraftManagementStorage.
+  private async recordModifiedByFromAuditHistory(
+    client: QueryRunner,
+  ): Promise<void> {
+    const migrated = await client.query(
+      "SELECT key FROM request_data_migrations WHERE key='modified-by-from-audit-history-v1'",
+    );
+    if (migrated.rows.length) return;
+    const audit = await client.query<{ exists: boolean }>(
+      "SELECT to_regclass('public.psf_request_audit_logs') IS NOT NULL AS exists",
+    );
+    if (audit.rows[0]?.exists)
+      await client.query(
+        `
+          UPDATE psf_requests AS request
+          SET requester_data_json = request.requester_data_json ||
+            jsonb_build_object('modified_by', latest.actor_display_name)
+          FROM (
+            SELECT DISTINCT ON (request_id) request_id, actor_display_name
+            FROM psf_request_audit_logs
+            WHERE request_id IS NOT NULL
+              AND action_type = ANY($1::text[])
+              AND COALESCE(metadata_json->>'bulkReplacement', '') <> 'true'
+            ORDER BY request_id, created_at DESC, id DESC
+          ) AS latest
+          WHERE request.id = latest.request_id
+            AND COALESCE(btrim(request.requester_data_json->>'modified_by'), '') = ''
+        `,
+        [
+          [
+            REQUEST_AUDIT_ACTION.DRAFT_CREATED,
+            REQUEST_AUDIT_ACTION.DRAFT_REQUESTER_DATA_UPDATED,
+            REQUEST_AUDIT_ACTION.REQUEST_SUBMITTED,
+            REQUEST_AUDIT_ACTION.REQUEST_STATUS_CHANGED,
+            REQUEST_AUDIT_ACTION.REQUESTER_INFORMATION_UPDATED,
+            REQUEST_AUDIT_ACTION.PSF_CREATED_INFORMATION_UPDATED,
+          ],
+        ],
+      );
+    await client.query(
+      "INSERT INTO request_data_migrations(key) VALUES('modified-by-from-audit-history-v1') ON CONFLICT DO NOTHING",
     );
   }
 
@@ -806,7 +919,7 @@ export class RequestsService implements OnModuleInit {
     this.assertExpectedFormVersion(dto.formVersion);
     this.assertExpectedUpdatedAt(dto.expectedUpdatedAt);
 
-    return this.withTransaction(async (client) => {
+    return this.withTransaction(async (client, onRollback) => {
       const current = await client.query<PsfRequestRow>(
         `
           SELECT *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
@@ -835,15 +948,11 @@ export class RequestsService implements OnModuleInit {
       }
 
       const requesterIdentity = this.getServerRequesterIdentity(request, actor);
-      const trackModifiedBy = this.shouldTrackModifiedBy(
-        request.schema_snapshot_json,
-        request.requester_data_json,
-      );
       const startDate = this.resolveServerStartDate(request.schema_snapshot_json, request.requester_data_json, request.created_at);
       const baseRequesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(
           request.schema_snapshot_json,
-          dto.requesterData,
+          withoutModifiedBy(dto.requesterData),
           {
             allowMissingRequired: request.status === DRAFT_STATUS,
             existingData: request.requester_data_json ?? {},
@@ -851,11 +960,6 @@ export class RequestsService implements OnModuleInit {
         ),
         requesterIdentity.displayName,
         startDate,
-        trackModifiedBy
-          ? typeof request.requester_data_json?.modified_by === 'string'
-            ? request.requester_data_json.modified_by
-            : actor.displayName
-          : undefined,
       );
       const userFieldChanges = this.getFieldChanges(
         request.schema_snapshot_json,
@@ -867,14 +971,12 @@ export class RequestsService implements OnModuleInit {
       if (userFieldChanges.length === 0)
         return this.mapRequestRow(request, actor);
 
-      const requesterData = trackModifiedBy
-        ? this.withServerRequesterIdentity(
-            baseRequesterData,
-            requesterIdentity.displayName,
-            startDate,
-            actor.displayName,
-          )
-        : baseRequesterData;
+      const requesterData = this.withServerRequesterIdentity(
+        baseRequesterData,
+        requesterIdentity.displayName,
+        startDate,
+        actor.displayName,
+      );
       const fieldChanges = this.getFieldChanges(
         request.schema_snapshot_json,
         request.requester_data_json ?? {},
@@ -927,7 +1029,7 @@ export class RequestsService implements OnModuleInit {
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
           },
-          this.withPsfSetupFileNameCanonical(
+          this.withPsfFileNameCanonicals(
             canonicalValues,
             updatedRow.psf_created_schema_snapshot_json,
             updatedRow.psf_created_data_json,
@@ -947,6 +1049,12 @@ export class RequestsService implements OnModuleInit {
         },
         client,
       );
+      await this.renameAttachmentFolder(
+        client,
+        request,
+        updatedRow,
+        onRollback,
+      );
 
       return this.mapRequestRow(updatedRow, actor);
     });
@@ -959,11 +1067,12 @@ export class RequestsService implements OnModuleInit {
   ): Promise<PsfRequestResponse> {
     this.assertExpectedFormVersion(dto.formVersion);
 
-    return this.withTransaction(async (client) => {
+    return this.withTransaction(async (client, onRollback) => {
       const current = await client.query<
         Pick<
           PsfRequestRow,
           | 'id'
+          | 'numeric_id'
           | 'form_key'
           | 'form_version'
           | 'status'
@@ -976,6 +1085,7 @@ export class RequestsService implements OnModuleInit {
         `
           SELECT
             id,
+            numeric_id,
             form_key,
             form_version,
             status,
@@ -1041,12 +1151,7 @@ export class RequestsService implements OnModuleInit {
         ),
         requesterIdentity.displayName,
         this.resolveServerStartDate(activeSchema.schema, request.requester_data_json),
-        this.shouldTrackModifiedBy(
-          activeSchema.schema,
-          request.requester_data_json,
-        )
-          ? actor.displayName
-          : undefined,
+        actor.displayName,
       );
       const productType = this.normalizeString(requesterData.product_type);
       const result = await client.query<PsfRequestRow>(
@@ -1100,6 +1205,12 @@ export class RequestsService implements OnModuleInit {
         },
         client,
       );
+      await this.renameAttachmentFolder(
+        client,
+        request,
+        upgradedRow,
+        onRollback,
+      );
 
       return this.mapRequestRow(upgradedRow, actor);
     });
@@ -1150,13 +1261,8 @@ export class RequestsService implements OnModuleInit {
       const hasPsfData = Object.values(psfCreatedData).some(
         (value) => typeof value === 'string' && value.trim().length > 0,
       );
-      const trackModifiedBy = this.shouldTrackModifiedBy(
-        request.schema_snapshot_json,
-        request.requester_data_json,
-      );
-      const result = trackModifiedBy
-        ? await client.query<PsfRequestRow>(
-            `
+      const result = await client.query<PsfRequestRow>(
+        `
           UPDATE psf_requests
           SET psf_created_data_json = $2::jsonb,
               psf_created_at = CASE WHEN $3::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
@@ -1166,29 +1272,17 @@ export class RequestsService implements OnModuleInit {
             AND updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-            [
-              id,
-              psfCreatedData,
-              hasPsfData,
-              dto.expectedUpdatedAt,
-              {
-                ...(request.requester_data_json ?? {}),
-                modified_by: dto.actor.displayName,
-              },
-            ],
-          )
-        : await client.query<PsfRequestRow>(
-            `
-          UPDATE psf_requests
-          SET psf_created_data_json = $2::jsonb,
-              psf_created_at = CASE WHEN $3::boolean THEN COALESCE(psf_created_at, NOW()) ELSE psf_created_at END,
-              updated_at = NOW()
-          WHERE id = $1
-            AND updated_at = ($4::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
-          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-        `,
-            [id, psfCreatedData, hasPsfData, dto.expectedUpdatedAt],
-          );
+        [
+          id,
+          psfCreatedData,
+          hasPsfData,
+          dto.expectedUpdatedAt,
+          {
+            ...(request.requester_data_json ?? {}),
+            modified_by: dto.actor.displayName,
+          },
+        ],
+      );
       const updatedRow = result.rows[0];
       if (!updatedRow) {
         throw new ConflictException(
@@ -1207,7 +1301,7 @@ export class RequestsService implements OnModuleInit {
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
           },
-          this.withPsfSetupFileNameCanonical(
+          this.withPsfFileNameCanonicals(
             this.searchIndexService.extractCanonicalValues(
               updatedRow.schema_snapshot_json,
               updatedRow.requester_data_json ?? {},
@@ -1291,13 +1385,8 @@ export class RequestsService implements OnModuleInit {
         );
       }
 
-      const trackModifiedBy = this.shouldTrackModifiedBy(
-        currentRequest.schema_snapshot_json,
-        currentRequest.requester_data_json,
-      );
-      const result = trackModifiedBy
-        ? await client.query<PsfRequestRow>(
-            `
+      const result = await client.query<PsfRequestRow>(
+        `
           UPDATE psf_requests
           SET status = $2,
               completed_at = CASE WHEN $3::boolean THEN NOW() ELSE completed_at END,
@@ -1309,40 +1398,19 @@ export class RequestsService implements OnModuleInit {
             AND updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
           RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
         `,
-            [
-              id,
-              target.name,
-              target.kind === 'completed',
-              entersTrigger,
-              currentRequest.status,
-              dto.expectedUpdatedAt,
-              {
-                ...(currentRequest.requester_data_json ?? {}),
-                modified_by: dto.actor.displayName,
-              },
-            ],
-          )
-        : await client.query<PsfRequestRow>(
-            `
-          UPDATE psf_requests
-          SET status = $2,
-              completed_at = CASE WHEN $3::boolean THEN NOW() ELSE completed_at END,
-              psf_released_at = CASE WHEN $4::boolean THEN COALESCE(psf_released_at, NOW()) ELSE psf_released_at END,
-              updated_at = NOW()
-          WHERE id = $1
-            AND status = $5
-            AND updated_at = ($6::timestamptz AT TIME ZONE current_setting('TIMEZONE'))
-          RETURNING *, ${REQUEST_UPDATED_AT_VERSION_SQL} AS updated_at_version
-        `,
-            [
-              id,
-              target.name,
-              target.kind === 'completed',
-              entersTrigger,
-              currentRequest.status,
-              dto.expectedUpdatedAt,
-            ],
-          );
+        [
+          id,
+          target.name,
+          target.kind === 'completed',
+          entersTrigger,
+          currentRequest.status,
+          dto.expectedUpdatedAt,
+          {
+            ...(currentRequest.requester_data_json ?? {}),
+            modified_by: dto.actor.displayName,
+          },
+        ],
+      );
 
       const updatedRow = result.rows[0];
       if (!updatedRow) {
@@ -1362,7 +1430,7 @@ export class RequestsService implements OnModuleInit {
           requestDate: updatedRow.created_at,
           updatedAt: updatedRow.updated_at,
         },
-        this.withPsfSetupFileNameCanonical(
+        this.withPsfFileNameCanonicals(
           this.searchIndexService.extractCanonicalValues(
             updatedRow.schema_snapshot_json,
             updatedRow.requester_data_json,
@@ -1470,7 +1538,7 @@ export class RequestsService implements OnModuleInit {
       const normalizedRequesterData = this.withServerRequesterIdentity(
         validateAndNormalizeFormData(
           request.schema_snapshot_json,
-          request.requester_data_json ?? {},
+          withoutModifiedBy(request.requester_data_json ?? {}),
           {
             allowMissingRequired: false,
             existingData: request.requester_data_json ?? {},
@@ -1478,12 +1546,7 @@ export class RequestsService implements OnModuleInit {
         ),
         requesterIdentity.displayName,
         this.resolveServerStartDate(activeSchema.schema, request.requester_data_json),
-        this.shouldTrackModifiedBy(
-          request.schema_snapshot_json,
-          request.requester_data_json,
-        )
-          ? actor.displayName
-          : undefined,
+        actor.displayName,
       );
       const entersTrigger = (
         configuration.psfVisibilityTriggerIds ?? [
@@ -1507,6 +1570,7 @@ export class RequestsService implements OnModuleInit {
         `
           UPDATE psf_requests
           SET status = $2,
+              request_no = $8,
               product_type = $3,
               requester_data_json = $4::jsonb,
               submitted_at = NOW(),
@@ -1526,6 +1590,7 @@ export class RequestsService implements OnModuleInit {
           target.kind === 'completed',
           entersTrigger,
           dto.expectedUpdatedAt,
+          this.submittedRequestNo(request.numeric_id),
         ],
       );
 
@@ -1554,7 +1619,7 @@ export class RequestsService implements OnModuleInit {
           requestDate: submittedRow.created_at,
           updatedAt: submittedRow.updated_at,
         },
-        this.withPsfSetupFileNameCanonical(
+        this.withPsfFileNameCanonicals(
           canonicalValues,
           submittedRow.psf_created_schema_snapshot_json,
           submittedRow.psf_created_data_json,
@@ -1590,6 +1655,26 @@ export class RequestsService implements OnModuleInit {
 
       return this.mapRequestRow(submittedRow, actor);
     });
+  }
+
+  // PSF- and the six-digit zero-padded ID, the Imported Requests' numbering.
+  private submittedRequestNo(numericId: number): string {
+    return `PSF-${String(numericId).padStart(6, '0')}`;
+  }
+
+  private async renameAttachmentFolder(
+    client: QueryRunner,
+    before: Pick<PsfRequestRow, 'requester_data_json'>,
+    after: Pick<PsfRequestRow, 'id' | 'numeric_id' | 'requester_data_json'>,
+    onRollback: RegisterUndo,
+  ): Promise<void> {
+    await this.requestAttachments?.renameRequestFolder(
+      client,
+      { id: after.id, numericId: after.numeric_id },
+      before.requester_data_json?.title,
+      after.requester_data_json?.title,
+      onRollback,
+    );
   }
 
   private assertExpectedFormVersion(value: unknown): asserts value is number {
@@ -1651,28 +1736,9 @@ export class RequestsService implements OnModuleInit {
     );
   }
 
-  private shouldTrackModifiedBy(
-    schema: FormSchemaJson | null | undefined,
-    existingRequesterData?: RequesterData | null,
-  ): boolean {
-    if (
-      existingRequesterData &&
-      Object.hasOwn(existingRequesterData, 'modified_by')
-    ) {
-      return true;
-    }
-    return Boolean(
-      schema?.sections?.some((section) =>
-        section.fields?.some(
-          (field) =>
-            field.fieldKey === 'modified_by' ||
-            field.canonicalKey === 'modified_by',
-        ),
-      ),
-    );
-  }
-
-  private withPsfSetupFileNameCanonical(
+  // The request list shows these PSF Created Information values, so every
+  // search index write carries them, whether or not the field is searchable.
+  private withPsfFileNameCanonicals(
     canonicalValues: Record<
       string,
       string | number | boolean | string[] | null
@@ -1683,29 +1749,20 @@ export class RequestsService implements OnModuleInit {
     if (!psfCreatedData || typeof psfCreatedData !== 'object') {
       return canonicalValues;
     }
-    const createdSchema = resolvePsfCreatedInformationSchema(
+    const fields = resolvePsfCreatedInformationSchema(
       psfCreatedSchemaSnapshot,
-    );
-    const setupFileField = createdSchema.sections
-      .flatMap((section) => section.fields)
-      .find(
-        (field) =>
-          (field.canonicalKey === 'psf_setup_file_name' ||
-            field.fieldKey === 'psf_setup_file_name') &&
-          field.searchable === true,
+    ).sections.flatMap((section) => section.fields);
+    const withFileNames = { ...canonicalValues };
+    for (const key of ['psf_setup_file_name', 'job_file_name']) {
+      const field = fields.find(
+        (candidate) =>
+          candidate.canonicalKey === key || candidate.fieldKey === key,
       );
-    if (!setupFileField) {
-      return canonicalValues;
+      const value = field ? psfCreatedData[field.fieldKey] : undefined;
+      if (typeof value === 'string' && value.trim().length > 0)
+        withFileNames[key] = value.trim();
     }
-    const rawValue = psfCreatedData[setupFileField.fieldKey];
-    const normalized =
-      typeof rawValue === 'string' && rawValue.trim().length > 0
-        ? rawValue.trim()
-        : null;
-    return {
-      ...canonicalValues,
-      psf_setup_file_name: normalized,
-    };
+    return withFileNames;
   }
 
   private shouldTrackStartDate(
@@ -1777,18 +1834,22 @@ export class RequestsService implements OnModuleInit {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
+  // Work outside the database, such as a NAS folder rename, registers its
+  // undo through onRollback.
   private async withTransaction<T>(
-    operation: (client: PoolClient) => Promise<T>,
+    operation: (client: PoolClient, onRollback: RegisterUndo) => Promise<T>,
   ): Promise<T> {
     const client = await this.pool.connect();
+    const undos: Array<() => Promise<void>> = [];
 
     try {
       await client.query('BEGIN');
-      const result = await operation(client);
+      const result = await operation(client, (undo) => undos.push(undo));
       await client.query('COMMIT');
       return result;
     } catch (error) {
       await this.rollbackTransaction(client);
+      for (const undo of undos.reverse()) await undo().catch(() => undefined);
       throw error;
     } finally {
       client.release();
@@ -1876,6 +1937,8 @@ export class RequestsService implements OnModuleInit {
       $$;
     `);
 
+    await this.ensureNumericIdStorage(queryRunner);
+
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_status_updated
       ON psf_requests (status, updated_at DESC)
@@ -1884,6 +1947,61 @@ export class RequestsService implements OnModuleInit {
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_psf_requests_requester_user_id
       ON psf_requests (requester_user_id)
+    `);
+  }
+
+  // Imported Requests keep the ID of their PSF-NNNNNN number; any other
+  // request takes the next ID in creation order. The sequence never moves
+  // back, so a deleted Draft's ID (and NAS folder name) is not reused.
+  private async ensureNumericIdStorage(queryRunner: QueryRunner) {
+    await queryRunner.query(
+      `ALTER TABLE psf_requests ADD COLUMN IF NOT EXISTS numeric_id INTEGER`,
+    );
+    await queryRunner.query(`
+      UPDATE psf_requests AS request
+      SET numeric_id = numbered.numeric_id
+      FROM (
+        SELECT DISTINCT ON (SUBSTRING(request_no FROM 5)::int)
+          id, SUBSTRING(request_no FROM 5)::int AS numeric_id
+        FROM psf_requests
+        WHERE request_no ~ '^PSF-[0-9]{1,9}$' AND numeric_id IS NULL
+        ORDER BY SUBSTRING(request_no FROM 5)::int, created_at, id
+      ) AS numbered
+      WHERE request.id = numbered.id AND request.numeric_id IS NULL
+    `);
+    await queryRunner.query(
+      `CREATE SEQUENCE IF NOT EXISTS ${NUMERIC_ID_SEQUENCE}`,
+    );
+    await queryRunner.query(`
+      SELECT setval('${NUMERIC_ID_SEQUENCE}', GREATEST(highest, 1), highest > 0)
+      FROM (
+        SELECT GREATEST(
+          (SELECT COALESCE(MAX(numeric_id), 0) FROM psf_requests),
+          (SELECT CASE WHEN is_called THEN last_value ELSE 0 END FROM ${NUMERIC_ID_SEQUENCE})
+        ) AS highest
+      ) AS current_ids
+    `);
+    await queryRunner.query(`
+      UPDATE psf_requests AS request
+      SET numeric_id = numbered.numeric_id
+      FROM (
+        SELECT id, nextval('${NUMERIC_ID_SEQUENCE}') AS numeric_id
+        FROM (
+          SELECT id FROM psf_requests
+          WHERE numeric_id IS NULL
+          ORDER BY created_at, id
+        ) AS unnumbered
+      ) AS numbered
+      WHERE request.id = numbered.id
+    `);
+    await queryRunner.query(`
+      ALTER TABLE psf_requests
+      ALTER COLUMN numeric_id SET DEFAULT nextval('${NUMERIC_ID_SEQUENCE}'),
+      ALTER COLUMN numeric_id SET NOT NULL
+    `);
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_psf_requests_numeric_id
+      ON psf_requests (numeric_id)
     `);
   }
 
@@ -2100,6 +2218,7 @@ export class RequestsService implements OnModuleInit {
 
     return {
       id: row.id,
+      numericId: row.numeric_id,
       requestNo: row.request_no,
       formKey: row.form_key,
       formVersion: row.form_version,

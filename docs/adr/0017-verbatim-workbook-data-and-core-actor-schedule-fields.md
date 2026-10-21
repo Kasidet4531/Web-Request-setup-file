@@ -1,6 +1,6 @@
 # 17. Verbatim workbook data, legacy option preservation, and core actor/schedule fields
 
-Status: accepted (19 October 2026)
+Status: accepted (19 October 2026). Decision 2 amended 21 October 2026: Modified By is recorded on every save whether or not the form has a `modified_by` field; see [current implementation](../current-implementation.md).
 
 When reloading `psf_setup_db` from `PSF_form_detail-censor.xlsx` ([guide](../initial-data-load.md)), we aligned the stored request records and form schemas with the `Data` sheet so historical values are preserved verbatim and core actor and schedule fields (`Requester`, `Modified By`, and `Due Date`) remain first-class across both historical and active forms.
 

@@ -12,9 +12,10 @@ import {
   Search,
 } from 'lucide-react'
 import { DraftDeleteDialog } from './DraftDeleteDialog'
+import { RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
-import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { DynamicFormRenderer, type DynamicFormActionFeedback } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { DANGER_BUTTON_CLASS, ROW_PX, pagedMinHeight } from './ui/tableLayout'
@@ -199,6 +200,8 @@ export interface PsfCreatedInformationPanelProps {
   onSave: (values: DynamicFormValues) => void
   request: PsfRequestResponse
   saving: boolean
+  /** The last save's result, reported in the form's action bar until editing starts again. */
+  saveFeedback?: DynamicFormActionFeedback
   disabled?: boolean
   dirty?: boolean
   editing?: boolean
@@ -212,6 +215,7 @@ export function PsfCreatedInformationPanel({
   onSave,
   request,
   saving,
+  saveFeedback,
   disabled = false,
   dirty = false,
   editing,
@@ -233,11 +237,12 @@ export function PsfCreatedInformationPanel({
   const canEdit = request.canEditPsfCreatedData
   const showEditor = canEdit && (editing ?? true)
 
+  // The header's edit state is visual only; the action bar announces saving, saved and save errors.
   return (
     <section className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`} aria-labelledby="psf-created-heading">
-      <div className="psf-created-panel__header"><h2 id="psf-created-heading">PSF Created Information</h2><div className="toolbar__actions"><span role="status">{canEdit ? saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved' : 'Read only'}</span>{canEdit && editing === false ? <button className="btn-secondary" type="button" onClick={onEdit} disabled={saving || disabled}>Edit information</button> : null}</div></div>
-      {saving ? <p className="page-card__description" role="status">Saving PSF Created Information…</p> : null}
+      <div className="psf-created-panel__header"><h2 id="psf-created-heading">PSF Created Information</h2><div className="toolbar__actions"><span>{canEdit ? saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved' : 'Read only'}</span>{canEdit && editing === false ? <button className="btn-secondary" type="button" onClick={onEdit} disabled={saving || disabled}>Edit information</button> : null}</div></div>
       <DynamicFormRenderer
+        actionFeedback={saving ? { kind: 'pending', message: 'Saving PSF Created Information…' } : saveFeedback}
         onChange={showEditor && !saving && !disabled ? onChange : undefined}
         onSubmit={showEditor && !saving && !disabled ? onSave : undefined}
         readOnly={!showEditor || saving || disabled}
@@ -318,7 +323,6 @@ async function loadCurrentUser(): Promise<AuthenticatedUserProfile> {
 
 export function RequestsTable({
   items,
-  compact = false,
   drafts = false,
   onOpenItem,
   onDeleteItem,
@@ -332,7 +336,6 @@ export function RequestsTable({
   onClearFilters?: () => void
   statusKinds?: Readonly<Record<string, WorkflowStatusKind>>
   items: PsfRequestListItem[]
-  compact?: boolean
   drafts?: boolean
   onOpenItem?: (requestId: string) => void
   onDeleteItem?: (item: PsfRequestListItem) => void
@@ -358,10 +361,16 @@ export function RequestsTable({
       <table>
         <thead>
           <tr>
-            <th scope="col">Request</th>
-            <th scope="col">{drafts ? 'Product Type' : 'Status'}</th>
-            {drafts ? null : <th scope="col">Due Date</th>}
-            <th scope="col">{drafts ? 'Updated' : 'Requester'}</th>
+            <th scope="col">Product Description</th>
+            <th scope="col">Request No.</th>
+            <th scope="col">Product Type</th>
+            {drafts ? <th scope="col">Updated</th> : <>
+              <th scope="col">Status</th>
+              <th scope="col">PSF Setup File Name</th>
+              <th scope="col">Job File Name</th>
+              <th scope="col">Due Date</th>
+              <th scope="col">Requester</th>
+            </>}
             {drafts || !interactiveRows ? <th scope="col"><span className="sr-only">Actions</span></th> : null}
           </tr>
         </thead>
@@ -382,29 +391,17 @@ export function RequestsTable({
               } : undefined}
               tabIndex={interactiveRows ? 0 : undefined}
             >
-              <td data-label="Request">
-                <div className="request-identity">
-                  <Link className="request-identity__link" to="/requests/$requestId" params={{ requestId: item.requestId }}>
-                    <span className="request-identity__title">{getRequestTitle(item)}</span>
-                    <span className="font-mono-code">{item.requestNo}{compact && item.probecardName ? ` · ${item.probecardName}` : ''}</span>
-                  </Link>
-                  {!compact && !drafts ? <span className="request-identity__type">{productTypeLabel(item.productType)}</span> : null}
-                </div>
+              <td data-label="Product Description"><span className="request-identity__title">{item.title || '—'}</span></td>
+              <td data-label="Request No.">
+                <Link className="request-identity__link font-mono-code" to="/requests/$requestId" params={{ requestId: item.requestId }}>{item.requestNo}</Link>
               </td>
-              {drafts ? <><td data-label="Product Type">{productTypeLabel(item.productType)}</td>
-                <td data-label="Updated">{formatDateTime(item.updatedAt)}</td></> : <><td data-label="Status">
-                <StatusLabel kind={statusKinds[item.status]} status={item.status} />
-              </td>
-              <td data-label="Due Date">
-                <div className="request-cell-stack">
-                  <span>{formatDate(item.dueDate)}</span>
-                </div>
-              </td>
-              <td data-label="Responsibility">
-                <div className="request-cell-stack">
-                  <span>{item.requester ?? '—'}</span>
-                </div>
-              </td>
+              <td data-label="Product Type">{productTypeLabel(item.productType)}</td>
+              {drafts ? <td data-label="Updated">{formatDateTime(item.updatedAt)}</td> : <>
+                <td data-label="Status"><StatusLabel kind={statusKinds[item.status]} status={item.status} /></td>
+                <td data-label="PSF Setup File Name">{item.psfSetupFileName || '—'}</td>
+                <td data-label="Job File Name">{item.jobFileName || '—'}</td>
+                <td data-label="Due Date">{formatDate(item.dueDate)}</td>
+                <td data-label="Requester">{item.requester ?? '—'}</td>
               </>}
               {drafts || !interactiveRows ? (
                 <td data-label="Action">
@@ -573,7 +570,7 @@ export function DashboardPage() {
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
       {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, ROW_PX.dashboard)}>
-        <RequestsTable compact statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
+        <RequestsTable statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
       {hasResults ? <div className="table-footer" aria-label="Dashboard pagination" aria-busy={pending}><span>{state.data.items.length ? `${state.data.offset + 1}–${Math.min(state.data.offset + state.data.items.length, state.data.total)} of ${state.data.total} requests` : '0 requests'}</span>
         {state.data.offset > 0 || state.data.total > state.data.limit ? <div className="toolbar__actions">
@@ -779,16 +776,53 @@ export function RequestCreatePage() {
     return () => { mounted = false }
   }, [])
   const [savedRequest, setSavedRequest] = useState<PsfRequestResponse | null>(null)
+  // Chosen before the Draft exists, then uploaded as soon as it is created.
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [stagedUpload, setStagedUpload] = useState<{ pending: boolean; error: string | null }>({ pending: false, error: null })
+  const stagedFilesRef = useRef(stagedFiles)
+  const stagedUploadRunning = useRef(false)
+  useEffect(() => { stagedFilesRef.current = stagedFiles }, [stagedFiles])
+  const unsaved = dirty || stagedFiles.length > 0
   const shouldBlockExit = useCallback(({ current, next }: { current: { pathname: string }; next: { pathname: string } }) =>
-    dirty && current.pathname !== next.pathname, [dirty])
-  const blocker = useBlocker({ shouldBlockFn: shouldBlockExit, enableBeforeUnload: dirty, withResolver: true })
+    unsaved && current.pathname !== next.pathname, [unsaved])
+  const blocker = useBlocker({ shouldBlockFn: shouldBlockExit, enableBeforeUnload: unsaved, withResolver: true })
   useEffect(() => {
-    if (savedRequest && !dirty) void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
-  }, [dirty, navigate, savedRequest])
+    if (savedRequest && !unsaved && !stagedUpload.pending) void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
+  }, [navigate, savedRequest, stagedUpload.pending, unsaved])
+
+  async function uploadStagedFiles(request: PsfRequestResponse) {
+    const files = stagedFilesRef.current
+    if (!files.length || stagedUploadRunning.current) return
+    stagedUploadRunning.current = true
+    setStagedUpload({ pending: true, error: null })
+    try {
+      await api.uploadRequestAttachments(request.id, files, (uploaded) => {
+        // Only files still waiting stay staged, so a retry sends just those.
+        stagedFilesRef.current = stagedFilesRef.current.filter((file) => !uploaded.includes(file))
+        setStagedFiles(stagedFilesRef.current)
+      })
+      stagedFilesRef.current = []
+      setStagedFiles([])
+      setStagedUpload({ pending: false, error: null })
+    } catch (error) {
+      setStagedUpload({ pending: false, error: `Draft ${request.requestNo} was saved, but its attachments were not uploaded: ${error instanceof Error ? error.message : 'Upload failed'}. Remove or replace the files, then retry.` })
+    } finally {
+      stagedUploadRunning.current = false
+    }
+  }
+
+  function acceptSavedRequest(request: PsfRequestResponse) {
+    setSavedRequest(request)
+    void uploadStagedFiles(request)
+  }
+
   return (
     <article className="workflow-page request-create-page">
       <PageHeader title="New Request" description="Save a private draft, then review and submit from its detail page." />
-      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={setSavedRequest} />
+      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
+      <StagedAttachmentsPanel files={stagedFiles} disabled={stagedUpload.pending} error={stagedUpload.error} onChange={setStagedFiles} />
+      {stagedUpload.pending ? <AsyncNotice kind="loading" title="Uploading attachments…" /> : null}
+      {savedRequest && stagedUpload.error && stagedFiles.length > 0 ? <button className="btn-primary" type="button" onClick={() => void uploadStagedFiles(savedRequest)}>Retry attachment upload</button> : null}
       <ConfirmDialog open={blocker?.status === 'blocked'} title="Discard unsaved changes?" description="Your unsaved request changes will be lost when you leave this page." confirmLabel="Discard and leave" cancelLabel="Stay on page" tone="danger" onCancel={() => { if (blocker?.status === 'blocked') blocker.reset() }} onConfirm={() => { if (blocker?.status === 'blocked') blocker.proceed() }} />
     </article>
   )
@@ -831,8 +865,9 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   const [savingStatus, setSavingStatus] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [historyRetry, setHistoryRetry] = useState(0)
-  const [activeTab, setActiveTab] = useState<'requester' | 'psf' | 'history' | null>(null)
+  const [activeTab, setActiveTab] = useState<'requester' | 'psf' | 'attachments' | 'history' | null>(null)
   const [psfEditing, setPsfEditing] = useState(false)
+  const [psfSaveFeedback, setPsfSaveFeedback] = useState<DynamicFormActionFeedback>()
   const [statusKinds, setStatusKinds] = useState<Record<string, WorkflowStatusKind>>({})
   useEffect(() => {
     let active = true
@@ -869,6 +904,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           workflowContext.current = { requestId, status: response.status }
           setRequest(response)
           setPsfEditing(false)
+          setPsfSaveFeedback(undefined)
           setActiveTab(null)
           psfDraft.current = { values: buildPsfCreatedInformationValues(response), dirty: false }
           setPsfCreatedValues(psfDraft.current.values)
@@ -1017,6 +1053,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     setPsfCreatedDirty(nextDirty)
     setError(null)
     setMessage(null)
+    setPsfSaveFeedback(undefined)
   }
 
   async function savePsfCreatedInformation(values: DynamicFormValues) {
@@ -1033,6 +1070,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     setSavingPsfCreatedData(true)
     setError(null)
     setMessage(null)
+    setPsfSaveFeedback(undefined)
 
     try {
       const savedRequest = await api.updatePsfCreatedData(request.id, {
@@ -1044,22 +1082,24 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       setPsfCreatedValues(buildPsfCreatedInformationValues(savedRequest))
       setPsfCreatedDirty(false)
       setPsfEditing(false)
-      setMessage(`PSF Created Information for ${savedRequest.requestNo} saved.`)
+      setPsfSaveFeedback({ kind: 'success', message: `PSF Created Information for ${savedRequest.requestNo} saved.` })
     } catch (saveError) {
       if (saveError instanceof ApiError && saveError.status === 409) {
         try {
           const refreshedRequest = await api.fetchPsfRequest(request.id)
           setRequest(refreshedRequest)
-          setError(
-            'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
-          )
+          setPsfSaveFeedback({
+            kind: 'error',
+            message: 'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
+          })
         } catch {
-          setError(
-            'PSF Created Information changed while you were editing. Reload the request and try again.',
-          )
+          setPsfSaveFeedback({
+            kind: 'error',
+            message: 'PSF Created Information changed while you were editing. Reload the request and try again.',
+          })
         }
       } else {
-        setError(saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information')
+        setPsfSaveFeedback({ kind: 'error', message: saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information' })
       }
     } finally {
       setSavingPsfCreatedData(false)
@@ -1074,7 +1114,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       : null
 
   const selectedTab = activeTab ?? (request?.canEditPsfCreatedData && request.status !== 'Draft' ? 'psf' : 'requester')
-  const detailTabs = [{ key: 'requester', label: 'Requester Information' }, { key: 'psf', label: 'PSF Created Information' }, { key: 'history', label: 'History' }] as const
+  const detailTabs = [{ key: 'requester', label: 'Requester Information' }, { key: 'psf', label: 'PSF Created Information' }, { key: 'attachments', label: 'Attachments' }, { key: 'history', label: 'History' }] as const
+  const isDraft = request?.status === 'Draft'
 
   return (
     <article className={`workflow-page detail-page${request?.status === 'Draft' ? ' detail-page--draft' : ''}`}>
@@ -1111,7 +1152,8 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           </aside>
           {request.status !== 'Draft' ? <div className="detail-tabs" role="tablist" aria-label="Request information">
             {detailTabs.map((tab, index) => <button type="button" key={tab.key} id={`detail-tab-${tab.key}`} role="tab" aria-selected={selectedTab === tab.key} aria-controls={`detail-panel-${tab.key}`} tabIndex={selectedTab === tab.key ? 0 : -1} onClick={() => setActiveTab(tab.key)} onKeyDown={(event) => {
-              const next = event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : null
+              const count = detailTabs.length
+              const next = event.key === 'ArrowRight' ? (index + 1) % count : event.key === 'ArrowLeft' ? (index + count - 1) % count : event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : null
               if (next !== null) { event.preventDefault(); setActiveTab(detailTabs[next].key); event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus() }
             }}>{tab.label}</button>)}
           </div> : null}
@@ -1144,15 +1186,21 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
               />
             </section>
 
+            {/* A Draft shows Attachments below Requester Information; submitted work in its tab. */}
+            <section className="workflow-section detail-layout__attachments" id="detail-panel-attachments" role={isDraft ? undefined : 'tabpanel'} aria-labelledby={isDraft ? undefined : 'detail-tab-attachments'} hidden={!isDraft && selectedTab !== 'attachments'}>
+              <RequestAttachmentsPanel requestId={requestId} reloadKey={request.requesterData.title} onChanged={() => setHistoryRetry((value) => value + 1)} />
+            </section>
+
             <section className="workflow-section detail-layout__psf" id="detail-panel-psf" role="tabpanel" aria-labelledby="detail-tab-psf" hidden={request.status === 'Draft' || selectedTab !== 'psf'}>
               <PsfCreatedInformationPanel
                 editing={psfEditing}
-                onEdit={() => { if (!mutationPending) setPsfEditing(true) }}
-                onCancel={() => { if (!mutationPending) { setPsfCreatedValues(buildPsfCreatedInformationValues(request)); setPsfCreatedDirty(false); setPsfEditing(false) } }}
+                onEdit={() => { if (!mutationPending) { setPsfSaveFeedback(undefined); setPsfEditing(true) } }}
+                onCancel={() => { if (!mutationPending) { setPsfCreatedValues(buildPsfCreatedInformationValues(request)); setPsfCreatedDirty(false); setPsfSaveFeedback(undefined); setPsfEditing(false) } }}
                 onChange={updatePsfCreatedInformation}
                 onSave={(values) => void savePsfCreatedInformation(values)}
                 request={request}
                 saving={savingPsfCreatedData}
+                saveFeedback={psfSaveFeedback}
                 dirty={psfCreatedDirty}
                 disabled={mutationPending}
                 values={psfCreatedValues}

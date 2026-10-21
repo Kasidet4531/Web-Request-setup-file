@@ -232,6 +232,7 @@ describe('SearchIndexService canonical extraction', () => {
         '2026-07-01',
         '2026-06-18T01:05:03.000Z',
         null,
+        null,
       ],
     );
   });
@@ -245,6 +246,7 @@ describe('SearchIndexService canonical extraction', () => {
           title: 'Probe card setup',
           reference_psf_name: 'REF-PSF',
           psf_setup_file_name: null,
+          job_file_name: null,
           probecard_name: 'PC-123',
           status: 'Submitted',
           priority: 'High',
@@ -283,6 +285,7 @@ describe('SearchIndexService canonical extraction', () => {
           title: 'Probe card setup',
           referencePsfName: 'REF-PSF',
           psfSetupFileName: null,
+          jobFileName: null,
           probecardName: 'PC-123',
           status: 'Submitted',
           priority: 'High',

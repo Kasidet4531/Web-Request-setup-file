@@ -11,12 +11,19 @@
   --accent-foreground: var(--primary-foreground); --accent-light: #eeefea; --selected-text: #24282c;
   --secondary: #f4f4f0; --secondary-foreground: var(--foreground); --muted: var(--secondary); --muted-foreground: #62686c;
   --border: #e2e3de; --border-subtle: var(--border); --border-strong: #9a9f9d;
-  --input: var(--card); --input-background: var(--card); --input-border: #a7adaa; --ring: var(--accent-hover);
+  --input: var(--card); --input-background: var(--card); --input-border: #858b88; --ring: var(--accent-hover);
   --success: #28651d; --warning: #8a4700; --destructive: #b42332; --destructive-foreground: #fff; --lime: #a8c83a;
   --radius-sm: 6px; --radius: 8px; --radius-lg: 10px; --radius-xl: 12px;
   --sidebar: #fafaf8; --sidebar-foreground: #24282c; --sidebar-muted: #62686c;
   --sidebar-accent: var(--accent-light); --sidebar-border: var(--border); --sidebar-active-indicator: var(--primary);
   --shadow-sm: none; --shadow-md: 0 4px 16px #172b3a18; --shadow-lg: 0 8px 32px #172b3a24;
+  --shadow-bar: 0 -4px 12px #172b3a14;
+  --card-padding: 24px;
+  --form-rows-max-width: 840px;
+  /* New Request, Request Detail and Admin Draft detail column: one and a half times a card around the form rows (1335px). */
+  --request-page-max-width: calc(1.5 * (var(--form-rows-max-width) + 2 * var(--card-padding) + 2px));
+  /* Room kept clear above the pinned form action bar when keyboard focus scrolls a field into view. */
+  --action-bar-clearance: 96px; --action-bar-clearance-preview: 72px;
 }
 .dark {
   color-scheme: dark;
@@ -24,6 +31,7 @@
   --primary: #73d5ee; --primary-foreground: #181a1c; --accent-hover: #a0e4f5; --accent-light: #303335; --selected-text: #f4f3ee;
   --secondary: #303335; --muted-foreground: #b7bab8; --border: #3b3e40; --border-strong: #858b8b; --input-border: #858b8b;
   --success: #a0d58d; --warning: #ffc36b; --destructive: #ffa2ab; --destructive-foreground: #181a1c; --sidebar: #1e2022; --sidebar-foreground: #f4f3ee; --sidebar-muted: #b7bab8;
+  --shadow-bar: 0 -4px 12px #0000004d;
 }
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
@@ -63,8 +71,8 @@ legend { padding: 0; }
 button:disabled, .ui-button[aria-disabled="true"] { opacity: .55; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); }
 .icon-button:hover { color: var(--foreground); background: var(--secondary); }
-.ui-field, .form-field, .dynamic-form__field, .admin-form-config__field, .admin-user-management__field, .admin-autofill-rules__field { display: grid; gap: 6px; min-width: 0; align-content: start; }
-.ui-label, .form-field > span, .dynamic-form__label, .admin-form-config__field > span, .admin-user-management__field > span, .admin-autofill-rules__field > span { font-size: 12px; line-height: 18px; font-weight: 500; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.ui-field, .form-field, .admin-form-config__field, .admin-user-management__field, .admin-autofill-rules__field { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.ui-label, .form-field > span, .admin-form-config__field > span, .admin-user-management__field > span, .admin-autofill-rules__field > span { font-size: 12px; line-height: 18px; font-weight: 500; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .ui-control, .input-base, :where(input:not([type="checkbox"]):not([type="radio"]):not([type="submit"])), select, textarea {
   width: 100%; min-width: 0; min-height: 36px; padding: 7px 10px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--input-background); color: var(--foreground); font: 14px/20px var(--font-sans);
 }
@@ -201,9 +209,18 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .dynamic-form__sections { display: grid; gap: 24px; }
 .dynamic-form__section { display: grid; gap: 16px; min-width: 0; padding-top: 16px; border-top: 1px solid var(--border); }
 .dynamic-form__section h3 { font-size: 14px; }
-.dynamic-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.dynamic-form__field--textarea { grid-column: 1 / -1; }
-.dynamic-form__field--changed { padding: 8px 12px; background: var(--secondary); border-left: 3px solid var(--warning); border-radius: 4px; }
+/* One row per field: label cell left, control or stored value right, capped for reading. Editable and
+   read-only rows share the label type and the control line (text 8px below the row top on a 36px line),
+   so switching a request between viewing and editing keeps ordinary rows in place. */
+.dynamic-form__rows { display: grid; min-width: 0; max-width: var(--form-rows-max-width); border-top: 1px solid var(--border); }
+.dynamic-form__row { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 4px 24px; align-items: start; min-width: 0; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.dynamic-form__label { padding-top: 8px; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--foreground); overflow-wrap: anywhere; }
+.dynamic-form__control { display: grid; gap: 6px; min-width: 0; }
+.dynamic-form__control > .dynamic-form__autofill-status, .dynamic-form__control > .dynamic-form__previous { margin: 0; }
+/* Chromium's calendar button makes a date input 2px taller than the other controls; hold it to the shared line. */
+.dynamic-form__control input[type="date"] { height: 36px; }
+/* A changed row (Request Snapshot) is tinted edge to edge; the stripe sits in the gutter so the label column stays aligned. */
+.dynamic-form__row--changed { margin-inline: -12px; padding-inline: 9px 12px; background: var(--secondary); border-left: 3px solid var(--warning); }
 .dynamic-form__previous { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .request-snapshot { display: grid; gap: 16px; }
 .request-snapshot__summary dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
@@ -211,14 +228,21 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .request-snapshot__summary dd { margin: 0; overflow-wrap: anywhere; }
 .request-snapshot__summary dd .dynamic-form__previous { margin-left: 8px; }
 .request-snapshot-link { display: block; margin-top: 4px; font-size: 12px; }
-.dynamic-form__product-type { display: grid; gap: 8px; grid-column: 1 / -1; margin: 0; }
-.dynamic-form__choice-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-legend.dynamic-form__label { padding: 0; margin-bottom: 6px; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 8px 24px; }
 .dynamic-form__radio-option { display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 28px; cursor: pointer; color: var(--foreground); overflow-wrap: anywhere; min-width: 0; }
-.dynamic-form__actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
-.dynamic-form__actions > p { color: var(--muted-foreground); font-size: 12px; }
-.dynamic-form__readonly { display: block; min-height: 36px; padding: 6px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+/* The action bar pins to the bottom of the viewport (or of the preview's scroll region) while its form scrolls:
+   the action's result on the left, then the buttons with Save last at the right edge. At the end of the form it
+   sits in flow below the last row, so that row scrolls clear of it. */
+.dynamic-form__actions { position: sticky; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 16px; margin-top: 24px; padding: 12px 0; background: var(--card); border-top: 1px solid var(--border); box-shadow: var(--shadow-bar); }
+.dynamic-form__status { flex: 1 1 auto; min-width: 0; font-size: 14px; line-height: 20px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+/* An idle status region leaves the layout but stays in the accessibility tree, so its next message is announced. */
+.dynamic-form__status:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.dynamic-form__status--success { color: var(--success); }
+.dynamic-form__status--error { color: var(--destructive); font-weight: 500; }
+.dynamic-form__buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-left: auto; }
+/* Keyboard focus scrolled into view stops above the pinned bar instead of behind it. */
+html:has(.dynamic-form__actions) { scroll-padding-bottom: var(--action-bar-clearance); }
+.dynamic-form__readonly { display: block; min-height: 36px; padding: 8px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .form-edit-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
 .form-edit-state--dirty { color: var(--warning); }
 .draft-schema-upgrade { padding: 16px; border: 1px solid var(--input-border); background: var(--background); margin-bottom: 20px; }
@@ -307,7 +331,7 @@ legend.dynamic-form__label { padding: 0; margin-bottom: 6px; }
 .admin-form-config__family-nav { display: flex; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
 .admin-form-config__family-link { color: var(--muted-foreground); padding: 10px 0; border-bottom: 2px solid transparent; font-weight: 500; }
 .admin-form-config__family-link[aria-current="page"] { color: var(--selected-text); border-bottom-color: var(--primary); }
-.admin-form-config__preview-content { max-height: 65vh; overflow: auto; min-width: 0; }
+.admin-form-config__preview-content { max-height: 65vh; overflow: auto; min-width: 0; scroll-padding-bottom: var(--action-bar-clearance-preview); }
 .json-preview { overflow: auto; max-width: 100%; padding: 12px; background: var(--background); border: 1px solid var(--border); border-radius: 4px; font: 12px/18px var(--font-mono); }
 .global-history-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .global-history-filters__dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -369,6 +393,8 @@ dialog::backdrop { background: #10182066; }
   .icon-button, .user-menu__trigger { min-width: 44px; height: 44px; }
   .ui-button, .btn-primary, .primary-button, .btn-secondary, .secondary-button, .btn-ghost, input:not([type="radio"]):not([type="checkbox"]), select { min-height: 44px; }
   .dynamic-form__radio-option, .admin-form-config__toggle { min-height: 44px; }
+  .dynamic-form__label { padding-top: 12px; }
+  .dynamic-form__readonly { min-height: 44px; padding-block: 12px; }
   .detail-layout { display: flex; flex-direction: column; gap: 24px; }
   .detail-layout__actions { order: -1; border-left: 0; padding-left: 0; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .form-workspace { display: flex; flex-direction: column; gap: 24px; }
@@ -382,7 +408,8 @@ dialog::backdrop { background: #10182066; }
   .breadcrumbs { gap: 4px; max-width: 120px; }
   .breadcrumbs > .breadcrumbs:last-child > .breadcrumbs__sep { display: none; }
   .page-header, .page-card__header { gap: 12px; margin-bottom: 20px; }
-  .dynamic-form__grid { grid-template-columns: 1fr; }
+  .dynamic-form__row { grid-template-columns: minmax(0, 1fr); }
+  .dynamic-form__label { padding-top: 0; }
   .dynamic-form__radio-group { flex-direction: column; gap: 0; }
   .filter-bar, .global-history-filters, .global-history-filters__dates { grid-template-columns: 1fr; gap: 12px; }
   .admin-workflow-transition__create, .admin-autofill-rules__editor-grid, .admin-form-config__field-properties { grid-template-columns: 1fr; }
@@ -393,8 +420,11 @@ dialog::backdrop { background: #10182066; }
   .detail-summary-grid > div { grid-template-columns: 135px minmax(0, 1fr); gap: 12px; }
   .admin-form-config__choice { flex-wrap: wrap; }
   .admin-form-config__choice .admin-form-config__field { flex-basis: 100%; }
-  .dynamic-form__actions { align-items: stretch; }
-  .dynamic-form__actions > button { width: 100%; }
+  /* The buttons take their own line and share it, Save still last; the result sits on the line above. */
+  .dynamic-form__buttons { flex: 1 1 100%; }
+  .dynamic-form__buttons > * { flex: 1 1 auto; }
+  /* Buttons that cannot share a line stack, so the bar can be about twice as tall here. */
+  :root { --action-bar-clearance: 152px; }
   .ui-notice { flex-wrap: wrap; }
   .ui-notice__action { margin-left: 24px; }
   .login-card { padding: 24px; }
@@ -433,7 +463,6 @@ dialog::backdrop { background: #10182066; }
 .tool-directory__content small { color:var(--muted-foreground); font-size:12px; line-height:18px; }
 .tool-directory__chevron { margin-left:auto; color:var(--muted-foreground); }
 .request-history-page .request-history { max-width:800px; }
-.dynamic-form__actions { justify-content:flex-end; }
 
 .detail-topbar__status { display:flex; align-items:center; gap:8px; }
 .detail-layout__main > .workflow-section:first-child { gap:8px; }
@@ -524,12 +553,19 @@ dialog::backdrop { background: #10182066; }
 .request-list-filters { grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px); gap: 16px; }
 .request-list-filters--drafts { grid-template-columns: minmax(0, 1fr); }
 .request-browser__results { border: 0; border-radius: 0 0 8px 8px; }
-.requests-table table { table-layout: fixed; min-width: 700px; }
-.requests-table th:nth-child(1) { width: 32%; }
-.requests-table th:nth-child(2) { width: 30%; }
-.requests-table th:nth-child(3) { width: 15%; }
-.requests-table th:nth-child(4) { width: 23%; }
-.requests-table td, .requests-table th { padding-inline: 24px; }
+.requests-table table { table-layout: fixed; min-width: 1120px; }
+/* One value per column: Product Description, Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date, Requester. */
+.requests-table th:nth-child(1) { width: 16%; }
+.requests-table th:nth-child(2) { width: 10%; }
+.requests-table th:nth-child(3) { width: 10%; }
+.requests-table th:nth-child(4) { width: 17%; }
+.requests-table th:nth-child(5) { width: 14%; }
+.requests-table th:nth-child(6) { width: 11%; }
+.requests-table th:nth-child(7) { width: 9%; }
+.requests-table th:nth-child(8) { width: 13%; }
+.requests-table td, .requests-table th { padding-inline: 16px; }
+/* File names have no spaces; break them rather than overflow the column. */
+.requests-table td { overflow-wrap: break-word; }
 .requests-table td { padding-block: 14px; }
 .request-identity { min-width: 0; }
 .request-identity__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -544,12 +580,16 @@ dialog::backdrop { background: #10182066; }
 .ui-status__disclosure::backdrop { background: transparent; }
 .ui-notice { padding: 12px; border-radius: 6px; background: var(--secondary); margin-block: 8px; }
 .ui-notice__action { flex-shrink: 0; }
-.request-create-page { max-width: 1120px; margin-inline: auto; }
-.request-create-page .active-schema-form,
+.request-create-page, .detail-page { max-width: var(--request-page-max-width); margin-inline: auto; }
+/* In that centred column the form rows fill the card; the label column stays 260px. */
+.request-create-page .dynamic-form__rows, .detail-page .dynamic-form__rows { max-width: none; }
+.request-create-page .active-schema-form, .request-create-page .request-attachments,
 .detail-editors > .workflow-section, .detail-layout__history,
-.request-history-page .request-history { padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+.request-history-page .request-history { padding: var(--card-padding); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+/* In a form card the pinned bar spans the card edge to edge and closes its bottom, rounded inside the card's 1px border. */
+.request-create-page .active-schema-form .dynamic-form__actions,
+.detail-editors > .workflow-section .dynamic-form__actions { margin-inline: calc(-1 * var(--card-padding)); margin-bottom: calc(-1 * var(--card-padding)); padding-inline: var(--card-padding); border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px); }
 .dynamic-form__section:first-child { border: 0; padding-top: 0; }
-.dynamic-form__grid { gap: 20px 24px; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 12px; }
 .dynamic-form__radio-option { border: 1px solid var(--input-border); border-radius: 6px; padding: 8px 12px; min-height: 38px; }
 .dynamic-form__radio-option--selected { border-color: var(--primary); background: var(--accent-light); }
@@ -573,6 +613,8 @@ dialog::backdrop { background: #10182066; }
 .detail-tabs > button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--primary); }
 .detail-editors { min-width: 0; }
 .detail-editors .workflow-section + .workflow-section { margin: 0; border-top: 1px solid var(--border); }
+/* Where Attachments shows under Requester Information (a Draft, also in Draft Management), its card sits 16px below, as on New Request. */
+.detail-editors > .detail-layout__requester:not([hidden]) + .detail-layout__attachments { margin-top: 16px; }
 .psf-created-panel { padding: 0; border: 0; }
 .detail-layout__history { border-left: 1px solid var(--border); }
 .request-history-page .request-history { max-width: none; }
@@ -581,6 +623,26 @@ dialog::backdrop { background: #10182066; }
 .request-history__timeline time, .request-history__timeline span { font-size: 12px; }
 .history-changes { margin: 8px 0 0; display: grid; gap: 8px; }
 .history-changes > div { display: grid; gap: 4px; }
+.history-attachment { overflow-wrap: anywhere; }
+
+/* Request Attachments: a shared NAS folder per request. */
+.request-attachments { display: grid; gap: 12px; min-width: 0; }
+.request-create-page .request-attachments { margin-top: 16px; }
+.request-attachments__header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.request-attachments__folder, .request-attachments__policy { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; overflow-wrap: anywhere; }
+.request-attachments__picker { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.request-attachments__picker:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.request-attachments__picker.is-disabled { opacity: .6; cursor: not-allowed; }
+.request-attachments__list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.request-attachments__list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.request-attachments__name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--primary); font: inherit; font-weight: 500; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+span.request-attachments__name { color: var(--foreground); cursor: default; }
+.request-attachments__meta { grid-column: 1; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.request-attachments__delete { grid-column: 2; grid-row: 1 / span 2; }
+.image-preview-dialog { width: min(960px, calc(100vw - 32px)); }
+.image-preview-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.image-preview-dialog__header h2 { font-size: 16px; overflow-wrap: anywhere; }
+.image-preview-dialog__image { display: block; max-width: 100%; max-height: 70dvh; margin: 0 auto; object-fit: contain; background: var(--background); }
 .history-changes dt { font-size: 12px; color: var(--muted-foreground); }
 .history-changes dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .global-history-filters { padding: 20px 24px; grid-template-columns: repeat(3,minmax(0,1fr)); }
@@ -652,17 +714,12 @@ dialog::backdrop { background: #10182066; }
 }
 @media (max-width: 599px) {
   .summary-grid, .administration-directory__tools { grid-template-columns: 1fr; }
-  .dynamic-form__grid, .global-history-filters, .request-export__filters { grid-template-columns: 1fr; }
+  .global-history-filters, .request-export__filters { grid-template-columns: 1fr; }
   .dashboard-filters { grid-template-columns: minmax(0,1fr); }
   .detail-tabs { gap: 16px; overflow-x: auto; }
   .detail-tabs > button { white-space: nowrap; font-size: 12px; }
   .detail-summary__heading > .ui-status { max-width: 100%; }
 }
-.requests-table--drafts th:nth-child(1) { width: 30%; }
-.requests-table--drafts th:nth-child(2) { width: 20%; }
-.requests-table--drafts th:nth-child(3) { width: 14%; }
-.requests-table--drafts th:nth-child(4) { width: 24%; }
-.requests-table--drafts th:nth-child(5) { width: 12%; }
 .summary-card { min-height: 100px; padding: 16px 20px; gap: 8px; }
 .summary-card--open, .summary-card--overdue, .summary-card--completed { border-left: 4px solid var(--summary-accent); }
 .summary-card__icon { width: 24px; height: 24px; }
@@ -689,8 +746,6 @@ dialog::backdrop { background: #10182066; }
 .request-export__preview-table th:nth-child(5) { width: 14%; }
 .active-schema-form__identity { align-items: center; }
 .active-schema-form__identity > div { margin-right: auto; }
-.dynamic-form--readonly .dynamic-form__product-type { grid-column: auto; }
-.dynamic-form--readonly .dynamic-form__grid { gap: 12px 24px; }
 .detail-summary { margin-bottom: 16px; }
 .detail-layout { gap: 16px; }
 .detail-page:not(.detail-page--draft) .workflow-actions__control label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
@@ -711,9 +766,7 @@ dialog::backdrop { background: #10182066; }
 .summary-card--completed .summary-card__selected { color: var(--success); }
 .active-schema-form__identity h2 { color: var(--foreground); }
 
-/* Readable field labels and section hierarchy are confined to request Detail. */
-.detail-editors .dynamic-form__label { font-size: 14px; font-weight: 700; color: var(--foreground); }
-.detail-editors .dynamic-form--readonly .dynamic-form__label { display: block; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* Section hierarchy on request Detail; field labels share one style everywhere (see the row rules). */
 .detail-editors .dynamic-form__section-title,
 .detail-editors .section-heading,
 .detail-editors .active-schema-form__identity h2,

@@ -37,6 +37,7 @@ describe('Request list rows', () => {
       title: 'Probe card update',
       referencePsfName: null,
       psfSetupFileName: null,
+      jobFileName: null,
       probecardName: null,
       status: 'Submitted',
       priority: 'High',

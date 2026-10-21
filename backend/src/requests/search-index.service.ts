@@ -84,6 +84,7 @@ export interface RequestSearchIndexItem {
   title: string | null;
   referencePsfName: string | null;
   psfSetupFileName: string | null;
+  jobFileName: string | null;
   probecardName: string | null;
   status: string;
   priority: string | null;
@@ -143,6 +144,7 @@ interface RequestSearchIndexRow {
   title: string | null;
   reference_psf_name: string | null;
   psf_setup_file_name: string | null;
+  job_file_name: string | null;
   probecard_name: string | null;
   status: string;
   priority: string | null;
@@ -155,6 +157,7 @@ interface RequestSearchIndexRow {
   request_date: Date | string | null;
   due_date: Date | string | null;
   updated_at: Date | string;
+  psf_released_at?: Date | string | null;
   total_count: number;
   open_count: number;
   overdue_count: number;
@@ -278,11 +281,12 @@ export class SearchIndexService implements OnModuleInit {
           request_date,
           due_date,
           updated_at,
-          setup_owner_user_id
+          setup_owner_user_id,
+          job_file_name
         )
         VALUES (
           $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid,
-          $11, $12, $13, $14::timestamp, $15::timestamp, ($16::timestamptz AT TIME ZONE current_setting('TIMEZONE')), $17::uuid
+          $11, $12, $13, $14::timestamp, $15::timestamp, ($16::timestamptz AT TIME ZONE current_setting('TIMEZONE')), $17::uuid, $18
         )
         ON CONFLICT (request_id)
         DO UPDATE SET
@@ -290,6 +294,7 @@ export class SearchIndexService implements OnModuleInit {
           title = EXCLUDED.title,
           reference_psf_name = EXCLUDED.reference_psf_name,
           psf_setup_file_name = EXCLUDED.psf_setup_file_name,
+          job_file_name = EXCLUDED.job_file_name,
           probecard_name = EXCLUDED.probecard_name,
           status = EXCLUDED.status,
           priority = EXCLUDED.priority,
@@ -324,6 +329,7 @@ export class SearchIndexService implements OnModuleInit {
           : null,
         this.serializeDateForQuery(source.updatedAt),
         null,
+        this.stringFromCanonical(canonicalValues.job_file_name),
       ],
     );
   }
@@ -418,11 +424,21 @@ export class SearchIndexService implements OnModuleInit {
     if (filters.keyword?.trim()) {
       params.push(`%${filters.keyword.trim()}%`);
       const keywordParam = `$${params.length}`;
+      // A Requester cannot find a request by PSF Created Information it
+      // cannot see yet.
+      const psfSetupFileNameMatch =
+        scope.actorRole === 'requester'
+          ? `(psf_setup_file_name ILIKE ${keywordParam} AND EXISTS (
+              SELECT 1 FROM psf_requests AS released
+              WHERE released.id = psf_request_search_index.request_id
+                AND released.psf_released_at IS NOT NULL
+            ))`
+          : `psf_setup_file_name ILIKE ${keywordParam}`;
       where.push(`(
         request_no ILIKE ${keywordParam}
         OR title ILIKE ${keywordParam}
         OR reference_psf_name ILIKE ${keywordParam}
-        OR psf_setup_file_name ILIKE ${keywordParam}
+        OR ${psfSetupFileNameMatch}
         OR probecard_name ILIKE ${keywordParam}
       )`);
     }
@@ -457,8 +473,10 @@ export class SearchIndexService implements OnModuleInit {
         visible AS (${visible}),
         totals AS (SELECT COUNT(*)::int AS total_count FROM visible),
         page AS (
-          SELECT * FROM visible
-          ORDER BY updated_at DESC, request_no DESC
+          SELECT visible.*, request.psf_released_at
+          FROM visible
+          LEFT JOIN psf_requests AS request ON request.id = visible.request_id
+          ORDER BY visible.updated_at DESC, visible.request_no DESC
           LIMIT $${params.length - 1} OFFSET $${params.length}
         )
         SELECT page.*, totals.total_count,
@@ -472,7 +490,16 @@ export class SearchIndexService implements OnModuleInit {
     return {
       items: result.rows
         .filter((row) => row.request_id !== null)
-        .map((row) => this.mapSearchIndexRow(row)),
+        .map((row) => {
+          const item = this.mapSearchIndexRow(row);
+          // PSF Created Information stays hidden from a Requester until release.
+          const psfVisible =
+            scope.actorRole !== 'requester' ||
+            (row.psf_released_at !== null && row.psf_released_at !== undefined);
+          return psfVisible
+            ? item
+            : { ...item, psfSetupFileName: null, jobFileName: null };
+        }),
       total: result.rows[0]?.total_count ?? 0,
       limit,
       offset,
@@ -571,6 +598,7 @@ export class SearchIndexService implements OnModuleInit {
           psfSetupFileName: this.stringFromCanonical(
             canonical.psf_setup_file_name,
           ),
+          jobFileName: this.stringFromCanonical(canonical.job_file_name),
           probecardName: this.stringFromCanonical(canonical.probecard_name),
           status: 'Draft',
           priority: this.stringFromCanonical(canonical.priority),
@@ -725,6 +753,7 @@ export class SearchIndexService implements OnModuleInit {
         title TEXT,
         reference_psf_name TEXT,
         psf_setup_file_name TEXT,
+        job_file_name TEXT,
         probecard_name TEXT,
         status TEXT NOT NULL,
         priority TEXT,
@@ -742,6 +771,9 @@ export class SearchIndexService implements OnModuleInit {
 
     await queryRunner.query(
       `ALTER TABLE psf_request_search_index ADD COLUMN IF NOT EXISTS setup_owner_user_id UUID NULL`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE psf_request_search_index ADD COLUMN IF NOT EXISTS job_file_name TEXT`,
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_setup_owner_user_id ON psf_request_search_index (setup_owner_user_id)`,
@@ -1001,6 +1033,7 @@ export class SearchIndexService implements OnModuleInit {
       title: row.title,
       referencePsfName: row.reference_psf_name,
       psfSetupFileName: row.psf_setup_file_name,
+      jobFileName: row.job_file_name,
       probecardName: row.probecard_name,
       status: row.status,
       priority: row.priority,

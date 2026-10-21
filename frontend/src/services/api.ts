@@ -151,6 +151,7 @@ export interface PsfRequestListItem {
   title: string | null
   referencePsfName: string | null
   psfSetupFileName: string | null
+  jobFileName: string | null
   probecardName: string | null
   status: string
   priority: string | null
@@ -303,6 +304,8 @@ export type PsfRequestHistoryAction =
   | 'REQUESTER_INFORMATION_UPDATED'
   | 'PSF_CREATED_INFORMATION_UPDATED'
   | 'WORKFLOW_CATALOG_UPDATED'
+  | 'ATTACHMENT_UPLOADED'
+  | 'ATTACHMENT_DELETED'
 
 export interface PsfRequestHistoryEntry {
   id: string
@@ -351,11 +354,47 @@ export interface GlobalAuditLogEntry {
   hasRequestSnapshot: boolean
   requestId: string | null
   requestNo: string | null
+  /** Product_Description, or `Untitled Draft (#ID)` while it is blank. */
+  requestLabel: string | null
   actionType: PsfRequestHistoryAction
   actorDisplayName: string
   actorRole: UserRole
   createdAt: string
   metadata: Record<string, unknown>
+}
+
+export interface RequestAttachment {
+  id: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  isImage: boolean
+  /** Null for a file placed on the NAS directly. */
+  uploadedByDisplayName: string | null
+  createdAt: string
+}
+
+export interface RequestAttachmentList {
+  /** The request's `[Product_Description]_[ID]` folder on the NAS. */
+  folderName: string
+  canManage: boolean
+  items: RequestAttachment[]
+}
+
+/** What the server refuses on upload, from the same configuration it enforces. */
+export interface AttachmentPolicy {
+  /** The largest file allowed, per file. */
+  maxBytes: number
+  /** Lower-case extensions with their dot, such as `.exe`. */
+  blockedExtensions: string[]
+}
+
+/** The most files the server takes in one upload request; more are sent in batches. */
+export const ATTACHMENTS_PER_UPLOAD = 10
+
+function attachmentsPath(requestId: string, attachmentId?: string): string {
+  const base = `/requests/${encodeURIComponent(requestId)}/attachments`
+  return attachmentId ? `${base}/${encodeURIComponent(attachmentId)}` : base
 }
 
 export function createApiClient(config: ApiClientConfig = {}) {
@@ -554,6 +593,31 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    fetchAttachmentPolicy: () => request<AttachmentPolicy>('/attachment-policy', { method: 'GET' }),
+    fetchRequestAttachments: (requestId: string) =>
+      request<RequestAttachmentList>(attachmentsPath(requestId), { method: 'GET' }),
+    // Any number of files, one batch after another; onBatchUploaded reports each
+    // finished batch so a later failure never resends files already uploaded.
+    uploadRequestAttachments: async (
+      requestId: string,
+      files: File[],
+      onBatchUploaded?: (uploaded: File[], list: RequestAttachmentList) => void,
+    ) => {
+      let list: RequestAttachmentList | null = null
+      for (let start = 0; start < files.length; start += ATTACHMENTS_PER_UPLOAD) {
+        const batch = files.slice(start, start + ATTACHMENTS_PER_UPLOAD)
+        const body = new FormData()
+        batch.forEach((file) => body.append('files', file, file.name))
+        list = await request<RequestAttachmentList>(attachmentsPath(requestId), { body, method: 'POST' })
+        onBatchUploaded?.(batch, list)
+      }
+      if (!list) throw new Error('Choose at least one file to attach.')
+      return list
+    },
+    deleteRequestAttachment: (requestId: string, attachmentId: string) =>
+      request<{ deleted: true }>(attachmentsPath(requestId, attachmentId), { method: 'DELETE' }),
+    requestAttachmentDownloadUrl: (requestId: string, attachmentId: string) =>
+      resolveUrl(`${attachmentsPath(requestId, attachmentId)}/download`),
   }
 }
 

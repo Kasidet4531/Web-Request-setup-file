@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { DynamicFormRenderer, type DynamicFormActionFeedback } from './DynamicFormRenderer'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
   activeSchemaFromRequest,
@@ -39,10 +39,14 @@ function isRequesterIdentityKey(canonicalKey: string): boolean {
   )
 }
 
-function buildInitialValues(schema: FormSchema): DynamicFormValues {
+// A new request starts with this Product_Description (the `title` field), which
+// also prefixes its `[Product_Description]_[ID]` attachment folder.
+const DEFAULT_PRODUCT_DESCRIPTION = 'Product_Description'
+
+function buildInitialValues(schema: FormSchema, mode: ActiveSchemaFormProps['mode']): DynamicFormValues {
   return schema.sections.reduce<DynamicFormValues>((values, section) => {
     section.fields.forEach((field) => {
-      values[field.fieldKey] = ''
+      values[field.fieldKey] = mode === 'request' && field.fieldKey === 'title' ? DEFAULT_PRODUCT_DESCRIPTION : ''
     })
 
     return values
@@ -179,8 +183,9 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  // The last save's result, reported in the action bar where the save was started.
+  const [saveFeedback, setSaveFeedback] = useState<DynamicFormActionFeedback>()
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   const [upgradeError, setUpgradeError] = useState<string | null>(null)
   const [submissionConflictError, setSubmissionConflictError] = useState<string | null>(null)
   const [upgradePending, setUpgradePending] = useState(false)
@@ -200,6 +205,12 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     valuesRef.current = nextValues
     setValues(nextValues)
     setHasUnsavedChanges(JSON.stringify(nextValues) !== JSON.stringify(savedValuesRef.current))
+  }
+
+  /** Clears the last save's result from the action bar and a Draft schema upgrade's from the top of the card. */
+  function clearFeedback() {
+    setSaveFeedback(undefined)
+    setUpgradeMessage(null)
   }
 
   function invalidateRuntimeAutofill() {
@@ -244,8 +255,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           const classification = classifyDraftSchemaVersion(mode, request, requestSchema)
           const resolvedSchema = resolveRequestFormSchema(mode, request, requestSchema)
           setLoadError(null)
-          setSaveError(null)
-          setSaveMessage(null)
+          clearFeedback()
           setUpgradeError(null)
           setErrors({})
           setCurrentRequest(request)
@@ -279,8 +289,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         }
 
         setLoadError(null)
-        setSaveError(null)
-        setSaveMessage(null)
+        clearFeedback()
         setUpgradeError(null)
         setErrors({})
         setCurrentRequest(null)
@@ -290,7 +299,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         setDraftSchemaVersion('not-applicable')
         onDraftSchemaSubmitAllowedChange?.(false)
         setActiveSchema(response)
-        const nextValues = buildInitialValues(response.schema)
+        const nextValues = buildInitialValues(response.schema, mode)
 
         savedValuesRef.current = nextValues
         onDirtyChange?.(false)
@@ -516,6 +525,13 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     return mode === 'request' ? 'Save draft request' : 'Preview only'
   }, [currentRequest, mode, usesExplicitEdit])
 
+  function startInformationEdit() {
+    if (formUnavailable) return
+    // The last save's result stays in the action bar until editing starts again.
+    clearFeedback()
+    setEditingInformation(true)
+  }
+
   function cancelInformationEdit() {
     if (formUnavailable) return
     invalidateRuntimeAutofill()
@@ -524,8 +540,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setAutofillStatuses({})
     setErrors({})
     setAutofillError(null)
-    setSaveError(null)
-    setSaveMessage(null)
+    clearFeedback()
     onDirtyChange?.(false)
     setEditingInformation(false)
   }
@@ -623,8 +638,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         : currentStatuses,
     )
     setAutofillError(null)
-    setSaveError(null)
-    setSaveMessage(null)
+    clearFeedback()
 
     if (
       mode !== 'request' ||
@@ -662,8 +676,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setDraftSchemaDecision('remain')
     setUpgradeError(null)
     setSubmissionConflictError(null)
-    setSaveError(null)
-    setSaveMessage(null)
+    clearFeedback()
   }
 
   function reloadDraftSchema() {
@@ -692,8 +705,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     invalidateRuntimeAutofill()
     setSaving(true)
     onSavingChange?.(true)
-    setSaveError(null)
-    setSaveMessage(null)
+    clearFeedback()
 
     try {
       const savedRequest = currentRequest
@@ -729,7 +741,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setAutofillStatuses({})
       replaceValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
       setEditingInformation(false)
-      setSaveMessage(savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.')
+      setSaveFeedback({ kind: 'success', message: savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.' })
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && currentRequest) {
         try {
@@ -778,12 +790,12 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
               ? 'This Draft schema does not match the active request schema. Your edits are preserved, but it cannot be saved. Reload the Draft.'
               : null,
           )
-          setSaveError('This request changed in another session. Your unsaved requester values are preserved; review them against the latest revision before saving again.')
+          setSaveFeedback({ kind: 'error', message: 'This request changed in another session. Your unsaved requester values are preserved; review them against the latest revision before saving again.' })
         } catch {
-          setSaveError('This request changed in another session. Your unsaved requester values are preserved; reload before saving again.')
+          setSaveFeedback({ kind: 'error', message: 'This request changed in another session. Your unsaved requester values are preserved; reload before saving again.' })
         }
       } else {
-        setSaveError(error instanceof Error ? error.message : 'Unable to save draft request')
+        setSaveFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Unable to save draft request' })
       }
     } finally {
       mutationLock.finish()
@@ -811,8 +823,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setUpgradePending(true)
     onSavingChange?.(true)
     setUpgradeError(null)
-    setSaveError(null)
-    setSaveMessage(null)
+    clearFeedback()
 
     try {
       const upgradedRequest = await api.upgradeDraftSchema(currentRequest.id, {
@@ -839,7 +850,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setAutofillError(null)
       setAutofillStatuses({})
       replaceValues(nextValues)
-      setSaveMessage(
+      // The upgrade is chosen at the top of the card, so its result is reported there, not in the action bar.
+      setUpgradeMessage(
         `Draft ${upgradedRequest.requestNo} upgraded to schema version ${upgradedRequest.formVersion}.`,
       )
     } catch (error) {
@@ -854,6 +866,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setUpgradePending(false)
     }
   }
+
 
   let editState = currentRequest ? 'Saved' : 'Not saved'
   if (hasUnsavedChanges) editState = 'Unsaved changes'
@@ -893,9 +906,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   return (
     <div className="active-schema-form">
       {currentRequest && !requestId ? <RequestDraftStatus request={currentRequest} /> : null}
-      {saving ? <AsyncNotice kind="loading" title="Saving requester information…" /> : null}
-      {saveMessage ? <AsyncNotice kind="success" title={saveMessage} /> : null}
-      {saveError ? <AsyncNotice kind="error" title={saveError} /> : null}
+      {upgradeMessage ? <AsyncNotice kind="success" title={upgradeMessage} /> : null}
       {submissionConflictError ? (
         <AsyncNotice kind="error" title={submissionConflictError} action={
           <button className="ui-button ui-button--secondary" onClick={reloadDraftSchema} type="button">
@@ -931,16 +942,17 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         </div>
         <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
         {usesExplicitEdit && !editingInformation && !readOnly ? (
-          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={() => { if (!formUnavailable) setEditingInformation(true) }} type="button">
+          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={startInformationEdit} type="button">
             Edit information
           </button>
         ) : null}
       </div>
       <DynamicFormRenderer
+        actionFeedback={saving ? { kind: 'pending', message: 'Saving requester information…' } : saveFeedback}
         deleteAction={deleteAction}
         errors={errors}
-        footerActions={!formReadOnly && usesExplicitEdit ? (
-          <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button>
+        footerActions={usesExplicitEdit && editingInformation && !readOnly ? (
+          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={cancelInformationEdit} type="button">Cancel</button>
         ) : undefined}
         headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}

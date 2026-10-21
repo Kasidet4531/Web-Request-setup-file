@@ -323,7 +323,10 @@ describe('RequestsService explicit draft schema upgrade', () => {
         requesterActor.displayName,
         requesterActor.id,
         'Existing Product',
-        upgradedRow.requester_data_json,
+        {
+          ...upgradedRow.requester_data_json,
+          modified_by: requesterActor.displayName,
+        },
         activeSchema.version,
         activeSchema.schema,
         lockedDraft.form_version,
