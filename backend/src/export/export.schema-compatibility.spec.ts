@@ -13,7 +13,8 @@ import {
   createdColumns,
   headers,
   historicalColumns,
-  requesterColumns,
+  modifiedByColumn,
+  requesterFieldColumns,
   source,
   type Column,
 } from '../../test/fixtures/export-scale';
@@ -77,7 +78,8 @@ function expected(i: number): Array<string | number> {
     row.status,
     row.createdAt,
     row.updatedAt,
-    ...requesterColumns.map((c) =>
+    exportedValue(modifiedByColumn, i),
+    ...requesterFieldColumns.map((c) =>
       (c.name === 'Request For' && i % 4 === 0) ||
       (c.name === 'Trench Thickness (um)' && [0, 2].includes(i % 4))
         ? ''

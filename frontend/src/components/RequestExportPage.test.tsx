@@ -278,6 +278,27 @@ describe("request export URL", () => {
     );
   });
 
+  it("rejects a malformed Export Preview and names the preview in a bare failure", async () => {
+    const respond = (body: string, status = 200) =>
+      new Response(body, {
+        headers: { "Content-Type": "application/json" },
+        status,
+      });
+    const filters = { status: "", from: "", to: "" };
+
+    globalThis.fetch = vi.fn(async () =>
+      respond(JSON.stringify({ total: 1, headers: ["Request No"], rows: [[{ value: 1 }]] })),
+    ) as unknown as typeof fetch;
+    await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
+      "Expected an export preview response.",
+    );
+
+    globalThis.fetch = vi.fn(async () => respond("", 500)) as unknown as typeof fetch;
+    await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
+      "Unable to load the export preview (500).",
+    );
+  });
+
   it("previews every exported column, one value per cell, with Request No pinned", () => {
     const html = renderToStaticMarkup(
       RequestExportPageModule.RequestExportPreview({
@@ -303,12 +324,15 @@ describe("request export URL", () => {
     expect(html).toContain("First 2 of 2 requests in the file.");
     expect(html).not.toContain("may list fewer");
     expect(html).not.toContain("Title / Product Type");
+    const cell = (value: string) => `<span title="${value}">${value}</span>`;
     for (const header of ["Product_Description", "Request To", "Bump Height (um)", "PSF Setup File Name"])
-      expect(html).toContain(`<th scope="col">${header}</th>`);
-    expect(html).toContain('<th scope="col" class="request-export__pinned">Request No</th>');
+      expect(html).toContain(`<th scope="col">${cell(header)}</th>`);
+    expect(html).toContain(`<th scope="col" class="request-export__pinned">${cell("Request No")}</th>`);
     expect(html).toContain('<th scope="row" class="request-export__pinned">PSF-000002</th>');
-    expect(html).toContain("<td>Probe card update</td><td>Create new PSF</td><td>12.5</td><td>NA</td>");
-    expect(html).toContain("<td>SETUP_A.psf</td>");
+    expect(html).toContain(
+      ["Probe card update", "Create new PSF", "12.5", "NA"].map((value) => `<td>${cell(value)}</td>`).join(""),
+    );
+    expect(html).toContain(`<td>${cell("SETUP_A.psf")}</td>`);
   });
 
   it("replaces the route placeholder with the request export page", () => {

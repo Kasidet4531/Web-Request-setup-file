@@ -6,8 +6,6 @@ import { resolvePsfCreatedInformationSchema } from '../admin/form_schema.constan
 import type { RequestExportItem } from '../requests/search-index.service';
 import { createExportTable } from './export-table';
 
-export { exportCell } from './export-table';
-
 export class WorkbookMemoryLimitError extends Error {}
 
 // The worker's resourceLimits is the hard cap, but a process-wide

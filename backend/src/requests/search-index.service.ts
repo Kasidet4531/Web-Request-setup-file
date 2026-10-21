@@ -31,6 +31,21 @@ export function serializeCanonicalValue(value: unknown): string {
   return Array.isArray(normalized) ? normalized.join(', ') : '';
 }
 
+// An export parses each distinct form snapshot text once, however many of its
+// requests captured it.
+function cachedSchema(
+  schemas: Map<string, FormSchemaJson>,
+  value: FormSchemaJson | string,
+): FormSchemaJson {
+  if (typeof value !== 'string') return value;
+  let parsed = schemas.get(value);
+  if (!parsed) {
+    parsed = JSON.parse(value) as FormSchemaJson;
+    schemas.set(value, parsed);
+  }
+  return parsed;
+}
+
 export function extractCanonicalValues(
   schema: FormSchemaJson,
   data: RequesterData,
@@ -708,24 +723,20 @@ export class SearchIndexService implements OnModuleInit {
     );
     const schemas =
       this.exportContext?.schemas || new Map<string, FormSchemaJson>();
-    const parse = (text: string | null) => {
-      if (text === null) return resolvePsfCreatedInformationSchema(null);
-      let schema = schemas.get(text);
-      if (!schema) {
-        schema = JSON.parse(text) as FormSchemaJson;
-        schemas.set(text, schema);
-      }
-      return schema;
-    };
+    const versions = (form: 'requester' | 'created') =>
+      result.rows
+        .filter((row) => row.form === form)
+        .map((row) => row.schema_json);
     return {
-      requester: result.rows
-        .filter((row) => row.form === 'requester')
-        .map((row) => parse(row.schema_json)),
-      created: result.rows
-        .filter((row) => row.form === 'created')
-        .map((row) =>
-          resolvePsfCreatedInformationSchema(parse(row.schema_json)),
+      // Every request captures its requester form (NOT NULL).
+      requester: versions('requester').map((text) =>
+        cachedSchema(schemas, text as string),
+      ),
+      created: versions('created').map((text) =>
+        resolvePsfCreatedInformationSchema(
+          text === null ? null : cachedSchema(schemas, text),
         ),
+      ),
     };
   }
 
@@ -1099,15 +1110,6 @@ export class SearchIndexService implements OnModuleInit {
     row: RequestExportRow,
     schemas: Map<string, FormSchemaJson>,
   ): RequestExportItem {
-    const schema = (value: FormSchemaJson | string): FormSchemaJson => {
-      if (typeof value !== 'string') return value;
-      let parsed = schemas.get(value);
-      if (!parsed) {
-        parsed = JSON.parse(value) as FormSchemaJson;
-        schemas.set(value, parsed);
-      }
-      return parsed;
-    };
     return {
       requestId: row.request_id,
       requestNo: row.request_no,
@@ -1122,9 +1124,9 @@ export class SearchIndexService implements OnModuleInit {
       psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
         row.psf_created_schema_snapshot_json == null
           ? row.psf_created_schema_snapshot_json
-          : schema(row.psf_created_schema_snapshot_json),
+          : cachedSchema(schemas, row.psf_created_schema_snapshot_json),
       ),
-      schemaSnapshot: schema(row.schema_snapshot_json),
+      schemaSnapshot: cachedSchema(schemas, row.schema_snapshot_json),
     };
   }
 

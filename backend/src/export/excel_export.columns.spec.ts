@@ -172,7 +172,7 @@ describe('Excel export columns', () => {
     });
   });
 
-  it('always exports Modified By, after Updated At when no form version has the field', async () => {
+  it('always exports Modified By right after Updated At, as the system recorded it', async () => {
     const form = requesterForm(1, [{ fieldKey: 'title' }]);
 
     const { headers, rows } = await exportSheet(form, [
@@ -194,28 +194,41 @@ describe('Excel export columns', () => {
     ]);
   });
 
-  it('keeps Modified By in its form position when the form has the field', async () => {
-    const form = requesterForm(2, [
+  it('shows Modified By once for requests on form versions with and without the field', async () => {
+    const withField = requesterForm(1, [
       { fieldKey: 'product_type', label: 'Request To' },
-      { fieldKey: 'requester_name', canonicalKey: 'requester' },
       { fieldKey: 'modified_by', label: 'Modified By' },
       { fieldKey: 'title' },
     ]);
-
-    const { headers, rows } = await exportSheet(form, [
-      request('PSF-000001', form, { title: 'A', modified_by: 'Owner A' }),
+    const withoutField = requesterForm(2, [
+      { fieldKey: 'product_type', label: 'Request To' },
+      { fieldKey: 'title' },
     ]);
 
-    expect(headers.slice(4, 8)).toEqual([
-      'Request To',
-      'requester_name',
+    const { headers, rows } = await exportSheet(withoutField, [
+      request('PSF-000002', withoutField, {
+        title: 'New form',
+        modified_by: 'Owner A',
+      }),
+      request('PSF-000001', withField, {
+        title: 'Old form',
+        modified_by: 'Imported Editor',
+      }),
+    ]);
+
+    expect(headers.slice(4)).toEqual([
       'Modified By',
+      'Request To',
       'title',
+      ...headers.slice(7),
     ]);
     expect(headers.filter((header) => header === 'Modified By')).toHaveLength(
       1,
     );
-    expect(rows[0]['Modified By']).toBe('Owner A');
+    expect(rows.map((row) => row['Modified By'])).toEqual([
+      'Owner A',
+      'Imported Editor',
+    ]);
   });
 
   it('shows a Requester every PSF Created Information value, released or not', async () => {

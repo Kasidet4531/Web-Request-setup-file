@@ -8,6 +8,7 @@ import {
   fetchRequestExportPreview,
   startRequestExport,
   type RequestExportFilterValues,
+  type RequestExportPreview as RequestExportPreviewValue,
 } from "../services/request-export";
 
 export const EXPORT_JOB_POLL_INTERVAL_MS = 2_000;
@@ -98,12 +99,9 @@ export function RequestExportFeedback({
   return feedback ? <AsyncNotice kind="error" title={feedback.message} /> : null;
 }
 
-type RequestExportPreviewState = {
+type RequestExportPreviewState = RequestExportPreviewValue & {
   error: string | null;
-  headers: string[];
-  rows: Array<Array<string | number>>;
   loading: boolean;
-  total: number;
 };
 
 // The first rows of the file itself: the same columns, values and NA cells,
@@ -121,7 +119,7 @@ export function RequestExportPreview({
         <div>
           <h2>Request preview</h2>
           <p>{loading ? "Loading filtered requests…" : `First ${rows.length} of ${total} request${total === 1 ? "" : "s"} in the file.`}</p>
-          <p>The download includes every submitted request that matches these filters, never Drafts, with the same {headers.length} columns shown here.</p>
+          <p>The download includes every submitted request that matches these filters, never Drafts, with the same columns shown here.</p>
         </div>
       </div>
       {error ? <AsyncNotice kind="error" title={error} /> : null}
@@ -139,7 +137,7 @@ export function RequestExportPreview({
             <thead>
               <tr>
                 {headers.map((header, column) => (
-                  <th key={column} scope="col" className={column === 0 ? "request-export__pinned" : undefined}>{header}</th>
+                  <th key={column} scope="col" className={column === 0 ? "request-export__pinned" : undefined}><span title={header}>{header}</span></th>
                 ))}
               </tr>
             </thead>
@@ -147,7 +145,7 @@ export function RequestExportPreview({
               {rows.map(([requestNo, ...cells], row) => (
                 <tr key={row}>
                   <th scope="row" className="request-export__pinned">{requestNo}</th>
-                  {cells.map((cell, column) => <td key={column}>{cell}</td>)}
+                  {cells.map((cell, column) => <td key={column}><span title={String(cell)}>{cell}</span></td>)}
                 </tr>
               ))}
             </tbody>
@@ -189,6 +187,7 @@ export function RequestExportPage() {
     value: string,
   ) => {
     setFilters((current) => ({ ...current, [field]: value }));
+    setPreview((current) => ({ ...current, error: null, loading: true }));
   };
 
   useEffect(() => {

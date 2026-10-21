@@ -8,7 +8,7 @@ import {
   ExcelExportService,
   formatRequestExportFilename,
 } from './excel_export.service';
-import { exportCell } from './export-workbook';
+import { exportCell } from './export-table';
 
 describe('ExcelExportService', () => {
   const adminActor = {

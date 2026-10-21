@@ -249,14 +249,17 @@ export class ExcelExportService implements OnModuleDestroy {
           rowLimit,
         );
         const captured = await search.queryExportSchemas(filters);
-        const [requesterSchema, createdSchema] = await Promise.all([
-          this.formSchemaService.getActiveSchema('psf-request', false, runner),
-          this.formSchemaService.getActiveSchema(
-            PSF_CREATED_INFORMATION_FORM_KEY,
-            false,
-            runner,
-          ),
-        ]);
+        // One snapshot connection runs one query at a time.
+        const requesterSchema = await this.formSchemaService.getActiveSchema(
+          'psf-request',
+          false,
+          runner,
+        );
+        const createdSchema = await this.formSchemaService.getActiveSchema(
+          PSF_CREATED_INFORMATION_FORM_KEY,
+          false,
+          runner,
+        );
         const table = createExportTable(
           [requesterSchema.schema, ...captured.requester],
           [createdSchema.schema, ...captured.created],

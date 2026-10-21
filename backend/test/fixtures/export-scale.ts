@@ -77,6 +77,14 @@ assert.equal(new Set(columns.map((c) => c.key)).size, columns.length);
 assert.equal(columns.filter((c) => c.side === 'historical').length, 7);
 
 export const requesterColumns = columns.filter((c) => c.side === 'requester');
+// The system saves Modified By under its own key on every save, so the export
+// shows it as one column right after Updated At, not among the form fields.
+export const modifiedByColumn = requesterColumns.find(
+  (c) => c.key === 'modified_by',
+)!;
+export const requesterFieldColumns = requesterColumns.filter(
+  (c) => c !== modifiedByColumn,
+);
 export const historicalColumns = columns.filter((c) => c.side === 'historical');
 export const createdColumns = columns.filter((c) => c.side === 'created');
 export const statusOptions = columns
@@ -103,7 +111,7 @@ function makeSchema(
           (_, index) => Math.floor((index * 3) / fields.length) === section,
         )
         .map((c) => ({
-          fieldKey: `${prefix}${c.key}`,
+          fieldKey: c === modifiedByColumn ? c.key : `${prefix}${c.key}`,
           canonicalKey: c.key,
           label: oldLabels ? c.name : c.label,
           type: c.type,
@@ -187,7 +195,8 @@ export const headers = [
   'Status',
   'Request Date',
   'Updated At',
-  ...requesterColumns.map((c) => c.label),
+  modifiedByColumn.label,
+  ...requesterFieldColumns.map((c) => c.label),
   ...historicalColumns.map((c) => c.label),
   ...createdColumns.map((c) => c.label),
 ];
@@ -333,7 +342,7 @@ export function source(i: number) {
 // A cell without a value shows NA.
 export function expectedRow(i: number): Cell[] {
   const who = identity(i);
-  const requester = requesterColumns.map((c) => {
+  const requester = requesterFieldColumns.map((c) => {
     // Specify version membership independently of the schema/source constructors.
     if (c.name === 'Trench Thickness (um)' && [0, 2].includes(i % 4)) return '';
     if (c.name === 'Request For' && i % 4 === 0) return '';
@@ -344,6 +353,7 @@ export function expectedRow(i: number): Cell[] {
     who.status,
     who.createdAt,
     who.updatedAt,
+    sample(modifiedByColumn, i).cell,
     ...requester,
     ...historicalColumns.map((c, index) =>
       i % 4 === 0 || (i % 4 === 2 && index < 3) ? sample(c, i).cell : '',

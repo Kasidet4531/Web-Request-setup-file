@@ -69,7 +69,10 @@ export function buildRequestExportUrl(
   return resolveUrl(path);
 }
 
-async function exportErrorMessage(response: Response): Promise<string> {
+async function exportErrorMessage(
+  response: Response,
+  action = "export requests",
+): Promise<string> {
   if (response.status === 401) {
     notifyAuthSessionChanged({ status: "anonymous" });
   }
@@ -77,7 +80,7 @@ async function exportErrorMessage(response: Response): Promise<string> {
   const responseText = await response.text();
 
   if (!responseText) {
-    return `Unable to export requests (${response.status}).`;
+    return `Unable to ${action} (${response.status}).`;
   }
 
   try {
@@ -130,15 +133,19 @@ export async function fetchRequestExportPreview(
   );
 
   if (!response.ok) {
-    throw new Error(await exportErrorMessage(response));
+    throw new Error(await exportErrorMessage(response, "load the export preview"));
   }
 
   const body = await readJsonResponse(response);
+  const isCell = (cell: unknown) =>
+    typeof cell === "string" || typeof cell === "number";
   if (
     !isRecord(body) ||
     typeof body.total !== "number" ||
     !Array.isArray(body.headers) ||
-    !Array.isArray(body.rows)
+    !body.headers.every((header) => typeof header === "string") ||
+    !Array.isArray(body.rows) ||
+    !body.rows.every((row) => Array.isArray(row) && row.every(isCell))
   ) {
     throw new Error("Expected an export preview response.");
   }

@@ -741,7 +741,9 @@ span.request-attachments__name { color: var(--foreground); cursor: default; }
 /* The preview shows every column of the file, so cells keep one line and
    Request No stays pinned while the rest scroll horizontally. */
 .request-export__preview-table table { width: max-content; min-width: 100%; }
-.request-export__preview-table th, .request-export__preview-table td { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Table cells ignore max-width under automatic layout, so the text truncates. */
+.request-export__preview-table th, .request-export__preview-table td { white-space: nowrap; }
+.request-export__preview-table th > span, .request-export__preview-table td > span { display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .request-export__pinned { position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: inset -1px 0 0 var(--border); }
 thead .request-export__pinned { z-index: 2; background: var(--secondary); }
 tbody .request-export__pinned { color: var(--foreground); font-weight: 500; border-top: 1px solid var(--border); }

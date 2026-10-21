@@ -14,15 +14,10 @@ export type ExportCell = string | number;
 // Shown in the export, never stored, wherever a request has no value.
 export const NO_VALUE = 'NA';
 
-// Recorded by the system on every save, whether or not a form version has
-// the field (see RequestsService), so it is always exported.
-const MODIFIED_BY: FormSchemaField = {
-  fieldKey: 'modified_by',
-  canonicalKey: 'modified_by',
-  label: 'Modified By',
-  type: 'text',
-  required: false,
-};
+// The system records Modified By under this key on every save, whether or not
+// a form version has the field (see RequestsService), so it is a metadata
+// column rather than a form field.
+const MODIFIED_BY = 'modified_by';
 
 export interface ExportTable {
   headers: string[];
@@ -39,13 +34,16 @@ export function exportCell(
 
 // Every field of every given form version, once per canonical key, in the
 // order the versions are given: the active form first, then captured ones.
-function columnFields(schemas: Iterable<FormSchemaJson>): FormSchemaField[] {
+function columnFields(
+  schemas: Iterable<FormSchemaJson>,
+  metadataKeys: string[] = [],
+): FormSchemaField[] {
   const selected = new Map<string, FormSchemaField>();
   for (const schema of schemas)
     for (const section of schema.sections)
       for (const field of section.fields) {
         const key = field.canonicalKey?.trim();
-        if (key && !selected.has(key))
+        if (key && !metadataKeys.includes(key) && !selected.has(key))
           selected.set(key, { ...field, canonicalKey: key });
       }
   return [...selected.values()];
@@ -77,13 +75,8 @@ export function createExportTable(
   requesterSchemas: Iterable<FormSchemaJson>,
   createdSchemas: Iterable<FormSchemaJson>,
 ): ExportTable {
-  const requesterFields = columnFields(requesterSchemas);
+  const requesterFields = columnFields(requesterSchemas, [MODIFIED_BY]);
   const createdFields = columnFields(createdSchemas);
-  const systemFields = requesterFields.some(
-    (field) => field.canonicalKey === MODIFIED_BY.canonicalKey,
-  )
-    ? []
-    : [MODIFIED_BY];
   const fieldKeys = new Map<FormSchemaJson, Map<string, string>>();
   return {
     headers: [
@@ -91,7 +84,7 @@ export function createExportTable(
       'Status',
       'Request Date',
       'Updated At',
-      ...systemFields.map((field) => field.label),
+      'Modified By',
       ...requesterFields.map((field) => field.label),
       ...createdFields.map((field) => field.label),
     ],
@@ -114,9 +107,7 @@ export function createExportTable(
         item.status,
         serializeCanonicalValue(item.requestDate),
         serializeCanonicalValue(item.updatedAt),
-        ...systemFields.map((field) =>
-          exportCell(field, item.requesterData[field.fieldKey]),
-        ),
+        serializeCanonicalValue(item.requesterData[MODIFIED_BY]),
         ...requesterFields.map((field) =>
           value(item.requesterData, requesterKeys, field),
         ),
