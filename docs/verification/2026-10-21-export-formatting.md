@@ -1,5 +1,7 @@
 # Readable Excel export
 
+Branch: `perf/excel-export`; worktree: `.worktrees/export-correctness-100k`.
+
 The `PSF Requests` worksheet now has a dark blue header (`#1F4E78`) with bold white text and alternating white / pale blue (`#EAF2F8`) data rows. Header text wraps in a 32-point row. Columns have bounded widths; status, dates and 12NC identifiers have enough room for common values without converting or shortening the stored values.
 
 Only the workbook presentation changes. Request queries, schema mappings, column order, cell values/types, PSF visibility and queue behavior retain the existing implementation. Both synchronous and queued exports use the same workbook builder.
