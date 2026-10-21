@@ -15,7 +15,18 @@ export type {
 
 export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
 
+/** The latest result of the bar's action (saving, saved, or the error), shown in the bar beside the buttons. */
+export interface DynamicFormActionFeedback {
+  kind: 'pending' | 'success' | 'error'
+  message: string
+}
+
 export interface DynamicFormRendererProps {
+  /**
+   * Shown in the action bar, left of the buttons. While it is pending the buttons stay in place, disabled, even
+   * though the form is read-only; once the form is read-only the bar keeps showing it without buttons.
+   */
+  actionFeedback?: DynamicFormActionFeedback
   deleteAction?: ReactNode
   footerActions?: ReactNode
   headerTitle?: string
@@ -44,6 +55,7 @@ function isHeaderMetadataField(field: FormSchemaField): boolean {
  * control (or, read-only, the stored value) on the right. Fields keep their configured order.
  */
 export function DynamicFormRenderer({
+  actionFeedback,
   deleteAction,
   errors = {},
   fieldStatuses = {},
@@ -60,6 +72,12 @@ export function DynamicFormRenderer({
   values = {},
 }: DynamicFormRendererProps) {
   const visibleFields = (fields: FormSchemaField[]) => fields.filter((field) => !isHeaderMetadataField(field))
+  // A form locked while its save runs keeps its buttons (disabled), so the bar does not change shape;
+  // a form that turned read-only after its action keeps the bar for the result, without buttons.
+  const showButtons = !readOnly || actionFeedback?.kind === 'pending'
+  // Progress and success are announced politely; an error is announced as an alert.
+  const errorFeedback = actionFeedback?.kind === 'error' ? actionFeedback : undefined
+  const politeFeedback = actionFeedback?.kind === 'error' ? undefined : actionFeedback
   const hasRequiredFields = schema.sections.some((section) => visibleFields(section.fields).some((field) => field.required))
 
   function handleFieldChange(fieldKey: string) {
@@ -131,13 +149,20 @@ export function DynamicFormRenderer({
         })}
       </div>
 
-      {!readOnly ? (
+      {showButtons || actionFeedback ? (
         <div className="dynamic-form__actions">
-          {deleteAction}
-          <button className="ui-button ui-button--primary" type="submit">
-            {submitLabel}
-          </button>
-          {footerActions}
+          {/* The status region stays mounted, empty when idle, so a message placed in it is announced. */}
+          <p className={`dynamic-form__status${politeFeedback ? ` dynamic-form__status--${politeFeedback.kind}` : ''}`} role="status">{politeFeedback?.message}</p>
+          {errorFeedback ? <p className="dynamic-form__status dynamic-form__status--error" role="alert">{errorFeedback.message}</p> : null}
+          {showButtons ? (
+            <div className="dynamic-form__buttons">
+              {deleteAction}
+              {footerActions}
+              <button className="ui-button ui-button--primary" disabled={readOnly} type="submit">
+                {submitLabel}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </form>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { DynamicFormRenderer, type DynamicFormActionFeedback } from './DynamicFormRenderer'
 import { AsyncNotice } from './ui/AsyncNotice'
 import {
   activeSchemaFromRequest,
@@ -185,6 +185,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   const [upgradeError, setUpgradeError] = useState<string | null>(null)
   const [submissionConflictError, setSubmissionConflictError] = useState<string | null>(null)
   const [upgradePending, setUpgradePending] = useState(false)
@@ -250,6 +251,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           setLoadError(null)
           setSaveError(null)
           setSaveMessage(null)
+          setUpgradeMessage(null)
           setUpgradeError(null)
           setErrors({})
           setCurrentRequest(request)
@@ -285,6 +287,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         setLoadError(null)
         setSaveError(null)
         setSaveMessage(null)
+        setUpgradeMessage(null)
         setUpgradeError(null)
         setErrors({})
         setCurrentRequest(null)
@@ -520,6 +523,14 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     return mode === 'request' ? 'Save draft request' : 'Preview only'
   }, [currentRequest, mode, usesExplicitEdit])
 
+  function startInformationEdit() {
+    if (formUnavailable) return
+    // The last save's result stays in the action bar until editing starts again.
+    setSaveError(null)
+    setSaveMessage(null)
+    setEditingInformation(true)
+  }
+
   function cancelInformationEdit() {
     if (formUnavailable) return
     invalidateRuntimeAutofill()
@@ -530,6 +541,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setAutofillError(null)
     setSaveError(null)
     setSaveMessage(null)
+    setUpgradeMessage(null)
     onDirtyChange?.(false)
     setEditingInformation(false)
   }
@@ -629,6 +641,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setAutofillError(null)
     setSaveError(null)
     setSaveMessage(null)
+    setUpgradeMessage(null)
 
     if (
       mode !== 'request' ||
@@ -668,6 +681,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setSubmissionConflictError(null)
     setSaveError(null)
     setSaveMessage(null)
+    setUpgradeMessage(null)
   }
 
   function reloadDraftSchema() {
@@ -698,6 +712,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     onSavingChange?.(true)
     setSaveError(null)
     setSaveMessage(null)
+    setUpgradeMessage(null)
 
     try {
       const savedRequest = currentRequest
@@ -817,6 +832,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
     setUpgradeError(null)
     setSaveError(null)
     setSaveMessage(null)
+    setUpgradeMessage(null)
 
     try {
       const upgradedRequest = await api.upgradeDraftSchema(currentRequest.id, {
@@ -843,7 +859,8 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setAutofillError(null)
       setAutofillStatuses({})
       replaceValues(nextValues)
-      setSaveMessage(
+      // The upgrade is chosen at the top of the card, so its result is reported there, not in the action bar.
+      setUpgradeMessage(
         `Draft ${upgradedRequest.requestNo} upgraded to schema version ${upgradedRequest.formVersion}.`,
       )
     } catch (error) {
@@ -858,6 +875,12 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       setUpgradePending(false)
     }
   }
+
+  // A save is reported in the action bar, where it was started.
+  const actionFeedback: DynamicFormActionFeedback | undefined = saving
+    ? { kind: 'pending', message: 'Saving requester information…' }
+    : saveError ? { kind: 'error', message: saveError }
+      : saveMessage ? { kind: 'success', message: saveMessage } : undefined
 
   let editState = currentRequest ? 'Saved' : 'Not saved'
   if (hasUnsavedChanges) editState = 'Unsaved changes'
@@ -897,9 +920,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   return (
     <div className="active-schema-form">
       {currentRequest && !requestId ? <RequestDraftStatus request={currentRequest} /> : null}
-      {saving ? <AsyncNotice kind="loading" title="Saving requester information…" /> : null}
-      {saveMessage ? <AsyncNotice kind="success" title={saveMessage} /> : null}
-      {saveError ? <AsyncNotice kind="error" title={saveError} /> : null}
+      {upgradeMessage ? <AsyncNotice kind="success" title={upgradeMessage} /> : null}
       {submissionConflictError ? (
         <AsyncNotice kind="error" title={submissionConflictError} action={
           <button className="ui-button ui-button--secondary" onClick={reloadDraftSchema} type="button">
@@ -935,16 +956,17 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         </div>
         <p className={`form-edit-state${hasUnsavedChanges ? ' form-edit-state--dirty' : ''}`}>{editState}</p>
         {usesExplicitEdit && !editingInformation && !readOnly ? (
-          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={() => { if (!formUnavailable) setEditingInformation(true) }} type="button">
+          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={startInformationEdit} type="button">
             Edit information
           </button>
         ) : null}
       </div>
       <DynamicFormRenderer
+        actionFeedback={actionFeedback}
         deleteAction={deleteAction}
         errors={errors}
-        footerActions={!formReadOnly && usesExplicitEdit ? (
-          <button className="ui-button ui-button--secondary" onClick={cancelInformationEdit} type="button">Cancel</button>
+        footerActions={usesExplicitEdit && editingInformation && !readOnly ? (
+          <button className="ui-button ui-button--secondary" disabled={formUnavailable} onClick={cancelInformationEdit} type="button">Cancel</button>
         ) : undefined}
         headerTitle={headerTitle}
         fieldStatuses={autofillStatuses}

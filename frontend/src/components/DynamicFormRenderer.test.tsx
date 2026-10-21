@@ -68,8 +68,16 @@ const allTypesSchema: FormSchema = {
 
 /** Returns the markup of each field row, in document order, by matching the row's balanced <div>. */
 function rowsOf(html: string): string[] {
+  return divsOf(html, /<div class="dynamic-form__row[" ]/g)
+}
+
+/** Returns the markup of the form's action bar, or an empty string when there is none. */
+function actionBarOf(html: string): string {
+  return divsOf(html, /<div class="dynamic-form__actions"/g)[0] ?? ''
+}
+
+function divsOf(html: string, start: RegExp): string[] {
   const rows: string[] = []
-  const start = /<div class="dynamic-form__row[" ]/g
   for (const match of html.matchAll(start)) {
     const tags = /<div[\s>]|<\/div>/g
     tags.lastIndex = match.index
@@ -402,6 +410,73 @@ describe('DynamicFormRenderer', () => {
   })
 })
 
+
+describe('DynamicFormRenderer action bar', () => {
+  const buttonsOf = (bar: string) => [...bar.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((match) => match[1])
+
+  it('reports a saved result in the bar, left of the buttons, with Save the right-most control', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer
+      actionFeedback={{ kind: 'success', message: 'Draft PSF-0001 saved.' }}
+      deleteAction={<button type="button">Delete Draft</button>}
+      footerActions={<button type="button">Cancel</button>}
+      onChange={() => undefined}
+      schema={schema}
+      submitLabel="Save draft changes"
+    />)
+    const bar = actionBarOf(html)
+
+    expect(bar.match(/<p[^>]*role="status"[^>]*>([^<]*)<\/p>/)?.[1]).toBe('Draft PSF-0001 saved.')
+    expect(bar).not.toContain('role="alert"')
+    expect(bar.indexOf('Draft PSF-0001 saved.')).toBeLessThan(bar.indexOf('<button'))
+    expect(buttonsOf(bar)).toEqual(['Delete Draft', 'Cancel', 'Save draft changes'])
+    expect(bar).toMatch(/<button[^>]*type="submit"[^>]*>Save draft changes<\/button><\/div>(<\/div>)?$/)
+  })
+
+  it('reports a save error in the bar as an alert, left of the buttons', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer
+      actionFeedback={{ kind: 'error', message: 'Save unavailable' }}
+      onChange={() => undefined}
+      schema={schema}
+      submitLabel="Save draft changes"
+    />)
+    const bar = actionBarOf(html)
+
+    expect(bar.match(/<p[^>]*role="alert"[^>]*>([^<]*)<\/p>/)?.[1]).toBe('Save unavailable')
+    expect(bar.match(/<p[^>]*role="status"[^>]*>([^<]*)<\/p>/)?.[1]).toBe('')
+    expect(bar.indexOf('Save unavailable')).toBeLessThan(bar.indexOf('<button'))
+    expect(buttonsOf(bar)).toEqual(['Save draft changes'])
+  })
+
+  it('keeps the buttons in place, disabled, while the locked form reports its save in progress', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer
+      actionFeedback={{ kind: 'pending', message: 'Saving requester information…' }}
+      readOnly
+      schema={schema}
+      submitLabel="Saving draft…"
+      values={{ title: 'Probe card update' }}
+    />)
+    const bar = actionBarOf(html)
+
+    expect(html).toMatch(/<output[^>]*>Probe card update<\/output>/)
+    expect(bar.match(/<p[^>]*role="status"[^>]*>([^<]*)<\/p>/)?.[1]).toBe('Saving requester information…')
+    expect(bar).toMatch(/<button[^>]*disabled=""[^>]*>Saving draft…<\/button>/)
+  })
+
+  it('keeps the saved result where it was reported when the form returns to read-only, without buttons', () => {
+    const saved = renderToStaticMarkup(<DynamicFormRenderer
+      actionFeedback={{ kind: 'success', message: 'Requester information saved.' }}
+      footerActions={<button type="button">Cancel</button>}
+      readOnly
+      schema={schema}
+      submitLabel="Save information"
+    />)
+    const bar = actionBarOf(saved)
+
+    expect(bar.match(/<p[^>]*role="status"[^>]*>([^<]*)<\/p>/)?.[1]).toBe('Requester information saved.')
+    expect(buttonsOf(bar)).toEqual([])
+    expect(actionBarOf(renderToStaticMarkup(<DynamicFormRenderer readOnly schema={schema} />))).toBe('')
+  })
+})
 
 describe('DynamicFormRenderer previous values', () => {
   it('marks only the fields that changed and shows what each held before', () => {

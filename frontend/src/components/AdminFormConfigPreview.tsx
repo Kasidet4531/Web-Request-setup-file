@@ -37,6 +37,7 @@ export function AdminFormConfigPreview({ schema }: { schema: FormSchema | null }
   return <div className={schema.formKey === 'psf-request' ? 'active-schema-form' : 'psf-created-panel'}>
     <p className="ui-help">Preview only. Trial values stay here and no request is saved.{identityKeys.length > 0 ? ' Requester identity uses sample data and is locked like the request form.' : ''}</p>
     <DynamicFormRenderer
+      actionFeedback={current.checked && Object.keys(errors).length === 0 ? { kind: 'success', message: 'All required fields are complete.' } : undefined}
       errors={errors}
       headerTitle={familyLabel}
       onChange={(fieldKey, value) => {
@@ -50,6 +51,5 @@ export function AdminFormConfigPreview({ schema }: { schema: FormSchema | null }
       submitLabel="Check required fields"
       values={values}
     />
-    {current.checked && Object.keys(errors).length === 0 ? <p className="ui-help" role="status">All required fields are complete.</p> : null}
   </div>
 }
