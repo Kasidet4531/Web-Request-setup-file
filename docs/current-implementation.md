@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Pinned action bar, 21 October 2026:** on every editable form (New Request, Draft and submitted request editing, PSF Created Information editing and the Admin Form Management preview) the action buttons sit in a bar pinned to the bottom of the viewport, or of the preview's scroll region, while the form scrolls; at the end of the form it sits below the last row. It spans the form card with Save as the right-most button at the card's right edge. Saving, saved and save errors of the Requester form and of PSF Created Information appear in the bar, left of the buttons (saving and saved as a status, errors as an alert), instead of at the top of the card or page; the preview's "All required fields are complete." appears there too. Status changes, load errors, Draft schema upgrades and other page-level notices stay at the top. See the [verification record](verification/2026-10-21-single-column-form.md#pinned-action-bar) (issue #90). Checks ran in Chromium against a throwaway local database.
+
 > **Single-column form rows, 21 October 2026:** every rendering of a Form Schema (New Request, Draft and submitted request editing, PSF Created Information viewing and editing, the Admin Form Management preview, read-only Request Detail, Admin Draft detail and Request Snapshots) shows one row per field: the label in a 260px column on the left, the control or stored value on the right, rows separated by a divider and capped at 840px wide. Below 600px wide the label sits above its control. The two-column grid and its full-width text areas, radios, Title and Product Type are gone; field order, sections, labels, required flags and visibility are unchanged. See the [verification record](verification/2026-10-21-single-column-form.md) (issue #88). Checks ran in Chromium against a throwaway local database.
 
 > **Attachment policy, 21 October 2026:** `GET /api/attachment-policy` gives any signed-in role `{ maxBytes, blockedExtensions }` from the storage configuration uploads are checked against; both Attachment pickers show the per-file limit and blocked file types from it, and New Request refuses an oversized file at selection as it does a blocked type. The frontend no longer keeps its own blocked-extension list; without the policy the pickers work with no hint or client-side check. See [Request Attachments](request-attachments.md#access-and-api) (issue #89). Checked by controller, application-module and frontend tests only.
@@ -153,6 +155,25 @@ cell and keeps its required, invalid and described-by state. The required marker
 field error, Auto-fill status and "Previous" value stay in the field's row; a
 Request Snapshot tints changed rows. Detail keeps 16px section headings. Request
 Owner / Dept metadata has been removed.
+An editable form ends in an action bar that is `position: sticky` at the bottom of
+the window (in the Admin preview, of its "Preview fields" scroll region), so it stays
+on screen while the form scrolls and the last row still scrolls clear of it. In a form
+card it spans the card edge to edge; buttons are right-aligned with Save last (Delete
+Draft or Cancel before it), and below 600px wide they share their own line, stacking
+when they do not fit. The bar's status area, left of the buttons, reports the form's
+action: the Requester form shows "Saving requester information…", then "Draft
+DRAFT-… saved." or "Requester information saved.", or the save error; PSF Created
+Information shows "Saving PSF Created Information…", then "PSF Created Information
+for PSF-… saved." or the error (including the 409 conflict messages); the preview
+shows "All required fields are complete.". Saving and saved are a polite
+`role="status"` region that stays mounted, errors a `role="alert"`. While a save runs
+the form is read-only and the buttons stay in the bar, disabled. A save error keeps
+the form editable. After a successful explicit-edit save (submitted Requester
+Information, PSF Created Information) the form returns to read-only and the bar
+keeps only the saved message, until "Edit information", a field change or Cancel
+clears it; a Draft stays editable with the message beside its buttons until the next
+edit. A Draft schema upgrade is started at the top of the card and still reports
+there. Keyboard focus scrolled into view stops above the bar (`scroll-padding-bottom`).
 New requests capture both active schemas. Requester Draft schema upgrades are
 explicit and do not upgrade the captured PSF schema. Legacy PSF records resolve
 through the fixed original descriptor. Required fields may be incomplete on
@@ -337,7 +358,7 @@ Credentials belong in ignored local configuration.
 
 Source: [file routes](../frontend/src/routes),
 [navigation permissions](../frontend/src/components/navigationState.ts).
-Request Detail includes Requester Information, PSF Created Information, Attachments and History tabs for submitted work (Drafts show Attachments below Requester Information; see [Request Attachments](request-attachments.md)). Each Attachment picker, there and on New Request, states the server's per-file limit and blocked file types from `/api/attachment-policy`, and New Request refuses an oversized or blocked file when it is chosen. Request Detail's explicit form Edit/Save/Cancel controls remain separate from Save Status. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
+Request Detail includes Requester Information, PSF Created Information, Attachments and History tabs for submitted work (Drafts show Attachments below Requester Information; see [Request Attachments](request-attachments.md)). Each Attachment picker, there and on New Request, states the server's per-file limit and blocked file types from `/api/attachment-policy`, and New Request refuses an oversized or blocked file when it is chosen. Request Detail's explicit form Edit/Save/Cancel controls remain separate from Save Status: a form save reports in that form's pinned action bar, while Status changes, workflow-option refresh errors and load errors report at the top of the page. The standalone request History route uses the request's real UUID and visibility rules. Drafts retain their dedicated editing/submission flow.
 Form editing uses application components, including a textarea-based advanced
 JSON editor, rather than Monaco/CodeMirror.
 Sources: [visual form editor](../frontend/src/components/AdminFormConfigEditor.tsx),
