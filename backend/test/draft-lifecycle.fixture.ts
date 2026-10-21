@@ -91,18 +91,29 @@ export const psfSchema: FormSchemaJson = {
     },
   ],
 };
-export async function lifecycleFixture(pool: Pool) {
+// Pass a real NotificationService to queue status emails; by default the
+// fixture only counts enqueue calls.
+export async function lifecycleFixture(
+  pool: Pool,
+  options: { notifications?: NotificationService } = {},
+) {
   const audit = new AuditLogService(pool);
   const forms = new FormSchemaService(pool);
-  const workflow = new WorkflowTransitionService(pool, audit);
-  const index = new SearchIndexService(pool);
   let mailCount = 0;
-  const notifications = {
-    enqueueRequest: () => {
-      mailCount++;
-      return Promise.resolve();
-    },
-  } as unknown as NotificationService;
+  const notifications =
+    options.notifications ??
+    ({
+      enqueueRequest: () => {
+        mailCount++;
+        return Promise.resolve();
+      },
+    } as unknown as NotificationService);
+  const workflow = new WorkflowTransitionService(
+    pool,
+    audit,
+    options.notifications,
+  );
+  const index = new SearchIndexService(pool);
   // Attachments are stored under ATTACHMENT_STORAGE_PATH, as in the app.
   const storage = new AttachmentStorage(process.env);
   const attachments = new RequestAttachmentsService(pool, storage, audit);
@@ -116,7 +127,7 @@ export async function lifecycleFixture(pool: Pool) {
     attachments,
   );
   await pool.query(
-    `CREATE TABLE app_users (id uuid PRIMARY KEY, username text, display_name text, role text, setup_owner_department text, updated_at timestamp, password_hash text)`,
+    `CREATE TABLE app_users (id uuid PRIMARY KEY, username text, display_name text, role text, setup_owner_department text, updated_at timestamp, password_hash text, email text)`,
   );
   for (const actor of [requester, ownerA, ownerB, admin])
     await pool.query(
