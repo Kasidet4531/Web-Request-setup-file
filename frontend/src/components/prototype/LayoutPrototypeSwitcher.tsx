@@ -8,6 +8,7 @@ const variants = [
   { key: 'a', name: 'Card fits form, centred' },
   { key: 'b', name: 'Rows fill the card' },
   { key: 'c', name: 'Form centred in wide card' },
+  { key: 'd', name: 'A widened 25% each side' },
 ] as const
 
 function initialIndex() {

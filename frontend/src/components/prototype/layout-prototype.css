@@ -2,11 +2,12 @@
  * PROTOTYPE, throwaway: issue 2 of the draft/request detail UI review.
  * Question: the single-column form rows stop at 840px and sit left inside a wider
  * card, so the page looks heavy on the left. Which single-column layout balances it?
- * Variants (switch with the floating bar, or ?variant=current|a|b|c):
+ * Variants (switch with the floating bar, or ?variant=current|a|b|c|d):
  *   current: today's layout, for comparison.
  *   a: the page column narrows to the form's width and centres (card fits the form).
  *   b: the rows drop their 840px cap and fill the card's width.
  *   c: the card keeps its width; the form content is centred inside it at 840px.
+ *   d: a, widened by 25% of its width on each side (1.5x); the rows fill the wider card.
  * Every variant also carries issue 1 (16px between the Draft's
  * Requester Information and Attachments cards, as on New Request).
  */
@@ -17,6 +18,11 @@ html[data-layout-prototype] .detail-editors > .workflow-section + .workflow-sect
 /* a: the card fits the form and the column centres. 840px rows + card padding + borders. */
 html[data-layout-prototype="a"] .detail-page,
 html[data-layout-prototype="a"] .request-create-page { max-width: calc(840px + 2 * var(--card-padding) + 2px); margin-inline: auto; }
+
+/* d: a at 1.5x its width, centred; rows fill the card. Narrower screens just fill the content area. */
+html[data-layout-prototype="d"] .detail-page,
+html[data-layout-prototype="d"] .request-create-page { max-width: calc(1.5 * (840px + 2 * var(--card-padding) + 2px)); margin-inline: auto; }
+html[data-layout-prototype="d"] .dynamic-form__rows { max-width: none; }
 
 /* b: rows fill the card. */
 html[data-layout-prototype="b"] .dynamic-form__rows { max-width: none; }
