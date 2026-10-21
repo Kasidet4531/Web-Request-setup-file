@@ -2,6 +2,8 @@
 
 > **Status clarification, 4 October 2026:** [Database Status names and interaction rules](../status-catalog-and-manual-updates.md) supersede old short-label catalogs, directed transition matrices and action-driven automatic Status changes below. Use complete configured strings for every displayed request Status. This documentation update does not change application source.
 
+> **Form layout update, 21 October 2026:** the [current implementation guide](../current-implementation.md#requests-forms-and-workflow) supersedes three form rules below. Form Schema field labels are 14px / 20px / 700 in the foreground colour, editable and read-only alike, rather than 12px / 18px / 500; other labels keep the 12px style. Each field is one row with its label on the left, so the native radio fieldset, the two-column desktop grid and the full-width multiline fields are gone; a radio group is a `role="radiogroup"` named by its row's label (issue #88). Editable forms end in an action bar pinned to the bottom of the viewport with a subtle upward shadow, an exception to "flat surfaces use no shadow" (issue #90). This notice does not change application source.
+
 Status: approved by the user on 3 October 2026 for implementation with the accompanying concepts, implementation plan, and verified worker routing policy. Written requirements and existing business/API contracts take precedence over generated concepts.
 
 ## Purpose and scope

@@ -380,6 +380,14 @@ export interface RequestAttachmentList {
   items: RequestAttachment[]
 }
 
+/** What the server refuses on upload, from the same configuration it enforces. */
+export interface AttachmentPolicy {
+  /** The largest file allowed, per file. */
+  maxBytes: number
+  /** Lower-case extensions with their dot, such as `.exe`. */
+  blockedExtensions: string[]
+}
+
 /** The most files the server takes in one upload request; more are sent in batches. */
 export const ATTACHMENTS_PER_UPLOAD = 10
 
@@ -584,6 +592,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
         body: payload,
         method: 'PUT',
       }),
+    fetchAttachmentPolicy: () => request<AttachmentPolicy>('/attachment-policy', { method: 'GET' }),
     fetchRequestAttachments: (requestId: string) =>
       request<RequestAttachmentList>(attachmentsPath(requestId), { method: 'GET' }),
     // Any number of files, one batch after another; onBatchUploaded reports each

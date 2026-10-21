@@ -388,6 +388,18 @@ describe('createApiClient', () => {
     }))
   })
 
+  it('reads the Attachment Policy from its request-independent route', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ maxBytes: 52428800, blockedExtensions: ['.exe'] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as typeof fetch
+
+    await expect(createApiClient({ baseUrl: '/api' }).fetchAttachmentPolicy()).resolves.toEqual({ maxBytes: 52428800, blockedExtensions: ['.exe'] })
+    expect(globalThis.fetch).toHaveBeenCalledExactlyOnceWith('/api/attachment-policy', expect.objectContaining({ method: 'GET' }))
+  })
+
   it('uploads any number of Attachments in batches the server accepts, reporting each batch', async () => {
     let call = 0
     globalThis.fetch = vi.fn(async () =>

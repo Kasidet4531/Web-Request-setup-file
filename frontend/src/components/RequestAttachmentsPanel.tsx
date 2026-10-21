@@ -4,25 +4,83 @@ import { AsyncNotice } from './ui/AsyncNotice'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { formatFileSize } from './ui/fileSize'
 import { formatHistoryDateTime } from './ui/historyDateTime'
-import { api, type RequestAttachment, type RequestAttachmentList } from '../services/api'
+import { api, type AttachmentPolicy, type RequestAttachment, type RequestAttachmentList } from '../services/api'
 
-// The server refuses these too; staging checks them before a Draft exists.
-const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.com', '.msi', '.ps1', '.sh', '.vbs']
+/**
+ * The server's per-file limit and blocked file types. Null until loaded, and
+ * for good if loading fails: pickers then show no hint and check nothing,
+ * and the server still refuses what it always refuses. `onLoaded` runs with
+ * the latest render's props when the policy arrives.
+ */
+function useAttachmentPolicy(onLoaded?: (policy: AttachmentPolicy) => void): AttachmentPolicy | null {
+  const [policy, setPolicy] = useState<AttachmentPolicy | null>(null)
+  const onLoadedRef = useRef(onLoaded)
+  useEffect(() => { onLoadedRef.current = onLoaded })
+  useEffect(() => {
+    let active = true
+    async function loadPolicy() {
+      try {
+        const loaded = await api.fetchAttachmentPolicy()
+        if (!active) return
+        setPolicy(loaded)
+        onLoadedRef.current?.(loaded)
+      } catch {
+        // No hint and no client-side check; uploads still work.
+      }
+    }
+    void loadPolicy()
+    return () => { active = false }
+  }, [])
+  return policy
+}
 
-function blockedFileName(files: File[]): string | null {
-  return files.find((file) => BLOCKED_EXTENSIONS.some((extension) => file.name.toLowerCase().endsWith(extension)))?.name ?? null
+function policyHint(policy: AttachmentPolicy): string {
+  const blocked = policy.blockedExtensions.length ? ` · Not allowed: ${policy.blockedExtensions.join(', ')}` : ''
+  return `Up to ${formatFileSize(policy.maxBytes)} per file${blocked}`
+}
+
+/**
+ * The file type as the upload path reads it: Node's `path.extname` of the name it stores, which drops
+ * trailing dots and spaces. A name whose only dot comes first, such as `.sh`, has no type there.
+ */
+function storedExtension(name: string): string {
+  const stored = name.trim().replace(/[. ]+$/, '')
+  const dot = stored.lastIndexOf('.')
+  return dot > 0 ? stored.slice(dot).toLowerCase() : ''
+}
+
+/**
+ * Why the upload path would refuse a file, or null. Both messages name the file as chosen. A blocked
+ * type is worded as the server words it; an oversized file states the limit as the picker's hint does
+ * (`formatFileSize`), where the server's message gives the byte count.
+ */
+function fileRefusal(file: File, policy: AttachmentPolicy): string | null {
+  if (policy.blockedExtensions.includes(storedExtension(file.name)))
+    return `${file.name} cannot be attached: executable and script files are not allowed.`
+  if (file.size > policy.maxBytes) return `${file.name} is larger than the ${formatFileSize(policy.maxBytes)} attachment limit.`
+  return null
+}
+
+/** The refusal of the first file in a selection that the upload path would refuse, or null. */
+function refusedFile(files: File[], policy: AttachmentPolicy): string | null {
+  for (const file of files) {
+    const refusal = fileRefusal(file, policy)
+    if (refusal) return refusal
+  }
+  return null
 }
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
-function AttachmentFilePicker({ disabled, label, onSelect }: { disabled: boolean; label: string; onSelect: (files: File[]) => void }) {
+function AttachmentFilePicker({ describedBy, disabled, label, onSelect }: { describedBy?: string; disabled: boolean; label: string; onSelect: (files: File[]) => void }) {
   const inputId = useId()
   return (
     <label className={`btn-secondary request-attachments__picker${disabled ? ' is-disabled' : ''}`} htmlFor={inputId}>
       <Paperclip size={14} aria-hidden="true" /> {label}
       <input
+        aria-describedby={describedBy}
         className="sr-only"
         disabled={disabled}
         id={inputId}
@@ -82,6 +140,7 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
   const [deleting, setDeleting] = useState<RequestAttachment | null>(null)
   const [deletePending, setDeletePending] = useState(false)
   const [preview, setPreview] = useState<RequestAttachment | null>(null)
+  const policy = useAttachmentPolicy()
 
   // Each load reconciles the list with the request's NAS folder.
   useEffect(() => {
@@ -140,14 +199,17 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
   }
 
   const list = state.data
+  const hint = list?.canManage && policy ? policyHint(policy) : null
+  const hintId = hint ? `attachments-policy-${requestId}` : undefined
   return (
     <section className="request-attachments" aria-labelledby={`attachments-heading-${requestId}`}>
       <div className="request-attachments__header">
         <div>
           <h2 id={`attachments-heading-${requestId}`}>Attachments</h2>
           {list ? <p className="request-attachments__folder">NAS folder: <span className="font-mono-code">{list.folderName}</span></p> : null}
+          {hint ? <p className="request-attachments__policy" id={hintId}>{hint}</p> : null}
         </div>
-        {list?.canManage ? <AttachmentFilePicker disabled={uploading} label={uploading ? 'Uploading…' : 'Upload files'} onSelect={(files) => void upload(files)} /> : null}
+        {list?.canManage ? <AttachmentFilePicker describedBy={hintId} disabled={uploading} label={uploading ? 'Uploading…' : 'Upload files'} onSelect={(files) => void upload(files)} /> : null}
       </div>
       {state.loading && !list ? <AsyncNotice kind="loading" title="Loading attachments…" /> : null}
       {state.error ? <AsyncNotice kind="error" title={`Unable to load attachments: ${state.error}`} action={<button className="btn-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>Retry attachments</button>} /> : null}
@@ -200,17 +262,28 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
 /** Files chosen on New Request before its Draft exists; uploaded once it is saved. */
 export function StagedAttachmentsPanel({ files, disabled = false, error, onChange }: { files: File[]; disabled?: boolean; error?: string | null; onChange: (files: File[]) => void }) {
   const [rejected, setRejected] = useState<string | null>(null)
+  // Files chosen while the policy was loading are checked when it arrives, so they are not refused only after the Draft is created.
+  const policy = useAttachmentPolicy((loaded) => {
+    const refusals = files.map((file) => fileRefusal(file, loaded))
+    if (!refusals.some(Boolean)) return
+    setRejected(refusals.filter(Boolean).join(' '))
+    onChange(files.filter((_, index) => !refusals[index]))
+  })
+  const hint = policy ? policyHint(policy) : null
+  const hintId = hint ? 'staged-attachments-policy' : undefined
   return (
     <section className="request-attachments" aria-labelledby="staged-attachments-heading">
       <div className="request-attachments__header">
         <div>
           <h2 id="staged-attachments-heading">Attachments</h2>
           <p className="request-attachments__folder">Uploaded to the request folder on the NAS when the Draft is saved.</p>
+          {hint ? <p className="request-attachments__policy" id={hintId}>{hint}</p> : null}
         </div>
-        <AttachmentFilePicker disabled={disabled} label="Add files" onSelect={(selected) => {
-          const blocked = blockedFileName(selected)
-          setRejected(blocked ? `${blocked} cannot be attached: executable and script files are not allowed.` : null)
-          if (!blocked) onChange([...files, ...selected])
+        {/* Refused now rather than after the Draft is created; nothing from the selection is added. */}
+        <AttachmentFilePicker describedBy={hintId} disabled={disabled} label="Add files" onSelect={(selected) => {
+          const refusal = policy ? refusedFile(selected, policy) : null
+          setRejected(refusal)
+          if (!refusal) onChange([...files, ...selected])
         }} />
       </div>
       {rejected ? <AsyncNotice kind="error" title={rejected} /> : null}

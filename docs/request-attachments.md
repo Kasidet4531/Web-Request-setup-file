@@ -1,7 +1,9 @@
 # Request Attachments and request IDs
 
-Implemented in source on 20 October 2026 for issue #78. Source is authoritative;
-this guide describes the source as of that change. It is not deployment
+Implemented in source on 20 October 2026 for issue #78; the Attachment Policy
+route and the picker limits were added on 21 October 2026 for issue #89. Source
+is authoritative; this guide describes the source as of those changes. It is
+not deployment
 evidence: the checks it names ran against disposable databases and a temporary
 directory standing in for the NAS (see [Verification](#verification)).
 
@@ -48,7 +50,9 @@ reports whether the folder can be reached. In `backend/.env` write the path
 unquoted (`ATTACHMENT_STORAGE_PATH=Z:/attachment`): inside double quotes `\n`
 becomes a line break. Restart the backend after changing it.
 `ATTACHMENT_MAX_BYTES` limits each file (default 52428800, 50 MB); uploads are
-held in memory up to that size.
+held in memory up to that size. The pickers show this limit, read from the
+[Attachment Policy](#access-and-api) route, so changing it and restarting the
+backend changes the hint with no frontend change.
 
 Any number of files can be attached. The browser sends them in batches of up
 to 10 per request; after a failed batch only the files not yet uploaded are
@@ -71,7 +75,9 @@ Each request has one folder directly under the root:
   before its extension; nothing is overwritten.
 - `.exe`, `.bat`, `.cmd`, `.com`, `.msi`, `.ps1`, `.sh` and `.vbs` files are
   refused, as are Windows/macOS system files (`Thumbs.db`, `desktop.ini`,
-  `.DS_Store`, `~$…`), which listings also ignore.
+  `.DS_Store`, `~$…`), which listings also ignore. The extension list is
+  defined only in the backend and served by the Attachment Policy route; the
+  system files are not part of it.
 - Saving a changed Product_Description renames the folder and updates stored
   paths in the same save; if the save fails, the rename is undone. If a folder
   with the new name already exists, the save is refused (409) and nothing moves.
@@ -132,6 +138,17 @@ Source: [check script](../backend/scripts/check-attachment-folders.ts).
 | `GET /api/requests/:requestId/attachments/:attachmentId/download` | Same as above |
 | `POST /api/requests/:requestId/attachments` (multipart field `files`, up to 10) | The creator of a Draft; anyone signed in on a submitted request |
 | `DELETE /api/requests/:requestId/attachments/:attachmentId` | Same as upload |
+| `GET /api/attachment-policy` → `{ maxBytes, blockedExtensions }` | Anyone signed in, any role; 401 otherwise |
+
+The **Attachment Policy** is what the upload path refuses: `maxBytes` is
+`ATTACHMENT_MAX_BYTES` and `blockedExtensions` the blocked extensions in
+lower case with their dot (`[".exe", ".bat", ".cmd", ".com", ".msi", ".ps1",
+".sh", ".vbs"]`). Both come from the same storage configuration that uploads
+are checked against. The route takes no request ID, because New Request shows
+the policy before its Draft exists, and it reads configuration only: it
+answers while `ATTACHMENT_STORAGE_PATH` is unset or the NAS is unreachable.
+Upload batching (10 files per request) is not part of it; users never meet
+that limit.
 
 Attachments are shared across roles and teams. Uploads and deletions take
 effect immediately: they need no form edit/save and do not change the request's
@@ -144,7 +161,8 @@ in Audit History, with `{ filename, sizeBytes, mimeType }`. These entries store
 no Request Snapshot: they change no form content, and file bytes are never
 stored in the database. Both actions are filterable on `/history`.
 
-Source: [controller](../backend/src/requests/request-attachments.controller.ts).
+Source: [controller](../backend/src/requests/request-attachments.controller.ts),
+[policy controller](../backend/src/requests/attachment-policy.controller.ts).
 
 ## Screens
 
@@ -156,6 +174,26 @@ Source: [controller](../backend/src/requests/request-attachments.controller.ts).
   uploaded yet" and uploaded right after the Draft is created; the page then
   opens the Draft. If the upload fails, the files stay listed with the error and
   a retry button. Staged files count as unsaved work when leaving the page.
+- **Picker limits:** every picker that can add files (New Request's "Add
+  files" and "Upload files" on a saved request) states the per-file limit,
+  formatted like other file sizes, and the blocked file types beneath the
+  Attachments heading, for example "Up to 50.0 MB per file · Not allowed:
+  .exe, .bat, .cmd, .com, .msi, .ps1, .sh, .vbs"; the file input is described
+  by that text. A read-only Attachments section shows no hint.
+- **New Request refusals:** a chosen file that is larger than the limit
+  ("`name` is larger than the 50.0 MB attachment limit.") or has a blocked
+  type ("`name` cannot be attached: executable and script files are not
+  allowed.") is refused at selection, and nothing from that selection is added.
+  The type is read as the server reads it, from the last dot of the name once
+  trailing dots and spaces are dropped, so `tool.exe.` is refused and a file
+  named just `.sh` is not. Files chosen while the policy is still loading are
+  staged, then checked when it arrives: any it rules out leave the list with
+  the same messages. On a saved request files upload at once and the server's
+  refusal is shown.
+- **Without the policy:** if it cannot be loaded, both pickers still work with
+  no hint and no client-side check; the server still refuses oversized and
+  blocked files, so on New Request they fail after the Draft is saved, with
+  the retry described above.
 - Clicking an image (`png`, `jpg`, `jpeg`, `gif`, `webp`, `bmp`, `svg`) opens
   an Image Preview dialog with a Download button; clicking any other file
   downloads it. Deleting asks for confirmation.
@@ -168,6 +206,35 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 [Audit History](../frontend/src/components/GlobalHistoryPage.tsx).
 
 ## Verification
+
+21 October 2026, on the feature branch for issue #89:
+
+- `attachment-policy.controller.spec.ts` checks over HTTP that requester,
+  Setup File Owner and Admin sessions get the configured limit (a non-default
+  `ATTACHMENT_MAX_BYTES`) and the blocked extensions, and that a missing
+  session or a deleted user gets 401; `app.e2e-spec.ts` checks the route is
+  registered under `/api` on the full application module with no
+  `ATTACHMENT_STORAGE_PATH`.
+- Frontend tests check both pickers' hints from a non-default policy, the New
+  Request refusal of an oversized file (a file of exactly the limit is
+  accepted) and of a blocked type from the server's list, the fallback without
+  the policy, and the client's request to `/api/attachment-policy`.
+- In Chromium 141 against the built backend with `ATTACHMENT_MAX_BYTES=2097152`
+  on a disposable PostgreSQL 16 cluster and a temporary attachment directory
+  (not the configured database or a NAS share): the route answered 401 signed
+  out and `{"maxBytes":2097152,...}` to requester, Setup File Owner and Admin;
+  both pickers showed "Up to 2.0 MB per file · Not allowed: …" as their
+  input's description; New Request refused a 3 MB file and a `.ps1` file at
+  selection and staged a file of exactly 2 MB; a Draft upload still worked;
+  the 390px page had no horizontal scroll. Screenshots:
+  [New Request refusal, desktop/light](verification/assets/2026-10-21-attachment-policy/new-request-oversized-desktop-light.png),
+  [Draft picker, desktop/light](verification/assets/2026-10-21-attachment-policy/draft-attachments-desktop-light.png),
+  [New Request hint, phone/dark](verification/assets/2026-10-21-attachment-policy/new-request-hint-mobile-dark.png).
+- After code review, on the review-fix branch: frontend tests check that files
+  chosen while the policy is loading are staged and, once it arrives, the ones
+  it rules out are removed with their refusals, and that the type is read like
+  the server's `path.extname` (`build.JS. ` refused, `.js` accepted). These
+  two were not re-checked in a browser.
 
 20 October 2026, on the feature branch:
 

@@ -20,7 +20,7 @@ into documentation or version control.
 
 | Document | Use/scope |
 | --- | --- |
-| [Request Attachments and request IDs](request-attachments.md) | NAS folder layout, reconciliation, access, request numbering, screens and dated verification scope (issue #78) |
+| [Request Attachments and request IDs](request-attachments.md) | NAS folder layout, reconciliation, access and the Attachment Policy, request numbering, screens and dated verification scope (issues #78 and #89) |
 | [Draft management and reminders](draft-management-and-reminders.md) | Admin readonly inspection, creator/Admin permanent deletion, cleanup, seven-day notification and team filters |
 | [docs/email-notifications.md](email-notifications.md) | Destination-status recipients, outbox/worker, safe configuration and dated offline/LAN verification scope; merged into main |
 | [docs/status-catalog-and-manual-updates.md](status-catalog-and-manual-updates.md) | Exact PostgreSQL Status strings, classification and no automatic action-driven status changes |
@@ -101,6 +101,8 @@ current behavior.
 | [docs/plans/production-ui-integration-execution-plan.md](plans/production-ui-integration-execution-plan.md) | Original scoped plan; not a current execution instruction |
 | [docs/plans/psf-created-information-editing.md](plans/psf-created-information-editing.md) | Original scoped plan; not a current execution instruction |
 | [docs/superpowers/plans/2026-09-01-ldap-api-login.md](superpowers/plans/2026-09-01-ldap-api-login.md) | Original scoped plan; not a current execution instruction |
+| [Single-column form verification](verification/2026-10-21-single-column-form.md) | Single-column field rows in all seven form renderings (issue #88) and the pinned action bar with save results in it (issue #90): renderer and interaction tests, measured row-height parity between viewing and editing, accessible names, bar position and roles, and desktop/phone light/dark screenshots on a throwaway local database; not deployment acceptance |
+| [Input border contrast verification](verification/2026-10-21-input-border-contrast.md) | Light-mode input border token at 3:1 against card and page (issue #87): before/after browser-measured ratios, field states and light/dark screenshots on a throwaway local database; not deployment acceptance |
 | [Request Snapshot verification](verification/2026-10-11-request-snapshot.md) | Suites against the `main` baseline, real-browser flow, and a run on the configured PostgreSQL inside session-temporary tables; not deployment acceptance |
 | [Draft lifecycle verification](verification/2026-10-07-draft-lifecycle-and-team-filtering.md) | Public browser/HTTP/mail, SQL races and regression evidence |
 | [docs/verification/2026-10-07-admin-autofill-dialogs.md](verification/2026-10-07-admin-autofill-dialogs.md) | Rule activation, modal editing and recipient-layout regression tests, browser evidence and two-axis review |

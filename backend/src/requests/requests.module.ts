@@ -12,6 +12,7 @@ import { SearchIndexService } from './search-index.service';
 import { AutofillService } from './autofill.service';
 import { AutofillController } from './autofill.controller';
 import { AttachmentStorage } from './attachment-storage';
+import { AttachmentPolicyController } from './attachment-policy.controller';
 import { RequestAttachmentsService } from './request-attachments.service';
 import {
   RequestAttachmentsController,
@@ -54,6 +55,7 @@ const attachmentStorage = (config: ConfigService) =>
     AutofillController,
     AdminDraftsController,
     RequestAttachmentsController,
+    AttachmentPolicyController,
   ],
   exports: [RequestsService, SearchIndexService, AutofillService],
 })

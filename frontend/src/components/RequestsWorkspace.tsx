@@ -15,7 +15,7 @@ import { DraftDeleteDialog } from './DraftDeleteDialog'
 import { RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
-import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { DynamicFormRenderer, type DynamicFormActionFeedback } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { DANGER_BUTTON_CLASS, ROW_PX, pagedMinHeight } from './ui/tableLayout'
@@ -200,6 +200,8 @@ export interface PsfCreatedInformationPanelProps {
   onSave: (values: DynamicFormValues) => void
   request: PsfRequestResponse
   saving: boolean
+  /** The last save's result, reported in the form's action bar until editing starts again. */
+  saveFeedback?: DynamicFormActionFeedback
   disabled?: boolean
   dirty?: boolean
   editing?: boolean
@@ -213,6 +215,7 @@ export function PsfCreatedInformationPanel({
   onSave,
   request,
   saving,
+  saveFeedback,
   disabled = false,
   dirty = false,
   editing,
@@ -234,11 +237,12 @@ export function PsfCreatedInformationPanel({
   const canEdit = request.canEditPsfCreatedData
   const showEditor = canEdit && (editing ?? true)
 
+  // The header's edit state is visual only; the action bar announces saving, saved and save errors.
   return (
     <section className={`psf-created-panel psf-created-panel--${canEdit ? 'editable' : 'read-only'}`} aria-labelledby="psf-created-heading">
-      <div className="psf-created-panel__header"><h2 id="psf-created-heading">PSF Created Information</h2><div className="toolbar__actions"><span role="status">{canEdit ? saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved' : 'Read only'}</span>{canEdit && editing === false ? <button className="btn-secondary" type="button" onClick={onEdit} disabled={saving || disabled}>Edit information</button> : null}</div></div>
-      {saving ? <p className="page-card__description" role="status">Saving PSF Created Information…</p> : null}
+      <div className="psf-created-panel__header"><h2 id="psf-created-heading">PSF Created Information</h2><div className="toolbar__actions"><span>{canEdit ? saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved' : 'Read only'}</span>{canEdit && editing === false ? <button className="btn-secondary" type="button" onClick={onEdit} disabled={saving || disabled}>Edit information</button> : null}</div></div>
       <DynamicFormRenderer
+        actionFeedback={saving ? { kind: 'pending', message: 'Saving PSF Created Information…' } : saveFeedback}
         onChange={showEditor && !saving && !disabled ? onChange : undefined}
         onSubmit={showEditor && !saving && !disabled ? onSave : undefined}
         readOnly={!showEditor || saving || disabled}
@@ -871,6 +875,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   const [historyRetry, setHistoryRetry] = useState(0)
   const [activeTab, setActiveTab] = useState<'requester' | 'psf' | 'attachments' | 'history' | null>(null)
   const [psfEditing, setPsfEditing] = useState(false)
+  const [psfSaveFeedback, setPsfSaveFeedback] = useState<DynamicFormActionFeedback>()
   const [statusKinds, setStatusKinds] = useState<Record<string, WorkflowStatusKind>>({})
   useEffect(() => {
     let active = true
@@ -907,6 +912,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
           workflowContext.current = { requestId, status: response.status }
           setRequest(response)
           setPsfEditing(false)
+          setPsfSaveFeedback(undefined)
           setActiveTab(null)
           psfDraft.current = { values: buildPsfCreatedInformationValues(response), dirty: false }
           setPsfCreatedValues(psfDraft.current.values)
@@ -1055,6 +1061,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     setPsfCreatedDirty(nextDirty)
     setError(null)
     setMessage(null)
+    setPsfSaveFeedback(undefined)
   }
 
   async function savePsfCreatedInformation(values: DynamicFormValues) {
@@ -1071,6 +1078,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
     setSavingPsfCreatedData(true)
     setError(null)
     setMessage(null)
+    setPsfSaveFeedback(undefined)
 
     try {
       const savedRequest = await api.updatePsfCreatedData(request.id, {
@@ -1082,22 +1090,24 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
       setPsfCreatedValues(buildPsfCreatedInformationValues(savedRequest))
       setPsfCreatedDirty(false)
       setPsfEditing(false)
-      setMessage(`PSF Created Information for ${savedRequest.requestNo} saved.`)
+      setPsfSaveFeedback({ kind: 'success', message: `PSF Created Information for ${savedRequest.requestNo} saved.` })
     } catch (saveError) {
       if (saveError instanceof ApiError && saveError.status === 409) {
         try {
           const refreshedRequest = await api.fetchPsfRequest(request.id)
           setRequest(refreshedRequest)
-          setError(
-            'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
-          )
+          setPsfSaveFeedback({
+            kind: 'error',
+            message: 'PSF Created Information changed while you were editing. Your unsaved values are preserved; review them against the latest revision before saving again.',
+          })
         } catch {
-          setError(
-            'PSF Created Information changed while you were editing. Reload the request and try again.',
-          )
+          setPsfSaveFeedback({
+            kind: 'error',
+            message: 'PSF Created Information changed while you were editing. Reload the request and try again.',
+          })
         }
       } else {
-        setError(saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information')
+        setPsfSaveFeedback({ kind: 'error', message: saveError instanceof Error ? saveError.message : 'Unable to save PSF Created Information' })
       }
     } finally {
       setSavingPsfCreatedData(false)
@@ -1192,12 +1202,13 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
             <section className="workflow-section detail-layout__psf" id="detail-panel-psf" role="tabpanel" aria-labelledby="detail-tab-psf" hidden={request.status === 'Draft' || selectedTab !== 'psf'}>
               <PsfCreatedInformationPanel
                 editing={psfEditing}
-                onEdit={() => { if (!mutationPending) setPsfEditing(true) }}
-                onCancel={() => { if (!mutationPending) { setPsfCreatedValues(buildPsfCreatedInformationValues(request)); setPsfCreatedDirty(false); setPsfEditing(false) } }}
+                onEdit={() => { if (!mutationPending) { setPsfSaveFeedback(undefined); setPsfEditing(true) } }}
+                onCancel={() => { if (!mutationPending) { setPsfCreatedValues(buildPsfCreatedInformationValues(request)); setPsfCreatedDirty(false); setPsfSaveFeedback(undefined); setPsfEditing(false) } }}
                 onChange={updatePsfCreatedInformation}
                 onSave={(values) => void savePsfCreatedInformation(values)}
                 request={request}
                 saving={savingPsfCreatedData}
+                saveFeedback={psfSaveFeedback}
                 dirty={psfCreatedDirty}
                 disabled={mutationPending}
                 values={psfCreatedValues}
