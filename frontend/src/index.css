@@ -595,7 +595,7 @@ dialog::backdrop { background: #10182066; }
 .request-attachments { display: grid; gap: 12px; min-width: 0; }
 .request-create-page .request-attachments { margin-top: 16px; }
 .request-attachments__header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.request-attachments__folder { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; overflow-wrap: anywhere; }
+.request-attachments__folder, .request-attachments__policy { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; overflow-wrap: anywhere; }
 .request-attachments__picker { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .request-attachments__picker:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
 .request-attachments__picker.is-disabled { opacity: .6; cursor: not-allowed; }

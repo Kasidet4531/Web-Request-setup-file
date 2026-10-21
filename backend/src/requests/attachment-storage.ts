@@ -40,7 +40,8 @@ const MIME_TYPES: Record<string, string> = {
   '.pptx':
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
-const BLOCKED_EXTENSIONS = new Set([
+/** Executable and script files are never Attachments; the pickers show this list. */
+export const BLOCKED_ATTACHMENT_EXTENSIONS: readonly string[] = [
   '.exe',
   '.bat',
   '.cmd',
@@ -49,13 +50,20 @@ const BLOCKED_EXTENSIONS = new Set([
   '.ps1',
   '.sh',
   '.vbs',
-]);
+];
+const BLOCKED_EXTENSIONS = new Set(BLOCKED_ATTACHMENT_EXTENSIONS);
 // Written next to user files by Windows Explorer, macOS or an open Office
 // document; they are never Attachments.
 const SYSTEM_FILES = new Set(['thumbs.db', 'desktop.ini', '.ds_store']);
 // Path separators, characters Windows forbids in names, and control characters.
 // eslint-disable-next-line no-control-regex
 const INVALID_NAME_CHARACTERS = /[/\\:*?"<>|\u0000-\u001f\u007f]/g;
+
+/** What the upload path refuses, for pickers to show before files are chosen. */
+export interface AttachmentPolicy {
+  maxBytes: number;
+  blockedExtensions: string[];
+}
 
 export interface StoredAttachmentFile {
   filename: string;
@@ -156,6 +164,14 @@ export class AttachmentStorage {
 
   get configured(): boolean {
     return this.rootPath !== null;
+  }
+
+  /** Configuration only: available while the root is unset or unreachable. */
+  get policy(): AttachmentPolicy {
+    return {
+      maxBytes: this.maxBytes,
+      blockedExtensions: [...BLOCKED_ATTACHMENT_EXTENSIONS],
+    };
   }
 
   /** Refuses work while the root is unset or unreachable, so an offline NAS never reads as empty folders. */
