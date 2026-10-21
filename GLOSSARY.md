@@ -44,7 +44,7 @@ A named lifecycle stage in the administrator-managed status catalog, classified 
 _Avoid_: Percentage stage
 
 **PSF Visibility Release**:
-A permanent release milestone granted when a PSF Request enters a configured trigger Work Status, making PSF Created Information visible to Requesters.
+A permanent release milestone granted when a PSF Request enters a configured trigger Work Status, making PSF Created Information visible to Requesters on screen. Excel exports do not wait for it.
 
 ## Forms and Automation
 
@@ -85,6 +85,10 @@ _Avoid_: async export, background download
 **Export Memory Limit**:
 The most JavaScript heap one export's workbook worker may use (`EXPORT_WORKER_MAX_MEMORY_MB`); an export that needs more fails on its own.
 _Avoid_: RAM cap
+
+**Export Preview**:
+The first rows of an Excel export, shown on the Export to Excel page with the file's own columns, values and request count for the same filters.
+_Avoid_: request preview list, dashboard preview
 
 ## Administration and Auditing
 

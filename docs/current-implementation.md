@@ -7,6 +7,8 @@ for the scope of this review.
 
 > **Excel export speed and limits, 21 October 2026:** every export reads one consistent database snapshot, pages the requests before gathering their canonical values, and builds the workbook in a worker with ExcelJS's streaming writer: dark blue headers, alternating white and pale blue rows, and multi-line text that keeps its CRLF. A Direct Export (at most `EXPORT_SYNC_THRESHOLD` requests, now 10,000 by default instead of 2,000) runs only while fewer than `EXPORT_SYNC_MAX_CONCURRENT` (default 2) are in progress in the backend process; otherwise the export becomes an Export Job, which the Export page already follows. Each worker has an Export Memory Limit on its JavaScript heap, `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024): an export that needs more fails on its own with a message saying so (HTTP 413, or a failed Export Job that is not retried). On 5,570 synthetic requests an export took about 2 s instead of 6.2 s and added about 250 MB instead of 730 MB; see [export limits verification](verification/2026-10-21-export-limits.md), [application integration](verification/2026-10-21-export-app-integration.md) and [formatting](verification/2026-10-21-export-formatting.md) (PR #95).
 
+> **Every column in the Excel export, 21 October 2026:** the export lists every field of every form version, including fields an administrator adds without the `exportable` flag, and always has Modified By (after Updated At when no form version has the field). A cell without a value shows `NA`; `NA` is never stored. Cells are read from each request's current data through its own captured form version instead of `canonical_submission_values`, which Status changes and PSF saves never refreshed, so Modified By is no longer stale. Every role gets the same cells: PSF Created Information is no longer blanked for a Requester before PSF Visibility Release ([ADR 0018](adr/0018-excel-export-shows-every-field-to-every-role.md)); the request page, request list and search still hide it. The Export to Excel page's Export Preview shows the file's first 10 rows with its own columns and the number of requests it holds, from `GET /api/requests/export-preview`, with Request No pinned; it no longer uses the Dashboard query or its creator scope.
+
 > **Request list columns and Modified By, 21 October 2026:** the Requests and Dashboard tables hold one value per column: Product Description (the `title` field), Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date and Requester. My Drafts has Product Description, Request No., Product Type, Updated and Delete. Before, the first column stacked the title, request number and Product Type (on the Dashboard the probe card name followed the number), and PSF file names were not shown. A missing value shows "—"; Product Description no longer falls back to "<Product Type> PSF request". Request No. is the row's link; the whole row still opens the request. The list API adds `jobFileName` beside `psfSetupFileName`, both from PSF Created Information whether or not the field is searchable, and returns both as `null` to a Requester until PSF Visibility Release (`psfSetupFileName` used to reach a Requester before release). Keyword search matches a PSF Setup File Name for a Requester only after release. The search index gains `job_file_name`, and a one-time startup step (`index-psf-file-names-v1`) indexes both names for existing submitted requests. Modified By is now recorded on every individual save (Draft creation, Draft and requester edits, Draft schema upgrade, submission, PSF Created Information saves and Status changes) whether or not the request's form has a Modified By field; before, only forms with that field recorded it, so the seeded form and forms loaded before 19 October left it blank. A Modified By sent with form data is ignored. A one-time startup step (`modified-by-from-audit-history-v1`) fills a blank Modified By from the actor of the request's latest such Audit History entry and keeps any recorded value; bulk Status replacement still records none (ADR 0016), and a request with no such entry stays blank until its next save. See the [verification record](verification/2026-10-21-request-list-columns.md). Checks ran in Chromium against a throwaway local database.
 
 > **Centred request column, 21 October 2026:** New Request, Request Detail (Drafts and submitted requests) and Admin Draft detail sit in one column at most 1335px wide (`--request-page-max-width`, one and a half times a card around the 840px `--form-rows-max-width`), centred in the content area, and their form rows, including PSF Created Information, fill the card instead of stopping at 840px; the label column stays 260px. The Admin Form Management preview and Request Snapshots keep the 840px cap. New Request was previously capped at 1120px and the detail pages were not capped. A Draft's Attachments card, also in Draft Management, now sits 16px below Requester Information, as on New Request. See the [verification record](verification/2026-10-21-single-column-form.md#centred-request-column). Checks ran in Chromium against a throwaway local database.
@@ -214,8 +216,9 @@ hardcoded `PSF Created`/`Completed` labels. Initially no statuses are triggers.
 Successful entry into any configured trigger validates PSF requirements and sets
 release once. Saving a checked trigger in Edit status also releases unreleased requests already at that status, after validating every candidate against its captured PSF schema. One invalid request rejects the whole combined save; catalog, request and search changes roll back together. Released requests are skipped and retain their timestamp. Backtracking, unchecking or deleting a trigger does not revoke release; a replacement status uses its own trigger flag. Legacy single-trigger configuration is preserved when read and converted to a trigger-ID list on writes.
 Setup File Owners/Admin bypass this release check on requests they can access.
-Unreleased requester PSF values are masked in detail/export and PSF update events
-are omitted from their per-request history.
+Unreleased requester PSF values are masked in detail and PSF update events
+are omitted from their per-request history; Excel exports show them to every
+role ([ADR 0018](adr/0018-excel-export-shows-every-field-to-every-role.md)).
 Sources: [visibility and release](../backend/src/requests/requests.service.ts),
 [history filtering](../backend/src/audit/audit_log.service.ts),
 [export masking](../backend/src/export/export-workbook.ts).
@@ -276,9 +279,11 @@ Sources: [admin rule editor](../frontend/src/components/AdminAutofillRulesPage.t
 [edit diffs](../backend/src/requests/requests.service.ts).
 
 Export is backend-generated XLSX, available to every authenticated role and
-covering all requests except other creators' Drafts. Requester actors still get
-blank PSF cells for requests without a PSF Visibility Release. The Export page
-preview list keeps the Dashboard's creator scope for Requesters. Filters include status/from/to. Counts strictly greater than
+covering every submitted request, never a Draft. Every role gets the same cells,
+including PSF Created Information without a PSF Visibility Release (ADR 0018).
+The Export page's Export Preview (`GET /api/requests/export-preview`) shows the
+file's columns, its first 10 rows and its request count for the same filters,
+read from one snapshot. Filters include status/from/to. Counts strictly greater than
 `EXPORT_SYNC_THRESHOLD` queue an Export Job; the default is 10000, so exactly 10000 remains
 a Direct Export. A Direct Export also needs one of `EXPORT_SYNC_MAX_CONCURRENT`
 slots (default 2, per backend process); when all are busy the export is queued instead. Jobs are
@@ -293,10 +298,14 @@ because a process-wide `--max-old-space-size` replaces worker limits; that check
 counts uncollected garbage, so it is approximate). An export
 over the cap fails alone with HTTP 413 or a failed job carrying that message;
 failed jobs are not retried.
-Columns combine active and captured fields by canonical key, respect exportable
-flags and mask unreleased requester PSF values. Four metadata columns (Request No,
-Status, Request Date, Updated At) precede form fields; Product Type is the first
-default requester-form field, not the first XLSX column.
+Columns combine every field of the active and captured form versions by
+canonical key (the `exportable` flag no longer selects them): four metadata
+columns (Request No, Status, Request Date, Updated At), Modified By when no form
+version has that field, requester fields in active-form order, fields only older
+versions have, then PSF Created Information. Cells come from each request's
+current data through its own captured form version; a cell without a value
+shows `NA`, which is never stored. The workbook and the preview share one
+[export table](../backend/src/export/export-table.ts).
 Sources: [export routes/policy](../backend/src/export/export.controller.ts),
 [query scope](../backend/src/requests/search-index.service.ts),
 [export service and worker](../backend/src/export/excel_export.service.ts),
@@ -331,7 +340,7 @@ query parameters. This table lists routes, not full payload schemas.
 | Admin autofill     | `GET/POST /api/admin/autofill`, `PUT /api/admin/autofill/:ruleId`                                                                                                | [AutofillRuleController](../backend/src/admin/autofill_rule.controller.ts)             |
 | Autofill lookup    | `GET /api/autofill`                                                                                                                                              | [AutofillController](../backend/src/requests/autofill.controller.ts)                   |
 | Global audit       | `GET /api/audit-logs?limit&offset` (default 25, max 100) returns `{items,total,limit,offset}`                                                                     | [AuditLogController](../backend/src/audit/audit_log.controller.ts)                     |
-| XLSX/jobs          | `GET /api/requests/export.xlsx`, `GET /api/requests/export-jobs/:jobId`, `GET /api/requests/export-jobs/:jobId/download`                                         | [ExportController](../backend/src/export/export.controller.ts)                         |
+| XLSX/jobs          | `GET /api/requests/export.xlsx`, `GET /api/requests/export-preview`, `GET /api/requests/export-jobs/:jobId`, `GET /api/requests/export-jobs/:jobId/download` | [ExportController](../backend/src/export/export.controller.ts)                         |
 
 ## Persistence and startup
 
