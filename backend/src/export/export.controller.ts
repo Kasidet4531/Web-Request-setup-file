@@ -30,6 +30,7 @@ const EXPORT_JOB_NOT_FOUND_MESSAGE = 'Export job not found.';
 const EXPORT_JOB_NOT_READY_MESSAGE = 'Export job is not ready for download.';
 const EXPORT_JOB_FAILURE_MESSAGE =
   'Unable to prepare this export. Please try again.';
+const DEFAULT_SYNC_THRESHOLD = 10000;
 
 type ExportActor = AuthenticatedUserProfile;
 
@@ -65,7 +66,18 @@ export class ExportController {
     const synchronousThreshold = this.getSynchronousExportThreshold();
     const total = await this.searchIndexService.countExportRequests(filters);
 
-    if (total > synchronousThreshold) {
+    // Exports above the threshold, or within it while every direct export
+    // slot is busy, run in the queue one at a time.
+    const exportResult =
+      total > synchronousThreshold
+        ? null
+        : await this.excelExportService.tryDirectExport(
+            filters,
+            actor,
+            synchronousThreshold,
+          );
+
+    if (!exportResult) {
       const job = await this.exportJobRepository.enqueue(filters, actor);
       response.status(202).json({
         id: job.id,
@@ -74,12 +86,6 @@ export class ExportController {
       });
       return;
     }
-
-    const exportResult = await this.excelExportService.exportRequests(
-      filters,
-      actor,
-      synchronousThreshold,
-    );
 
     response.setHeader('Content-Type', XLSX_CONTENT_TYPE);
     response.setHeader(
@@ -225,13 +231,13 @@ export class ExportController {
   private getSynchronousExportThreshold(): number {
     const configured = this.configService.get<string | number>(
       'EXPORT_SYNC_THRESHOLD',
-      2000,
+      DEFAULT_SYNC_THRESHOLD,
     );
     const threshold =
       typeof configured === 'number' ? configured : Number(configured);
 
     if (!Number.isFinite(threshold) || threshold < 1) {
-      return 2000;
+      return DEFAULT_SYNC_THRESHOLD;
     }
 
     return Math.trunc(threshold);
