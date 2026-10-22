@@ -23,7 +23,7 @@ export function HistoryChanges({ metadata }: { metadata: Record<string, unknown>
     return <span className="history-attachment">{metadata.filename}{typeof metadata.sizeBytes === 'number' ? ` (${formatFileSize(metadata.sizeBytes)})` : ''}</span>
   }
 
-  // A Workflow catalog update records configuration, not changes to show, so it gets a dash too (issue #106).
+  // A Workflow catalog update records configuration, not changes to show, so it gets a dash too.
   if (!changes.length && !statusChange) return <>—</>
 
   return (

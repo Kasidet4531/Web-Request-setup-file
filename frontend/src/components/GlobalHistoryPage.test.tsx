@@ -247,14 +247,15 @@ describe('GlobalAuditLogTable', () => {
     expect(html).toContain('invalid-date')
   })
 
-  it('keeps View changes for a bulk Status replacement, which has no Request Snapshot', () => {
+  it('keeps View changes for a bulk Status replacement, which has no Request Snapshot, and escapes status names', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
       id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null, actionType: 'REQUEST_STATUS_CHANGED',
       actorDisplayName: 'Admin', actorRole: 'admin', createdAt: '2026-10-22T01:00:00Z',
-      metadata: { fromStatus: 'Deleted status', toStatus: 'Replacement status', bulkReplacement: true },
+      metadata: { fromStatus: 'Deleted status', toStatus: '<script>Replacement</script>', bulkReplacement: true },
     }], error: null, loading: false }))
     expect(html).toContain('<summary>View changes</summary>')
-    expect(html).toContain('<th scope="row">Work Status</th><td><pre class="history-changes__value">Deleted status</pre></td><td><pre class="history-changes__value">Replacement status</pre></td>')
+    expect(html).toContain('<th scope="row">Work Status</th><td><pre class="history-changes__value">Deleted status</pre></td><td><pre class="history-changes__value">&lt;script&gt;Replacement&lt;/script&gt;</pre></td>')
+    expect(html).not.toContain('<script>')
   })
 
   it('renders accessible loading, empty, and error states', () => {
