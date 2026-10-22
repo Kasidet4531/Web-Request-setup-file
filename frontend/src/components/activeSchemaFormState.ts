@@ -73,6 +73,8 @@ export function applyRuntimeAutofillSuggestions({
       !field ||
       typeof suggestedValue !== 'string' ||
       suggestedValue.trim().length === 0 ||
+      ((field.type === 'select' || field.type === 'radio') &&
+        !(field.options ?? []).includes(suggestedValue)) ||
       nextValues[field.fieldKey] !== '' ||
       currentEditVersions[field.fieldKey] !== lookupEditVersions[field.fieldKey]
     ) {

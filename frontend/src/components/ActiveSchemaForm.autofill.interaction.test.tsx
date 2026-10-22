@@ -385,6 +385,41 @@ describe('ActiveSchemaForm runtime autofill interactions', () => {
     })
   })
 
+  it('leaves a choice target blank when the previous request value is no longer one of its options', async () => {
+    const choiceSchema = structuredClone(runtimeAutofillSchema)
+    choiceSchema.sections[0].fields.push({
+      fieldKey: 'priority_input',
+      canonicalKey: 'priority',
+      label: 'Priority',
+      type: 'select',
+      required: true,
+      options: ['Low', 'Normal', 'High'],
+    })
+    requestApi.fetchActiveFormSchema.mockResolvedValue({ ...runtimeAutofillActiveSchema, schema: choiceSchema })
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({
+      requesterData: { product_input: '', reference_psf_input: '', priority_input: '' },
+      schemaSnapshot: choiceSchema,
+    }))
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValueOnce({
+      matched: true,
+      suggestedValues: { product: 'Historical Product', priority: 'Very High' },
+    })
+
+    let page = await loadDraft()
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)('reference_psf_input', 'REF-PSF-1')
+    await flushAsyncWork()
+    page = renderDraft()
+
+    expect(getFormRenderer(page).props.values).toEqual({
+      priority_input: '',
+      product_input: 'Historical Product',
+      reference_psf_input: 'REF-PSF-1',
+    })
+    expect(getFormRenderer(page).props.fieldStatuses).toEqual({
+      product_input: 'auto-filled',
+    })
+  })
+
   it('rejects an older trigger response and protects a target edited during a later lookup', async () => {
     let resolveOlderLookup: ((response: RuntimeAutofillSuggestionsResponse) => void) | undefined
     let resolveNewerLookup: ((response: RuntimeAutofillSuggestionsResponse) => void) | undefined
