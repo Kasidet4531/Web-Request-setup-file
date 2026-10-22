@@ -112,6 +112,44 @@ describe('runtime autofill form state', () => {
     expect(staleAfterManualEdit.values).toEqual({ product_input: '' })
   })
 
+  it('fills a radio target only with a value that is one of its current options', () => {
+    const radioSchema = structuredClone(schema)
+    radioSchema.sections[0].fields.push(
+      {
+        fieldKey: 'product_type_input',
+        canonicalKey: 'product_type',
+        label: 'Product Type',
+        type: 'radio',
+        required: true,
+        options: ['New Product', 'Transfer Product'],
+      },
+      {
+        fieldKey: 'package_type_input',
+        canonicalKey: 'package_type',
+        label: 'Package Type',
+        type: 'radio',
+        required: true,
+        options: ['QFN', 'BGA'],
+      },
+    )
+
+    const applied = applyRuntimeAutofillSuggestions({
+      currentEditVersions: {},
+      currentValues: { package_type_input: '', product_type_input: '' },
+      lookupEditVersions: {},
+      schema: radioSchema,
+      suggestedValues: {
+        package_type: 'BGA',
+        product_type: 'Existing Product',
+      },
+    })
+
+    expect(applied).toEqual({
+      appliedFieldKeys: ['package_type_input'],
+      values: { package_type_input: 'BGA', product_type_input: '' },
+    })
+  })
+
   it('does not coerce non-string canonical values into string-only form controls', () => {
     const applied = applyRuntimeAutofillSuggestions({
       currentEditVersions: {},
