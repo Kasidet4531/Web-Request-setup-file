@@ -78,6 +78,7 @@ export type PublicWorkflowConfiguration = Omit<
   'entries'
 > & {
   entries: Array<Omit<StatusCatalogEntry, 'requestCount' | 'emailPolicy'>>;
+  filterStatuses: string[];
 };
 
 interface WorkflowConfigurationRow {
@@ -251,8 +252,19 @@ export class WorkflowTransitionService implements OnModuleInit {
     queryRunner: QueryRunner = this.pool,
   ): Promise<PublicWorkflowConfiguration> {
     const configuration = await this.readConfiguration(queryRunner, false);
+    // Submitted requests are shared. Drafts remain private and never contribute
+    // filter options; legacy names here are not allowed catalog transitions.
+    const stored = await queryRunner.query<{ status: string }>(
+      "SELECT DISTINCT status FROM psf_requests WHERE status <> 'Draft' AND BTRIM(status) <> '' ORDER BY status",
+    );
     return {
       ...configuration,
+      filterStatuses: [
+        ...new Set([
+          ...configuration.statuses.filter((status) => status !== 'Draft'),
+          ...stored.rows.map((row) => row.status),
+        ]),
+      ],
       entries: configuration.entries.map(({ id, name, kind }) => ({
         id,
         name,

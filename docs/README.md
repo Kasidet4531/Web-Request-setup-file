@@ -45,6 +45,7 @@ behavior and test outcomes.
 | --- | --- |
 | [Draft lifecycle and Product Type team filtering](specs/2026-10-07-draft-lifecycle-and-product-team-filtering.md) | Approved requirements and confirmed system-test scope; implementation guide/verification record current behavior |
 | [Draft lifecycle interview notes](specs/2026-10-07-draft-lifecycle-requirements-notes.md) | Recorded decisions from the three requirement rounds |
+| [Search and filter requirements](specs/2026-10-22-search-filter-requirements-notes.md) | Confirmed History live Search, Bangkok dates, accurate Search descriptions and legacy Status filters; [verification](verification/2026-10-22-search-filters.md) |
 | [Auto-fill Rules and Status recipient design](specs/2026-10-07-autofill-admin-dialogs-design.md) | Active/Inactive selection, modal editing, field labels and recipient layout requirements |
 | [Auto-fill Admin Dialogs plan](plans/2026-10-07-autofill-admin-dialogs.md) | Implementation checklist using `/implement` and `/code-review` |
 

@@ -224,6 +224,7 @@ export type AdminWorkflowTransitionConfiguration = WorkflowConfiguration
 
 export interface WorkflowStatusesResponse {
   statuses: string[]
+  filterStatuses?: string[]
   entries: Array<Omit<StatusCatalogEntry, 'requestCount' | 'emailPolicy'>>
   psfVisibilityTriggerIds?: string[]
   /** Deprecated: the sole trigger id, or null when zero or multiple triggers exist. */
@@ -337,6 +338,7 @@ export interface RequestSnapshotResponse {
 }
 
 export interface GlobalAuditLogQuery {
+  keyword?: string
   requestId?: string
   user?: string
   actionType?: PsfRequestHistoryAction
