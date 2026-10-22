@@ -15,7 +15,7 @@ The issue first asked for a "—" in the Detail column instead of the
 "View changes" toggle; the product owner then asked to remove these entries from
 the page altogether.
 
-- Branch `claude/project-thread-bogu9x`, started from `main` at `6cb6bd5` and merged with `main` at `8b256c0` (PR #105, History search and filters).
+- Branch `claude/project-thread-bogu9x`, started from `main` at `6cb6bd5` and merged with `main` at `8b256c0` (PR #105, History search and filters) and again at `cf5613e` (PR #107, Autofill choice fields; no Audit History change).
 - Node 22.22.0. Browser: Chromium 141.0.7390.37 (`/opt/pw-browsers/chromium`),
   driven by Playwright 1.58.2 from `backend/node_modules`, headless, at a
   1440×1000 viewport.
@@ -33,7 +33,7 @@ the page altogether.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend tests | `cd frontend && npx vitest run` | 39 files, 545 tests passed |
+| Frontend tests | `cd frontend && npx vitest run` | 39 files, 547 tests passed |
 | Frontend type check | `cd frontend && npx tsc -b` | Passed |
 | Frontend lint (changed files) | `cd frontend && npx eslint src/components/GlobalHistoryPage.tsx src/components/GlobalHistoryPage.test.tsx src/components/ui/HistoryChanges.tsx` | Passed |
 | Backend unit tests | `cd backend && npx jest` | 50 suites, 755 tests passed |
