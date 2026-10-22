@@ -233,20 +233,6 @@ describe('GlobalAuditLogTable', () => {
     expect(html).toContain('After')
   })
 
-  it('shows a dash instead of View changes for a Workflow catalog update', () => {
-    const catalog = { entries: [{ id: 'status-1', name: 'Old exact status', kind: 'open' }], psfVisibilityTriggerIds: ['status-1'] }
-    const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
-      id: 'entry-1', hasRequestSnapshot: false, requestId: null, requestNo: null, requestLabel: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
-      actorDisplayName: 'Admin', actorRole: 'admin', createdAt: 'invalid-date',
-      metadata: { operation: { action: 'rename', name: 'New exact status' }, before: catalog, after: catalog, affectedRequestCount: 0, releasedRequestCount: 2 },
-    }], error: null, loading: false }))
-    expect(html).toContain('<td>Workflow configuration</td><td>Admin</td><td>Workflow catalog updated</td><td>—</td>')
-    expect(html).not.toContain('View changes')
-    expect(html).not.toContain('New exact status')
-    expect(html).not.toContain('released')
-    expect(html).toContain('invalid-date')
-  })
-
   it('keeps View changes for a bulk Status replacement, which has no Request Snapshot, and escapes status names', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
       id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null, actionType: 'REQUEST_STATUS_CHANGED',
@@ -403,7 +389,10 @@ describe('GlobalHistoryPage tabs and role access', () => {
   })
 })
 
-it('removes request assignment from the audit action filter', () => {
+it('removes request assignment and Workflow catalog updates from the audit action filter', () => {
   const filters = renderToStaticMarkup(<GlobalAuditLogFilters filters={EMPTY_GLOBAL_AUDIT_LOG_FILTERS} onApply={vi.fn()} onChange={vi.fn()} onClear={vi.fn()} />)
   expect(filters).not.toContain('REQUEST_ASSIGNEE_CHANGED')
+  expect(filters).not.toContain('WORKFLOW_CATALOG_UPDATED')
+  expect(filters).not.toContain('Workflow catalog updated')
+  expect(filters).toContain('<option value="ATTACHMENT_DELETED">Attachment deleted</option>')
 })

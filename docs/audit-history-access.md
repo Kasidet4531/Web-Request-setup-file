@@ -14,7 +14,7 @@ This changes History viewing access. It does not grant administration, request e
 
 ## Implementation status
 
-The authorized implementation on 5 October 2026 updates shared navigation and `GET /api/audit-logs` for every authenticated role. The API resolves the stored actor profile and applies visibility filters before returning audit rows: private Draft events remain creator-only, including for Admin, and Requesters cannot see unreleased PSF update events. Requestless configuration events remain available to authenticated roles. Viewing History does not grant the separate editing, export or administration permissions.
+The authorized implementation on 5 October 2026 updates shared navigation and `GET /api/audit-logs` for every authenticated role. The API resolves the stored actor profile and applies visibility filters before returning audit rows: private Draft events remain creator-only, including for Admin, and Requesters cannot see unreleased PSF update events. Requestless configuration events remained available to authenticated roles until 22 October 2026 (see below). Viewing History does not grant the separate editing, export or administration permissions.
 
 These are working-tree source changes, not deployment evidence. Local unit, HTTP, SQL and browser checks passed; see [implementation verification](superpowers/plans/2026-10-05-stitch-desktop-implementation.md). SQL visibility tests cover private Drafts and unreleased PSF metadata; browser checks cover both owner departments and anonymous access. The configured PostgreSQL and LDAP services have not been exercised or mutated by this implementation work. Earlier Admin-only source observations remain dated historical evidence.
 
@@ -29,3 +29,7 @@ A Request Snapshot opened from an entry ([ADR 0016](adr/0016-full-request-snapsh
 This is a source change, not deployment evidence. `backend/test/request-snapshot.postgres.test.ts` covers these rules and passed on 11 October 2026, in memory and on the configured server inside temporary tables; see the [verification record](verification/2026-10-11-request-snapshot.md). The 5 October checks above do not cover it.
 
 Attachment entries (20 October 2026, [Request Attachments](request-attachments.md)): `ATTACHMENT_UPLOADED` and `ATTACHMENT_DELETED` follow the same rules as the request they belong to, including Draft privacy, and store no Request Snapshot. Audit History names each request by its Product_Description (or `Untitled Draft (#ID)`) instead of a Draft number; this label adds no data a viewer could not already see on the request.
+
+## Workflow catalog updates, 22 October 2026
+
+`GET /api/audit-logs` leaves out every entry with the action `WORKFLOW_CATALOG_UPDATED` for every role, Admin included, from both the rows and the total, even when the action filter asks for it; the Audit History Action filter no longer offers it (issue #106). The entries are still recorded with their full metadata, so this hides history from the page, not from the database. They were requestless Status Management changes; a request's own History never showed them. See the [verification record](verification/2026-10-22-catalog-entries-hidden.md).

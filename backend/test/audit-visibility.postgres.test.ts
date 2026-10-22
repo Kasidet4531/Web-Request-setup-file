@@ -48,7 +48,7 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
   }
 
   for (const role of ['requester', 'setup_owner', 'admin'] as const)
-    void it(`keeps another creator’s Draft private from ${role} while sharing catalog activity`, async () => {
+    void it(`keeps another creator’s Draft private from ${role} and leaves Workflow catalog updates out`, async () => {
       const result = await service.findGlobalAuditLogs({}, actor(role));
       assert.equal(
         result.some((entry) => entry.requestId === privateId),
@@ -56,9 +56,25 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
       );
       assert.equal(
         result.some((entry) => entry.actionType === 'WORKFLOW_CATALOG_UPDATED'),
-        true,
+        false,
+      );
+      assert.equal(
+        await service.countGlobalAuditLogs({}, actor(role)),
+        result.length,
       );
     });
+
+  void it('returns no Workflow catalog updates even when the action filter asks for them', async () => {
+    const filters = { actionType: 'WORKFLOW_CATALOG_UPDATED' };
+    assert.deepEqual(
+      await service.findGlobalAuditLogs(filters, actor('admin')),
+      [],
+    );
+    assert.equal(
+      await service.countGlobalAuditLogs(filters, actor('admin')),
+      0,
+    );
+  });
 
   void it('returns own Draft but suppresses unreleased PSF events, including an explicit PSF action filter', async () => {
     const viewer = actor('requester', ownerId);
@@ -94,7 +110,6 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
     assert.deepEqual(
       result.map((entry) => [entry.id.slice(-2), entry.hasRequestSnapshot]),
       [
-        ['13', false],
         ['12', false],
         ['11', true],
       ],

@@ -26,7 +26,6 @@ const AUDIT_ACTIONS: Array<{ label: string; value: PsfRequestHistoryAction }> = 
   { label: 'Request status changed', value: 'REQUEST_STATUS_CHANGED' },
   { label: 'Requester information updated', value: 'REQUESTER_INFORMATION_UPDATED' },
   { label: 'PSF Created Information updated', value: 'PSF_CREATED_INFORMATION_UPDATED' },
-  { label: 'Workflow catalog updated', value: 'WORKFLOW_CATALOG_UPDATED' },
   { label: 'Attachment uploaded', value: 'ATTACHMENT_UPLOADED' },
   { label: 'Attachment deleted', value: 'ATTACHMENT_DELETED' },
 ]
@@ -421,7 +420,7 @@ export function GlobalHistoryPage() {
 
   return (
     <article className="page-card workflow-page global-history-page">
-      <PageHeader title="Audit History" description="Review authorized request and configuration activity. Edit filters, then choose Apply to update the results." />
+      <PageHeader title="Audit History" description="Review authorized request activity. Edit filters, then choose Apply to update the results." />
 
       {isAdmin ? (
         <div className="detail-tabs" role="tablist" aria-label="Audit history sections">
