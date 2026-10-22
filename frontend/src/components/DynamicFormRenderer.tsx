@@ -31,8 +31,6 @@ export interface DynamicFormRendererProps {
   footerActions?: ReactNode
   headerTitle?: string
   fieldStatuses?: Partial<Record<string, DynamicFormFieldStatus>>
-  /** Marks each listed field as changed and shows the value it held before. */
-  previousValues?: Partial<Record<string, string>>
   schema: FormSchema
   values?: DynamicFormValues
   errors?: DynamicFormErrors
@@ -63,7 +61,6 @@ export function DynamicFormRenderer({
   headerTitle,
   onChange,
   onSubmit,
-  previousValues = {},
   readOnly = false,
   readOnlyFieldKeys = [],
   schema,
@@ -94,7 +91,6 @@ export function DynamicFormRenderer({
       fieldStatus={fieldStatuses[field.fieldKey]}
       key={field.fieldKey}
       onChange={handleFieldChange(field.fieldKey)}
-      previousValue={previousValues[field.fieldKey]}
       readOnly={readOnly || readOnlyFieldKeys.includes(field.fieldKey)}
       value={values[field.fieldKey] ?? ''}
     />
@@ -174,22 +170,19 @@ interface FieldRowProps {
   field: FormSchemaField
   fieldStatus?: DynamicFormFieldStatus
   onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
-  previousValue?: string
   readOnly: boolean
   value: string
 }
 
 /** One field's row: a label cell, then a control cell holding the control or value and the field's notes. */
-function FieldRow({ errors, field, fieldStatus, onChange, previousValue, readOnly, value }: FieldRowProps) {
+function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: FieldRowProps) {
   const instanceId = useId()
   const error = errors[field.fieldKey]
   const fieldId = `dynamic-field-${instanceId}-${field.fieldKey}`
   const labelId = `${fieldId}-label`
   const errorId = `${fieldId}-error`
   const fieldStatusId = `${fieldId}-autofill-status`
-  const previousId = `${fieldId}-previous`
-  const changed = previousValue !== undefined
-  const describedBy = [error ? errorId : null, fieldStatus ? fieldStatusId : null, changed ? previousId : null]
+  const describedBy = [error ? errorId : null, fieldStatus ? fieldStatusId : null]
     .filter((id): id is string => id !== null)
     .join(' ') || undefined
   const label = <>
@@ -200,7 +193,7 @@ function FieldRow({ errors, field, fieldStatus, onChange, previousValue, readOnl
   const labelsGroup = !readOnly && field.type === 'radio'
 
   return (
-    <div className={`dynamic-form__row${changed ? ' dynamic-form__row--changed' : ''}`}>
+    <div className="dynamic-form__row">
       {labelsGroup ? <span className="dynamic-form__label" id={labelId}>{label}</span>
         : <label className="dynamic-form__label" htmlFor={fieldId} id={labelId}>{label}</label>}
       <div className="dynamic-form__control">
@@ -224,7 +217,6 @@ function FieldRow({ errors, field, fieldStatus, onChange, previousValue, readOnl
             {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
           </p>
         ) : null}
-        {changed ? <p className="dynamic-form__previous" id={previousId}>Previous: {previousValue || 'Empty'}</p> : null}
       </div>
     </div>
   )

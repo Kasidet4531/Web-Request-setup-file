@@ -189,8 +189,12 @@ export function GlobalAuditLogTable({
               <td>{entry.actorDisplayName}</td>
               <td>{actionLabel(entry.actionType)}</td>
               <td>
-                <HistoryChanges metadata={entry.metadata} />
-                {entry.requestId && entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId: entry.requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View Request Snapshot</Link> : null}
+                {/* A Request Snapshot shows what its entry changed, so the row offers it alone (an Attachment keeps its file name);
+                    an inline View changes would widen the column as it opens. */}
+                {entry.requestId && entry.hasRequestSnapshot ? <>
+                  {typeof entry.metadata.filename === 'string' ? <HistoryChanges metadata={entry.metadata} /> : null}
+                  <Link className="table-action request-snapshot-link" params={{ requestId: entry.requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View Request Snapshot</Link>
+                </> : <HistoryChanges metadata={entry.metadata} />}
               </td>
             </tr>
           ))}

@@ -185,6 +185,25 @@ describe('GlobalAuditLogTable', () => {
     expect(html.match(/View Request Snapshot/g)).toHaveLength(1)
   })
 
+  it('offers only the Request Snapshot for an entry that has one, keeping an Attachment file name', () => {
+    const base = { requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null, actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-06T01:00:00Z' }
+    const edit = { fieldChanges: [{ fieldKey: 'priority', fieldLabel: 'Priority', before: 'Normal', after: 'Urgent' }] }
+    const row = (html: string, id: string) => html.slice(html.indexOf(`/history/${id}`) - 400, html.indexOf(`/history/${id}`) + 200)
+    const html = renderToStaticMarkup(GlobalAuditLogTable({
+      entries: [
+        { ...base, id: 'entry-file', hasRequestSnapshot: true, actionType: 'ATTACHMENT_UPLOADED', metadata: { filename: 'layout.dpl', sizeBytes: 2048 } },
+        { ...base, id: 'entry-new', hasRequestSnapshot: true, actionType: 'REQUESTER_INFORMATION_UPDATED', metadata: edit },
+        { ...base, id: 'entry-old', hasRequestSnapshot: false, actionType: 'REQUESTER_INFORMATION_UPDATED', metadata: edit },
+      ],
+      error: null, loading: false,
+    }))
+
+    expect(html.match(/<summary>View changes<\/summary>/g)).toHaveLength(1)
+    expect(row(html, 'entry-new')).not.toContain('View changes')
+    expect(row(html, 'entry-file')).toContain('layout.dpl (2.0 KB)')
+    expect(html.indexOf('View changes')).toBeGreaterThan(html.indexOf('/history/entry-new'))
+  })
+
   it('labels requests by Product_Description instead of a Draft number and lists Attachment changes', () => {
     const base = { hasRequestSnapshot: false, actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-20T01:00:00Z' }
     const html = renderToStaticMarkup(GlobalAuditLogTable({
@@ -311,7 +330,8 @@ describe('GlobalAuditLogTable', () => {
     expect(html).toContain('<th scope="col">Detail</th>')
     expect(html).toContain('href="/requests/request-2"')
     expect(html).toContain('Setup Owner GNTC Demo')
-    expect(html).toContain('Status: Submitted → Setup In Progress')
+    expect(html).toContain('<th scope="row">Work Status</th><td><pre class="history-changes__value">Submitted</pre></td><td><pre class="history-changes__value">Setup In Progress</pre></td>')
+    expect(html).not.toContain('Status: Submitted')
     expect(html).toContain('<td>—</td>')
     expect(html.indexOf('PSF-0002')).toBeLessThan(html.indexOf('PSF-0001'))
   })

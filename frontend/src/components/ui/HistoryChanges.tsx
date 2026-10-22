@@ -45,14 +45,14 @@ export function HistoryChanges({ metadata }: { metadata: Record<string, unknown>
   return (
     <details className="history-changes">
       <summary>View changes</summary>
-      {statusChange ? <p>{`Status: ${metadata.fromStatus as string} → ${metadata.toStatus as string}`}</p> : null}
       {catalogOperation ? <p>Catalog operation: {displayValue(catalogOperation.action)}{typeof catalogOperation.name === 'string' ? ` — ${catalogOperation.name}` : ''}</p> : null}
       {typeof metadata.releasedRequestCount === 'number' && metadata.releasedRequestCount > 0 ? <p>{`Requester PSF access released for ${metadata.releasedRequestCount} request(s).`}</p> : null}
-      {changes.length || catalogChange ? (
+      {changes.length || statusChange || catalogChange ? (
         <table className="history-changes__table">
           <caption>Recorded changes</caption>
           <thead><tr><th scope="col">Field</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
           <tbody>
+            {statusChange ? <tr><th scope="row">Work Status</th><td><pre className="history-changes__value">{metadata.fromStatus as string}</pre></td><td><pre className="history-changes__value">{metadata.toStatus as string}</pre></td></tr> : null}
             {changes.map((change, index) => (
               <tr key={index}>
                 <th scope="row">{String(change.fieldLabel ?? change.fieldKey)}</th>
