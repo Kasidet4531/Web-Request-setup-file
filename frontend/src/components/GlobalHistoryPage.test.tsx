@@ -57,15 +57,6 @@ vi.mock('react', async (importOriginal) => {
 })
 
 describe('History route', () => {
-  it('shows multiple PSF trigger names and the retrospective release count', () => {
-    const html = renderToStaticMarkup(<HistoryChanges metadata={{
-      operation: { action: 'rename', name: 'Work' }, releasedRequestCount: 2,
-      before: { entries: [{ id: 'first', name: 'Work', kind: 'open' }, { id: 'second', name: 'Review', kind: 'open' }], psfVisibilityTriggerIds: ['first'] },
-      after: { entries: [{ id: 'first', name: 'Work', kind: 'open' }, { id: 'second', name: 'Review', kind: 'open' }], psfVisibilityTriggerIds: ['first', 'second'] },
-    }} />)
-    expect(html).toContain('PSF visibility triggers: Work, Review')
-    expect(html).toContain('Requester PSF access released for 2 request(s).')
-  })
   it('uses Asia/Bangkok independently of the host timezone and preserves invalid timestamp fallback', () => {
     vi.stubEnv('TZ', 'UTC')
     try {
@@ -79,19 +70,6 @@ describe('History route', () => {
   it('does not invent diffs from malformed or missing old/new field values', () => {
     const html = renderToStaticMarkup(<HistoryChanges metadata={{ fieldChanges: [null, { fieldLabel: 'Unknown', after: 'New only' }] }} />)
     expect(html).toBe('—')
-  })
-
-  it('names catalog values and release settings without exposing internal configuration identifiers', () => {
-    const html = renderToStaticMarkup(<HistoryChanges metadata={{
-      operation: { action: 'rename', name: 'New exact status' },
-      before: { entries: [{ id: 'internal-catalog-id', name: 'Old exact status', kind: 'open' }], psfVisibilityTriggerId: 'internal-catalog-id' },
-      after: { entries: [{ id: 'internal-catalog-id', name: 'New exact status', kind: 'open' }], psfVisibilityTriggerId: null },
-    }} />)
-    expect(html).toContain('Old exact status')
-    expect(html).toContain('New exact status')
-    expect(html).toContain('PSF visibility trigger: Old exact status')
-    expect(html).toContain('PSF visibility trigger: None')
-    expect(html).not.toContain('internal-catalog-id')
   })
 
   it('replaces the placeholder with the global history page', () => {
@@ -209,18 +187,15 @@ describe('GlobalAuditLogTable', () => {
     expect(html).toContain('After')
   })
 
-  it('renders factual catalog metadata and escapes untrusted values', () => {
+  it('keeps View changes for a bulk Status replacement, which has no Request Snapshot, and escapes status names', () => {
     const html = renderToStaticMarkup(GlobalAuditLogTable({ entries: [{
-      id: 'entry-1', hasRequestSnapshot: false, requestId: null, requestNo: null, requestLabel: null, actionType: 'WORKFLOW_CATALOG_UPDATED',
-      actorDisplayName: 'Admin', actorRole: 'admin', createdAt: 'invalid-date',
-      metadata: { operation: { action: 'rename', name: '<script>new status</script>' } },
+      id: 'entry-1', hasRequestSnapshot: false, requestId: 'request-1', requestNo: 'PSF-0001', requestLabel: null, actionType: 'REQUEST_STATUS_CHANGED',
+      actorDisplayName: 'Admin', actorRole: 'admin', createdAt: '2026-10-22T01:00:00Z',
+      metadata: { fromStatus: 'Deleted status', toStatus: '<script>Replacement</script>', bulkReplacement: true },
     }], error: null, loading: false }))
-    expect(html).toContain('rename')
-    expect(html).toContain('&lt;script&gt;new status&lt;/script&gt;')
+    expect(html).toContain('<summary>View changes</summary>')
+    expect(html).toContain('<th scope="row">Work Status</th><td><pre class="history-changes__value">Deleted status</pre></td><td><pre class="history-changes__value">&lt;script&gt;Replacement&lt;/script&gt;</pre></td>')
     expect(html).not.toContain('<script>')
-    expect(html).toContain('invalid-date')
-    expect(html).toContain('<td>Workflow configuration</td><td class="font-mono-code">—</td>')
-    expect(html).not.toContain('Before')
   })
 
   it('renders accessible loading, empty, and error states', () => {
@@ -436,7 +411,10 @@ describe('GlobalHistoryPage tabs and role access', () => {
   })
 })
 
-it('removes request assignment from the audit action filter', () => {
+it('removes request assignment and Workflow catalog updates from the audit action filter', () => {
   const filters = renderToStaticMarkup(<GlobalAuditLogFilters filters={EMPTY_GLOBAL_AUDIT_LOG_FILTERS} onChange={vi.fn()} onClear={vi.fn()} />)
   expect(filters).not.toContain('REQUEST_ASSIGNEE_CHANGED')
+  expect(filters).not.toContain('WORKFLOW_CATALOG_UPDATED')
+  expect(filters).not.toContain('Workflow catalog updated')
+  expect(filters).toContain('<option value="ATTACHMENT_DELETED">Attachment deleted</option>')
 })

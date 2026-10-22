@@ -41,7 +41,7 @@ The same Edit modal contains **Allow requesters to view PSF Created Information*
 
 Stored legacy `psfVisibilityTriggerId` is read as one trigger without modifying requests on reads/startup. Admin writes persist canonical `psfVisibilityTriggerIds`; responses project a per-entry `psfAccessTrigger` flag and retain the deprecated scalar only when exactly one trigger exists (otherwise null). Current clients use the array/flag. The legacy settings operation still explicitly replaces the whole trigger set with zero or one status; the Edit modal toggles only its own status.
 
-Policy settings are admin-only. Public status responses omit recipient settings, and shared audit history hides recipient policies from requesters/setup owners while retaining ordinary catalog history. Admins retain full before/after recipient audit.
+Policy settings are admin-only. Public status responses omit recipient settings, and shared audit history hides recipient policies from requesters/setup owners while retaining ordinary catalog history. Admins retain full before/after recipient audit. Since 22 October 2026 (issue #106) Audit History lists no Workflow catalog updates at all; they are still recorded with full metadata.
 
 ## Trigger rules
 

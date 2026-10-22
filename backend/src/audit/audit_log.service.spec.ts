@@ -264,6 +264,7 @@ describe('AuditLogService', () => {
         'REQUEST_STATUS_CHANGED',
         new Date('2026-06-17T17:00:00.000Z'),
         new Date('2026-06-19T17:00:00.000Z'),
+        'WORKFLOW_CATALOG_UPDATED',
       ],
     );
     expect(pool.query).toHaveBeenCalledWith(
@@ -287,6 +288,10 @@ describe('AuditLogService', () => {
       expect.any(Array),
     );
     expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('audit_log.action_type <> $6'),
+      expect.any(Array),
+    );
+    expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining(
         'ORDER BY audit_log.created_at DESC, audit_log.id DESC',
       ),
@@ -294,51 +299,45 @@ describe('AuditLogService', () => {
     );
   });
 
-  it('binds global Draft privacy to the trusted admin identity independently of user filters and permits null configuration events', async () => {
+  it('binds global Draft privacy to the trusted admin identity independently of user filters and leaves Workflow catalog updates out', async () => {
     const actual = new AuditLogService(pool as unknown as Pool);
     pool.query.mockResolvedValueOnce({
       rows: [
         {
-          request_id: null,
-          request_no: null,
-          action_type: 'WORKFLOW_CATALOG_UPDATED',
+          request_id: 'request-1',
+          request_no: 'PSF-0001',
+          action_type: 'REQUEST_STATUS_CHANGED',
           actor_display_name: 'Admin',
           actor_role: 'admin',
           created_at: '2026-06-18T01:05:03.123456Z',
-          metadata_json: {
-            action: 'rename',
-            before: { name: 'Old' },
-            after: { name: 'New' },
-          },
+          metadata_json: { fromStatus: 'Old', toStatus: 'New' },
         },
       ],
     });
     const result = await actual.findGlobalAuditLogs(
-      { user: 'foreign.actor', actionType: 'WORKFLOW_CATALOG_UPDATED' },
+      { user: 'foreign.actor', actionType: 'REQUEST_STATUS_CHANGED' },
       { id: 'server-admin', role: 'admin' },
     );
     expect(result).toEqual([
       {
-        requestId: null,
-        requestNo: null,
+        requestId: 'request-1',
+        requestNo: 'PSF-0001',
         requestLabel: null,
-        actionType: 'WORKFLOW_CATALOG_UPDATED',
+        actionType: 'REQUEST_STATUS_CHANGED',
         actorDisplayName: 'Admin',
         actorRole: 'admin',
         createdAt: '2026-06-18T01:05:03.123456Z',
-        metadata: {
-          action: 'rename',
-          before: { name: 'Old' },
-          after: { name: 'New' },
-        },
+        metadata: { fromStatus: 'Old', toStatus: 'New' },
       },
     ]);
     const [sql, params] = pool.query.mock.calls[0] as [string, unknown[]];
     expect(params).toEqual([
       '%foreign.actor%',
-      'WORKFLOW_CATALOG_UPDATED',
+      'REQUEST_STATUS_CHANGED',
       'server-admin',
+      'WORKFLOW_CATALOG_UPDATED',
     ]);
+    expect(sql).toContain('audit_log.action_type <> $4');
     expect(sql).toContain('LEFT JOIN psf_requests');
     expect(sql).toMatch(
       /audit_log.request_id IS NULL[\s\S]*psf_request.status <> 'Draft'[\s\S]*psf_request.requester_user_id = \$3::uuid/,
