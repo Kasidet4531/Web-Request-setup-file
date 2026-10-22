@@ -15,7 +15,7 @@ The issue first asked for a "—" in the Detail column instead of the
 "View changes" toggle; the product owner then asked to remove these entries from
 the page altogether.
 
-- Branch `claude/project-thread-bogu9x`, based on `main` at `6cb6bd5`.
+- Branch `claude/project-thread-bogu9x`, started from `main` at `6cb6bd5` and merged with `main` at `8b256c0` (PR #105, History search and filters).
 - Node 22.22.0. Browser: Chromium 141.0.7390.37 (`/opt/pw-browsers/chromium`),
   driven by Playwright 1.58.2 from `backend/node_modules`, headless, at a
   1440×1000 viewport.
@@ -26,26 +26,29 @@ the page altogether.
   `Setup Review`, then a rename of it to
   `Setup Review - 50% (Waiting for customer)` that also made it a PSF trigger.
 - Backend and frontend: the compiled builds of this branch ("after") and of
-  `6cb6bd5` ("before"). Company LDAP and SOAP were not contacted. External font
+  `8b256c0` ("before"). Company LDAP and SOAP were not contacted. External font
   requests are blocked by the fixture, so screenshots use fallback fonts.
 
 ## Test results
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend tests | `cd frontend && npx vitest run` | 39 files, 540 tests passed |
+| Frontend tests | `cd frontend && npx vitest run` | 39 files, 545 tests passed |
 | Frontend type check | `cd frontend && npx tsc -b` | Passed |
-| Frontend lint (changed files) | `cd frontend && npx eslint src/components/GlobalHistoryPage.tsx src/components/GlobalHistoryPage.test.tsx` | 1 error, present on the base: `GlobalHistoryPage.test.tsx` `no-useless-assignment` in the Draft Deletions tab test |
+| Frontend lint (changed files) | `cd frontend && npx eslint src/components/GlobalHistoryPage.tsx src/components/GlobalHistoryPage.test.tsx src/components/ui/HistoryChanges.tsx` | Passed |
 | Backend unit tests | `cd backend && npx jest` | 50 suites, 755 tests passed |
-| Backend API e2e | `cd backend && npm run test:e2e` | 21 passed |
-| Backend PGlite suites | `cd backend && node --require ts-node/register --test test/*.postgres.test.ts` | 111 passed, 0 failed, 1 skipped |
+| Backend API e2e | `cd backend && npm run test:e2e` | 20 passed, 1 failed, failing identically on `main` at `8b256c0`: `exposes ordered workflow statuses without transition rules to every authenticated role` does not expect the `filterStatuses` field PR #105 added |
+| Backend PGlite suites | `cd backend && node --require ts-node/register --test test/*.postgres.test.ts` | 114 passed, 0 failed, 1 skipped |
+| History browser system test | `node --test test/email-system.search-filters.e2e.mjs` (as the `postgres` user) | Passed |
 | Browser check | A scratch `node:test` file (outside the repository) using the fixture above, run as the `postgres` user | See below |
 
 `test/audit-visibility.postgres.test.ts` runs the real SQL on PGlite. For
 Requester, Setup Owner and Admin the list holds no catalog entry and the total
 equals the rows returned; with the action filter set to
 `WORKFLOW_CATALOG_UPDATED` an Admin gets no rows and a total of 0. These failed
-before the backend change. The Audit History page tests check that the Action
+before the backend change. PR #105's Bangkok-day boundary test there used
+catalog entries as generic events; it now uses `REQUEST_STATUS_CHANGED` rows so
+it still tests the date boundaries. The Audit History page tests check that the Action
 filter has no "Workflow catalog updated" option, and that a bulk Status
 replacement entry (no Request Snapshot) still shows "View changes" with its Work
 Status row and escapes the status name.
