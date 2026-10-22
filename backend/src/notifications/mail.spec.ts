@@ -14,6 +14,76 @@ const enabled = {
 };
 const success =
   '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><m:SendMailResponse xmlns:m="http://tempuri.org/" /></s:Body></s:Envelope>';
+const statusChange = (
+  overrides: Partial<RequestNotificationEvent> = {},
+): RequestNotificationEvent => ({
+  eventType: 'REQUEST_STATUS_CHANGED',
+  requestId: '123',
+  fromStatus: '10% -- Test Engineer Data Entry',
+  targetStatus: {
+    id: 's',
+    name: '30% -- Compare Old and New layout',
+    kind: 'open',
+  },
+  actor: {
+    id: 'u',
+    username: 'somchai.j',
+    displayName: 'Somchai Jaidee',
+    role: 'setup_owner',
+    setupOwnerDepartment: 'GNTC',
+  },
+  ...overrides,
+});
+
+// Shaped like a request on the Initial Data Load requester form.
+const importedFormRequest = (extra: Record<string, unknown> = {}) => {
+  const field = (key: string, label: string) => ({
+    fieldKey: key,
+    canonicalKey: key,
+    label,
+    type: 'text' as const,
+    required: false,
+  });
+  const productType = 'Create new PSF (Require PCSF , E142 or .DPL)';
+  const base = {
+    product_type: productType,
+    title: 'Chip A',
+    requester_name: 'Somebody Requester',
+    due_date: '2026-08-07',
+    start_date: '2026-08-04',
+  };
+  return {
+    request_no: 'PSF-000123',
+    requester: 'Somebody Requester',
+    product_type: productType,
+    requester_data_json: { ...base, ...extra },
+    schema_snapshot_json: {
+      formKey: 'psf-request',
+      version: 2,
+      title: 'Requester Information',
+      sections: [
+        {
+          sectionKey: 'requester_information',
+          title: 'Requester Information',
+          fields: [
+            field('product_type', 'Request To'),
+            field('title', 'Product_Description'),
+            field('due_date', 'Due Date'),
+            field('start_date', 'Start Date'),
+            ...Object.keys(extra)
+              .filter((key) => !(key in base))
+              .map((key) => field(key, key)),
+          ],
+        },
+      ],
+    },
+  };
+};
+
+const rowPattern = /<tr><th>(.*?)<\/th><td>(.*?)<\/td><\/tr>/g;
+const rows = (html: string) =>
+  [...html.matchAll(rowPattern)].map(([, label, value]) => [label, value]);
+const rowLabels = (html: string) => rows(html).map(([label]) => label);
 describe('mail safety and SOAP', () => {
   it('disables delivery by default and fixes From', () => {
     expect(new MailConfig({}).enabled).toBe(false);
@@ -187,7 +257,6 @@ describe('mail safety and SOAP', () => {
         product_type: null,
         requester_data_json: {
           custom_title: 'Captured title',
-          custom_priority: 'Urgent',
           custom_date: '2026-10-08',
           custom_product: 'IC',
         },
@@ -204,12 +273,6 @@ describe('mail safety and SOAP', () => {
                   fieldKey: 'custom_title',
                   canonicalKey: 'title',
                   label: 'Title',
-                  type: 'text',
-                },
-                {
-                  fieldKey: 'custom_priority',
-                  canonicalKey: 'priority',
-                  label: 'Priority',
                   type: 'text',
                 },
                 {
@@ -273,10 +336,7 @@ describe('mail safety and SOAP', () => {
   it('shows a Product Type the request tables do not recognise as stored', () => {
     const result = renderRequestEmail(
       statusChange(),
-      {
-        ...importedFormRequest({ product_type: 'Legacy line (B2)' }),
-        product_type: 'Legacy line (B2)',
-      },
+      importedFormRequest({ product_type: 'Legacy line (B2)' }),
       'http://localhost:3000',
     );
     expect(rows(result.html)).toContainEqual([
@@ -310,74 +370,3 @@ describe('mail safety and SOAP', () => {
     expect(result.html).not.toContain('Duplicate');
   });
 });
-
-const statusChange = (
-  overrides: Partial<RequestNotificationEvent> = {},
-): RequestNotificationEvent => ({
-  eventType: 'REQUEST_STATUS_CHANGED',
-  requestId: '123',
-  fromStatus: '10% -- Test Engineer Data Entry',
-  targetStatus: {
-    id: 's',
-    name: '30% -- Compare Old and New layout',
-    kind: 'open',
-  },
-  actor: {
-    id: 'u',
-    username: 'somchai.j',
-    displayName: 'Somchai Jaidee',
-    role: 'setup_owner',
-    setupOwnerDepartment: 'GNTC',
-  },
-  ...overrides,
-});
-
-// Shaped like a request on the Initial Data Load requester form.
-function importedFormRequest(extra: Record<string, unknown> = {}) {
-  const field = (key: string, label: string) => ({
-    fieldKey: key,
-    canonicalKey: key,
-    label,
-    type: 'text' as const,
-    required: false,
-  });
-  const productType = 'Create new PSF (Require PCSF , E142 or .DPL)';
-  const base = {
-    product_type: productType,
-    title: 'Chip A',
-    requester_name: 'Somebody Requester',
-    due_date: '2026-08-07',
-    start_date: '2026-08-04',
-  };
-  return {
-    request_no: 'PSF-000123',
-    requester: 'Somebody Requester',
-    product_type: productType,
-    requester_data_json: { ...base, ...extra },
-    schema_snapshot_json: {
-      formKey: 'psf-request',
-      version: 2,
-      title: 'Requester Information',
-      sections: [
-        {
-          sectionKey: 'requester_information',
-          title: 'Requester Information',
-          fields: [
-            field('product_type', 'Request To'),
-            field('title', 'Product_Description'),
-            field('due_date', 'Due Date'),
-            field('start_date', 'Start Date'),
-            ...Object.keys(extra)
-              .filter((key) => !(key in base))
-              .map((key) => field(key, key)),
-          ],
-        },
-      ],
-    },
-  };
-}
-
-const rowPattern = /<tr><th>(.*?)<\/th><td>(.*?)<\/td><\/tr>/g;
-const rows = (html: string) =>
-  [...html.matchAll(rowPattern)].map(([, label, value]) => [label, value]);
-const rowLabels = (html: string) => rows(html).map(([label]) => label);
