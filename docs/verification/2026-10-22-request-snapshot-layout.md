@@ -29,7 +29,7 @@ this change.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend tests | `cd frontend && npx vitest run` | 39 files, 537 tests passed (base: 531) |
+| Frontend tests | `cd frontend && npx vitest run` | 39 files, 539 tests passed (base: 531) |
 | Request Snapshot tests | `cd frontend && npx vitest run src/components/RequestSnapshotPage.test.tsx` | 16 passed |
 | Frontend type check | `cd frontend && npx tsc -b --force` | Passed |
 | Frontend lint | `cd frontend && npx eslint .` | 1 error, present on the base: `GlobalHistoryPage.test.tsx:389` `no-useless-assignment` |
@@ -104,6 +104,34 @@ After, the Status-only update in light and dark:
 ![After: Status change, light](assets/2026-10-22-request-snapshot-layout/after-status-light.png)
 
 ![After: Status change, dark](assets/2026-10-22-request-snapshot-layout/after-status-dark.png)
+
+## History lists (PR #104 review)
+
+Fook's review of PR #104 asked for three changes to "View changes", made in
+`HistoryChanges`, the request History tab and the Audit History page:
+
+- A Status change is the "Work Status" row of the Field, Before and After
+  table, like any other change, instead of a "Status: X → Y" line.
+- On a request's History tab, "View changes" sits below "View Request
+  Snapshot". Before, it sat above, so opening it pushed the link down.
+- On Audit History, an entry with a Request Snapshot shows only "View Request
+  Snapshot", because the snapshot already marks the update's changes; an
+  attachment entry still shows its file name. Entries without a snapshot
+  (catalog updates, bulk Status replacements, entries recorded before
+  11 October) keep "View changes", so their details stay reachable.
+
+Measured in the browser on the same synthetic request: before, opening the
+first "View changes" on Audit History moved its toggle from x=1282 to x=1139,
+because the change table widened the Detail column and squeezed the Request
+column. After, Audit History has no toggles on these four entries (four
+"View Request Snapshot" links), and on the History tab every toggle keeps its
+x position when opened. The frontend tests add one test per point.
+
+![Before: Audit History with View changes open](assets/2026-10-22-request-snapshot-layout/before-audit-history-open.png)
+
+![After: Audit History](assets/2026-10-22-request-snapshot-layout/after-audit-history.png)
+
+![After: History tab with View changes open](assets/2026-10-22-request-snapshot-layout/after-history-tab-open.png)
 
 ## Limits
 

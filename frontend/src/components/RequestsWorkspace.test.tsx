@@ -13,6 +13,7 @@ import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { AsyncNotice } from './ui/AsyncNotice'
+import { HistoryChanges } from './ui/HistoryChanges'
 import { ImagePreviewModal, RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 
 const navigation = vi.hoisted(() => ({ blocker: null as { shouldBlockFn: (location: { current: { pathname: string }; next: { pathname: string } }) => boolean; enableBeforeUnload: boolean; withResolver?: boolean } | null, navigate: vi.fn(), resolver: { status: 'idle' as 'idle' | 'blocked', proceed: vi.fn(), reset: vi.fn() } }))
@@ -676,6 +677,26 @@ describe('RequestHistoryPanel', () => {
     expect(link.props.params).toEqual({ requestId: 'request-1', entryId: 'entry-1' })
     expect(link.props.children).toBe('View Request Snapshot')
     expect(findRenderedElement(render(false), isSnapshotLink)).toBeNull()
+  })
+
+  it('places View changes below View Request Snapshot, so opening it leaves the link in place', () => {
+    const panel = RequestsWorkspace.RequestHistoryPanel({
+      requestId: 'request-1',
+      entries: [{
+        id: 'entry-1', hasRequestSnapshot: true, actionType: 'REQUESTER_INFORMATION_UPDATED', actorDisplayName: 'Editor', actorRole: 'requester',
+        createdAt: '2026-06-18T01:02:03.000Z', metadata: { fieldChanges: [{ fieldKey: 'priority', fieldLabel: 'Priority', before: 'Normal', after: 'Urgent' }] },
+      }] as never,
+      error: null,
+      loading: false,
+    })
+    type Child = { type?: unknown; props?: Record<string, unknown> } | null
+    const entry = requireRenderedElement(panel, (element) =>
+      Array.isArray(element.props.children) && (element.props.children as Child[]).some((child) => child?.type === HistoryChanges))
+    const children = entry.props.children as Child[]
+    const linkAt = children.findIndex((child) => child?.props?.to === '/requests/$requestId/history/$entryId')
+
+    expect(linkAt).toBeGreaterThanOrEqual(0)
+    expect(linkAt).toBeLessThan(children.findIndex((child) => child?.type === HistoryChanges))
   })
 
   it('surfaces a history loading failure accessibly instead of treating it as empty', () => {

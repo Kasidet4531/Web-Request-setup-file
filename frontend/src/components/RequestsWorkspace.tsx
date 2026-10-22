@@ -301,8 +301,9 @@ export function RequestHistoryPanel({
               <div>
                 <strong>{historyActionSummary(entry)}</strong>
                 <span>{entry.actorDisplayName} · {entry.actorRole}</span>
-                <HistoryChanges metadata={entry.metadata} />
+                {/* Above View changes, so opening the changes does not move the link. */}
                 {entry.hasRequestSnapshot ? <Link className="table-action request-snapshot-link" params={{ requestId, entryId: entry.id }} to="/requests/$requestId/history/$entryId">View Request Snapshot</Link> : null}
+                <HistoryChanges metadata={entry.metadata} />
               </div>
             </li>
           ))}
