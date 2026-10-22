@@ -23,6 +23,8 @@ function shortProductType(value: unknown): unknown {
     ? value.replace(/\s*\(.*\)$/, '')
     : value;
 }
+const GREEN = '#C6EFCE';
+const YELLOW = '#FFEB9C';
 export interface RequestEmailMetadata {
   request_no: string;
   requester: string | null;
@@ -65,27 +67,31 @@ export function renderRequestEmail(
       /[\r\n]/g,
       ' ',
     );
-  const fields: [string, unknown][] = [
+  const fields: [string, unknown, string?][] = [
     ['Request No', request.request_no],
-    ['Product Description', title],
+    ['Product Description', title, GREEN],
     ['Requester', request.requester],
     [
       'Product Type',
       shortProductType(valueFor('product_type') ?? request.product_type),
+      GREEN,
     ],
     ['Due Date', valueFor('due_date')],
-    ['Previous Status', event.fromStatus],
-    ['New Status', event.targetStatus.name],
+    ['Previous Status', event.fromStatus, YELLOW],
+    ['New Status', event.targetStatus.name, YELLOW],
     ['Updated By', event.actor.displayName],
   ];
   const summary = fields
-    .map(
-      ([key, value]) =>
-        `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(display(value))}</td></tr>`,
-    )
+    .map(([key, value, background]) => {
+      // Inline styles, since Outlook ignores <style> blocks.
+      const fill = background ? `background-color:${background}` : '';
+      const labelStyle = ['text-align:left', fill].filter(Boolean).join(';');
+      const valueStyle = fill ? ` style="${fill}"` : '';
+      return `<tr><th style="${labelStyle}">${escapeHtml(key)}</th><td${valueStyle}>${escapeHtml(display(value))}</td></tr>`;
+    })
     .join('');
   const link = `${baseUrl}/requests/${encodeURIComponent(event.requestId)}`;
-  const html = `<h1>PSF Setup File Request Management</h1><p>${escapeHtml(action)}</p><table>${summary}</table>${event.bulkReplacement ? '<p>Status updated by bulk replacement.</p>' : ''}<p><a href="${escapeHtml(link)}">View Request</a></p>`;
+  const html = `<h1>PSF Setup File Request Management</h1><p>${escapeHtml(action)}</p><table cellspacing="0" cellpadding="6">${summary}</table>${event.bulkReplacement ? '<p>Status updated by bulk replacement.</p>' : ''}<p><a href="${escapeHtml(link)}">View Request</a></p>`;
   return { subject, html };
 }
 

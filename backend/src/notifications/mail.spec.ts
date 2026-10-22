@@ -80,9 +80,19 @@ const importedFormRequest = (extra: Record<string, unknown> = {}) => {
   };
 };
 
-const rowPattern = /<tr><th>(.*?)<\/th><td>(.*?)<\/td><\/tr>/g;
+const rowPattern =
+  /<tr><th(?: style="([^"]*)")?>(.*?)<\/th><td(?: style="([^"]*)")?>(.*?)<\/td><\/tr>/g;
+const cells = (html: string) =>
+  [...html.matchAll(rowPattern)].map(
+    ([, labelStyle = '', label, valueStyle = '', value]) => ({
+      label,
+      value,
+      labelStyle,
+      valueStyle,
+    }),
+  );
 const rows = (html: string) =>
-  [...html.matchAll(rowPattern)].map(([, label, value]) => [label, value]);
+  cells(html).map(({ label, value }) => [label, value]);
 const rowLabels = (html: string) => rows(html).map(([label]) => label);
 describe('mail safety and SOAP', () => {
   it('disables delivery by default and fixes From', () => {
@@ -298,7 +308,7 @@ describe('mail safety and SOAP', () => {
       '[PSF Request] New Request: PSF-1 - Captured title',
     );
     expect(result.html).toContain('2026-10-08');
-    expect(result.html).toContain('<td>IC</td>');
+    expect(rows(result.html)).toContainEqual(['Product Type', 'IC']);
   });
 
   it('has no Priority row, even when the request captured a priority', () => {
@@ -368,5 +378,50 @@ describe('mail safety and SOAP', () => {
     );
     expect(rowLabels(result.html)).not.toContain('Reason / Remarks');
     expect(result.html).not.toContain('Duplicate');
+  });
+
+  it('aligns every row label to the left so the labels line up', () => {
+    const { html } = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(cells(html)).toHaveLength(8);
+    for (const { labelStyle } of cells(html))
+      expect(labelStyle).toContain('text-align:left');
+  });
+
+  it('highlights Product Description and Product Type in green', () => {
+    const { html } = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    const green = cells(html).filter(
+      ({ labelStyle, valueStyle }) =>
+        labelStyle.includes('background-color:#C6EFCE') &&
+        valueStyle.includes('background-color:#C6EFCE'),
+    );
+    expect(green.map(({ label }) => label)).toEqual([
+      'Product Description',
+      'Product Type',
+    ]);
+  });
+
+  it('highlights the status update, Previous Status and New Status, in yellow', () => {
+    const { html } = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    const yellow = cells(html).filter(
+      ({ labelStyle, valueStyle }) =>
+        labelStyle.includes('background-color:#FFEB9C') &&
+        valueStyle.includes('background-color:#FFEB9C'),
+    );
+    expect(yellow.map(({ label, value }) => [label, value])).toEqual([
+      ['Previous Status', '10% -- Test Engineer Data Entry'],
+      ['New Status', '30% -- Compare Old and New layout'],
+    ]);
   });
 });

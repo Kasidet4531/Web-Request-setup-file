@@ -152,19 +152,15 @@ void describe('notification SQL on an isolated in-memory PostgreSQL engine', () 
         'SELECT body_html FROM email_outbox',
       )
     ).rows;
-    assert.ok(
-      job.body_html.includes(
-        '<tr><th>Product Description</th><td>Chip B</td></tr>',
-      ),
+    assert.match(
+      job.body_html,
+      /<th[^>]*>Product Description<\/th><td[^>]*>Chip B<\/td>/,
     );
-    assert.ok(
-      job.body_html.includes(
-        '<tr><th>Product Type</th><td>Product Transfer</td></tr>',
-      ),
+    assert.match(
+      job.body_html,
+      /<th[^>]*>Product Type<\/th><td[^>]*>Product Transfer<\/td>/,
     );
-    assert.ok(
-      job.body_html.includes('<tr><th>Updated By</th><td>Tester</td></tr>'),
-    );
+    assert.match(job.body_html, /<th[^>]*>Updated By<\/th><td>Tester<\/td>/);
     assert.equal(job.body_html.includes('Priority'), false);
     assert.equal(job.body_html.includes('Urgent'), false);
   });
