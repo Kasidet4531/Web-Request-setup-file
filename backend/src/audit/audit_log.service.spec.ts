@@ -188,7 +188,7 @@ describe('AuditLogService', () => {
     );
   });
 
-  it('returns a newest-first global audit list with parameterized exact, user, action, and UTC-day filters', async () => {
+  it('returns a newest-first global audit list with parameterized exact, user, action, and Bangkok-day filters', async () => {
     const readGlobalAuditLogs = getGlobalAuditLogReader();
     pool.query.mockResolvedValueOnce({
       rows: [
@@ -262,8 +262,8 @@ describe('AuditLogService', () => {
         'c4e87bd1-f7de-4d6d-8097-bf914cd13acd',
         '%setup.gntc%',
         'REQUEST_STATUS_CHANGED',
-        new Date('2026-06-18T00:00:00.000Z'),
-        new Date('2026-06-20T00:00:00.000Z'),
+        new Date('2026-06-17T17:00:00.000Z'),
+        new Date('2026-06-19T17:00:00.000Z'),
       ],
     );
     expect(pool.query).toHaveBeenCalledWith(

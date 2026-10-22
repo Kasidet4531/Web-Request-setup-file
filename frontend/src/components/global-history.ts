@@ -4,16 +4,14 @@ import type {
 } from '../services/api'
 
 export interface GlobalAuditLogFilterValues {
-  requestId: string
-  user: string
+  keyword: string
   actionType: '' | PsfRequestHistoryAction
   from: string
   to: string
 }
 
 export const EMPTY_GLOBAL_AUDIT_LOG_FILTERS: GlobalAuditLogFilterValues = {
-  requestId: '',
-  user: '',
+  keyword: '',
   actionType: '',
   from: '',
   to: '',
@@ -23,16 +21,8 @@ export function buildGlobalAuditLogQuery(
   filters: GlobalAuditLogFilterValues,
 ): GlobalAuditLogQuery {
   const query: GlobalAuditLogQuery = {}
-  const requestId = filters.requestId.trim()
-  const user = filters.user.trim()
-
-  if (requestId) {
-    query.requestId = requestId
-  }
-
-  if (user) {
-    query.user = user
-  }
+  const keyword = filters.keyword.trim()
+  if (keyword) query.keyword = keyword
 
   if (filters.actionType) {
     query.actionType = filters.actionType
@@ -47,4 +37,8 @@ export function buildGlobalAuditLogQuery(
   }
 
   return query
+}
+
+export function historyDateRangeError(from: string, to: string): string | null {
+  return from && to && from > to ? 'Choose an end date on or after the start date.' : null
 }

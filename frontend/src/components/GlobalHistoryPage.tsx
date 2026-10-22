@@ -2,6 +2,7 @@ import { HistoryChanges } from './ui/HistoryChanges'
 import { formatHistoryDateTime } from './ui/historyDateTime'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { Search, SlidersHorizontal, RotateCcw } from 'lucide-react'
 import { PageHeader } from './ui/PageHeader'
 import { ROW_PX, pagedMinHeight } from './ui/tableLayout'
 import { AsyncNotice } from './ui/AsyncNotice'
@@ -10,12 +11,12 @@ import {
   fetchCurrentUser,
   type DraftDeletion,
   type GlobalAuditLogEntry,
-  type GlobalAuditLogQuery,
   type PsfRequestHistoryAction,
 } from '../services/api'
 import {
   EMPTY_GLOBAL_AUDIT_LOG_FILTERS,
   buildGlobalAuditLogQuery,
+  historyDateRangeError,
   type GlobalAuditLogFilterValues,
 } from './global-history'
 
@@ -33,9 +34,10 @@ const AUDIT_ACTIONS: Array<{ label: string; value: PsfRequestHistoryAction }> = 
 
 export interface GlobalAuditLogFiltersProps {
   filters: GlobalAuditLogFilterValues
-  onApply: () => void
   onChange: (field: keyof GlobalAuditLogFilterValues, value: string) => void
   onClear: () => void
+  moreFiltersOpen?: boolean
+  onToggleMoreFilters?: () => void
 }
 
 interface AsyncState<T> {
@@ -50,76 +52,78 @@ function actionLabel(actionType: PsfRequestHistoryAction): string {
 
 export function GlobalAuditLogFilters({
   filters,
-  onApply,
   onChange,
   onClear,
+  moreFiltersOpen = false,
+  onToggleMoreFilters,
 }: GlobalAuditLogFiltersProps) {
+  const dateError = historyDateRangeError(filters.from, filters.to)
+  const active = Boolean(filters.keyword.trim() || filters.actionType || filters.from || filters.to)
   return (
-    <form
-      className="filter-bar global-history-filters"
-      onSubmit={(event) => {
-        event.preventDefault()
-        onApply()
-      }}
-    >
-      <label className="global-history-filters__request-id">
-        Request ID
-        <input
-          name="requestId"
-          onChange={(event) => onChange('requestId', event.target.value)}
-          type="text"
-          value={filters.requestId}
-        />
-      </label>
-      <label className="global-history-filters__user">
-        User
-        <input
-          name="user"
-          onChange={(event) => onChange('user', event.target.value)}
-          type="text"
-          value={filters.user}
-        />
-      </label>
-      <label className="global-history-filters__action">
-        Action
-        <select
-          name="actionType"
-          onChange={(event) => onChange('actionType', event.target.value)}
-          value={filters.actionType}
-        >
-          <option value="">All actions</option>
-          {AUDIT_ACTIONS.map((action) => (
-            <option key={action.value} value={action.value}>
-              {action.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="global-history-filters__dates">
+    <div>
+      <form className="filter-bar global-history-filters" onSubmit={(event) => event.preventDefault()}>
+        <label className="global-history-filters__search">
+          Search
+          <span className="filter-bar__control">
+            <Search size={16} aria-hidden="true" />
+            <input className="input-with-icon" name="keyword" type="search" placeholder="Search history…"
+              aria-describedby="history-search-help" value={filters.keyword}
+              onChange={(event) => onChange('keyword', event.target.value)} />
+          </span>
+        </label>
+        <label className="global-history-filters__action">
+          Action
+          <select
+            name="actionType"
+            onChange={(event) => onChange('actionType', event.target.value)}
+            value={filters.actionType}
+          >
+            <option value="">All actions</option>
+            {AUDIT_ACTIONS.map((action) => (
+              <option key={action.value} value={action.value}>
+                {action.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="btn-secondary" type="button" aria-expanded={moreFiltersOpen}
+          aria-controls="history-more-filters" onClick={onToggleMoreFilters}>
+          <SlidersHorizontal size={14} aria-hidden="true" />More filters
+        </button>
+        <button className="btn-secondary" onClick={onClear} type="button" disabled={!active}>
+          <RotateCcw size={14} aria-hidden="true" />Clear filters
+        </button>
+      </form>
+      <p className="filter-help" id="history-search-help">Searches request no., product description, user name and username.</p>
+      <div className="global-history-filters__dates" id="history-more-filters" hidden={!moreFiltersOpen}>
         <label>
-          From (UTC)
+          From (Bangkok)
           <input
             name="from"
             onChange={(event) => onChange('from', event.target.value)}
             type="date"
             value={filters.from}
+            max={filters.to || undefined}
+            aria-invalid={Boolean(dateError)}
+            aria-describedby={dateError ? 'history-date-error' : undefined}
           />
         </label>
         <label>
-          To (UTC)
+          To (Bangkok)
           <input
             name="to"
             onChange={(event) => onChange('to', event.target.value)}
             type="date"
             value={filters.to}
+            min={filters.from || undefined}
+            aria-invalid={Boolean(dateError)}
+            aria-describedby={dateError ? 'history-date-error' : undefined}
           />
         </label>
       </div>
-      <div className="button-row global-history-filters__actions">
-        <button className="btn-ghost" onClick={onClear} type="button">Clear</button>
-        <button className="primary-button" type="submit">Apply</button>
-      </div>
-    </form>
+      {filters.from || filters.to ? <p className="history-active-dates">Dates (Bangkok): {filters.from || 'Any start date'} – {filters.to || 'Any end date'}</p> : null}
+      {dateError ? <p className="field-error" id="history-date-error" role="alert">{dateError}</p> : null}
+    </div>
   )
 }
 
@@ -311,14 +315,19 @@ export function GlobalHistoryPage() {
   const [filters, setFilters] = useState<GlobalAuditLogFilterValues>({
     ...EMPTY_GLOBAL_AUDIT_LOG_FILTERS,
   })
-  const [appliedFilters, setAppliedFilters] = useState<GlobalAuditLogQuery>({})
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [historyOffset, setHistoryOffset] = useState(0)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
-  const [historyTotal, setHistoryTotal] = useState(0)
-  const [history, setHistory] = useState<AsyncState<GlobalAuditLogEntry[]>>({
+  const { actionType, from, to } = filters
+  const keyword = filters.keyword.trim()
+  const dateError = historyDateRangeError(from, to)
+  const queryKey = JSON.stringify([debouncedKeyword, actionType, from, to, historyOffset, pageSize])
+  const [history, setHistory] = useState<AsyncState<GlobalAuditLogEntry[]> & { total: number; offset: number; limit: number; queryKey: string | null }>({
     loading: true,
     error: null,
     data: [],
+    total: 0, offset: 0, limit: PAGE_SIZE, queryKey: null,
   })
 
   const [deletionOffset, setDeletionOffset] = useState(0)
@@ -326,6 +335,12 @@ export function GlobalHistoryPage() {
   const [deletions, setDeletions] = useState<{ items: DraftDeletion[]; total: number; limit: number; offset: number } | null>(null)
   const [deletionLoading, setDeletionLoading] = useState(false)
   const [deletionError, setDeletionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (keyword === debouncedKeyword) return
+    const timer = setTimeout(() => { setDebouncedKeyword(keyword); setHistoryOffset(0) }, 300)
+    return () => clearTimeout(timer)
+  }, [keyword, debouncedKeyword])
 
   useEffect(() => {
     let mounted = true
@@ -344,17 +359,20 @@ export function GlobalHistoryPage() {
   }, [])
 
   useEffect(() => {
+    if (dateError || keyword !== debouncedKeyword) return
     let mounted = true
 
     async function loadHistory() {
       setHistory((current) => ({ ...current, loading: true, error: null }))
 
       try {
-        const page = await api.fetchGlobalAuditLogs({ ...appliedFilters, limit: pageSize, offset: historyOffset })
+        const page = await api.fetchGlobalAuditLogs({
+          ...buildGlobalAuditLogQuery({ keyword: debouncedKeyword, actionType, from, to }),
+          limit: pageSize, offset: historyOffset,
+        })
 
         if (mounted) {
-          setHistoryTotal(page.total)
-          setHistory({ loading: false, error: null, data: page.items })
+          setHistory({ loading: false, error: null, data: page.items, total: page.total, offset: page.offset, limit: page.limit, queryKey })
         }
       } catch (loadError) {
         if (mounted) {
@@ -362,6 +380,7 @@ export function GlobalHistoryPage() {
             loading: false,
             error: loadError instanceof Error ? loadError.message : 'Unable to load global audit history',
             data: [],
+            total: 0, offset: 0, limit: pageSize, queryKey,
           })
         }
       }
@@ -372,7 +391,7 @@ export function GlobalHistoryPage() {
     return () => {
       mounted = false
     }
-  }, [appliedFilters, historyOffset, pageSize])
+  }, [keyword, debouncedKeyword, actionType, from, to, dateError, queryKey, historyOffset, pageSize])
 
   useEffect(() => {
     if (activeTab !== 'deletions' || currentUser?.role !== 'admin') return
@@ -404,24 +423,21 @@ export function GlobalHistoryPage() {
 
   function updateFilter(field: keyof GlobalAuditLogFilterValues, value: string) {
     setFilters((currentFilters) => ({ ...currentFilters, [field]: value }))
-  }
-
-  function applyFilters() {
-    setHistoryOffset(0)
-    setAppliedFilters(buildGlobalAuditLogQuery(filters))
+    if (field !== 'keyword') setHistoryOffset(0)
   }
 
   function clearFilters() {
     setFilters({ ...EMPTY_GLOBAL_AUDIT_LOG_FILTERS })
     setHistoryOffset(0)
-    setAppliedFilters({})
+    setDebouncedKeyword('')
   }
 
   const isAdmin = currentUser?.role === 'admin'
+  const pending = history.loading || keyword !== debouncedKeyword || history.queryKey !== queryKey
 
   return (
     <article className="page-card workflow-page global-history-page">
-      <PageHeader title="Audit History" description="Review authorized request and configuration activity. Edit filters, then choose Apply to update the results." />
+      <PageHeader title="Audit History" description="Review request and configuration activity. Search and filters update automatically." />
 
       {isAdmin ? (
         <div className="detail-tabs" role="tablist" aria-label="Audit history sections">
@@ -460,9 +476,10 @@ export function GlobalHistoryPage() {
             <h2 className="sr-only" id="global-history-filters-heading">Filters</h2>
             <GlobalAuditLogFilters
               filters={filters}
-              onApply={applyFilters}
               onChange={updateFilter}
               onClear={clearFilters}
+              moreFiltersOpen={moreFiltersOpen}
+              onToggleMoreFilters={() => setMoreFiltersOpen((open) => !open)}
             />
           </section>
 
@@ -471,12 +488,12 @@ export function GlobalHistoryPage() {
             <GlobalAuditLogTable
               entries={history.data}
               error={history.error}
-              loading={history.loading}
-              offset={historyOffset}
+              loading={pending && !dateError}
+              offset={history.offset}
               onOffsetChange={setHistoryOffset}
               onPageSizeChange={(size) => { setHistoryOffset(0); setPageSize(size) }}
-              pageSize={pageSize}
-              total={historyTotal}
+              pageSize={history.limit}
+              total={history.total}
             />
           </section>
         </div>

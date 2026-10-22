@@ -47,6 +47,38 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
     };
   }
 
+  void it('searches visible history by request number, product description, display name or username with consistent totals', async () => {
+    await database.query(
+      `UPDATE psf_requests SET requester_data_json = '{"title":"Silicon Search Example"}' WHERE id = $1`,
+      [submittedId],
+    );
+    for (const keyword of [
+      'psf-public',
+      'silicon search',
+      'EDITOR',
+      'company.editor',
+    ]) {
+      const filters = { keyword, requestId: submittedId };
+      const viewer = actor('requester');
+      const result = await service.findGlobalAuditLogs(filters, viewer, {
+        limit: 1,
+        offset: 0,
+      });
+      assert.equal(result.length, 1, keyword);
+      assert.equal(result[0].requestId, submittedId);
+      assert.equal(await service.countGlobalAuditLogs(filters, viewer), 1);
+    }
+    const filters = { keyword: 'does-not-exist', requestId: submittedId };
+    assert.deepEqual(
+      await service.findGlobalAuditLogs(filters, actor('admin')),
+      [],
+    );
+    assert.equal(
+      await service.countGlobalAuditLogs(filters, actor('admin')),
+      0,
+    );
+  });
+
   for (const role of ['requester', 'setup_owner', 'admin'] as const)
     void it(`keeps another creator’s Draft private from ${role} while sharing catalog activity`, async () => {
       const result = await service.findGlobalAuditLogs({}, actor(role));
@@ -111,7 +143,7 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
       assert.equal(JSON.stringify(result).includes('new-secret.psf'), true);
     });
 
-  void it('allows Requester PSF history after persistent release while applying user and UTC filters', async () => {
+  void it('allows Requester PSF history after persistent release while applying user and date filters', async () => {
     await database.query(
       'UPDATE psf_requests SET psf_released_at = $1 WHERE id = $2',
       ['2026-10-04T04:00:00Z', submittedId],
@@ -133,6 +165,43 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
         actor('requester'),
       ),
       [],
+    );
+  });
+
+  void it('includes the whole selected Bangkok day and excludes both adjacent days', async () => {
+    const times = [
+      '2026-10-21T16:59:59.999Z',
+      '2026-10-21T17:00:00Z',
+      '2026-10-22T16:59:59.999Z',
+      '2026-10-22T17:00:00Z',
+    ];
+    for (const [index, time] of times.entries()) {
+      await database.query(
+        `INSERT INTO psf_request_audit_logs (id, action_type, actor_username, actor_display_name, actor_role, created_at, metadata_json)
+         VALUES ($1, 'WORKFLOW_CATALOG_UPDATED', 'calendar-boundary', 'Calendar', 'admin', $2, '{}')`,
+        [`00000000-0000-4000-8000-00000000002${index}`, time],
+      );
+    }
+    const filters = {
+      keyword: 'calendar-boundary',
+      from: '2026-10-22',
+      to: '2026-10-22',
+    };
+    const rows = await service.findGlobalAuditLogs(filters, actor('admin'));
+    assert.deepEqual(
+      rows.map((row) => row.id.slice(-2)),
+      ['22', '21'],
+    );
+    assert.equal(
+      await service.countGlobalAuditLogs(filters, actor('admin')),
+      2,
+    );
+    await assert.rejects(
+      service.findGlobalAuditLogs(
+        { from: '2026-10-23', to: '2026-10-22' },
+        actor('admin'),
+      ),
+      { status: 400 },
     );
   });
 });

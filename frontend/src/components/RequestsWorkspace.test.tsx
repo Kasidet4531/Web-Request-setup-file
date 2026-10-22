@@ -885,7 +885,7 @@ describe('Request list pagination', () => {
     requestDetailApi.queryPsfRequests.mockReset().mockResolvedValue({ items: [], total: 201, limit: 100, offset: 0 })
   })
 
-  it.each(['Keyword', 'Status'])('resets offset100 to zero when %s narrows the result to one row', async (name) => {
+  it.each(['Search', 'Status'])('resets offset100 to zero when %s narrows the result to one row', async (name) => {
     render(); let page = await settle()
     ;(button(page, 'Next').props.onClick as () => void)()
     render(); page = await settle()
@@ -903,7 +903,7 @@ describe('Request list pagination', () => {
     let page = renderDrafts()
     expect(findRenderedElement(page, (element) => element.type === 'select')).toBeNull()
     expect(findRenderedElement(page, (element) => element.type === 'input' && element.props.placeholder === 'Search product type…')).toBeNull()
-    ;(field(page, 'Keyword').props.onChange as (event: unknown) => void)({ target: { value: 'my probe' } })
+    ;(field(page, 'Search').props.onChange as (event: unknown) => void)({ target: { value: 'my probe' } })
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
     await new Promise((resolve) => setTimeout(resolve, 310))
     renderDrafts(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
@@ -916,7 +916,7 @@ describe('Request list pagination', () => {
 
   it('clears filters from page2 at offset100 and keeps Previous available on a narrowed server page', async () => {
     render(); let page = await settle()
-    ;(field(page, 'Keyword').props.onChange as (event: unknown) => void)({ target: { value: 'probe' } })
+    ;(field(page, 'Search').props.onChange as (event: unknown) => void)({ target: { value: 'probe' } })
     render(); page = await settle()
     ;(button(page, 'Next').props.onClick as () => void)()
     requestDetailApi.queryPsfRequests.mockResolvedValue({ items: [], total: 1, limit: 100, offset: 100 })
@@ -956,13 +956,28 @@ describe('Queue filtering and retained results', () => {
   })
   afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
 
+  it.each([true, false])('offers legacy Status options beyond the current result page (dashboard=%s)', async (dashboard) => {
+    requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Open work'], filterStatuses: ['Open work', 'Legacy Transfer -- pending'] })
+    render(dashboard); const page = await settle(dashboard)
+    expect(findRenderedElement(page, element => element.type === 'option' && element.props.children === 'Legacy Transfer -- pending')).not.toBeNull()
+  })
+
+  it('selecting a Dashboard Status clears its work-state card while preserving Team and Search', async () => {
+    requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'actor-1', role: 'setup_owner', setupOwnerDepartment: 'GNTC' } })
+    render(true); let page = await settle(true)
+    change(page, 'Search', 'probe'); render(true); await settle(true)
+    await vi.advanceTimersByTimeAsync(300); render(true); page = await settle(true)
+    change(page, 'Status', 'Legacy Transfer -- pending'); render(true); await settle(true)
+    expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ workState: 'all', team: 'GNTC', keyword: 'probe', status: 'Legacy Transfer -- pending', offset: 0 }))
+  })
+
   it.each([true, false])('keeps inputs responsive and debounces text queries for300ms (dashboard=%s)', async (dashboard) => {
     render(dashboard); let page = await settle(dashboard)
-    change(page, 'Keyword', 'pro'); page = render(dashboard); await settle(dashboard)
-    expect(field(page, 'Keyword').props.value).toBe('pro')
+    change(page, 'Search', 'pro'); page = render(dashboard); await settle(dashboard)
+    expect(field(page, 'Search').props.value).toBe('pro')
     expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(200)
-    change(page, 'Keyword', 'probe'); render(dashboard); await settle(dashboard)
+    change(page, 'Search', 'probe'); render(dashboard); await settle(dashboard)
     await vi.advanceTimersByTimeAsync(299)
     expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1); render(dashboard); await settle(dashboard)
@@ -978,7 +993,7 @@ describe('Queue filtering and retained results', () => {
     const next = requireRenderedElement(page, (element) => element.type === 'button' && element.props.children === 'Next')
     ;(next.props.onClick as () => void)(); render(); page = await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 100 }))
-    change(page, 'Keyword', 'probe'); render(); await settle()
+    change(page, 'Search', 'probe'); render(); await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(300); render(); await settle()
     expect(requestDetailApi.queryPsfRequests).toHaveBeenCalledTimes(3)
@@ -1033,7 +1048,7 @@ describe('Queue filtering and retained results', () => {
     let resolveOld: ((value: unknown) => void) | undefined
     requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
     change(page, 'Status', 'Completed'); render(); page = await settle()
-    change(page, 'Keyword', 'new'); render(); await settle()
+    change(page, 'Search', 'new'); render(); await settle()
     await vi.advanceTimersByTimeAsync(300)
     requestDetailApi.queryPsfRequests.mockResolvedValueOnce(response('PSF-NEW', 1))
     render(); await settle()
@@ -1046,8 +1061,8 @@ describe('Queue filtering and retained results', () => {
     let resolve: ((value: unknown) => void) | undefined
     requestDetailApi.queryPsfRequests.mockImplementationOnce(() => new Promise((resolveRequest) => { resolve = resolveRequest }))
     change(page, 'Status', 'Completed'); render(); page = await settle()
-    change(page, 'Keyword', 'temporary'); render(); page = await settle()
-    change(page, 'Keyword', ''); render(); await settle()
+    change(page, 'Search', 'temporary'); render(); page = await settle()
+    change(page, 'Search', ''); render(); await settle()
     resolve!(response('PSF-FINISHED', 1)); await vi.advanceTimersByTimeAsync(0); page = render()
     expect(table(page)?.props.items).toEqual(response('PSF-FINISHED', 1).items)
     expect(findRenderedElement(page, (element) => element.props.inert === true)).toBeNull()

@@ -480,7 +480,7 @@ export function DashboardPage() {
   useEffect(() => {
     let mounted = true
     void api.fetchWorkflowStatuses().then((configuration) => {
-      if (mounted) setCatalog({ loading: false, error: null, data: configuration.statuses.filter((item) => item !== 'Draft'), statusKinds: Object.fromEntries((configuration.entries ?? []).map((entry) => [entry.name, entry.kind])) })
+      if (mounted) setCatalog({ loading: false, error: null, data: (configuration.filterStatuses ?? configuration.statuses).filter((item) => item !== 'Draft'), statusKinds: Object.fromEntries((configuration.entries ?? []).map((entry) => [entry.name, entry.kind])) })
     }).catch((error: unknown) => {
       if (mounted) setCatalog((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : 'Catalog unavailable', errorStatus: error instanceof ApiError ? error.status : undefined }))
     })
@@ -566,10 +566,11 @@ export function DashboardPage() {
       <section className="queue-surface" aria-label="Related request queue">
       <div className="queue-surface__heading"><h2>Related request queue</h2><span className="sr-only" role="status">{pending && hasResults ? 'Updating dashboard queue…' : ''}</span></div>
       <div className="filter-bar dashboard-filters" aria-label="Dashboard filters">
-        <label>Keyword<span className="filter-bar__control"><Search size={16} /><input className="input-with-icon" placeholder="Request no, title, PSF name…" value={keyword} onChange={(event) => { setKeyword(event.target.value) }} /></span></label>
-        <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label>Search<span className="filter-bar__control"><Search size={16} /><input aria-describedby="dashboard-search-help" className="input-with-icon" placeholder="Search requests…" value={keyword} onChange={(event) => { setKeyword(event.target.value) }} /></span></label>
+        <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); if (event.target.value) setWorkState('all'); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
+      <p className="filter-help" id="dashboard-search-help">Searches request no., product description, reference PSF name, PSF setup file name and probecard name.</p>
       {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, ROW_PX.dashboard)}>
         <RequestsTable statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
@@ -624,7 +625,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
     let mounted = true
     if (scope === 'my-drafts') return
     void api.fetchWorkflowStatuses().then((response) => {
-      if (mounted) setCatalog({ loading: false, error: null, data: response.statuses.filter((item) => item !== 'Draft'), statusKinds: Object.fromEntries((response.entries ?? []).map((entry) => [entry.name, entry.kind])) })
+      if (mounted) setCatalog({ loading: false, error: null, data: (response.filterStatuses ?? response.statuses).filter((item) => item !== 'Draft'), statusKinds: Object.fromEntries((response.entries ?? []).map((entry) => [entry.name, entry.kind])) })
     }).catch((error: unknown) => {
       if (mounted) setCatalog((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : 'Catalog unavailable', errorStatus: error instanceof ApiError ? error.status : undefined }))
     })
@@ -696,13 +697,14 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
         <div className="toolbar request-browser__toolbar" aria-label="Request filters">
           <form className={`filter-bar request-list-filters${scope === 'my-drafts' ? ' request-list-filters--drafts' : ''}`} onSubmit={(event) => event.preventDefault()}>
             <label>
-              Keyword
+              Search
               <span className="filter-bar__control">
                 <Search size={16} />
                 <input
                   className="input-base input-with-icon"
                   onChange={(event) => { setFilters((current) => ({ ...current, keyword: event.target.value })) }}
-                  placeholder="Request no, title, PSF name…"
+                  aria-describedby="request-search-help"
+                  placeholder={scope === 'my-drafts' ? 'Search drafts…' : 'Search requests…'}
                   value={filters.keyword}
                 />
               </span>
@@ -729,6 +731,9 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
           </div>
         </div>
 
+        <p className="filter-help" id="request-search-help">{scope === 'my-drafts'
+          ? 'Searches request no. and all requester information.'
+          : 'Searches request no., product description, reference PSF name, PSF setup file name and probecard name.'}</p>
         </QueueFilterPanel>
         <div className="queue-surface request-browser__results">
         {scope === 'all' && catalog.loading ? <p role="status">Loading status catalog…</p> : null}
