@@ -14,6 +14,15 @@ export function escapeHtml(value: unknown): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// The request tables' short Product Type (frontend productTypeLabel); other
+// values are shown as stored.
+const KNOWN_PRODUCT_TYPES =
+  /^(New Product|Transfer Product|Existing Product|Create new PSF|Revise from old PSF|Revise Old PSF|Product Transfer)\b/;
+function productTypeLabel(value: unknown): unknown {
+  return typeof value === 'string' && KNOWN_PRODUCT_TYPES.test(value)
+    ? value.replace(/\s*\(.*\)$/, '')
+    : value;
+}
 export interface RequestEmailMetadata {
   request_no: string;
   requester: string | null;
@@ -58,17 +67,17 @@ export function renderRequestEmail(
     );
   const fields: [string, unknown][] = [
     ['Request No', request.request_no],
-    ['Title', title],
+    ['Product Description', title],
     ['Requester', request.requester],
-    ['Product Type', valueFor('product_type') ?? request.product_type],
-    ['Priority', valueFor('priority')],
+    [
+      'Product Type',
+      productTypeLabel(valueFor('product_type') ?? request.product_type),
+    ],
     ['Due Date', valueFor('due_date')],
     ['Previous Status', event.fromStatus],
     ['New Status', event.targetStatus.name],
-    ['Updated By', `${event.actor.displayName} (${event.actor.role})`],
+    ['Updated By', event.actor.displayName],
   ];
-  if (event.targetStatus.kind === 'cancelled' && (data.reason || data.remarks))
-    fields.push(['Reason / Remarks', data.reason || data.remarks]);
   const summary = fields
     .map(
       ([key, value]) =>

@@ -113,6 +113,62 @@ void describe('notification SQL on an isolated in-memory PostgreSQL engine', () 
     assert.equal(result.rows[0].body_html.includes('NEVER-EMAIL-PSF'), false);
   });
 
+  void it('queues the summary the request tables use, without Priority', async () => {
+    const field = (key: string) => ({
+      fieldKey: key,
+      canonicalKey: key,
+      label: key,
+      type: 'text',
+    });
+    await db.query(
+      'UPDATE psf_requests SET product_type=$2, requester_data_json=$3::jsonb, schema_snapshot_json=$4::jsonb WHERE id=$1',
+      [
+        requestId,
+        'Product Transfer (Require PSF , PCSF , .LAY)',
+        JSON.stringify({
+          title: 'Chip B',
+          product_type: 'Product Transfer (Require PSF , PCSF , .LAY)',
+          priority: 'Urgent',
+        }),
+        JSON.stringify({
+          formKey: 'psf-request',
+          version: 2,
+          title: 'Requester Information',
+          sections: [
+            {
+              sectionKey: 'requester_information',
+              title: 'Requester Information',
+              fields: ['title', 'product_type', 'priority'].map(field),
+            },
+          ],
+        }),
+      ],
+    );
+    await db.exec('BEGIN');
+    await service.enqueueRequest({ query }, event);
+    await db.exec('COMMIT');
+    const [job] = (
+      await db.query<{ body_html: string }>(
+        'SELECT body_html FROM email_outbox',
+      )
+    ).rows;
+    assert.ok(
+      job.body_html.includes(
+        '<tr><th>Product Description</th><td>Chip B</td></tr>',
+      ),
+    );
+    assert.ok(
+      job.body_html.includes(
+        '<tr><th>Product Type</th><td>Product Transfer</td></tr>',
+      ),
+    );
+    assert.ok(
+      job.body_html.includes('<tr><th>Updated By</th><td>Tester</td></tr>'),
+    );
+    assert.equal(job.body_html.includes('Priority'), false);
+    assert.equal(job.body_html.includes('Urgent'), false);
+  });
+
   void it('rolls back outbox writes when the business transaction rolls back', async () => {
     await db.exec('BEGIN');
     await service.enqueueRequest({ query }, event);
