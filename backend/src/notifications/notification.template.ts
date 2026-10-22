@@ -14,6 +14,17 @@ export function escapeHtml(value: unknown): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// The request tables' short Product Type (frontend productTypeLabel), but other
+// values are shown as stored.
+const KNOWN_PRODUCT_TYPES =
+  /^(New Product|Transfer Product|Existing Product|Create new PSF|Revise from old PSF|Revise Old PSF|Product Transfer)\b/;
+function shortProductType(value: unknown): unknown {
+  return typeof value === 'string' && KNOWN_PRODUCT_TYPES.test(value)
+    ? value.replace(/\s*\(.*\)$/, '')
+    : value;
+}
+const GREEN = '#C6EFCE';
+const YELLOW = '#FFEB9C';
 export interface RequestEmailMetadata {
   request_no: string;
   requester: string | null;
@@ -56,27 +67,32 @@ export function renderRequestEmail(
       /[\r\n]/g,
       ' ',
     );
-  const fields: [string, unknown][] = [
+  const fields: [string, unknown, string?][] = [
     ['Request No', request.request_no],
-    ['Title', title],
+    ['Product Description', title, GREEN],
     ['Requester', request.requester],
-    ['Product Type', valueFor('product_type') ?? request.product_type],
-    ['Priority', valueFor('priority')],
+    [
+      'Product Type',
+      shortProductType(valueFor('product_type') ?? request.product_type),
+      GREEN,
+    ],
     ['Due Date', valueFor('due_date')],
     ['Previous Status', event.fromStatus],
     ['New Status', event.targetStatus.name],
-    ['Updated By', `${event.actor.displayName} (${event.actor.role})`],
+    ['Updated By', event.actor.displayName],
   ];
-  if (event.targetStatus.kind === 'cancelled' && (data.reason || data.remarks))
-    fields.push(['Reason / Remarks', data.reason || data.remarks]);
   const summary = fields
-    .map(
-      ([key, value]) =>
-        `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(display(value))}</td></tr>`,
-    )
+    .map(([key, value, background]) => {
+      // Inline styles, since Outlook ignores <style> blocks.
+      const fill = background ? `background-color:${background}` : '';
+      const labelStyle = ['text-align:left', fill].filter(Boolean).join(';');
+      const valueStyle = fill ? ` style="${fill}"` : '';
+      return `<tr><th style="${labelStyle}">${escapeHtml(key)}</th><td${valueStyle}>${escapeHtml(display(value))}</td></tr>`;
+    })
     .join('');
   const link = `${baseUrl}/requests/${encodeURIComponent(event.requestId)}`;
-  const html = `<h1>PSF Setup File Request Management</h1><p>${escapeHtml(action)}</p><table>${summary}</table>${event.bulkReplacement ? '<p>Status updated by bulk replacement.</p>' : ''}<p><a href="${escapeHtml(link)}">View Request</a></p>`;
+  const center = 'style="text-align:center"';
+  const html = `<h1 ${center}>PSF Setup File Request Management</h1><p ${center}><span style="background-color:${YELLOW}">${escapeHtml(action)}</span></p><table align="center" cellspacing="0" cellpadding="6">${summary}</table>${event.bulkReplacement ? `<p ${center}>Status updated by bulk replacement.</p>` : ''}<p ${center}><a href="${escapeHtml(link)}">View Request</a></p>`;
   return { subject, html };
 }
 

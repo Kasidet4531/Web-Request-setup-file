@@ -14,6 +14,86 @@ const enabled = {
 };
 const success =
   '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><m:SendMailResponse xmlns:m="http://tempuri.org/" /></s:Body></s:Envelope>';
+const statusChange = (
+  overrides: Partial<RequestNotificationEvent> = {},
+): RequestNotificationEvent => ({
+  eventType: 'REQUEST_STATUS_CHANGED',
+  requestId: '123',
+  fromStatus: '10% -- Test Engineer Data Entry',
+  targetStatus: {
+    id: 's',
+    name: '30% -- Compare Old and New layout',
+    kind: 'open',
+  },
+  actor: {
+    id: 'u',
+    username: 'somchai.j',
+    displayName: 'Somchai Jaidee',
+    role: 'setup_owner',
+    setupOwnerDepartment: 'GNTC',
+  },
+  ...overrides,
+});
+
+// Shaped like a request on the Initial Data Load requester form.
+const importedFormRequest = (extra: Record<string, unknown> = {}) => {
+  const field = (key: string, label: string) => ({
+    fieldKey: key,
+    canonicalKey: key,
+    label,
+    type: 'text' as const,
+    required: false,
+  });
+  const productType = 'Create new PSF (Require PCSF , E142 or .DPL)';
+  const base = {
+    product_type: productType,
+    title: 'Chip A',
+    requester_name: 'Somebody Requester',
+    due_date: '2026-08-07',
+    start_date: '2026-08-04',
+  };
+  return {
+    request_no: 'PSF-000123',
+    requester: 'Somebody Requester',
+    product_type: productType,
+    requester_data_json: { ...base, ...extra },
+    schema_snapshot_json: {
+      formKey: 'psf-request',
+      version: 2,
+      title: 'Requester Information',
+      sections: [
+        {
+          sectionKey: 'requester_information',
+          title: 'Requester Information',
+          fields: [
+            field('product_type', 'Request To'),
+            field('title', 'Product_Description'),
+            field('due_date', 'Due Date'),
+            field('start_date', 'Start Date'),
+            ...Object.keys(extra)
+              .filter((key) => !(key in base))
+              .map((key) => field(key, key)),
+          ],
+        },
+      ],
+    },
+  };
+};
+
+const rowPattern =
+  /<tr><th(?: style="([^"]*)")?>(.*?)<\/th><td(?: style="([^"]*)")?>(.*?)<\/td><\/tr>/g;
+const cells = (html: string) =>
+  [...html.matchAll(rowPattern)].map(
+    ([, labelStyle = '', label, valueStyle = '', value]) => ({
+      label,
+      value,
+      labelStyle,
+      valueStyle,
+    }),
+  );
+const rows = (html: string) =>
+  cells(html).map(({ label, value }) => [label, value]);
+const rowLabels = (html: string) => rows(html).map(([label]) => label);
 describe('mail safety and SOAP', () => {
   it('disables delivery by default and fixes From', () => {
     expect(new MailConfig({}).enabled).toBe(false);
@@ -187,7 +267,6 @@ describe('mail safety and SOAP', () => {
         product_type: null,
         requester_data_json: {
           custom_title: 'Captured title',
-          custom_priority: 'Urgent',
           custom_date: '2026-10-08',
           custom_product: 'IC',
         },
@@ -204,12 +283,6 @@ describe('mail safety and SOAP', () => {
                   fieldKey: 'custom_title',
                   canonicalKey: 'title',
                   label: 'Title',
-                  type: 'text',
-                },
-                {
-                  fieldKey: 'custom_priority',
-                  canonicalKey: 'priority',
-                  label: 'Priority',
                   type: 'text',
                 },
                 {
@@ -234,8 +307,135 @@ describe('mail safety and SOAP', () => {
     expect(result.subject).toBe(
       '[PSF Request] New Request: PSF-1 - Captured title',
     );
-    expect(result.html).toContain('Urgent');
     expect(result.html).toContain('2026-10-08');
-    expect(result.html).toContain('<td>IC</td>');
+    expect(rows(result.html)).toContainEqual(['Product Type', 'IC']);
+  });
+
+  it('has no Priority row, even when the request captured a priority', () => {
+    const result = renderRequestEmail(
+      statusChange(),
+      importedFormRequest({ priority: 'Urgent' }),
+      'http://localhost:3000',
+    );
+    expect(rowLabels(result.html)).not.toContain('Priority');
+    expect(result.html).not.toContain('Urgent');
+  });
+
+  it('labels the title row Product Description, as the request tables do', () => {
+    const result = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(rows(result.html)).toContainEqual(['Product Description', 'Chip A']);
+    expect(rowLabels(result.html)).not.toContain('Title');
+  });
+
+  it('shows Product Type without its document hint, as the request tables do', () => {
+    const result = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(rows(result.html)).toContainEqual([
+      'Product Type',
+      'Create new PSF',
+    ]);
+  });
+
+  it('shows a Product Type the request tables do not recognise as stored', () => {
+    const result = renderRequestEmail(
+      statusChange(),
+      importedFormRequest({ product_type: 'Legacy line (B2)' }),
+      'http://localhost:3000',
+    );
+    expect(rows(result.html)).toContainEqual([
+      'Product Type',
+      'Legacy line (B2)',
+    ]);
+  });
+
+  it('names who updated the request by their name only, without their role', () => {
+    const result = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(rows(result.html)).toContainEqual(['Updated By', 'Somchai Jaidee']);
+  });
+
+  it('has no Reason / Remarks row when a request is cancelled', () => {
+    const result = renderRequestEmail(
+      statusChange({
+        targetStatus: {
+          id: 'x',
+          name: '0% -- Rejected (Cancel Request)',
+          kind: 'cancelled',
+        },
+      }),
+      importedFormRequest({ reason: 'Duplicate', remarks: 'Old note' }),
+      'http://localhost:3000',
+    );
+    expect(rowLabels(result.html)).not.toContain('Reason / Remarks');
+    expect(result.html).not.toContain('Duplicate');
+  });
+
+  it('aligns every row label to the left so the labels line up', () => {
+    const { html } = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(cells(html)).toHaveLength(8);
+    for (const { labelStyle } of cells(html))
+      expect(labelStyle).toContain('text-align:left');
+  });
+
+  it('highlights Product Description and Product Type in green', () => {
+    const { html } = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    const green = cells(html).filter(
+      ({ labelStyle, valueStyle }) =>
+        labelStyle.includes('background-color:#C6EFCE') &&
+        valueStyle.includes('background-color:#C6EFCE'),
+    );
+    expect(green.map(({ label }) => label)).toEqual([
+      'Product Description',
+      'Product Type',
+    ]);
+  });
+
+  it('centres everything except the data inside the table', () => {
+    const { html } = renderRequestEmail(
+      statusChange({ bulkReplacement: true }),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    const blocks = [...html.matchAll(/<(h1|p)( [^>]*)?>/g)];
+    expect(blocks.map(([, tag]) => tag)).toEqual(['h1', 'p', 'p', 'p']);
+    for (const [, , attributes = ''] of blocks)
+      expect(attributes).toContain('text-align:center');
+    expect(html).toMatch(/<table[^>]* align="center"/);
+    for (const { labelStyle, valueStyle } of cells(html))
+      expect(`${labelStyle}${valueStyle}`).not.toContain('center');
+  });
+
+  it('highlights the status update line at the top in yellow, not the status rows', () => {
+    const { html } = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(html).toMatch(
+      /<span style="[^"]*background-color:#FFEB9C[^"]*">Status Updated to 30% -- Compare Old and New layout<\/span>/,
+    );
+    expect(
+      cells(html).filter(({ labelStyle, valueStyle }) =>
+        `${labelStyle}${valueStyle}`.includes('#FFEB9C'),
+      ),
+    ).toEqual([]);
   });
 });
