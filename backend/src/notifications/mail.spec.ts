@@ -408,20 +408,34 @@ describe('mail safety and SOAP', () => {
     ]);
   });
 
-  it('highlights the status update, Previous Status and New Status, in yellow', () => {
+  it('centres everything except the data inside the table', () => {
+    const { html } = renderRequestEmail(
+      statusChange({ bulkReplacement: true }),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    const blocks = [...html.matchAll(/<(h1|p)( [^>]*)?>/g)];
+    expect(blocks.map(([, tag]) => tag)).toEqual(['h1', 'p', 'p', 'p']);
+    for (const [, , attributes = ''] of blocks)
+      expect(attributes).toContain('text-align:center');
+    expect(html).toMatch(/<table[^>]* align="center"/);
+    for (const { labelStyle, valueStyle } of cells(html))
+      expect(`${labelStyle}${valueStyle}`).not.toContain('center');
+  });
+
+  it('highlights the status update line at the top in yellow, not the status rows', () => {
     const { html } = renderRequestEmail(
       statusChange(),
       importedFormRequest(),
       'http://localhost:3000',
     );
-    const yellow = cells(html).filter(
-      ({ labelStyle, valueStyle }) =>
-        labelStyle.includes('background-color:#FFEB9C') &&
-        valueStyle.includes('background-color:#FFEB9C'),
+    expect(html).toMatch(
+      /<span style="[^"]*background-color:#FFEB9C[^"]*">Status Updated to 30% -- Compare Old and New layout<\/span>/,
     );
-    expect(yellow.map(({ label, value }) => [label, value])).toEqual([
-      ['Previous Status', '10% -- Test Engineer Data Entry'],
-      ['New Status', '30% -- Compare Old and New layout'],
-    ]);
+    expect(
+      cells(html).filter(({ labelStyle, valueStyle }) =>
+        `${labelStyle}${valueStyle}`.includes('#FFEB9C'),
+      ),
+    ).toEqual([]);
   });
 });

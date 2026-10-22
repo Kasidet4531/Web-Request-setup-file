@@ -77,8 +77,8 @@ export function renderRequestEmail(
       GREEN,
     ],
     ['Due Date', valueFor('due_date')],
-    ['Previous Status', event.fromStatus, YELLOW],
-    ['New Status', event.targetStatus.name, YELLOW],
+    ['Previous Status', event.fromStatus],
+    ['New Status', event.targetStatus.name],
     ['Updated By', event.actor.displayName],
   ];
   const summary = fields
@@ -91,7 +91,8 @@ export function renderRequestEmail(
     })
     .join('');
   const link = `${baseUrl}/requests/${encodeURIComponent(event.requestId)}`;
-  const html = `<h1>PSF Setup File Request Management</h1><p>${escapeHtml(action)}</p><table cellspacing="0" cellpadding="6">${summary}</table>${event.bulkReplacement ? '<p>Status updated by bulk replacement.</p>' : ''}<p><a href="${escapeHtml(link)}">View Request</a></p>`;
+  const center = 'style="text-align:center"';
+  const html = `<h1 ${center}>PSF Setup File Request Management</h1><p ${center}><span style="background-color:${YELLOW}">${escapeHtml(action)}</span></p><table align="center" cellspacing="0" cellpadding="6">${summary}</table>${event.bulkReplacement ? `<p ${center}>Status updated by bulk replacement.</p>` : ''}<p ${center}><a href="${escapeHtml(link)}">View Request</a></p>`;
   return { subject, html };
 }
 
