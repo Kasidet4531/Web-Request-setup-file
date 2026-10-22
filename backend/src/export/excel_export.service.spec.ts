@@ -8,7 +8,7 @@ import {
   ExcelExportService,
   formatRequestExportFilename,
 } from './excel_export.service';
-import { exportCell } from './export-workbook';
+import { exportCell } from './export-table';
 
 describe('ExcelExportService', () => {
   const adminActor = {
@@ -100,7 +100,7 @@ describe('ExcelExportService', () => {
     await module.close();
   });
 
-  it('uses request-list status and request-date filters with the authenticated actor for a bounded synchronous export query', async () => {
+  it('uses request-list status and request-date filters for a bounded synchronous export query', async () => {
     const exportService = service as unknown as {
       exportRequests: (
         filters: {
@@ -129,7 +129,6 @@ describe('ExcelExportService', () => {
         limit: 500,
         offset: 0,
       },
-      adminActor,
       500,
     );
     expect(formSchemaService.getActiveSchema).toHaveBeenCalledWith(
@@ -144,7 +143,7 @@ describe('ExcelExportService', () => {
     );
   });
 
-  it('writes the latest active schema in canonical-key order, including bounded fallback values and deterministic cells', async () => {
+  it('writes the latest active schema in canonical-key order, reading each request through its own form version', async () => {
     const currentSchema = {
       formKey: 'psf-request',
       version: 9,
@@ -284,19 +283,19 @@ describe('ExcelExportService', () => {
           productType: 'New Product',
           requestDate: '2026-06-18T01:02:03.000Z',
           updatedAt: '2026-06-18T01:05:03.000Z',
-          requesterData: { legacy_title: 'Do not use fallback here' },
-          psfCreatedData: { psf_setup_file_name: 'admin-visible.psf' },
-          schemaSnapshot: oldSchema,
-          canonicalValues: {
-            title: 'Persisted canonical title',
-            multi_value: ['North, East', ' South '],
-            empty_value: [],
-            null_value: null,
-            number_value: 42,
-            boolean_value: false,
-            unsupported_value: { unexpected: true },
-            admin_only: 'Admin value',
+          requesterData: {
+            title_v9: 'Current title',
+            multi_v9: ['North, East', ' South '],
+            empty_v9: [],
+            null_v9: null,
+            number_v9: 42,
+            boolean_v9: false,
+            unsupported_v9: { unexpected: true },
+            admin_v9: 'Admin value',
+            legacy_title: 'Not in this form version',
           },
+          psfCreatedData: { psf_setup_file_name: 'admin-visible.psf' },
+          schemaSnapshot: currentSchema,
         },
         {
           requestId: 'request-2',
@@ -312,7 +311,6 @@ describe('ExcelExportService', () => {
           },
           psfCreatedData: { psf_setup_file_name: 'draft-admin-visible.psf' },
           schemaSnapshot: oldSchema,
-          canonicalValues: null,
         },
       ],
       total: 2,
@@ -345,6 +343,7 @@ describe('ExcelExportService', () => {
       'Status',
       'Request Date',
       'Updated At',
+      'Modified By',
       'Current Title',
       'Multi Value',
       'Empty Array',
@@ -370,19 +369,20 @@ describe('ExcelExportService', () => {
     );
     expect(headers).not.toContain('Old Title');
     expect(cellFor(2, 'Request No')).toBe('PSF-0001');
-    expect(cellFor(2, 'Current Title')).toBe('Persisted canonical title');
+    expect(cellFor(2, 'Current Title')).toBe('Current title');
     expect(cellFor(2, 'Multi Value')).toBe('North, East, South');
-    expect(cellFor(2, 'Empty Array')).toBe('');
-    expect(cellFor(2, 'Null Value')).toBe('');
+    expect(cellFor(2, 'Empty Array')).toBe('NA');
+    expect(cellFor(2, 'Null Value')).toBe('NA');
     expect(cellFor(2, 'Number Value')).toBe('42');
     expect(cellFor(2, 'Boolean Value')).toBe('false');
-    expect(cellFor(2, 'Unsupported Value')).toBe('');
-    expect(cellFor(2, 'Newest Only')).toBe('');
+    expect(cellFor(2, 'Unsupported Value')).toBe('NA');
+    expect(cellFor(2, 'Newest Only')).toBe('NA');
     expect(cellFor(2, 'Admin Only')).toBe('Admin value');
     expect(cellFor(2, 'PSF Setup File Name')).toBe('admin-visible.psf');
     expect(cellFor(3, 'Current Title')).toBe('Fallback from old field key');
     expect(cellFor(3, 'Multi Value')).toBe('A, B, C');
-    expect(cellFor(3, 'Newest Only')).toBe('');
+    expect(cellFor(3, 'Newest Only')).toBe('NA');
+    expect(cellFor(3, 'Admin Only')).toBe('NA');
     expect(cellFor(3, 'PSF Setup File Name')).toBe('draft-admin-visible.psf');
   });
 
@@ -476,7 +476,6 @@ describe('ExcelExportService', () => {
           },
           psfCreatedInformationSchema: historicalSchema,
           schemaSnapshot: requesterSchema,
-          canonicalValues: {},
         },
         {
           requestId: 'request-legacy',
@@ -490,7 +489,6 @@ describe('ExcelExportService', () => {
           psfCreatedData: { psf_setup_file_name: 'legacy.psf' },
           psfCreatedInformationSchema: LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
           schemaSnapshot: requesterSchema,
-          canonicalValues: {},
         },
       ],
       total: 2,
@@ -509,7 +507,8 @@ describe('ExcelExportService', () => {
       { length: worksheet.columnCount },
       (_, index) => worksheet.getRow(1).getCell(index + 1).value,
     );
-    const psfHeaders = headers.slice(4);
+    expect(headers[4]).toBe('Modified By');
+    const psfHeaders = headers.slice(5);
 
     expect(psfHeaders.slice(0, 3)).toEqual([
       'Current Setup File',
@@ -538,7 +537,59 @@ describe('ExcelExportService', () => {
     );
   });
 
-  it('exports all configured form sections while using sticky release rather than status names to reveal PSF cells', async () => {
+  it('exports all configured form sections and shows a Requester every PSF cell, released or not (ADR 0019)', async () => {
+    const activeSchema = {
+      formKey: 'psf-request',
+      version: 10,
+      title: 'PSF Request Form',
+      sections: [
+        {
+          sectionKey: 'requester',
+          title: 'Requester fields',
+
+          fields: [
+            {
+              fieldKey: 'title_v10',
+              canonicalKey: 'title',
+              label: 'Requester Title',
+              type: 'text',
+              required: false,
+              exportable: true,
+            },
+          ],
+        },
+        {
+          sectionKey: 'requester_only',
+          title: 'Requester only fields',
+
+          fields: [
+            {
+              fieldKey: 'requester_only',
+              canonicalKey: 'requester_only',
+              label: 'Requester Only',
+              type: 'text',
+              required: false,
+              exportable: true,
+            },
+          ],
+        },
+        {
+          sectionKey: 'admin_only',
+          title: 'Admin fields',
+
+          fields: [
+            {
+              fieldKey: 'admin_only',
+              canonicalKey: 'admin_only',
+              label: 'Admin Only',
+              type: 'text',
+              required: false,
+              exportable: true,
+            },
+          ],
+        },
+      ],
+    };
     formSchemaService.getActiveSchema.mockResolvedValueOnce({
       formKey: 'psf-request',
       version: 10,
@@ -546,58 +597,7 @@ describe('ExcelExportService', () => {
       description: null,
       status: 'active',
       publishedAt: null,
-      schema: {
-        formKey: 'psf-request',
-        version: 10,
-        title: 'PSF Request Form',
-        sections: [
-          {
-            sectionKey: 'requester',
-            title: 'Requester fields',
-
-            fields: [
-              {
-                fieldKey: 'title_v10',
-                canonicalKey: 'title',
-                label: 'Requester Title',
-                type: 'text',
-                required: false,
-                exportable: true,
-              },
-            ],
-          },
-          {
-            sectionKey: 'requester_only',
-            title: 'Requester only fields',
-
-            fields: [
-              {
-                fieldKey: 'requester_only',
-                canonicalKey: 'requester_only',
-                label: 'Requester Only',
-                type: 'text',
-                required: false,
-                exportable: true,
-              },
-            ],
-          },
-          {
-            sectionKey: 'admin_only',
-            title: 'Admin fields',
-
-            fields: [
-              {
-                fieldKey: 'admin_only',
-                canonicalKey: 'admin_only',
-                label: 'Admin Only',
-                type: 'text',
-                required: false,
-                exportable: true,
-              },
-            ],
-          },
-        ],
-      },
+      schema: activeSchema,
     });
     searchIndexService.queryExportRequests.mockResolvedValueOnce({
       items: ['Draft', 'Submitted', 'PSF Created', 'Completed'].map(
@@ -610,19 +610,13 @@ describe('ExcelExportService', () => {
           productType: null,
           requestDate: '2026-06-18T01:02:03.000Z',
           updatedAt: '2026-06-18T01:05:03.000Z',
-          requesterData: {},
-          psfCreatedData: { psf_setup_file_name: `${status}.psf` },
-          schemaSnapshot: {
-            formKey: 'psf-request',
-            version: 10,
-            title: 'PSF Request Form',
-            sections: [],
-          },
-          canonicalValues: {
-            title: status,
+          requesterData: {
+            title_v10: status,
             requester_only: `${status} requester value`,
             admin_only: `${status} admin value`,
           },
+          psfCreatedData: { psf_setup_file_name: `${status}.psf` },
+          schemaSnapshot: activeSchema,
         }),
       ),
       total: 4,
@@ -654,8 +648,12 @@ describe('ExcelExportService', () => {
     expect(worksheet.getRow(2).getCell(additionalColumn).value).toBe(
       'Draft admin value',
     );
-    expect(worksheet.getRow(2).getCell(psfSetupFileColumn).value).toBe('');
-    expect(worksheet.getRow(3).getCell(psfSetupFileColumn).value).toBe('');
+    expect(worksheet.getRow(2).getCell(psfSetupFileColumn).value).toBe(
+      'Draft.psf',
+    );
+    expect(worksheet.getRow(3).getCell(psfSetupFileColumn).value).toBe(
+      'Submitted.psf',
+    );
     expect(worksheet.getRow(4).getCell(psfSetupFileColumn).value).toBe(
       'PSF Created.psf',
     );
@@ -671,7 +669,7 @@ describe('ExcelExportService', () => {
   });
 
   it.each(['synchronous', 'queued'] as const)(
-    'retains historical requester and PSF sections in a %s workbook while masking unreleased PSF cells',
+    'retains historical requester and PSF sections in a %s workbook, unreleased PSF cells included',
     async (mode) => {
       const currentSchema = {
         formKey: 'psf-request',
@@ -800,7 +798,6 @@ describe('ExcelExportService', () => {
             old_second: 'Captured two',
             old_third: 'Captured three',
           },
-          canonicalValues: null,
           schemaSnapshot: capturedSchema,
           psfCreatedData: {
             old_file: 'captured.psf',
@@ -845,22 +842,18 @@ describe('ExcelExportService', () => {
             .getCell(headers.indexOf('Historical third section') + 1).value,
         ).toBe('Captured three');
       }
-      expect(
-        sheet.getRow(2).getCell(headers.indexOf('PSF Setup File Name') + 1)
-          .value,
-      ).toBe('');
-      expect(
-        sheet.getRow(2).getCell(headers.indexOf('Historical PSF note') + 1)
-          .value,
-      ).toBe('');
-      expect(
-        sheet.getRow(3).getCell(headers.indexOf('PSF Setup File Name') + 1)
-          .value,
-      ).toBe('captured.psf');
-      expect(
-        sheet.getRow(3).getCell(headers.indexOf('Historical PSF note') + 1)
-          .value,
-      ).toBe('Captured private note');
+      for (const rowNumber of [2, 3]) {
+        expect(
+          sheet
+            .getRow(rowNumber)
+            .getCell(headers.indexOf('PSF Setup File Name') + 1).value,
+        ).toBe('captured.psf');
+        expect(
+          sheet
+            .getRow(rowNumber)
+            .getCell(headers.indexOf('Historical PSF note') + 1).value,
+        ).toBe('Captured private note');
+      }
     },
   );
 
@@ -912,7 +905,6 @@ describe('ExcelExportService', () => {
             requesterData: { note: 'ภาษาไทย 😀\r\nsecond line' },
             psfCreatedData: {},
             schemaSnapshot: schema,
-            canonicalValues: null,
             psfReleasedAt: null,
           },
         ],
@@ -946,7 +938,6 @@ describe('ExcelExportService', () => {
             status: 'Submitted',
             requesterData: {},
             psfCreatedData: {},
-            canonicalValues: {},
             schemaSnapshot: {
               formKey: 'psf-request',
               version: 1,
@@ -963,7 +954,7 @@ describe('ExcelExportService', () => {
     await expect(service.exportAllRequests({}, adminActor)).rejects.toThrow();
   });
 
-  it('paginates a durable large export through the same workbook rendering and actor scope', async () => {
+  it('paginates a durable large export through the same workbook rendering', async () => {
     const exportItem = (requestNo: string) => ({
       requestId: requestNo,
       requestNo,
@@ -980,7 +971,6 @@ describe('ExcelExportService', () => {
         title: 'PSF Request Form',
         sections: [],
       },
-      canonicalValues: {},
     });
     searchIndexService.queryExportRequests
       .mockResolvedValueOnce({
@@ -1011,13 +1001,11 @@ describe('ExcelExportService', () => {
     expect(searchIndexService.queryExportRequests).toHaveBeenNthCalledWith(
       1,
       { status: 'Submitted', limit: 500, offset: 0 },
-      requesterActor,
       500,
     );
     expect(searchIndexService.queryExportRequests).toHaveBeenNthCalledWith(
       2,
       { status: 'Submitted', limit: 500, offset: 1 },
-      requesterActor,
       500,
     );
   });

@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
-import { api, type PsfRequestListItem, type WorkflowStatusKind } from "../services/api";
+import { useEffect, useRef, useState, type Ref } from "react";
+import { api } from "../services/api";
 import { PageHeader } from './ui/PageHeader';
 import { AsyncNotice } from './ui/AsyncNotice';
-import { StatusLabel } from './ui/StatusLabel';
 import {
+  EXPORT_PREVIEW_PAGE_SIZE,
   downloadCompletedRequestExport,
   fetchRequestExportJob,
+  fetchRequestExportPreview,
   startRequestExport,
   type RequestExportFilterValues,
+  type RequestExportPreview as RequestExportPreviewValue,
 } from "../services/request-export";
 
 export const EXPORT_JOB_POLL_INTERVAL_MS = 2_000;
@@ -98,72 +100,62 @@ export function RequestExportFeedback({
   return feedback ? <AsyncNotice kind="error" title={feedback.message} /> : null;
 }
 
-type RequestExportPreviewState = {
+type RequestExportPreviewState = RequestExportPreviewValue & {
   error: string | null;
-  items: PsfRequestListItem[];
   loading: boolean;
-  total: number;
-  statusKinds?: Record<string, WorkflowStatusKind>;
 };
 
-function formatPreviewDate(value: string | null): string {
-  if (!value) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
-}
-
+// The file itself a page at a time: the same columns, values and NA cells,
+// with Request No pinned while the other columns scroll. A page stays in
+// place while the next one loads, and an empty or failed page keeps its way
+// back, as on the request list. Only the count is announced, not the table.
 export function RequestExportPreview({
   error,
-  items,
+  headers,
+  rows,
   loading,
   total,
-  statusKinds = {},
-}: RequestExportPreviewState) {
+  offset,
+  limit,
+  onPageChange,
+  tableRef,
+}: RequestExportPreviewState & {
+  onPageChange: (offset: number) => void;
+  tableRef?: Ref<HTMLDivElement>;
+}) {
   return (
-    <section className="request-export__preview" aria-live="polite">
+    <section className="request-export__preview">
       <div className="request-export__preview-header">
         <div>
           <h2>Request preview</h2>
-          <p>{loading ? "Loading filtered requests…" : `First ${items.length} of ${total} matching request${total === 1 ? "" : "s"}.`}</p>
-          <p>The download includes submitted requests only, never Drafts. This preview may list fewer for your account; its count is not an exported record count.</p>
+          <p role="status">{loading ? "Loading filtered requests…" : `${total} request${total === 1 ? "" : "s"} in the file.`}</p>
+          <p>The download includes every submitted request that matches these filters, never Drafts, with the same columns shown here.</p>
         </div>
       </div>
       {error ? <AsyncNotice kind="error" title={error} /> : null}
-      {!loading && !error && items.length === 0 ? (
+      {!loading && !error && total === 0 ? (
         <div className="table-empty">
           <h3>No requests match these filters</h3>
           <p>Adjust the filters to preview different requests.</p>
         </div>
       ) : null}
-      {!loading && !error && items.length > 0 ? (
-        <div className="request-export__preview-table">
-        <p className="table-scroll__hint">Scroll horizontally to see request statuses, requesters, and due dates.</p>
-        <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0}>
+      {!error && rows.length > 0 ? (
+        <div className="request-export__preview-table" inert={loading} aria-busy={loading}>
+        <p className="table-scroll__hint">Scroll horizontally to see every column in the file.</p>
+        <div className="data-table" role="region" aria-label="Filtered request preview" tabIndex={0} ref={tableRef}>
           <table>
             <thead>
               <tr>
-                <th scope="col">Request No.</th>
-                <th scope="col">Title / Product Type</th>
-                <th scope="col">Status</th>
-                <th scope="col">Requester</th>
-                <th scope="col">Due Date</th>
+                {headers.map((header, column) => (
+                  <th key={column} scope="col" className={column === 0 ? "request-export__pinned" : undefined}><span title={header}>{header}</span></th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.requestId}>
-                  <td><code>{item.requestNo}</code></td>
-                  <td>
-                    <div className="request-identity">
-                    <span className="request-identity__title">{item.title ?? "Untitled request"}</span>
-                    <span className="request-identity__type">{item.productType ?? "No product type"}</span>
-                    </div>
-                  </td>
-                  <td><StatusLabel status={item.status} kind={Object.hasOwn(statusKinds, item.status) ? statusKinds[item.status] : undefined} /></td>
-                  <td>{item.requester ?? "—"}</td>
-                  <td>{formatPreviewDate(item.dueDate)}</td>
+              {rows.map(([requestNo, ...cells], row) => (
+                <tr key={row}>
+                  <th scope="row" className="request-export__pinned">{requestNo}</th>
+                  {cells.map((cell, column) => <td key={column}><span title={String(cell)}>{cell}</span></td>)}
                 </tr>
               ))}
             </tbody>
@@ -171,13 +163,22 @@ export function RequestExportPreview({
         </div>
         </div>
       ) : null}
+      {rows.length > 0 || offset > 0 ? (
+        <div className="table-footer" aria-label="Export Preview pagination" aria-busy={loading}>
+          <span>{rows.length ? `${offset + 1}–${Math.min(offset + rows.length, total)} of ${total} requests` : "0 requests"}</span>
+          {offset > 0 || total > limit ? <div className="toolbar__actions">
+            <button className="btn-secondary" disabled={loading || offset === 0} onClick={() => onPageChange(Math.max(0, offset - limit))} type="button">Previous</button>
+            <button className="btn-secondary" disabled={loading || offset + limit >= total} onClick={() => onPageChange(offset + limit)} type="button">Next</button>
+          </div> : null}
+        </div>
+      ) : null}
     </section>
   );
 }
 
 export function RequestExportPage() {
-  const [catalog, setCatalog] = useState<{ statuses: string[]; kinds: Record<string, WorkflowStatusKind>; loading: boolean; error: string | null }>({
-    statuses: [], kinds: {}, loading: true, error: null,
+  const [catalog, setCatalog] = useState<{ statuses: string[]; loading: boolean; error: string | null }>({
+    statuses: [], loading: true, error: null,
   });
   const [filters, setFilters] = useState<RequestExportFilterValues>({
     status: "",
@@ -191,11 +192,16 @@ export function RequestExportPage() {
   const [pendingJob, setPendingJob] = useState<PendingRequestExportJob | null>(
     null,
   );
+  const [offset, setOffset] = useState(0);
+  const previewTable = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<RequestExportPreviewState>({
     error: null,
-    items: [],
+    headers: [],
+    rows: [],
     loading: true,
     total: 0,
+    offset: 0,
+    limit: EXPORT_PREVIEW_PAGE_SIZE,
   });
   const pendingJobStatusUrl = pendingJob?.statusUrl;
 
@@ -204,16 +210,24 @@ export function RequestExportPage() {
     value: string,
   ) => {
     setFilters((current) => ({ ...current, [field]: value }));
+    showPreviewPage(0);
+  };
+
+  const showPreviewPage = (nextOffset: number) => {
+    // A new page starts at its first row.
+    previewTable.current?.scrollTo({ top: 0 });
+    setOffset(nextOffset);
+    setPreview((current) => ({ ...current, error: null, loading: true }));
   };
 
   useEffect(() => {
     let cancelled = false;
     void api.fetchWorkflowStatuses().then(
       (response) => {
-        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), kinds: Object.fromEntries(response.entries.map((entry) => [entry.name, entry.kind])), loading: false, error: null });
+        if (!cancelled) setCatalog({ statuses: response.entries.filter((entry) => entry.kind !== "draft").map((entry) => entry.name), loading: false, error: null });
       },
       (error: unknown) => {
-        if (!cancelled) setCatalog({ statuses: [], kinds: {}, loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
+        if (!cancelled) setCatalog({ statuses: [], loading: false, error: error instanceof Error ? error.message : "Catalog unavailable." });
       },
     );
     return () => { cancelled = true; };
@@ -222,24 +236,22 @@ export function RequestExportPage() {
   useEffect(() => {
     let cancelled = false;
 
-    void api.queryPsfRequests({
-      limit: 10,
-      requestDateFrom: filters.from || undefined,
-      requestDateTo: filters.to || undefined,
-      status: filters.status || undefined,
-    }).then(
+    void fetchRequestExportPreview(filters, offset).then(
       (response) => {
         if (!cancelled) {
-          setPreview({ error: null, items: response.items, loading: false, total: response.total });
+          setPreview({ error: null, ...response, loading: false });
         }
       },
       (error: unknown) => {
         if (!cancelled) {
           setPreview({
             error: error instanceof Error ? error.message : "Unable to load export preview.",
-            items: [],
+            headers: [],
+            rows: [],
             loading: false,
             total: 0,
+            offset,
+            limit: EXPORT_PREVIEW_PAGE_SIZE,
           });
         }
       },
@@ -248,7 +260,7 @@ export function RequestExportPage() {
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, offset]);
 
   useEffect(() => {
     if (!pendingJobStatusUrl) {
@@ -370,7 +382,7 @@ export function RequestExportPage() {
             jobStatus={pendingJob?.status ?? null}
           />
         </section>
-        <RequestExportPreview {...preview} statusKinds={catalog.kinds} />
+        <RequestExportPreview {...preview} onPageChange={showPreviewPage} tableRef={previewTable} />
       </div>
     </article>
   );

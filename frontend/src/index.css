@@ -738,12 +738,18 @@ span.request-attachments__name { color: var(--foreground); cursor: default; }
 .admin-workflow-transition__table th:nth-child(2) { width: 14%; }
 .admin-workflow-transition__table th:nth-child(3) { width: 10%; }
 .admin-workflow-transition__table th:nth-child(4) { width: 26%; }
-.request-export__preview-table table { table-layout: fixed; min-width: 800px; }
-.request-export__preview-table th:nth-child(1) { width: 16%; }
-.request-export__preview-table th:nth-child(2) { width: 24%; }
-.request-export__preview-table th:nth-child(3) { width: 28%; }
-.request-export__preview-table th:nth-child(4) { width: 18%; }
-.request-export__preview-table th:nth-child(5) { width: 14%; }
+/* The preview shows every column of the file, so cells keep one line and
+   Request No stays pinned while the rest scroll horizontally. */
+.request-export__preview-table table { width: max-content; min-width: 100%; }
+/* Table cells ignore max-width under automatic layout, so the text truncates. */
+.request-export__preview-table th, .request-export__preview-table td { white-space: nowrap; }
+.request-export__preview-table th > span, .request-export__preview-table td > span { display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.request-export__pinned { position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: inset -1px 0 0 var(--border); }
+/* The header row stays pinned above the rows, its Request No above both. */
+.request-export__preview-table thead th { position: sticky; top: 0; z-index: 2; }
+.request-export__preview-table thead .request-export__pinned { z-index: 3; }
+tbody .request-export__pinned { color: var(--foreground); font-weight: 500; border-top: 1px solid var(--border); }
+.data-table tbody tr:hover .request-export__pinned { background: var(--background); }
 .active-schema-form__identity { align-items: center; }
 .active-schema-form__identity > div { margin-right: auto; }
 .detail-summary { margin-bottom: 16px; }

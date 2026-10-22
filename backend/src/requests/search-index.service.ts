@@ -31,6 +31,69 @@ export function serializeCanonicalValue(value: unknown): string {
   return Array.isArray(normalized) ? normalized.join(', ') : '';
 }
 
+// The columns each Form Schema family's schema snapshot is captured in and
+// its content key is stored in.
+const SCHEMA_SNAPSHOT_COLUMNS = {
+  requester: { snapshot: 'schema_snapshot_json', key: 'schema_snapshot_key' },
+  created: {
+    snapshot: 'psf_created_schema_snapshot_json',
+    key: 'psf_created_schema_snapshot_key',
+  },
+} as const;
+type FormFamily = keyof typeof SCHEMA_SNAPSHOT_COLUMNS;
+const FORM_FAMILIES = Object.keys(SCHEMA_SNAPSHOT_COLUMNS) as FormFamily[];
+
+// Identifies a schema snapshot by its whole content, so an export reads each
+// distinct schema snapshot once instead of once per request: the MD5 of its
+// JSONB text, which is canonical, so equal content gets the same key.
+// PostgreSQL stores the key beside its schema snapshot, so finding an
+// export's distinct schema snapshots never decompresses every request's.
+// Adding both columns in one statement rewrites psf_requests once.
+export async function ensureSchemaSnapshotKeyStorage(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  await queryRunner.query(
+    `ALTER TABLE psf_requests ${FORM_FAMILIES.map((family) => {
+      const { snapshot, key } = SCHEMA_SNAPSHOT_COLUMNS[family];
+      return `ADD COLUMN IF NOT EXISTS ${key} TEXT GENERATED ALWAYS AS (md5(${snapshot}::text)) STORED`;
+    }).join(', ')}`,
+  );
+}
+const contentKey = (family: FormFamily, alias = 'request') =>
+  `${alias}.${SCHEMA_SNAPSHOT_COLUMNS[family].key}`;
+
+interface SchemaSnapshotRef {
+  family: FormFamily;
+  key: string | null;
+  requestId: string;
+}
+
+// The schema snapshots one export has read, by content key.
+class SchemaSnapshots {
+  private readonly byKey = new Map<string, FormSchemaJson>();
+
+  add(key: string, json: string): void {
+    if (!this.byKey.has(key))
+      this.byKey.set(key, JSON.parse(json) as FormSchemaJson);
+  }
+
+  get(key: string): FormSchemaJson {
+    const schema = this.byKey.get(key);
+    // Within an export's transaction a request's schema snapshot cannot change.
+    if (!schema) throw new Error('A schema snapshot was not read.');
+    return schema;
+  }
+
+  // One request per content key not read yet.
+  unread(refs: SchemaSnapshotRef[]): SchemaSnapshotRef[] {
+    const unread = new Map<string, SchemaSnapshotRef>();
+    for (const ref of refs)
+      if (ref.key !== null && !this.byKey.has(ref.key) && !unread.has(ref.key))
+        unread.set(ref.key, ref);
+    return [...unread.values()];
+  }
+}
+
 export function extractCanonicalValues(
   schema: FormSchemaJson,
   data: RequesterData,
@@ -128,7 +191,6 @@ export interface RequestExportItem {
   psfReleasedAt: string | null;
   psfCreatedInformationSchema?: FormSchemaJson;
   schemaSnapshot: FormSchemaJson;
-  canonicalValues: CanonicalValues | null;
 }
 
 export interface RequestExportResult {
@@ -195,9 +257,8 @@ interface RequestExportRow {
   psf_created_data_json: RequesterData;
   psf_released_at: Date | string | null;
   requester_user_id: string | null;
-  psf_created_schema_snapshot_json?: FormSchemaJson | string | null;
-  schema_snapshot_json: FormSchemaJson | string;
-  canonical_values_json: CanonicalValues | null;
+  psf_created_schema_key: string | null;
+  schema_key: string;
   total_count: number;
 }
 
@@ -222,7 +283,7 @@ const MFG_PRODUCT_TYPES =
 export class SearchIndexService implements OnModuleInit {
   private exportContext?: {
     counts: Map<string, number>;
-    schemas: Map<string, FormSchemaJson>;
+    schemas: SchemaSnapshots;
   };
   constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
 
@@ -233,7 +294,10 @@ export class SearchIndexService implements OnModuleInit {
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const search = new SearchIndexService(client as unknown as Pool);
-      search.exportContext = { counts: new Map(), schemas: new Map() };
+      search.exportContext = {
+        counts: new Map(),
+        schemas: new SchemaSnapshots(),
+      };
       const result = await operation(search, client);
       await client.query('COMMIT');
       return result;
@@ -620,9 +684,9 @@ export class SearchIndexService implements OnModuleInit {
     };
   }
 
+  // Every role exports the same submitted requests and values (ADR 0019).
   async queryExportRequests(
     filters: RequestSearchFilters,
-    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
     maximumLimit = 100,
   ): Promise<RequestExportResult> {
     const limit = this.normalizeLimit(filters.limit, maximumLimit);
@@ -653,16 +717,10 @@ export class SearchIndexService implements OnModuleInit {
           request.psf_created_data_json,
           request.psf_released_at,
           request.requester_user_id,
-          request.psf_created_schema_snapshot_json::text AS psf_created_schema_snapshot_json,
-          request.schema_snapshot_json::text AS schema_snapshot_json,
-          canonical_values.canonical_values_json,
+          ${contentKey('created')} AS psf_created_schema_key,
+          ${contentKey('requester')} AS schema_key,
           ${knownTotal === undefined ? 'request.total_count' : `${knownTotal}::int AS total_count`}
         FROM export_page AS request
-        LEFT JOIN LATERAL (
-          SELECT jsonb_object_agg(canonical_key, value_json) AS canonical_values_json
-          FROM canonical_submission_values
-          WHERE request_id = request.id
-        ) AS canonical_values ON TRUE
         ORDER BY request.updated_at DESC, request.request_no DESC
       `,
       [...params, limit, offset],
@@ -670,14 +728,111 @@ export class SearchIndexService implements OnModuleInit {
 
     const total = knownTotal ?? result.rows[0]?.total_count ?? 0;
     this.exportContext?.counts.set(countKey, total);
-    const schemas =
-      this.exportContext?.schemas || new Map<string, FormSchemaJson>();
+    const schemas = this.exportContext?.schemas || new SchemaSnapshots();
+    await this.readSchemaSnapshots(
+      schemas,
+      result.rows.flatMap((row) => [
+        { family: 'requester', key: row.schema_key, requestId: row.request_id },
+        {
+          family: 'created',
+          key: row.psf_created_schema_key,
+          requestId: row.request_id,
+        },
+      ]),
+    );
     return {
-      items: result.rows.map((row) => this.mapExportRow(row, actor, schemas)),
+      items: result.rows.map((row) => this.mapExportRow(row, schemas)),
       total,
       limit,
       offset,
     };
+  }
+
+  // The distinct schema snapshots of every request the export holds, in the
+  // export's row order, so its columns can be known without its rows. Requests
+  // group by content key, and each distinct schema snapshot is read from the
+  // first request that captured it.
+  async queryExportSchemas(filters: RequestSearchFilters): Promise<{
+    requester: FormSchemaJson[];
+    created: FormSchemaJson[];
+  }> {
+    const { whereClause, params } = this.buildExportWhere(filters);
+    const distinct = (family: FormFamily) => `
+      SELECT '${family}' AS family, first.key,
+        request.${SCHEMA_SNAPSHOT_COLUMNS[family].snapshot}::text AS schema_json,
+        first.position
+      FROM (
+        SELECT DISTINCT ON (${contentKey(family, 'ordered')})
+          ${contentKey(family, 'ordered')} AS key, ordered.id, ordered.position
+        FROM ordered
+        ORDER BY ${contentKey(family, 'ordered')}, ordered.position
+      ) AS first
+      JOIN psf_requests AS request ON request.id = first.id`;
+    const result = await this.pool.query<{
+      family: FormFamily;
+      key: string | null;
+      schema_json: string | null;
+    }>(
+      `
+        WITH ordered AS (
+          SELECT
+            request.id,
+            ${contentKey('requester')},
+            ${contentKey('created')},
+            ROW_NUMBER() OVER (
+              ORDER BY request.updated_at DESC, request.request_no DESC
+            ) AS position
+          FROM psf_requests AS request
+          ${whereClause}
+        )
+        SELECT family, key, schema_json FROM (
+          ${distinct('requester')}
+          UNION ALL
+          ${distinct('created')}
+        ) AS captured
+        ORDER BY family DESC, position
+      `,
+      params,
+    );
+    const schemas = this.exportContext?.schemas || new SchemaSnapshots();
+    for (const row of result.rows)
+      if (row.key !== null && row.schema_json !== null)
+        schemas.add(row.key, row.schema_json);
+    const keys = (family: FormFamily) =>
+      result.rows.filter((row) => row.family === family).map((row) => row.key);
+    return {
+      // Every request captures its requester form (NOT NULL).
+      requester: keys('requester').map((key) => schemas.get(key as string)),
+      created: keys('created').map((key) =>
+        resolvePsfCreatedInformationSchema(
+          key === null ? null : schemas.get(key),
+        ),
+      ),
+    };
+  }
+
+  // Reads each schema snapshot the export has not read yet, once, from one
+  // request that captured it.
+  private async readSchemaSnapshots(
+    schemas: SchemaSnapshots,
+    refs: SchemaSnapshotRef[],
+  ): Promise<void> {
+    const unread = schemas.unread(refs);
+    if (unread.length === 0) return;
+    const result = await this.pool.query<{ key: string; schema_json: string }>(
+      FORM_FAMILIES.map(
+        (family, index) => `
+            SELECT ${contentKey(family)} AS key,
+              request.${SCHEMA_SNAPSHOT_COLUMNS[family].snapshot}::text AS schema_json
+            FROM psf_requests AS request WHERE request.id = ANY($${index + 1}::uuid[])`,
+      ).join(' UNION ALL '),
+      FORM_FAMILIES.map((family) =>
+        unread
+          .filter((ref) => ref.family === family)
+          .map((ref) => ref.requestId),
+      ),
+    );
+    for (const row of result.rows) schemas.add(row.key, row.schema_json);
   }
 
   async countExportRequests(filters: RequestSearchFilters): Promise<number> {
@@ -1048,21 +1203,8 @@ export class SearchIndexService implements OnModuleInit {
 
   private mapExportRow(
     row: RequestExportRow,
-    actor: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
-    schemas: Map<string, FormSchemaJson>,
+    schemas: SchemaSnapshots,
   ): RequestExportItem {
-    const schema = (value: FormSchemaJson | string): FormSchemaJson => {
-      if (typeof value !== 'string') return value;
-      let parsed = schemas.get(value);
-      if (!parsed) {
-        parsed = JSON.parse(value) as FormSchemaJson;
-        schemas.set(value, parsed);
-      }
-      return parsed;
-    };
-    const psfVisible =
-      actor.role !== 'requester' ||
-      (row.psf_released_at !== null && row.psf_released_at !== undefined);
     return {
       requestId: row.request_id,
       requestNo: row.request_no,
@@ -1072,15 +1214,14 @@ export class SearchIndexService implements OnModuleInit {
       requestDate: this.serializeTimestamp(row.request_date),
       updatedAt: this.serializeTimestamp(row.updated_at),
       requesterData: row.requester_data_json ?? {},
-      psfCreatedData: psfVisible ? (row.psf_created_data_json ?? {}) : {},
+      psfCreatedData: row.psf_created_data_json ?? {},
       psfReleasedAt: this.serializeNullableTimestamp(row.psf_released_at),
       psfCreatedInformationSchema: resolvePsfCreatedInformationSchema(
-        row.psf_created_schema_snapshot_json == null
-          ? row.psf_created_schema_snapshot_json
-          : schema(row.psf_created_schema_snapshot_json),
+        row.psf_created_schema_key === null
+          ? null
+          : schemas.get(row.psf_created_schema_key),
       ),
-      schemaSnapshot: schema(row.schema_snapshot_json),
-      canonicalValues: row.canonical_values_json,
+      schemaSnapshot: schemas.get(row.schema_key),
     };
   }
 

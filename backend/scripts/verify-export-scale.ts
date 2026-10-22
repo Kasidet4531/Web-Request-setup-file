@@ -18,6 +18,7 @@ import { SaxesParser } from 'saxes';
 import { ExcelExportService } from '../src/export/excel_export.service';
 import {
   SearchIndexService,
+  ensureSchemaSnapshotKeyStorage,
   type RequestSearchFilters,
 } from '../src/requests/search-index.service';
 import {
@@ -111,7 +112,7 @@ function checkCell(actual: Cell | undefined, expected: Cell, location: string) {
 }
 
 // An independent ZIP + strict XML reader; no ExcelJS reader or exporter helpers.
-export async function verify(file: string, rows: number, role: Role) {
+export async function verify(file: string, rows: number) {
   const start = performance.now();
   const zip = await unzipper.Open.file(file);
   assert.equal(
@@ -228,7 +229,7 @@ export async function verify(file: string, rows: number, role: Role) {
       }
       if (name === 'row') {
         const expected =
-          rowNumber === 1 ? headers : expectedRow(rows - rowNumber + 2, role);
+          rowNumber === 1 ? headers : expectedRow(rows - rowNumber + 2);
         for (let c = 0; c < headers.length; c++) {
           const actual = row[c] === undefined ? '' : row[c];
           const wanted = expected[c];
@@ -326,9 +327,7 @@ export async function runCase(c: Case, sharedPool?: Pool) {
     const bytes = result.content.length;
     result.content = Buffer.alloc(0);
     if (!c.deferVerification) global.gc?.();
-    const verified = c.deferVerification
-      ? {}
-      : await verify(c.output, c.rows, c.role);
+    const verified = c.deferVerification ? {} : await verify(c.output, c.rows);
     const output = {
       ...c,
       success: true,
@@ -366,6 +365,18 @@ export async function createFixtureTables(pool: Pool) {
   CREATE TABLE form_definitions (form_key text, version int, status text, schema_json jsonb,
     title text NOT NULL DEFAULT 'Synthetic', description text, published_at timestamptz,
     PRIMARY KEY(form_key,version))`);
+  await ensureSchemaSnapshotKeyStorage(pool);
+}
+
+// The request columns an INSERT may write: PostgreSQL computes the rest.
+async function writableRequestColumns(pool: Pool): Promise<string> {
+  const result = await pool.query<{ list: string }>(
+    `SELECT string_agg(quote_ident(column_name), ',' ORDER BY ordinal_position) AS list
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'psf_requests'
+       AND is_generated = 'NEVER'`,
+  );
+  return result.rows[0].list;
 }
 
 export async function seed(pool: Pool, count: number) {
@@ -596,8 +607,9 @@ export async function restoreFixture(pool: Pool, saved: FixtureState) {
     await pool.query('DELETE FROM psf_requests WHERE id = ANY($1::uuid[])', [
       saved.ids,
     ]);
+    const columns = await writableRequestColumns(pool);
     await pool.query(
-      'INSERT INTO psf_requests SELECT * FROM jsonb_populate_recordset(NULL::psf_requests,$1::jsonb)',
+      `INSERT INTO psf_requests (${columns}) SELECT ${columns} FROM jsonb_populate_recordset(NULL::psf_requests,$1::jsonb)`,
       [JSON.stringify(saved.requests)],
     );
     await pool.query(
@@ -641,10 +653,11 @@ export async function mutateFixture(port: number, rows: number) {
     await writer.query('DELETE FROM psf_requests WHERE id = $1', [
       identity(2).id,
     ]);
+    const columns = await writableRequestColumns(writer);
     await writer.query(
-      `INSERT INTO psf_requests SELECT (jsonb_populate_record(NULL::psf_requests,
-      to_jsonb(request) || jsonb_build_object('id',$1::text,'request_no','AFTER-SNAPSHOT INSERT','updated_at','2041-01-01'))).*
-      FROM psf_requests AS request WHERE id = $2`,
+      `INSERT INTO psf_requests (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::psf_requests,
+      (SELECT to_jsonb(request) || jsonb_build_object('id',$1::text,'request_no','AFTER-SNAPSHOT INSERT','updated_at','2041-01-01')
+      FROM psf_requests AS request WHERE id = $2))`,
       [identity(rows + 1).id, identity(3).id],
     );
     await writer.query(`UPDATE form_definitions SET schema_json = jsonb_set(schema_json,
@@ -686,7 +699,6 @@ export async function mutateFixture(port: number, rows: number) {
 }
 
 async function queryChecks(pool: Pool, rows: number) {
-  const actor = { id: 'synthetic-actor', role: 'admin' as const };
   const original = new SearchIndexService(pool);
   const filters: RequestSearchFilters[] = [
     { limit: 7, offset: 4 },
@@ -711,9 +723,9 @@ async function queryChecks(pool: Pool, rows: number) {
       expected.push(i);
     }
     assert.equal(total, expected.length);
-    const a = await original.queryExportRequests(filter, actor, 7);
+    const a = await original.queryExportRequests(filter, 7);
     const b = await original.withExportSnapshot((search) =>
-      search.queryExportRequests(filter, actor, 7),
+      search.queryExportRequests(filter, 7),
     );
     assert.deepEqual(a, b, 'Candidate changed filtered query results.');
     assert.deepEqual(
@@ -736,7 +748,6 @@ async function queryChecks(pool: Pool, rows: number) {
       const search = original;
       const first = await search.queryExportRequests(
         { limit: 10, offset: 0 },
-        actor,
         10,
       );
       await writer.query(
@@ -745,7 +756,6 @@ async function queryChecks(pool: Pool, rows: number) {
       );
       const second = await search.queryExportRequests(
         { limit: 10, offset: 10 },
-        actor,
         10,
       );
       const all = [...first.items, ...second.items].map(
@@ -882,9 +892,7 @@ async function main() {
         rows++;
         const values = headers.map((_, i) => row.getCell(i + 1).value ?? '');
         const expected =
-          row.number === 1
-            ? headers
-            : expectedRow(c.rows - row.number + 2, c.role);
+          row.number === 1 ? headers : expectedRow(c.rows - row.number + 2);
         expected.forEach((cell, i) => {
           const wanted =
             typeof cell === 'string' && !c.strictPass

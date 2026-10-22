@@ -58,7 +58,6 @@ describe('ExcelExportService large export rendering', () => {
               title: 'PSF Request Form',
               sections: [],
             },
-            canonicalValues: {},
           },
         ],
         total: 1,

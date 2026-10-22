@@ -319,7 +319,7 @@ void it('renders an export when the app starts outside the backend directory', a
 void it('never exports a Draft, not even its creator’s own', async () => {
   await fixture.reset();
   await fixture.draft();
-  const exported = await fixture.index.queryExportRequests({}, requester, 100);
+  const exported = await fixture.index.queryExportRequests({}, 100);
   assert.equal(exported.total, 0);
   assert.deepEqual(exported.items, []);
   assert.equal(await fixture.index.countExportRequests({}), 0);

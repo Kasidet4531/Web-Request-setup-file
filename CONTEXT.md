@@ -43,7 +43,7 @@ The section containing setup details, editable by backend-authorized Setup File 
 _Avoid_: Setup Information, Completed Info
 
 **PSF Setup File Name** / **Job File Name**:
-The PSF Created Information fields with canonical keys `psf_setup_file_name` and `job_file_name`. The Requests and Dashboard tables show each in its own column, whether or not the field is searchable (21 October 2026). Like all PSF Created Information they are hidden from a Requester-only actor until PSF Visibility Release, and keyword search matches the PSF Setup File Name only where the actor can see it.
+The PSF Created Information fields with canonical keys `psf_setup_file_name` and `job_file_name`. The Requests and Dashboard tables show each in its own column, whether or not the field is searchable (21 October 2026). Like all PSF Created Information they are hidden on screen from a Requester-only actor until PSF Visibility Release (Excel exports excepted, ADR 0019), and keyword search matches the PSF Setup File Name only where the actor can see it.
 _Avoid_: PSF name (ambiguous with the `reference_psf_name` field)
 
 **Draft**:
@@ -58,7 +58,7 @@ The Admin's per-Work Status choice of who is emailed when a PSF Request enters t
 _Avoid_: Notification subscription, mailing list
 
 **PSF Visibility Release**:
-A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data/history/Excel cells; authorized PSF team/Admin actors do not wait for release on accessible work. Backtracking, renaming or changing the trigger does not revoke release.
+A one-time stored release set on successful entry into any configured Work Status trigger, or by an administrator enabling a trigger for qualifying requests already at that status. Required PSF information must validate before release. Requester-only actors cannot see unreleased PSF data or history on screen; authorized PSF team/Admin actors do not wait for release on accessible work. Excel exports and the Export Preview show PSF Created Information to every role, released or not (ADR 0019, 21 October 2026). Backtracking, renaming or changing the trigger does not revoke release.
 
 **Auto-fill Rule**:
 An administrator-managed configuration defining a trigger field and its target fields to populate from a previous completed PSF Request. Active rules participate in autofill; Inactive rules do not. Administrators explicitly choose activation, while publishing an incompatible form may disable a rule for review. Editing an Inactive rule or restoring its fields does not reactivate it.
@@ -154,6 +154,10 @@ _Avoid_: async export, background download
 **Export Memory Limit**:
 The most JavaScript heap one export's workbook worker may use, `EXPORT_WORKER_MAX_MEMORY_MB` (default 1024). The finished file's bytes are outside it. An export that needs more fails on its own with a message saying so. Added 21 October 2026.
 _Avoid_: RAM cap
+
+**Export Preview**:
+An Excel export shown on the Export to Excel page 100 rows a page, in the file's order, with the file's own columns, values (including `NA`) and request count for the same filters. The header row and Request No stay pinned while the table scrolls both ways; Previous and Next move between pages as on the request list. Added 21 October 2026; paged the same day.
+_Avoid_: request preview list, dashboard preview
 
 ## Audit History vocabulary
 

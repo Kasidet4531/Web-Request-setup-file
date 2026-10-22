@@ -36,12 +36,8 @@ export interface Column {
 }
 export type Cell = string | number;
 export type Role = UserRole;
-const PSF_VISIBLE_WITHOUT_RELEASE: Record<Role, boolean> = {
-  admin: true,
-  setup_owner: true,
-  requester: false,
-};
-export const EXPORT_ROLES = Object.keys(PSF_VISIBLE_WITHOUT_RELEASE) as Role[];
+// Every role gets the same cells, released or not (ADR 0019).
+export const EXPORT_ROLES: Role[] = ['admin', 'setup_owner', 'requester'];
 export const columns: Column[] = [];
 let current: Column | undefined;
 for (const line of readFileSync(join(__dirname, 'export-columns.tsv'), 'utf8')
@@ -81,6 +77,14 @@ assert.equal(new Set(columns.map((c) => c.key)).size, columns.length);
 assert.equal(columns.filter((c) => c.side === 'historical').length, 7);
 
 export const requesterColumns = columns.filter((c) => c.side === 'requester');
+// The system saves Modified By under its own key on every save, so the export
+// shows it as one column right after Updated At, not among the form fields.
+export const modifiedByColumn = requesterColumns.find(
+  (c) => c.key === 'modified_by',
+)!;
+export const requesterFieldColumns = requesterColumns.filter(
+  (c) => c !== modifiedByColumn,
+);
 export const historicalColumns = columns.filter((c) => c.side === 'historical');
 export const createdColumns = columns.filter((c) => c.side === 'created');
 export const statusOptions = columns
@@ -107,7 +111,7 @@ function makeSchema(
           (_, index) => Math.floor((index * 3) / fields.length) === section,
         )
         .map((c) => ({
-          fieldKey: `${prefix}${c.key}`,
+          fieldKey: c === modifiedByColumn ? c.key : `${prefix}${c.key}`,
           canonicalKey: c.key,
           label: oldLabels ? c.name : c.label,
           type: c.type,
@@ -191,7 +195,8 @@ export const headers = [
   'Status',
   'Request Date',
   'Updated At',
-  ...requesterColumns.map((c) => c.label),
+  modifiedByColumn.label,
+  ...requesterFieldColumns.map((c) => c.label),
   ...historicalColumns.map((c) => c.label),
   ...createdColumns.map((c) => c.label),
 ];
@@ -316,6 +321,8 @@ export function source(i: number) {
             ? raw
             : null;
   }
+  // A stored projection that disagrees with the request data must not reach
+  // the export: cells come from the data itself.
   if (i % 31 === 0) canonical.title = `CANONICAL:${i}`;
   for (const field of createdSchema.sections.flatMap((s) => s.fields)) {
     const c = columns.find((c) => c.key === field.canonicalKey)!;
@@ -331,32 +338,38 @@ export function source(i: number) {
   };
 }
 
+// Request Date and Updated At are shown in Bangkok time (UTC+7, no daylight saving).
+export const bangkokTime = (iso: string) =>
+  new Date(Date.parse(iso) + 7 * 3600_000)
+    .toISOString()
+    .slice(0, 19)
+    .replace('T', ' ');
+
 // Expected cells come from the fixture specification, never exporter mapping/serialization helpers.
-export function expectedRow(i: number, role: Role): Cell[] {
+// A cell without a value shows NA.
+export function expectedRow(i: number): Cell[] {
   const who = identity(i);
-  const requester = requesterColumns.map((c) => {
+  const requester = requesterFieldColumns.map((c) => {
     // Specify version membership independently of the schema/source constructors.
     if (c.name === 'Trench Thickness (um)' && [0, 2].includes(i % 4)) return '';
     if (c.name === 'Request For' && i % 4 === 0) return '';
-    return c.name === 'Title' && i % 31 === 0 && i % 5 !== 0
-      ? `CANONICAL:${i}`
-      : sample(c, i).cell;
+    return sample(c, i).cell;
   });
   return [
     who.requestNo,
     who.status,
-    who.createdAt,
-    who.updatedAt,
+    bangkokTime(who.createdAt),
+    bangkokTime(who.updatedAt),
+    sample(modifiedByColumn, i).cell,
     ...requester,
     ...historicalColumns.map((c, index) =>
       i % 4 === 0 || (i % 4 === 2 && index < 3) ? sample(c, i).cell : '',
     ),
     ...createdColumns.map((c) =>
-      (!PSF_VISIBLE_WITHOUT_RELEASE[role] && who.releasedAt === null) ||
       (c.name === 'Wafer ID format' && i % 3 !== 2) ||
       (c.name === 'Physical Wafer' && i % 3 === 0)
         ? ''
         : sample(c, i).cell,
     ),
-  ];
+  ].map((cell) => (cell === '' ? 'NA' : cell));
 }

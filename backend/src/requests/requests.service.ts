@@ -34,6 +34,7 @@ import {
   RequestSearchResult,
   RequestScopeFilters,
   SearchIndexService,
+  ensureSchemaSnapshotKeyStorage,
 } from './search-index.service';
 import {
   assertValidRequiredFormData,
@@ -1909,6 +1910,8 @@ export class RequestsService implements OnModuleInit {
       ALTER TABLE psf_requests
       ADD COLUMN IF NOT EXISTS psf_created_schema_snapshot_json JSONB NULL
     `);
+
+    await ensureSchemaSnapshotKeyStorage(queryRunner);
 
     await queryRunner.query(`
       ALTER TABLE psf_requests

@@ -19,6 +19,8 @@ import {
   type RequestExportItem,
   type RequestSearchFilters,
 } from '../requests/search-index.service';
+import { bangkokDateTime } from './bangkok-time';
+import { createExportTable, type ExportCell } from './export-table';
 
 export type RequestExportFilters = Pick<
   RequestSearchFilters,
@@ -31,6 +33,22 @@ export interface RequestExportWorkbook {
 type Actor = Pick<AuthenticatedUserProfile, 'id' | 'role'>;
 
 export const DEFAULT_SYNC_THRESHOLD = 10000;
+// The most rows one Export Preview page holds, and its default, as on the
+// request list.
+export const EXPORT_PREVIEW_PAGE_SIZE = 100;
+
+export interface RequestExportPreviewPage {
+  offset?: number;
+  limit?: number;
+}
+
+export interface RequestExportPreview {
+  total: number;
+  offset: number;
+  limit: number;
+  headers: string[];
+  rows: ExportCell[][];
+}
 const DEFAULT_SYNC_MAX_CONCURRENT = 2;
 const DEFAULT_WORKER_MAX_MEMORY_MB = 1024;
 // A worker needs roughly 25 MB (70 MB from TypeScript sources) just to load the
@@ -56,7 +74,7 @@ const WORKER_SOURCE = `
         appendExportItems(items, message.items, schemas, workerData.memoryLimitMb);
         parentPort.postMessage({ type: 'accepted' });
       } else if (message.type === 'finish') {
-        const content = await createExportWorkbook(items, workerData.requesterSchema, workerData.createdSchema, workerData.actor, workerData.memoryLimitMb);
+        const content = await createExportWorkbook(items, workerData.requesterSchema, workerData.createdSchema, workerData.memoryLimitMb);
         const bytes = Uint8Array.from(content);
         parentPort.postMessage({ type: 'complete', content: bytes }, [bytes.buffer]);
         parentPort.close();
@@ -81,7 +99,6 @@ class WorkbookWorker {
   constructor(
     requesterSchema: FormSchemaJson,
     createdSchema: FormSchemaJson,
-    actor: Actor,
     memoryLimitMb: number,
   ) {
     const builderPath = require.resolve('./export-workbook');
@@ -92,7 +109,6 @@ class WorkbookWorker {
         builderPath,
         requesterSchema,
         createdSchema,
-        actor,
         memoryLimitMb,
       },
       resourceLimits: {
@@ -188,22 +204,8 @@ class WorkbookWorker {
 }
 
 export function formatRequestExportFilename(now: Date): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  })
-    .formatToParts(now)
-    .reduce<Record<string, string>>((values, part) => {
-      values[part.type] = part.value;
-      return values;
-    }, {});
-  return `psf_requests_${parts.year}${parts.month}${parts.day}_${parts.hour}${parts.minute}${parts.second}.xlsx`;
+  const { year, month, day, hour, minute, second } = bangkokDateTime(now);
+  return `psf_requests_${year}${month}${day}_${hour}${minute}${second}.xlsx`;
 }
 
 @Injectable()
@@ -229,6 +231,54 @@ export class ExcelExportService implements OnModuleDestroy {
     actor: Actor,
   ): Promise<RequestExportWorkbook> {
     return this.exportWorkbook(filters, actor);
+  }
+  // The Export Preview: the file's own columns and one page of its rows, read
+  // from one snapshot, so it matches the file the same filters download.
+  async previewRequests(
+    filters: RequestExportFilters,
+    {
+      offset = 0,
+      limit = EXPORT_PREVIEW_PAGE_SIZE,
+    }: RequestExportPreviewPage = {},
+  ): Promise<RequestExportPreview> {
+    return this.searchIndexService.withExportSnapshot(
+      async (search, runner) => {
+        // Discovering every captured form first lets the page reuse them.
+        const captured = await search.queryExportSchemas(filters);
+        const page = await search.queryExportRequests(
+          { ...filters, limit, offset },
+          EXPORT_PREVIEW_PAGE_SIZE,
+        );
+        // One snapshot connection runs one query at a time.
+        const requesterSchema = await this.formSchemaService.getActiveSchema(
+          'psf-request',
+          false,
+          runner,
+        );
+        const createdSchema = await this.formSchemaService.getActiveSchema(
+          PSF_CREATED_INFORMATION_FORM_KEY,
+          false,
+          runner,
+        );
+        const table = createExportTable(
+          [requesterSchema.schema, ...captured.requester],
+          [createdSchema.schema, ...captured.created],
+        );
+        // A page past the end, when requests left the filters since the last
+        // page, still says how many requests the file holds.
+        const total =
+          page.items.length === 0 && page.offset > 0
+            ? await search.countExportRequests(filters)
+            : page.total;
+        return {
+          total,
+          offset: page.offset,
+          limit: page.limit,
+          headers: table.headers,
+          rows: page.items.map((item) => table.row(item)),
+        };
+      },
+    );
   }
   // A Direct Export answers the HTTP request itself. Null means every
   // EXPORT_SYNC_MAX_CONCURRENT slot in this backend process is busy, so the
@@ -273,7 +323,6 @@ export class ExcelExportService implements OnModuleDestroy {
           const limit = Math.min(maximumRecords ?? 500, 500);
           let result = await search.queryExportRequests(
             { ...filters, limit, offset: 0 },
-            actor,
             limit,
           );
           const total = result.total;
@@ -294,7 +343,6 @@ export class ExcelExportService implements OnModuleDestroy {
           worker = new WorkbookWorker(
             requesterSchema.schema,
             createdSchema.schema,
-            actor,
             memoryLimitMb,
           );
           this.workers.add(worker);
@@ -309,7 +357,6 @@ export class ExcelExportService implements OnModuleDestroy {
             if (offset >= total) break;
             result = await search.queryExportRequests(
               { ...filters, limit, offset },
-              actor,
               limit,
             );
           }

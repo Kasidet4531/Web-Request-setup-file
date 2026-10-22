@@ -250,49 +250,160 @@ describe("request export URL", () => {
     expect(errorHtml).toContain('role="alert"');
   });
 
-  it("renders the filtered server-backed preview with its requested columns", () => {
-    const RequestExportPreview = Reflect.get(
-      RequestExportPageModule,
-      "RequestExportPreview",
-    ) as (props: {
-      error: string | null;
-      items: Array<{
-        dueDate: string | null;
-        productType: string | null;
-        requestId: string;
-        requestNo: string;
-        requester: string | null;
-        status: string;
-        title: string | null;
-      }>;
-      loading: boolean;
-      total: number;
-    }) => unknown;
+  it("fetches an Export Preview page for the page filters, 100 rows at a time", async () => {
+    const preview = {
+      total: 112,
+      offset: 100,
+      limit: 100,
+      headers: ["Request No", "Status", "PSF Setup File Name"],
+      rows: [["PSF-000012", "Submitted", "NA"]],
+    };
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify(preview), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const html = renderToStaticMarkup(
-      RequestExportPreview({
-        error: null,
-        items: [{
-          dueDate: "2026-06-30",
-          productType: "New Product",
-          requestId: "request-1",
-          requestNo: "PSF-001",
-          requester: "Request Owner",
+    await expect(
+      RequestExportClient.fetchRequestExportPreview(
+        {
           status: "Submitted",
-          title: "Probe card update",
-        }],
+          from: "2026-06-01",
+          to: " ",
+        },
+        100,
+      ),
+    ).resolves.toEqual(preview);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/requests/export-preview?status=Submitted&from=2026-06-01&offset=100&limit=100",
+      { credentials: "include", method: "GET" },
+    );
+  });
+
+  it("rejects a malformed Export Preview and names the preview in a bare failure", async () => {
+    const respond = (body: string, status = 200) =>
+      new Response(body, {
+        headers: { "Content-Type": "application/json" },
+        status,
+      });
+    const filters = { status: "", from: "", to: "" };
+
+    globalThis.fetch = vi.fn(async () =>
+      respond(JSON.stringify({ total: 1, offset: 0, limit: 100, headers: ["Request No"], rows: [[{ value: 1 }]] })),
+    ) as unknown as typeof fetch;
+    await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
+      "Expected an export preview response.",
+    );
+
+    globalThis.fetch = vi.fn(async () =>
+      respond(JSON.stringify({ total: 1, headers: ["Request No"], rows: [["PSF-000001"]] })),
+    ) as unknown as typeof fetch;
+    await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
+      "Expected an export preview response.",
+    );
+
+    globalThis.fetch = vi.fn(async () => respond("", 500)) as unknown as typeof fetch;
+    await expect(RequestExportClient.fetchRequestExportPreview(filters)).rejects.toThrow(
+      "Unable to load the export preview (500).",
+    );
+  });
+
+  it("previews every exported column, one value per cell, with Request No pinned", () => {
+    const html = renderToStaticMarkup(
+      RequestExportPageModule.RequestExportPreview({
+        error: null,
+        headers: [
+          "Request No",
+          "Status",
+          "Product_Description",
+          "Request To",
+          "Bump Height (um)",
+          "PSF Setup File Name",
+        ],
+        rows: [
+          ["PSF-000002", "Submitted", "Probe card update", "Create new PSF", 12.5, "NA"],
+          ["PSF-000001", "Completed", "Chip A", "Product Transfer", "NA", "SETUP_A.psf"],
+        ],
         loading: false,
-        total: 1,
+        total: 2,
+        offset: 0,
+        limit: 100,
+        onPageChange: () => {},
       }) as never,
     );
 
     expect(html).toContain("Request preview");
-    expect(html).toContain("submitted requests only, never Drafts");
-    expect(html).not.toContain("only requests permitted");
-    expect(html).toContain("Request No.");
-    expect(html).toContain("Title / Product Type");
-    expect(html).toContain("Requester");
-    expect(html).toContain("PSF-001");
+    expect(html).toContain("2 requests in the file.");
+    expect(html).toContain("1–2 of 2 requests");
+    expect(html).not.toContain(">Next<");
+    expect(html).not.toContain("may list fewer");
+    expect(html).not.toContain("Title / Product Type");
+    const cell = (value: string) => `<span title="${value}">${value}</span>`;
+    for (const header of ["Product_Description", "Request To", "Bump Height (um)", "PSF Setup File Name"])
+      expect(html).toContain(`<th scope="col">${cell(header)}</th>`);
+    expect(html).toContain(`<th scope="col" class="request-export__pinned">${cell("Request No")}</th>`);
+    expect(html).toContain('<th scope="row" class="request-export__pinned">PSF-000002</th>');
+    expect(html).toContain(
+      ["Probe card update", "Create new PSF", "12.5", "NA"].map((value) => `<td>${cell(value)}</td>`).join(""),
+    );
+    expect(html).toContain(`<td>${cell("SETUP_A.psf")}</td>`);
+  });
+
+  it("pages through the file like the request list, keeping the rows in place while the next page loads", () => {
+    const page = (offset: number, loading = false) =>
+      renderToStaticMarkup(
+        RequestExportPageModule.RequestExportPreview({
+          error: null,
+          headers: ["Request No", "Status"],
+          rows: Array.from({ length: offset === 200 ? 50 : 100 }, (_, row) => [`PSF-${offset + row}`, "Submitted"]),
+          loading,
+          total: 250,
+          offset,
+          limit: 100,
+          onPageChange: () => {},
+        }) as never,
+      );
+    const button = (html: string, label: string) =>
+      html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0] ?? "";
+
+    const middle = page(100);
+    expect(middle).toContain('aria-label="Export Preview pagination"');
+    expect(middle).not.toContain("aria-live");
+    expect(middle).toContain('<p role="status">250 requests in the file.</p>');
+    expect(middle).toContain("101–200 of 250 requests");
+    expect(button(middle, "Previous")).not.toContain("disabled");
+    expect(button(middle, "Next")).not.toContain("disabled");
+
+    const last = page(200);
+    expect(last).toContain("201–250 of 250 requests");
+    expect(button(last, "Next")).toContain("disabled");
+
+    const loading = page(100, true);
+    expect(loading).toContain("PSF-100");
+    expect(loading).toContain('aria-busy="true"');
+    expect(button(loading, "Next")).toContain("disabled");
+
+    // Past the end, or after a failed page, the way back stays.
+    for (const error of [null, "Unable to load the export preview (500)."]) {
+      const empty = renderToStaticMarkup(
+        RequestExportPageModule.RequestExportPreview({
+          error,
+          headers: ["Request No", "Status"],
+          rows: [],
+          loading: false,
+          total: error ? 0 : 250,
+          offset: 300,
+          limit: 100,
+          onPageChange: () => {},
+        }) as never,
+      );
+      expect(empty).toContain("0 requests");
+      expect(empty).not.toContain("No requests match these filters");
+      expect(button(empty, "Previous")).not.toContain("disabled");
+    }
   });
 
   it("replaces the route placeholder with the request export page", () => {

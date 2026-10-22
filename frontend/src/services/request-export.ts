@@ -30,6 +30,19 @@ export interface RequestExportJobStatus {
   downloadUrl?: string;
 }
 
+// An Export Preview page holds as many rows as a request list page.
+export const EXPORT_PREVIEW_PAGE_SIZE = 100;
+
+// The file's own columns, one page of its rows and the number of requests it
+// holds.
+export interface RequestExportPreview {
+  total: number;
+  offset: number;
+  limit: number;
+  headers: string[];
+  rows: Array<Array<string | number>>;
+}
+
 export type RequestExportStartResult =
   | { kind: "downloaded" }
   | { kind: "queued"; job: RequestExportQueuedJob };
@@ -37,6 +50,8 @@ export type RequestExportStartResult =
 export function buildRequestExportUrl(
   filters: RequestExportFilterValues,
   resolveUrl: (path: string) => string = api.resolveUrl,
+  route = "/requests/export.xlsx",
+  page?: { offset: number; limit: number },
 ): string {
   const query = new URLSearchParams();
   const status = filters.status;
@@ -55,15 +70,21 @@ export function buildRequestExportUrl(
     query.set("to", to);
   }
 
+  if (page) {
+    query.set("offset", String(page.offset));
+    query.set("limit", String(page.limit));
+  }
+
   const serializedQuery = query.toString();
-  const path = serializedQuery
-    ? `/requests/export.xlsx?${serializedQuery}`
-    : "/requests/export.xlsx";
+  const path = serializedQuery ? `${route}?${serializedQuery}` : route;
 
   return resolveUrl(path);
 }
 
-async function exportErrorMessage(response: Response): Promise<string> {
+async function exportErrorMessage(
+  response: Response,
+  action = "export requests",
+): Promise<string> {
   if (response.status === 401) {
     notifyAuthSessionChanged({ status: "anonymous" });
   }
@@ -71,7 +92,7 @@ async function exportErrorMessage(response: Response): Promise<string> {
   const responseText = await response.text();
 
   if (!responseText) {
-    return `Unable to export requests (${response.status}).`;
+    return `Unable to ${action} (${response.status}).`;
   }
 
   try {
@@ -113,6 +134,40 @@ export async function startRequestExport(
     kind: "queued",
     job: readQueuedJob(await readJsonResponse(response)),
   };
+}
+
+export async function fetchRequestExportPreview(
+  filters: RequestExportFilterValues,
+  offset = 0,
+): Promise<RequestExportPreview> {
+  const response = await fetch(
+    buildRequestExportUrl(filters, api.resolveUrl, "/requests/export-preview", {
+      offset,
+      limit: EXPORT_PREVIEW_PAGE_SIZE,
+    }),
+    { credentials: "include", method: "GET" },
+  );
+
+  if (!response.ok) {
+    throw new Error(await exportErrorMessage(response, "load the export preview"));
+  }
+
+  const body = await readJsonResponse(response);
+  const isCell = (cell: unknown) =>
+    typeof cell === "string" || typeof cell === "number";
+  if (
+    !isRecord(body) ||
+    typeof body.total !== "number" ||
+    typeof body.offset !== "number" ||
+    typeof body.limit !== "number" ||
+    !Array.isArray(body.headers) ||
+    !body.headers.every((header) => typeof header === "string") ||
+    !Array.isArray(body.rows) ||
+    !body.rows.every((row) => Array.isArray(row) && row.every(isCell))
+  ) {
+    throw new Error("Expected an export preview response.");
+  }
+  return body as unknown as RequestExportPreview;
 }
 
 export async function fetchRequestExportJob(
@@ -186,13 +241,13 @@ function isXlsxResponse(response: Response): boolean {
 
 async function readJsonResponse(response: Response): Promise<unknown> {
   if (!response.headers.get("Content-Type")?.includes("application/json")) {
-    throw new Error("Expected a JSON export job response.");
+    throw new Error("Expected a JSON export response.");
   }
 
   try {
     return await response.json();
   } catch {
-    throw new Error("Expected a JSON export job response.");
+    throw new Error("Expected a JSON export response.");
   }
 }
 

@@ -23,7 +23,6 @@ describe('ExcelExportService resource limits', () => {
     psfReleasedAt: null,
     psfCreatedInformationSchema: null,
     schemaSnapshot: requesterSchema,
-    canonicalValues: {},
   };
   const page = { items: [item], total: 1, limit: 500, offset: 0 };
 
