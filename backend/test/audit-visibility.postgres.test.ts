@@ -80,7 +80,7 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
   });
 
   for (const role of ['requester', 'setup_owner', 'admin'] as const)
-    void it(`keeps another creator’s Draft private from ${role} while sharing catalog activity`, async () => {
+    void it(`keeps another creator’s Draft private from ${role} and leaves Workflow catalog updates out`, async () => {
       const result = await service.findGlobalAuditLogs({}, actor(role));
       assert.equal(
         result.some((entry) => entry.requestId === privateId),
@@ -88,9 +88,25 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
       );
       assert.equal(
         result.some((entry) => entry.actionType === 'WORKFLOW_CATALOG_UPDATED'),
-        true,
+        false,
+      );
+      assert.equal(
+        await service.countGlobalAuditLogs({}, actor(role)),
+        result.length,
       );
     });
+
+  void it('returns no Workflow catalog updates even when the action filter asks for them', async () => {
+    const filters = { actionType: 'WORKFLOW_CATALOG_UPDATED' };
+    assert.deepEqual(
+      await service.findGlobalAuditLogs(filters, actor('admin')),
+      [],
+    );
+    assert.equal(
+      await service.countGlobalAuditLogs(filters, actor('admin')),
+      0,
+    );
+  });
 
   void it('returns own Draft but suppresses unreleased PSF events, including an explicit PSF action filter', async () => {
     const viewer = actor('requester', ownerId);
@@ -126,7 +142,6 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
     assert.deepEqual(
       result.map((entry) => [entry.id.slice(-2), entry.hasRequestSnapshot]),
       [
-        ['13', false],
         ['12', false],
         ['11', true],
       ],
@@ -178,7 +193,7 @@ void describe('Global audit visibility with an in-memory PostgreSQL engine', () 
     for (const [index, time] of times.entries()) {
       await database.query(
         `INSERT INTO psf_request_audit_logs (id, action_type, actor_username, actor_display_name, actor_role, created_at, metadata_json)
-         VALUES ($1, 'WORKFLOW_CATALOG_UPDATED', 'calendar-boundary', 'Calendar', 'admin', $2, '{}')`,
+         VALUES ($1, 'REQUEST_STATUS_CHANGED', 'calendar-boundary', 'Calendar', 'admin', $2, '{}')`,
         [`00000000-0000-4000-8000-00000000002${index}`, time],
       );
     }

@@ -14,7 +14,7 @@ This changes History viewing access. It does not grant administration, request e
 
 ## Implementation status
 
-The authorized implementation on 5 October 2026 updates shared navigation and `GET /api/audit-logs` for every authenticated role. The API resolves the stored actor profile and applies visibility filters before returning audit rows: private Draft events remain creator-only, including for Admin, and Requesters cannot see unreleased PSF update events. Requestless configuration events remain available to authenticated roles. Viewing History does not grant the separate editing, export or administration permissions.
+The authorized implementation on 5 October 2026 updates shared navigation and `GET /api/audit-logs` for every authenticated role. The API resolves the stored actor profile and applies visibility filters before returning audit rows: private Draft events remain creator-only, including for Admin, and Requesters cannot see unreleased PSF update events. Requestless configuration events remained available to authenticated roles until 22 October 2026 (see below). Viewing History does not grant the separate editing, export or administration permissions.
 
 These are working-tree source changes, not deployment evidence. Local unit, HTTP, SQL and browser checks passed; see [implementation verification](superpowers/plans/2026-10-05-stitch-desktop-implementation.md). SQL visibility tests cover private Drafts and unreleased PSF metadata; browser checks cover both owner departments and anonymous access. The configured PostgreSQL and LDAP services have not been exercised or mutated by this implementation work. Earlier Admin-only source observations remain dated historical evidence.
 
@@ -55,3 +55,7 @@ accepts `keyword`, `actionType`, `from`, `to`, `limit` and `offset`; its existin
 `requestId` and `user` API filters remain supported. Counts and rows apply the
 same search and visibility conditions. Search does not inspect hidden PSF content
 or arbitrary audit metadata. See [verification](verification/2026-10-22-search-filters.md).
+
+## Workflow catalog updates, 22 October 2026
+
+`GET /api/audit-logs` leaves out every entry with the action `WORKFLOW_CATALOG_UPDATED` for every role, Admin included, from both the rows and the total, even when the action filter asks for it; the Audit History Action filter no longer offers it (issue #106). The entries are still recorded with their full metadata, so this hides history from the page, not from the database. They were requestless Status Management changes; a request's own History never showed them. See the [verification record](verification/2026-10-22-catalog-entries-hidden.md).

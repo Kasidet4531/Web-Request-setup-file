@@ -420,6 +420,11 @@ export class AuditLogService implements OnModuleInit {
       );
     }
 
+    // Workflow catalog updates are still recorded but left out of Audit History.
+    where.push(
+      `audit_log.action_type <> ${addParameter(REQUEST_AUDIT_ACTION.WORKFLOW_CATALOG_UPDATED)}`,
+    );
+
     return {
       whereSql:
         where.length > 0 ? `WHERE ${where.join('\n          AND ')}` : '',
