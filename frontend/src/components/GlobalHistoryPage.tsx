@@ -169,7 +169,8 @@ export function GlobalAuditLogTable({
         <thead>
           <tr>
             <th scope="col">Time</th>
-            <th scope="col">Request</th>
+            <th scope="col">Product Description</th>
+            <th scope="col">Request No.</th>
             <th scope="col">User</th>
             <th scope="col">Action</th>
             <th scope="col">Detail</th>
@@ -180,15 +181,21 @@ export function GlobalAuditLogTable({
             <tr key={`${entry.requestId}-${entry.createdAt}-${entry.actionType}-${index}`}>
               <td><time dateTime={entry.createdAt}>{formatHistoryDateTime(entry.createdAt)}</time></td>
               <td>
-                {/* Product_Description reads better than a Draft number, which is not shown. */}
-                {entry.requestId && entry.requestNo ? (
-                  <span className="request-cell-stack">
+                {entry.requestId && entry.requestLabel ? (
+                  <Link className="table-action" params={{ requestId: entry.requestId }} to="/requests/$requestId">
+                    {entry.requestLabel}
+                  </Link>
+                ) : entry.requestLabel ?? (entry.requestId ? '—' : 'Workflow configuration')}
+              </td>
+              <td className="font-mono-code">
+                {/* Drafts keep their descriptive link without exposing an internal Draft number. */}
+                {entry.requestNo && !entry.requestNo.startsWith('DRAFT-') ? (
+                  entry.requestId ? (
                     <Link className="table-action" params={{ requestId: entry.requestId }} to="/requests/$requestId">
-                      {entry.requestLabel ?? entry.requestNo}
+                      {entry.requestNo}
                     </Link>
-                    {entry.requestLabel && !entry.requestNo.startsWith('DRAFT-') ? <span className="font-mono-code">{entry.requestNo}</span> : null}
-                  </span>
-                ) : entry.requestLabel ?? entry.requestNo ?? 'Workflow configuration'}
+                  ) : entry.requestNo
+                ) : '—'}
               </td>
               <td>{entry.actorDisplayName}</td>
               <td>{actionLabel(entry.actionType)}</td>

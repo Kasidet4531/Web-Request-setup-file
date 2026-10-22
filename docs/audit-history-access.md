@@ -30,6 +30,14 @@ This is a source change, not deployment evidence. `backend/test/request-snapshot
 
 Attachment entries (20 October 2026, [Request Attachments](request-attachments.md)): `ATTACHMENT_UPLOADED` and `ATTACHMENT_DELETED` follow the same rules as the request they belong to, including Draft privacy, and store no Request Snapshot. Audit History names each request by its Product_Description (or `Untitled Draft (#ID)`) instead of a Draft number; this label adds no data a viewer could not already see on the request.
 
+On 22 October 2026 the compound Request column was split into Product Description
+and Request No. Both link to the request when available. Drafts keep their
+descriptive link and show `—` for Request No.; their internal Draft number stays
+hidden. Existing `Untitled Draft (#ID)` / `Untitled Request (#ID)` labels are
+preserved; if the API supplies no label, show `—` instead of the request number.
+Configuration events without a request keep the configuration label and show
+`—` for Request No. Snapshot links and access rules are unchanged.
+
 ## Search and filters, 22 October 2026
 
 The System Audit Trail uses one Search field for Request No., Product Description,

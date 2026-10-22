@@ -103,3 +103,32 @@ Fresh checks on the rebased tree passed: Frontend **39 files / 547 tests**,
 Backend **50 suites / 755 tests**, frontend lint, both builds and the Chromium
 end-to-end Search/filter test. The two in-memory PostgreSQL integration files
 also passed. The screenshots were refreshed with the built rebased app.
+
+## Follow-up: atomic Audit History columns
+
+Baseline: `89fa669b924929ab65da7c6bccda0202b328303b` (PR #105).
+The product owner requested splitting Request into Product Description and
+Request No. Each value now occupies its own cell; both can open Request Detail.
+Drafts retain their descriptive links and hide internal `DRAFT-…` numbers.
+Existing API-generated untitled labels are preserved. No backend contract,
+search/filter behavior or Snapshot presentation changed.
+
+Updated existing table assertions first: three failed against the compound
+column, then all **23 focused tests** passed after splitting it. Fresh validation:
+
+- Frontend: **39 files / 547 tests**, lint and production build passed.
+- Chromium real-app test: **1 passed**, including the six table headers,
+  independent description/number cells and navigation through Request No.,
+  alongside existing live Search/date/pagination/legacy Status checks.
+- Inspected Light/Dark at 1440 px and Dark at 1024 px; no horizontal page overflow.
+  The existing local fixture used a disposable database and synthetic records.
+
+Standards review: **0 hard violations, 0 supported smell findings**. Spec review:
+**0 remaining findings** after correcting documentation to describe the existing
+API-generated untitled labels accurately. The backend suite was not rerun for
+this frontend-only behavior change; the earlier **755-test** result above applies
+to the same backend source.
+
+- [Atomic columns, Light](assets/2026-10-22-audit-atomic-columns/history-search-light.png)
+- [Atomic columns, Dark](assets/2026-10-22-audit-atomic-columns/history-search-dark.png)
+- [Atomic columns, 1024 px](assets/2026-10-22-audit-atomic-columns/history-search-1024.png)

@@ -136,6 +136,21 @@ the explicit Q4 correction that History does not need a Status filter.
   `frontend/src/components/ui/historyDateTime.ts` and
   `backend/src/audit/audit_log.service.ts` (`buildGlobalWhere`).
 
+## Audit History columns — follow-up, 22 October 2026
+
+The product owner additionally requested splitting the compound Request column
+into atomic columns. Show Product Description and Request No. separately, in
+that order after Time. Each submitted request number opens its Request Detail;
+the existing descriptive labels and links remain available, including the API
+labels `Untitled Draft (#ID)` and `Untitled Request (#ID)` for untitled requests.
+Keep internal `DRAFT-…` numbers hidden, with `—` in the Request No. column. When
+the API provides no request label, show `—` rather than repeating the request
+number. Requestless configuration events retain their configuration label and
+have no request number.
+
+This amends the earlier instruction to preserve the existing History table;
+search/filter behavior, Snapshot links and access rules remain as agreed.
+
 ## Existing constraints
 
 All searches, result counts and filter options must preserve Draft privacy,

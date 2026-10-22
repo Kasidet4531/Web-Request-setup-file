@@ -19,7 +19,7 @@ after(async () => {
 });
 
 test(
-  'History live Search, Bangkok dates and legacy Status filtering work through the real app',
+  'History atomic columns, live Search, Bangkok dates and legacy Status filtering work through the real app',
   { timeout: 60_000 },
   async (t) => {
     const page = await loginPage(system, t);
@@ -72,6 +72,12 @@ test(
     const rows = page.locator('.global-history-page__results .data-table > table > tbody > tr');
     const pagination = page.getByLabel('Audit history pagination');
     await expect(rows).toHaveCount(25);
+    await expect(page.locator('.global-history-page__results .data-table > table > thead th')).toHaveText([
+      'Time', 'Product Description', 'Request No.', 'User', 'Action', 'Detail',
+    ]);
+    await expect(rows.first().locator('td').nth(1)).toHaveText('Search Filter Silicon');
+    await expect(rows.first().locator('td').nth(2)).toHaveText(submitted.requestNo);
+    await expect(rows.first().getByRole('link', { name: submitted.requestNo, exact: true })).toHaveAttribute('href', `/requests/${draft.id}`);
     await expect(
       page.getByRole('button', { name: 'Apply', exact: true }),
     ).toHaveCount(0);
@@ -152,6 +158,8 @@ test(
     await expect(search).toHaveValue('');
     await expect(rows).toHaveCount(25);
     await expect(pagination).toContainText('1–25 of 32 entries');
+    await rows.first().getByRole('link', { name: submitted.requestNo, exact: true }).click();
+    await expect(page).toHaveURL(`${system.origin}/requests/${draft.id}`);
 
     // Model a historical imported Status without changing the active catalog.
     const legacy = 'Legacy Transfer -- pending';

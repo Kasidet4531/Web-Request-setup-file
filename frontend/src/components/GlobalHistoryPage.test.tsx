@@ -158,7 +158,7 @@ describe('GlobalAuditLogTable', () => {
     expect(html.indexOf('View changes')).toBeGreaterThan(html.indexOf('/history/entry-new'))
   })
 
-  it('labels requests by Product_Description instead of a Draft number and lists Attachment changes', () => {
+  it('separates Product Description and Request No. while keeping Draft labels and Attachment changes', () => {
     const base = { hasRequestSnapshot: false, actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-20T01:00:00Z' }
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [
@@ -168,9 +168,9 @@ describe('GlobalAuditLogTable', () => {
       ],
       error: null, loading: false,
     }))
-    expect(html).toContain('<a href="/requests/request-1">Chip A</a><span class="font-mono-code">PSF-005571</span>')
-    expect(html).toContain('<a href="/requests/request-2">Untitled Draft (#5572)</a>')
-    expect(html).toContain('<a href="/requests/request-3">Product_Description</a>')
+    expect(html).toContain('<td><a href="/requests/request-1">Chip A</a></td><td class="font-mono-code"><a href="/requests/request-1">PSF-005571</a></td>')
+    expect(html).toContain('<td><a href="/requests/request-2">Untitled Draft (#5572)</a></td><td class="font-mono-code">—</td>')
+    expect(html).toContain('<td><a href="/requests/request-3">Product_Description</a></td><td class="font-mono-code">—</td>')
     expect(html).not.toContain('DRAFT-2026')
     expect(html).toContain('<td>Attachment uploaded</td>')
     expect(html).toContain('<td>Attachment deleted</td>')
@@ -219,6 +219,7 @@ describe('GlobalAuditLogTable', () => {
     expect(html).toContain('&lt;script&gt;new status&lt;/script&gt;')
     expect(html).not.toContain('<script>')
     expect(html).toContain('invalid-date')
+    expect(html).toContain('<td>Workflow configuration</td><td class="font-mono-code">—</td>')
     expect(html).not.toContain('Before')
   })
 
@@ -278,11 +279,11 @@ describe('GlobalAuditLogTable', () => {
 
     expect(html).toContain('aria-label="Global audit history"')
     expect(html).toContain('<th scope="col">Time</th>')
-    expect(html).toContain('<th scope="col">Request</th>')
+    expect(html).toContain('<th scope="col">Product Description</th><th scope="col">Request No.</th>')
     expect(html).toContain('<th scope="col">User</th>')
     expect(html).toContain('<th scope="col">Action</th>')
     expect(html).toContain('<th scope="col">Detail</th>')
-    expect(html).toContain('href="/requests/request-2"')
+    expect(html).toContain('<td>—</td><td class="font-mono-code"><a href="/requests/request-2">PSF-0002</a></td>')
     expect(html).toContain('Setup Owner GNTC Demo')
     expect(html).toContain('<th scope="row">Work Status</th><td><pre class="history-changes__value">Submitted</pre></td><td><pre class="history-changes__value">Setup In Progress</pre></td>')
     expect(html).not.toContain('Status: Submitted')
