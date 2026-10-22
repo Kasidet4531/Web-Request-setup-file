@@ -57,6 +57,7 @@ export interface RequestAuditHistoryEntry {
 }
 
 export interface GlobalAuditLogFilters {
+  keyword?: string;
   requestId?: string;
   user?: string;
   actionType?: string;
@@ -339,10 +340,17 @@ export class AuditLogService implements OnModuleInit {
     actor?: Pick<AuthenticatedUserProfile, 'id' | 'role'>,
   ): { whereSql: string; values: unknown[] } {
     const requestId = this.parseOptionalUuid(filters.requestId);
+    if (filters.keyword !== undefined && typeof filters.keyword !== 'string') {
+      throw new BadRequestException('keyword must be text.');
+    }
+    const keyword = this.normalizeOptionalString(filters.keyword);
     const user = this.normalizeOptionalString(filters.user);
     const actionType = this.normalizeOptionalString(filters.actionType);
-    const from = this.parseUtcDay(filters.from, 'from');
-    const to = this.parseUtcDay(filters.to, 'to');
+    const from = this.parseBangkokDay(filters.from, 'from');
+    const to = this.parseBangkokDay(filters.to, 'to');
+    if (from && to && from > to) {
+      throw new BadRequestException('to must be on or after from.');
+    }
     const values: unknown[] = [];
     const where: string[] = [];
     const addParameter = (value: unknown): string => {
@@ -367,6 +375,16 @@ export class AuditLogService implements OnModuleInit {
 
     if (user) {
       where.push(`audit_log.actor_username ILIKE ${addParameter(`%${user}%`)}`);
+    }
+
+    if (keyword) {
+      const match = addParameter(`%${keyword}%`);
+      where.push(`(
+        psf_request.request_no ILIKE ${match}
+        OR psf_request.requester_data_json->>'title' ILIKE ${match}
+        OR audit_log.actor_display_name ILIKE ${match}
+        OR audit_log.actor_username ILIKE ${match}
+      )`);
     }
 
     if (actionType) {
@@ -397,7 +415,9 @@ export class AuditLogService implements OnModuleInit {
     }
 
     if (to) {
-      where.push(`audit_log.created_at < ${addParameter(this.nextUtcDay(to))}`);
+      where.push(
+        `audit_log.created_at < ${addParameter(new Date(to.getTime() + 86_400_000))}`,
+      );
     }
 
     return {
@@ -487,7 +507,10 @@ export class AuditLogService implements OnModuleInit {
     return normalized;
   }
 
-  private parseUtcDay(value: unknown, name: 'from' | 'to'): Date | undefined {
+  private parseBangkokDay(
+    value: unknown,
+    name: 'from' | 'to',
+  ): Date | undefined {
     const normalized = this.normalizeOptionalString(value);
 
     if (!normalized) {
@@ -496,7 +519,7 @@ export class AuditLogService implements OnModuleInit {
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
       throw new BadRequestException(
-        `${name} must be an ISO UTC calendar date.`,
+        `${name} must be an ISO calendar date (Asia/Bangkok).`,
       );
     }
 
@@ -507,17 +530,12 @@ export class AuditLogService implements OnModuleInit {
       day.toISOString().slice(0, 10) !== normalized
     ) {
       throw new BadRequestException(
-        `${name} must be an ISO UTC calendar date.`,
+        `${name} must be an ISO calendar date (Asia/Bangkok).`,
       );
     }
 
-    return day;
-  }
-
-  private nextUtcDay(day: Date): Date {
-    return new Date(
-      Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1),
-    );
+    // Bangkok is UTC+07:00 year-round; local midnight is the previous UTC day.
+    return new Date(day.getTime() - 7 * 60 * 60 * 1000);
   }
 
   private serializeTimestamp(value: Date | string): string {

@@ -46,6 +46,21 @@ Preserve creator-private Draft access and the dedicated initial-submission lifec
 
 Requester visibility of PSF values is controlled by persistent release state and the configured PSF access triggers, not the old short Status `PSF Created`. Each non-Draft status can be a trigger, selected in its Edit modal and shown in the catalog table. Release follows valid entry into any trigger, or an administrator saving its checked trigger to release existing requests at that status. All candidates must have valid required PSF information; otherwise that combined save rolls back. Access already released is retained. Deleting a trigger does not automatically make its replacement a trigger. Release does not choose or advance a Status. Status Management manages catalog entries and release settings, not allowed paths between stages.
 
+## Legacy Status values in list filters, 22 October 2026
+
+Requests and Dashboard filters offer the current catalog plus distinct non-Draft
+Status names still stored on submitted requests, including Imported Requests.
+The public catalog response returns these as `filterStatuses`; its `statuses`
+and `entries` remain the active catalog. Legacy names are preserved verbatim,
+and listing them does not make them allowed Status changes or classify them
+as Open/Overdue/Completed. Private Drafts never contribute extra filter options.
+
+Selecting an explicit Dashboard Status clears its active summary-card selection
+to query all work states, keeping Team and Search. Users can select a summary
+card afterward to narrow the result again. Clearing all Dashboard filters retains
+the existing reset to Open work. History has no Status filter. See
+[verification](verification/2026-10-22-search-filters.md).
+
 ## Documentation and design boundary
 
 The 4 October clarification originally changed documentation and design instructions only. The authorized implementation on 5 October now changes application source: Request Detail uses runtime catalog values and the existing revision-checked status API, with a separate explicit Save Status control and independent form Edit/Save/Cancel controls in the approved tabs. Choosing a Status alone does not save it; dirty form data blocks Status saving. Shared Desktop Light/Dark preferences and navigation are integrated with that flow.

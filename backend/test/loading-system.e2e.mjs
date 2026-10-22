@@ -161,7 +161,7 @@ test(
       held = await holdNextRequest(page, '**/api/requests?**');
       try {
         await page
-          .getByLabel('Keyword', { exact: true })
+          .getByLabel('Search', { exact: true })
           .fill('does-not-match-any-request');
         await held.reached;
         await expectBackgroundStatus(page, 'Updating PSF requests…');
@@ -203,9 +203,8 @@ test(
     held = await holdNextRequest(page, '**/api/audit-logs?**');
     try {
       await page
-        .getByLabel('User', { exact: true })
+        .getByLabel('Search', { exact: true })
         .fill('does-not-match-any-actor');
-      await page.getByRole('button', { name: 'Apply', exact: true }).click();
       await held.reached;
       await expectBackgroundStatus(page, 'Updating global audit history…');
       await expect(history.locator('tbody tr')).toHaveCount(rows);

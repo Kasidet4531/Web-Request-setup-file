@@ -102,72 +102,26 @@ describe('History route', () => {
 })
 
 describe('GlobalAuditLogFilters', () => {
-  it('renders native filter controls and invokes Apply and Clear actions', () => {
-    const onApply = vi.fn()
-    const onClear = vi.fn()
-    const controls = GlobalAuditLogFilters({
-      filters: {
-        requestId: 'request-1',
-        user: 'setup.gntc',
-        actionType: 'REQUEST_STATUS_CHANGED',
-        from: '2026-06-18',
-        to: '2026-06-19',
-      },
-      onApply,
-      onChange: vi.fn(),
-      onClear,
-    })
-    const html = renderToStaticMarkup(controls)
-
-    expect(html).toContain('name="requestId"')
-    expect(html).toContain('name="user"')
-    expect(html).toContain('name="actionType"')
-    expect(html).toContain('name="from"')
-    expect(html).toContain('name="to"')
-    expect(html).toContain('type="date"')
-    expect(html).toContain('global-history-filters__dates')
-    expect(html).toContain('global-history-filters__actions')
-    expect(html).toContain('btn-ghost')
-
-    const form = controls as unknown as {
-      props: {
-        children: unknown[]
-        onSubmit: (event: { preventDefault: () => void }) => void
-      }
-    }
-    form.props.onSubmit({ preventDefault: vi.fn() })
-    expect(onApply).toHaveBeenCalledTimes(1)
-
-    const actions = form.props.children as unknown[]
-    const buttonRow = actions[4] as {
-      props: { children: Array<{ props: { children: string; onClick?: () => void } }> }
-    }
-    const clearButton = buttonRow.props.children[0]
-    clearButton.props.onClick?.()
-    expect(onClear).toHaveBeenCalledTimes(1)
+  it('explains one Search field, keeps selected Bangkok dates visible and has no Apply or Status control', () => {
+    const html = renderToStaticMarkup(<GlobalAuditLogFilters
+      filters={{ keyword: 'Chip', actionType: 'REQUEST_STATUS_CHANGED', from: '2026-10-22', to: '2026-10-22' }}
+      onChange={vi.fn()} onClear={vi.fn()} moreFiltersOpen={false} onToggleMoreFilters={vi.fn()}
+    />)
+    expect(html).toContain('name="keyword"')
+    expect(html).toContain('Searches request no., product description, user name and username.')
+    expect(html).toContain('More filters')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain('Dates (Bangkok):')
+    expect(html).toContain('2026-10-22')
+    expect(html).not.toContain('>Apply<')
+    expect(html).not.toContain('name="requestId"')
+    expect(html).not.toContain('name="user"')
+    expect(html).not.toContain('name="status"')
   })
 
-  it('serializes only applied non-empty filters for the server-authorized audit query and clears to the empty form', () => {
-    expect(buildGlobalAuditLogQuery({
-      requestId: ' request-1 ',
-      user: ' setup.gntc ',
-      actionType: 'REQUEST_STATUS_CHANGED',
-      from: '2026-06-18',
-      to: '2026-06-19',
-    })).toEqual({
-      requestId: 'request-1',
-      user: 'setup.gntc',
-      actionType: 'REQUEST_STATUS_CHANGED',
-      from: '2026-06-18',
-      to: '2026-06-19',
-    })
-    expect(EMPTY_GLOBAL_AUDIT_LOG_FILTERS).toEqual({
-      requestId: '',
-      user: '',
-      actionType: '',
-      from: '',
-      to: '',
-    })
+  it('serializes only non-empty Search, Action and date filters', () => {
+    expect(buildGlobalAuditLogQuery({ keyword: ' Chip ', actionType: 'REQUEST_STATUS_CHANGED', from: '2026-10-22', to: '' })).toEqual({ keyword: 'Chip', actionType: 'REQUEST_STATUS_CHANGED', from: '2026-10-22' })
+    expect(buildGlobalAuditLogQuery(EMPTY_GLOBAL_AUDIT_LOG_FILTERS)).toEqual({})
   })
 })
 
@@ -204,7 +158,7 @@ describe('GlobalAuditLogTable', () => {
     expect(html.indexOf('View changes')).toBeGreaterThan(html.indexOf('/history/entry-new'))
   })
 
-  it('labels requests by Product_Description instead of a Draft number and lists Attachment changes', () => {
+  it('separates Product Description and Request No. while keeping Draft labels and Attachment changes', () => {
     const base = { hasRequestSnapshot: false, actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-20T01:00:00Z' }
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [
@@ -214,9 +168,9 @@ describe('GlobalAuditLogTable', () => {
       ],
       error: null, loading: false,
     }))
-    expect(html).toContain('<a href="/requests/request-1">Chip A</a><span class="font-mono-code">PSF-005571</span>')
-    expect(html).toContain('<a href="/requests/request-2">Untitled Draft (#5572)</a>')
-    expect(html).toContain('<a href="/requests/request-3">Product_Description</a>')
+    expect(html).toContain('<td><a href="/requests/request-1">Chip A</a></td><td class="font-mono-code"><a href="/requests/request-1">PSF-005571</a></td>')
+    expect(html).toContain('<td><a href="/requests/request-2">Untitled Draft (#5572)</a></td><td class="font-mono-code">—</td>')
+    expect(html).toContain('<td><a href="/requests/request-3">Product_Description</a></td><td class="font-mono-code">—</td>')
     expect(html).not.toContain('DRAFT-2026')
     expect(html).toContain('<td>Attachment uploaded</td>')
     expect(html).toContain('<td>Attachment deleted</td>')
@@ -265,6 +219,7 @@ describe('GlobalAuditLogTable', () => {
     expect(html).toContain('&lt;script&gt;new status&lt;/script&gt;')
     expect(html).not.toContain('<script>')
     expect(html).toContain('invalid-date')
+    expect(html).toContain('<td>Workflow configuration</td><td class="font-mono-code">—</td>')
     expect(html).not.toContain('Before')
   })
 
@@ -324,11 +279,11 @@ describe('GlobalAuditLogTable', () => {
 
     expect(html).toContain('aria-label="Global audit history"')
     expect(html).toContain('<th scope="col">Time</th>')
-    expect(html).toContain('<th scope="col">Request</th>')
+    expect(html).toContain('<th scope="col">Product Description</th><th scope="col">Request No.</th>')
     expect(html).toContain('<th scope="col">User</th>')
     expect(html).toContain('<th scope="col">Action</th>')
     expect(html).toContain('<th scope="col">Detail</th>')
-    expect(html).toContain('href="/requests/request-2"')
+    expect(html).toContain('<td>—</td><td class="font-mono-code"><a href="/requests/request-2">PSF-0002</a></td>')
     expect(html).toContain('Setup Owner GNTC Demo')
     expect(html).toContain('<th scope="row">Work Status</th><td><pre class="history-changes__value">Submitted</pre></td><td><pre class="history-changes__value">Setup In Progress</pre></td>')
     expect(html).not.toContain('Status: Submitted')
@@ -385,12 +340,80 @@ describe('GlobalHistoryPage tabs and role access', () => {
     service.fetchDraftDeletions.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0 })
   })
 
+  it('searches after typing pauses, applies Action immediately, resets pagination and clears without Apply', async () => {
+    vi.useFakeTimers()
+    const render = () => { hooks.current!.beginRender(); const page = GlobalHistoryPage(); hooks.current!.runEffects(); return page }
+    const change = (page: ReactNode, name: string, value: string) => {
+      const control = requireRenderedElement(page, el => el.type === GlobalAuditLogFilters)
+      ;(control.props.onChange as (field: string, value: string) => void)(name, value)
+    }
+    try {
+      render(); await vi.advanceTimersByTimeAsync(0)
+      let page = render()
+      const initialRequests = service.fetchGlobalAuditLogs.mock.calls.length
+      change(page, 'keyword', 'Silicon')
+      render(); await vi.advanceTimersByTimeAsync(299)
+      expect(service.fetchGlobalAuditLogs).toHaveBeenCalledTimes(initialRequests)
+      expect(service.fetchGlobalAuditLogs).not.toHaveBeenCalledWith(expect.objectContaining({ keyword: 'Silicon' }))
+      await vi.advanceTimersByTimeAsync(1)
+      render(); await vi.advanceTimersByTimeAsync(0)
+      expect(service.fetchGlobalAuditLogs).toHaveBeenLastCalledWith({ keyword: 'Silicon', limit: 25, offset: 0 })
+      page = render()
+      const table = requireRenderedElement(page, el => el.type === GlobalAuditLogTable)
+      ;(table.props.onOffsetChange as (value: number) => void)(25)
+      render(); await vi.advanceTimersByTimeAsync(0)
+      page = render()
+      change(page, 'actionType', 'REQUEST_STATUS_CHANGED')
+      render(); await vi.advanceTimersByTimeAsync(0)
+      expect(service.fetchGlobalAuditLogs).toHaveBeenLastCalledWith({ keyword: 'Silicon', actionType: 'REQUEST_STATUS_CHANGED', limit: 25, offset: 0 })
+      page = render()
+      const filters = requireRenderedElement(page, el => el.type === GlobalAuditLogFilters)
+      ;(filters.props.onClear as () => void)()
+      render(); await vi.advanceTimersByTimeAsync(0)
+      expect(service.fetchGlobalAuditLogs).toHaveBeenLastCalledWith({ limit: 25, offset: 0 })
+    } finally {
+      hooks.current!.unmount()
+      vi.useRealTimers()
+    }
+  })
+
   it('shows System Audit Trail and Draft Deletions tabs for admin users', async () => {
     function renderPage() { hooks.current!.beginRender(); return GlobalHistoryPage() }
     renderPage(); hooks.current!.runEffects(); await new Promise(r => setTimeout(r, 0)); const page = renderPage()
     const markup = renderToStaticMarkup(page)
     expect(markup).toContain('System Audit Trail')
     expect(markup).toContain('Draft Deletions')
+  })
+
+  it('ignores a late earlier search response and does not submit an invalid date range', async () => {
+    vi.useFakeTimers()
+    let resolveEarlier: (value: unknown) => void = () => {}
+    service.fetchGlobalAuditLogs.mockImplementationOnce(() => new Promise(resolve => { resolveEarlier = resolve }))
+    const latest = { id: 'latest-entry', actorDisplayName: 'Latest result' }
+    const render = () => { hooks.current!.beginRender(); const page = GlobalHistoryPage(); hooks.current!.runEffects(); return page }
+    try {
+      let page = render()
+      let controls = requireRenderedElement(page, el => el.type === GlobalAuditLogFilters)
+      ;(controls.props.onChange as (field: string, value: string) => void)('keyword', 'Latest')
+      render(); await vi.advanceTimersByTimeAsync(300)
+      service.fetchGlobalAuditLogs.mockResolvedValueOnce({ items: [latest], total: 1, limit: 25, offset: 0 })
+      render(); await vi.advanceTimersByTimeAsync(0)
+      resolveEarlier({ items: [{ id: 'old-entry' }], total: 1, limit: 25, offset: 0 })
+      await vi.advanceTimersByTimeAsync(0)
+      page = render()
+      expect(requireRenderedElement(page, el => el.type === GlobalAuditLogTable).props.entries).toEqual([latest])
+      controls = requireRenderedElement(page, el => el.type === GlobalAuditLogFilters)
+      const change = controls.props.onChange as (field: string, value: string) => void
+      const requests = service.fetchGlobalAuditLogs.mock.calls.length
+      change('from', '2026-10-23'); change('to', '2026-10-22')
+      page = render(); await vi.advanceTimersByTimeAsync(300)
+      expect(service.fetchGlobalAuditLogs).toHaveBeenCalledTimes(requests)
+      controls = requireRenderedElement(page, el => el.type === GlobalAuditLogFilters)
+      expect(renderToStaticMarkup(createElement(GlobalAuditLogFilters, controls.props as unknown as Parameters<typeof GlobalAuditLogFilters>[0]))).toContain('Choose an end date on or after the start date.')
+    } finally {
+      hooks.current!.unmount()
+      vi.useRealTimers()
+    }
   })
 
   it('hides tabs for non-admin users', async () => {
@@ -403,10 +426,10 @@ describe('GlobalHistoryPage tabs and role access', () => {
 
   it('loads draft deletions when switching to Draft Deletions tab', async () => {
     function renderPage() { hooks.current!.beginRender(); return GlobalHistoryPage() }
-    renderPage(); hooks.current!.runEffects(); await new Promise(r => setTimeout(r, 0)); let page = renderPage()
+    renderPage(); hooks.current!.runEffects(); await new Promise(r => setTimeout(r, 0)); const page = renderPage()
     const tab = requireRenderedElement(page, el => el.type === 'button' && el.props.children === 'Draft Deletions')
     ;(tab.props.onClick as () => void)()
-    page = renderPage()
+    renderPage()
     hooks.current!.runEffects()
     await new Promise(r => setTimeout(r, 0))
     expect(service.fetchDraftDeletions).toHaveBeenCalledWith(expect.objectContaining({ limit: 25, offset: 0 }))
@@ -414,6 +437,6 @@ describe('GlobalHistoryPage tabs and role access', () => {
 })
 
 it('removes request assignment from the audit action filter', () => {
-  const filters = renderToStaticMarkup(<GlobalAuditLogFilters filters={EMPTY_GLOBAL_AUDIT_LOG_FILTERS} onApply={vi.fn()} onChange={vi.fn()} onClear={vi.fn()} />)
+  const filters = renderToStaticMarkup(<GlobalAuditLogFilters filters={EMPTY_GLOBAL_AUDIT_LOG_FILTERS} onChange={vi.fn()} onClear={vi.fn()} />)
   expect(filters).not.toContain('REQUEST_ASSIGNEE_CHANGED')
 })

@@ -29,3 +29,29 @@ A Request Snapshot opened from an entry ([ADR 0016](adr/0016-full-request-snapsh
 This is a source change, not deployment evidence. `backend/test/request-snapshot.postgres.test.ts` covers these rules and passed on 11 October 2026, in memory and on the configured server inside temporary tables; see the [verification record](verification/2026-10-11-request-snapshot.md). The 5 October checks above do not cover it.
 
 Attachment entries (20 October 2026, [Request Attachments](request-attachments.md)): `ATTACHMENT_UPLOADED` and `ATTACHMENT_DELETED` follow the same rules as the request they belong to, including Draft privacy, and store no Request Snapshot. Audit History names each request by its Product_Description (or `Untitled Draft (#ID)`) instead of a Draft number; this label adds no data a viewer could not already see on the request.
+
+On 22 October 2026 the compound Request column was split into Product Description
+and Request No. Both link to the request when available. Drafts keep their
+descriptive link and show `—` for Request No.; their internal Draft number stays
+hidden. Existing `Untitled Draft (#ID)` / `Untitled Request (#ID)` labels are
+preserved; if the API supplies no label, show `—` instead of the request number.
+Configuration events without a request keep the configuration label and show
+`—` for Request No. Snapshot links and access rules are unchanged.
+
+## Search and filters, 22 October 2026
+
+The System Audit Trail uses one Search field for Request No., Product Description,
+the acting user's display name or username. Partial matching is case insensitive;
+the page explains the searched fields. Search runs after a 300 ms pause; Action
+and date selections update automatically without Apply. More filters contains
+From/To dates. A selected range stays visible when those inputs are collapsed.
+Dates use Asia/Bangkok, including the entire end date, consistent with the table.
+Invalid ranges display a field error and are not submitted. Changing filters
+resets pagination; late responses cannot replace newer results.
+
+There is no Status filter in History. The Admin-only Draft Deletions tab and
+Request Snapshot links retain their existing behavior. `GET /api/audit-logs`
+accepts `keyword`, `actionType`, `from`, `to`, `limit` and `offset`; its existing
+`requestId` and `user` API filters remain supported. Counts and rows apply the
+same search and visibility conditions. Search does not inspect hidden PSF content
+or arbitrary audit metadata. See [verification](verification/2026-10-22-search-filters.md).
