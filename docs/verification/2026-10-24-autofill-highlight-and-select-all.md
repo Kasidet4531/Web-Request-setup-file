@@ -23,7 +23,7 @@ mail). No configured database, NAS share or deployment was used, and no mail was
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend tests | `cd frontend && npx vitest run` | 39 files, 560 tests passed |
+| Frontend tests | `cd frontend && npx vitest run` | 39 files, 565 tests passed |
 | Frontend type check and lint | `npx tsc -b`, `npx eslint .` | Passed |
 | Backend unit tests | `cd backend && npx jest` | 51 suites, 787 tests passed |
 | Backend API e2e | `npm run test:e2e` | 20 passed, 1 failed: `exposes ordered workflow statuses…`, which also fails on the base (it expects no `filterStatuses`) |
