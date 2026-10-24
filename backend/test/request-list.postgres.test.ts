@@ -10,8 +10,31 @@ import {
   ownerA,
   psfSchema,
   requester,
+  schema,
   submittedStatus,
 } from './draft-lifecycle.fixture';
+
+// Request For tells engineering work from production. Like PSF file names, the
+// list shows it whether or not its field is searchable or exportable.
+const requestForSchema: FormSchemaJson = {
+  ...schema,
+  sections: [
+    {
+      ...schema.sections[0],
+      fields: [
+        ...schema.sections[0].fields,
+        {
+          fieldKey: 'request_for',
+          canonicalKey: 'request_for',
+          label: 'Request For',
+          type: 'radio',
+          required: false,
+          options: ['Engineering', 'Production'],
+        },
+      ],
+    },
+  ],
+};
 
 // The request list shows each request's PSF Setup File Name and Job File Name,
 // both PSF Created Information fields. Neither is marked searchable here, as in
@@ -56,6 +79,10 @@ before(
     await db.query(
       "UPDATE form_definitions SET schema_json=$1 WHERE form_key='psf-created-information' AND status='active'",
       [psfFileNamesSchema],
+    );
+    await db.query(
+      "UPDATE form_definitions SET schema_json=$1 WHERE form_key='psf-request' AND status='active'",
+      [requestForSchema],
     );
   },
   { timeout: 30000 },
@@ -151,6 +178,81 @@ void it('lets a Requester find a request by PSF Setup File Name only after PSF V
 
   await releasePsfCreatedInformation(saved);
 
+  assert.equal(
+    (await fixture.service.queryRequests(search, requester)).total,
+    1,
+  );
+});
+
+async function submittedFor(
+  requestFor: string,
+  actor = requester,
+): Promise<PsfRequestResponse> {
+  const draft = await fixture.service.createDraft(
+    { requesterData: { title: 'Test request', request_for: requestFor } },
+    actor,
+  );
+  return fixture.submit(draft);
+}
+
+void it('lists the Request For of each request', async () => {
+  await submittedFor('Production');
+
+  const { items } = await fixture.service.queryRequests({}, ownerA);
+
+  assert.equal(items[0].requestFor, 'Production');
+});
+
+void it('fills in Request For for requests listed before the list showed it', async () => {
+  await submittedFor('Engineering');
+  // As left by earlier versions, which had no Request For column.
+  await db.query('UPDATE psf_request_search_index SET request_for = NULL');
+  await db.query('DELETE FROM request_data_migrations');
+
+  await fixture.service.onModuleInit();
+
+  const { items } = await fixture.service.queryRequests({}, ownerA);
+  assert.equal(items[0].requestFor, 'Engineering');
+});
+
+void it('finds a request by the first name of its Requester', async () => {
+  const somchai = { ...requester, displayName: 'Somchai Jaidee' };
+  const found = await submittedFor('Production', somchai);
+  await submittedFor('Production');
+
+  const { items, total } = await fixture.service.queryRequests(
+    { keyword: 'somchai' },
+    ownerA,
+  );
+
+  assert.equal(total, 1);
+  assert.equal(items[0].requestId, found.id);
+  assert.equal(items[0].requester, 'Somchai Jaidee');
+});
+
+void it('keeps a Requester to the requests they could see before when searching by name', async () => {
+  const somchai = { ...ownerA, displayName: 'Somchai Jaidee' };
+  const draft = await fixture.service.createDraft(
+    { requesterData: { title: 'Owner request' } },
+    somchai,
+  );
+  await fixture.service.submitRequest(
+    draft.id,
+    {
+      formVersion: 1,
+      expectedUpdatedAt: draft.updatedAt,
+      status: submittedStatus,
+    },
+    somchai,
+  );
+  const search = { keyword: 'somchai' };
+
+  const related = await fixture.service.queryRequests(
+    { ...search, scope: 'related' },
+    requester,
+  );
+  assert.equal(related.total, 0);
+  assert.equal(related.summary.open, 0);
   assert.equal(
     (await fixture.service.queryRequests(search, requester)).total,
     1,

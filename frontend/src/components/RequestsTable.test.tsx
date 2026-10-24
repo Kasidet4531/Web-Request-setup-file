@@ -37,19 +37,21 @@ const request: PsfRequestListItem = {
   priority: null,
   requester: 'Somchai',
   productType: 'Create new PSF (Require PCSF , E142 or .DPL)',
+  requestFor: 'Production',
   requestDate: '2026-10-01',
   dueDate: '2026-10-30',
   updatedAt: '2026-10-02T00:00:00.000Z',
 }
 
 describe('Request list columns', () => {
-  it('starts with Target 12NC Desc and names the Request To column', () => {
+  it('starts with Target 12NC Desc and puts Request For right after Request To', () => {
     const table = RequestsTable({ items: [request], onOpenItem: () => {} })
 
     expect(headers(table)).toEqual([
       'Target 12NC Desc',
       'Request No.',
       'Request To',
+      'Request For',
       'Status',
       'PSF Setup File Name',
       'Job File Name',
@@ -66,16 +68,18 @@ describe('Request list columns', () => {
     expect(cell(table, 'Target 12NC Desc')).toBe('Probe card update')
     expect(cell(table, 'Request No.')).toBe('PSF-000042')
     expect(cell(table, 'Request To')).toBe('Create new PSF')
+    expect(cell(table, 'Request For')).toBe('Production')
     expect(cell(table, 'Requester')).toBe('Somchai')
   })
 
   it('shows a dash for a missing value instead of filling it from another column', () => {
     const table = RequestsTable({
-      items: [{ ...request, title: null, psfSetupFileName: null, jobFileName: null }],
+      items: [{ ...request, title: null, requestFor: null, psfSetupFileName: null, jobFileName: null }],
       onOpenItem: () => {},
     })
 
     expect(cell(table, 'Target 12NC Desc')).toBe('—')
+    expect(cell(table, 'Request For')).toBe('—')
     expect(cell(table, 'PSF Setup File Name')).toBe('—')
     expect(cell(table, 'Job File Name')).toBe('—')
   })

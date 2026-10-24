@@ -219,6 +219,7 @@ describe('SearchIndexService canonical extraction', () => {
         probecard_name: 'PC-123',
         priority: 'High',
         due_date: '2026-07-01',
+        request_for: 'Production',
       },
     );
 
@@ -243,6 +244,7 @@ describe('SearchIndexService canonical extraction', () => {
         '2026-06-18T01:05:03.000Z',
         null,
         null,
+        'Production',
       ],
     );
   });
@@ -265,6 +267,7 @@ describe('SearchIndexService canonical extraction', () => {
           setup_owner: null,
           setup_owner_role: 'GNTC',
           product_type: 'New Product',
+          request_for: 'Production',
           request_date: new Date('2026-06-18T01:02:03.000Z'),
           due_date: new Date('2026-07-01T00:00:00.000Z'),
           updated_at: new Date('2026-06-18T01:05:03.000Z'),
@@ -302,6 +305,7 @@ describe('SearchIndexService canonical extraction', () => {
           requester: 'Fook',
           requesterUserId: 'requester-1',
           productType: 'New Product',
+          requestFor: 'Production',
           requestDate: '2026-06-18T01:02:03.000Z',
           dueDate: '2026-07-01T00:00:00.000Z',
           updatedAt: '2026-06-18T01:05:03.000Z',

@@ -46,6 +46,8 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
   mapping.addRow(['Requester', 'Tester Type', '', 'Choice', 'J750']);
   for (const option of ['LTX_C', 'MCT', 'UFLEX'])
     mapping.addRow(['', '', '', '', option]);
+  mapping.addRow(['Requester', 'Request For', '', 'Choice', 'Engineering']);
+  mapping.addRow(['', '', '', '', 'Production']);
   mapping.addRow(['Creater', 'Job File Name', '', 'Single line of text']);
   mapping.addRow(['Creater', 'PSF Setup File Name', '', 'Single line of text']);
   mapping.addRow(['Creater', 'Touch down per wafer', '', 'Number']);
@@ -75,6 +77,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     'Start Date',
     'Created By',
     'Modified By',
+    'Request For',
   ]);
   const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
   data.addRow([
@@ -94,6 +97,7 @@ async function fakeWorkbook(extraRows: unknown[][] = []): Promise<string> {
     day('2026-08-04'),
     'Somebody',
     'Editor',
+    'Production',
   ]);
   data.addRow([
     101,
@@ -392,6 +396,27 @@ void it('lenient mode blanks non-fitting values and skips unusable rows', async 
   );
   assert.equal(rows[0].requester_data_json.diameter_inch, '');
   assert.equal(rows[1].psf_created_data_json.touch_down_per_wafer, '');
+});
+
+void it('lists the Request For of Imported Requests', async () => {
+  await initialize(
+    {
+      query: (sql: string, args?: unknown[]) => db.query(sql, args),
+    } as unknown as PoolClient,
+    await fakeWorkbook(),
+  );
+
+  const { items } = await fixture.service.queryRequests({}, admin);
+
+  assert.deepEqual(
+    items
+      .map((item) => [item.requestNo, item.requestFor])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    [
+      ['PSF-000100', 'Production'],
+      ['PSF-000101', null],
+    ],
+  );
 });
 
 void it("sets the Work Status order to the workbook's Status options, replacing an administrator's order", async () => {

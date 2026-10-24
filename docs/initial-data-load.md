@@ -61,7 +61,7 @@ non-fitting values per column, which are real data: use it only in your own term
    continue above the highest workbook `ID`, skipped `Draft` rows included, since their NAS
    folders may exist ([Request Attachments](request-attachments.md)). `Created By` populates `psf_requests.requester`, `psf_request_search_index.requester`, and `requester_data_json.requester_name` (fallback `NA` if blank), while `requester_user_id` remains `NULL`. `Modified By` populates `requester_data_json.modified_by` (fallback to `Created By`). `Created`/`Modified` give created/submitted and updated time;
    Completed rows also get `completed_at` and `psf_released_at` from `Modified`. Status is stored
-   verbatim even when outside the catalog. Rows whose Status is `Draft` are skipped. `psf_setup_file_name` from `psf_created_data_json` is indexed into `psf_request_search_index.psf_setup_file_name`.
+   verbatim even when outside the catalog. Rows whose Status is `Draft` are skipped. `psf_setup_file_name` from `psf_created_data_json` is indexed into `psf_request_search_index.psf_setup_file_name`. A Requester `Request For` column becomes the `request_for` field (canonical key `request_for`), and its value is indexed into `psf_request_search_index.request_for` for the Request For column of the Requests and Dashboard tables (24 October 2026).
 6. **Values.** Trimmed; `NA` (any case) is normalized to `NA` and kept in all field types;
    Choice values are matched to the configured option ignoring case/spacing; dates become
    `YYYY-MM-DD`. Values that still do not fit (non-numeric Number, unknown option) are kept verbatim in default mode and
