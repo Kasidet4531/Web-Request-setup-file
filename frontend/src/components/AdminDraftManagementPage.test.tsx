@@ -30,7 +30,7 @@ describe('Draft Management public UI', () => {
 
   it('presents creator, creation/update times, unclassified product and recipient issues', () => {
     const markup = renderToStaticMarkup(<AdminDraftTable items={[item]} reminders={[{ requestId: 'draft-1', requestNo: 'PSF-1', state: 'unresolved', queuedAt: null, skippedRecipients: [{ userId: 'creator', displayName: 'Creator', reason: 'Missing email' }] }]} onDelete={() => {}} />)
-    expect(markup).toContain('Creator'); expect(markup).toContain('รอระบุ Product Type'); expect(markup).toContain('Missing email'); expect(markup).toContain('unresolved'); expect(markup).not.toContain('Owner / Dept')
+    expect(markup).toContain('Creator'); expect(markup).toContain('<td data-label="Request To">รอระบุ Request To</td>'); expect(markup).toContain('<th scope="col">Request To</th>'); expect(markup).not.toContain('Product Type'); expect(markup).toContain('Missing email'); expect(markup).toContain('unresolved'); expect(markup).not.toContain('Owner / Dept')
   })
 
   it('shows recipient issues inside the table and no separate reminder section, with Delete as a regular button', async () => {
@@ -69,6 +69,8 @@ describe('Draft Management public UI', () => {
       expect(findRenderedElement(page, element => element.type === 'input' && String(element.props.placeholder).includes('Product'))).toBeNull()
       expect(findRenderedElement(page, element => element.type === 'button' && element.props.children === 'Search Drafts')).toBeNull()
       expect(findRenderedElement(page, element => typeof element.props.children === 'string' && element.props.children.includes('Draft deletion log'))).toBeNull()
+
+      expect(requireRenderedElement(page, element => element.type === 'input' && element.props.placeholder === 'Draft number or Target 12NC Desc…')).toBeTruthy()
 
       const creator = requireRenderedElement(page, element => element.type === 'input' && element.props.placeholder === 'Creator name…')
       ;(creator.props.onChange as (event: unknown) => void)({ target: { value: 'Alex' } }); page = renderList()

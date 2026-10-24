@@ -17,7 +17,15 @@ export interface FormSchemaField {
   searchable?: boolean
   exportable?: boolean
   autofillTrigger?: boolean
+  /** Field Help Text: plain text shown in smaller type under the field's control while it is filled in. */
+  helpText?: string
+  /** How a Multiple choice (radio) field lays out its options; absent means horizontal. */
+  optionLayout?: FieldOptionLayout
 }
+
+export const FIELD_HELP_TEXT_MAX_LENGTH = 500
+export const FIELD_OPTION_LAYOUTS = ['horizontal', 'vertical'] as const
+export type FieldOptionLayout = typeof FIELD_OPTION_LAYOUTS[number]
 
 export interface FormSchemaSection {
   sectionKey: string

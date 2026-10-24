@@ -4,7 +4,7 @@ import { AsyncNotice } from './ui/AsyncNotice'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { formatFileSize } from './ui/fileSize'
 import { formatHistoryDateTime } from './ui/historyDateTime'
-import { api, type AttachmentPolicy, type RequestAttachment, type RequestAttachmentList } from '../services/api'
+import { api, type AttachmentCategory, type AttachmentPolicy, type RequestAttachment, type RequestAttachmentList } from '../services/api'
 
 /**
  * The server's per-file limit and blocked file types. Null until loaded, and
@@ -130,6 +130,18 @@ export function ImagePreviewModal({ attachment, downloadUrl, onClose }: { attach
   )
 }
 
+/** The Attachment Categories in the order they are shown; the server decides each file's category. */
+const ATTACHMENT_GROUPS: ReadonlyArray<{ category: AttachmentCategory; label: string; empty: string }> = [
+  { category: 'map_layout', label: 'Map Layout File', empty: 'No Map Layout Files.' },
+  { category: 'fpc_layout', label: 'FPC Layout File', empty: 'No FPC Layout Files.' },
+  { category: 'other', label: 'Other', empty: 'No other files.' },
+]
+
+/** A category this screen does not know is shown under Other, so no file is ever hidden. */
+function attachmentGroup(item: RequestAttachment): AttachmentCategory {
+  return item.category === 'map_layout' || item.category === 'fpc_layout' ? item.category : 'other'
+}
+
 /** Attachments of a saved request: listed from its NAS folder, changed immediately. */
 export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { requestId: string; reloadKey?: unknown; onChanged?: () => void }) {
   const [state, setState] = useState<{ loading: boolean; error: string | null; data: RequestAttachmentList | null }>({ loading: true, error: null, data: null })
@@ -198,6 +210,31 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
     }
   }
 
+  function renderAttachment(item: RequestAttachment, canManage: boolean) {
+    const downloadUrl = api.requestAttachmentDownloadUrl(requestId, item.id)
+    return (
+      <li key={item.id}>
+        {item.isImage ? (
+          <button className="request-attachments__name" type="button" onClick={() => setPreview(item)}>
+            <Image size={16} aria-hidden="true" /> {item.filename}
+          </button>
+        ) : (
+          <a className="request-attachments__name" href={downloadUrl} download={item.filename}>
+            <FileText size={16} aria-hidden="true" /> {item.filename}
+          </a>
+        )}
+        <span className="request-attachments__meta">
+          {formatFileSize(item.sizeBytes)} · {item.uploadedByDisplayName ?? 'Added on the NAS'} · <time dateTime={item.createdAt}>{formatHistoryDateTime(item.createdAt)}</time>
+        </span>
+        {canManage ? (
+          <button className="ui-button ui-button--secondary request-attachments__delete" type="button" aria-label={`Delete ${item.filename}`} disabled={uploading || deletePending} onClick={() => setDeleting(item)}>
+            <Trash2 size={14} aria-hidden="true" /> Delete
+          </button>
+        ) : null}
+      </li>
+    )
+  }
+
   const list = state.data
   const hint = list?.canManage && policy ? policyHint(policy) : null
   const hintId = hint ? `attachments-policy-${requestId}` : undefined
@@ -215,34 +252,21 @@ export function RequestAttachmentsPanel({ requestId, reloadKey, onChanged }: { r
       {state.error ? <AsyncNotice kind="error" title={`Unable to load attachments: ${state.error}`} action={<button className="btn-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>Retry attachments</button>} /> : null}
       {actionError ? <AsyncNotice kind="error" title={actionError} /> : null}
       {message ? <p className="sr-only" role="status">{message}</p> : null}
-      {list && list.items.length === 0 ? <p className="page-card__description" role="status">No attachments yet.</p> : null}
-      {list && list.items.length > 0 ? (
-        <ul className="request-attachments__list">
-          {list.items.map((item) => {
-            const downloadUrl = api.requestAttachmentDownloadUrl(requestId, item.id)
+      {list ? (
+        <div className="request-attachments__groups">
+          {ATTACHMENT_GROUPS.map((group) => {
+            const items = list.items.filter((item) => attachmentGroup(item) === group.category)
+            const headingId = `attachments-${group.category}-${requestId}`
             return (
-              <li key={item.id}>
-                {item.isImage ? (
-                  <button className="request-attachments__name" type="button" onClick={() => setPreview(item)}>
-                    <Image size={16} aria-hidden="true" /> {item.filename}
-                  </button>
-                ) : (
-                  <a className="request-attachments__name" href={downloadUrl} download={item.filename}>
-                    <FileText size={16} aria-hidden="true" /> {item.filename}
-                  </a>
+              <section className="request-attachments__group" key={group.category} aria-labelledby={headingId}>
+                <h3 id={headingId}>{group.label} <span className="request-attachments__count">({items.length})</span></h3>
+                {items.length === 0 ? <p className="page-card__description">{group.empty}</p> : (
+                  <ul className="request-attachments__list">{items.map((item) => renderAttachment(item, list.canManage))}</ul>
                 )}
-                <span className="request-attachments__meta">
-                  {formatFileSize(item.sizeBytes)} · {item.uploadedByDisplayName ?? 'Added on the NAS'} · <time dateTime={item.createdAt}>{formatHistoryDateTime(item.createdAt)}</time>
-                </span>
-                {list.canManage ? (
-                  <button className="ui-button ui-button--secondary request-attachments__delete" type="button" aria-label={`Delete ${item.filename}`} disabled={uploading || deletePending} onClick={() => setDeleting(item)}>
-                    <Trash2 size={14} aria-hidden="true" /> Delete
-                  </button>
-                ) : null}
-              </li>
+              </section>
             )
           })}
-        </ul>
+        </div>
       ) : null}
       {preview ? <ImagePreviewModal attachment={preview} downloadUrl={api.requestAttachmentDownloadUrl(requestId, preview.id)} onClose={() => setPreview(null)} /> : null}
       <ConfirmDialog

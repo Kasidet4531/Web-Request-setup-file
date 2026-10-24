@@ -30,11 +30,13 @@ import { DATABASE_POOL } from '../database/database.service';
 import { NotificationService } from '../notifications/notification.service';
 import { escapeHtml } from '../notifications/notification.template';
 import {
+  CanonicalValues,
   RequestSearchFilters,
   RequestSearchResult,
   RequestScopeFilters,
   SearchIndexService,
   ensureSchemaSnapshotKeyStorage,
+  requestForValue,
 } from './search-index.service';
 import {
   assertValidRequiredFormData,
@@ -223,6 +225,7 @@ export class RequestsService implements OnModuleInit {
       await this.searchIndexService.ensureRequestSearchIndexStorage(client);
       await this.ensureDraftManagementStorage(client);
       await this.indexListedPsfFileNames(client);
+      await this.indexRequestFor(client);
       await this.recordModifiedByFromAuditHistory(client);
       await this.requestAttachments?.ensureStorage(client);
     });
@@ -676,6 +679,34 @@ export class RequestsService implements OnModuleInit {
     );
   }
 
+  // Requests saved before the request list showed Request For have none in
+  // the search index. Runs once, after ensureDraftManagementStorage.
+  private async indexRequestFor(client: QueryRunner): Promise<void> {
+    const migrated = await client.query(
+      "SELECT key FROM request_data_migrations WHERE key='index-request-for-v1'",
+    );
+    if (migrated.rows.length) return;
+    const requests = await client.query<
+      Pick<PsfRequestRow, 'id' | 'schema_snapshot_json' | 'requester_data_json'>
+    >(
+      `SELECT id, schema_snapshot_json, requester_data_json FROM psf_requests WHERE status <> '${DRAFT_STATUS}'`,
+    );
+    for (const request of requests.rows) {
+      const requestFor = requestForValue(
+        request.schema_snapshot_json,
+        request.requester_data_json,
+      );
+      if (requestFor !== null)
+        await client.query(
+          'UPDATE psf_request_search_index SET request_for = $2 WHERE request_id = $1',
+          [request.id, requestFor],
+        );
+    }
+    await client.query(
+      "INSERT INTO request_data_migrations(key) VALUES('index-request-for-v1') ON CONFLICT DO NOTHING",
+    );
+  }
+
   // Requests saved while Modified By was recorded only on forms with a
   // Modified By field get the actor of their latest individual save. A bulk
   // Status replacement does not change request content (ADR 0016), so it
@@ -1030,11 +1061,7 @@ export class RequestsService implements OnModuleInit {
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
           },
-          this.withPsfFileNameCanonicals(
-            canonicalValues,
-            updatedRow.psf_created_schema_snapshot_json,
-            updatedRow.psf_created_data_json,
-          ),
+          this.withListedCanonicals(canonicalValues, updatedRow),
           client,
         );
       }
@@ -1302,13 +1329,12 @@ export class RequestsService implements OnModuleInit {
             requestDate: updatedRow.created_at,
             updatedAt: updatedRow.updated_at,
           },
-          this.withPsfFileNameCanonicals(
+          this.withListedCanonicals(
             this.searchIndexService.extractCanonicalValues(
               updatedRow.schema_snapshot_json,
               updatedRow.requester_data_json ?? {},
             ),
-            updatedRow.psf_created_schema_snapshot_json,
-            updatedRow.psf_created_data_json,
+            updatedRow,
           ),
           client,
         );
@@ -1431,13 +1457,12 @@ export class RequestsService implements OnModuleInit {
           requestDate: updatedRow.created_at,
           updatedAt: updatedRow.updated_at,
         },
-        this.withPsfFileNameCanonicals(
+        this.withListedCanonicals(
           this.searchIndexService.extractCanonicalValues(
             updatedRow.schema_snapshot_json,
             updatedRow.requester_data_json,
           ),
-          updatedRow.psf_created_schema_snapshot_json,
-          updatedRow.psf_created_data_json,
+          updatedRow,
         ),
         client,
       );
@@ -1620,11 +1645,7 @@ export class RequestsService implements OnModuleInit {
           requestDate: submittedRow.created_at,
           updatedAt: submittedRow.updated_at,
         },
-        this.withPsfFileNameCanonicals(
-          canonicalValues,
-          submittedRow.psf_created_schema_snapshot_json,
-          submittedRow.psf_created_data_json,
-        ),
+        this.withListedCanonicals(canonicalValues, submittedRow),
         client,
       );
 
@@ -1735,6 +1756,32 @@ export class RequestsService implements OnModuleInit {
       schemaSnapshot.formKey === request.form_key &&
       schemaSnapshot.version === request.form_version
     );
+  }
+
+  // The request list shows these values, so every search index write carries
+  // them, whether or not their field is searchable.
+  private withListedCanonicals(
+    canonicalValues: CanonicalValues,
+    request: Pick<
+      PsfRequestRow,
+      | 'schema_snapshot_json'
+      | 'requester_data_json'
+      | 'psf_created_schema_snapshot_json'
+      | 'psf_created_data_json'
+    >,
+  ): CanonicalValues {
+    const listed = this.withPsfFileNameCanonicals(
+      canonicalValues,
+      request.psf_created_schema_snapshot_json,
+      request.psf_created_data_json,
+    );
+    const requestFor = requestForValue(
+      request.schema_snapshot_json,
+      request.requester_data_json,
+    );
+    return requestFor === null
+      ? listed
+      : { ...listed, request_for: requestFor };
   }
 
   // The request list shows these PSF Created Information values, so every

@@ -5,6 +5,12 @@ import type {
   FormSchema,
   FormSchemaField,
 } from '../types/forms'
+import {
+  AUTOFILL_HIGHLIGHT_LABELS,
+  autofillHighlightRowClass,
+  type AutofillHighlight,
+  type AutofillHighlights,
+} from './autofillHighlight'
 
 export type {
   DynamicFormErrors,
@@ -13,7 +19,8 @@ export type {
   FormSchemaField,
 } from '../types/forms'
 
-export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
+/** A field's Autofill highlight (see `autofillHighlight.ts`). */
+export type DynamicFormFieldStatus = AutofillHighlight
 
 /** The latest result of the bar's action (saving, saved, or the error), shown in the bar beside the buttons. */
 export interface DynamicFormActionFeedback {
@@ -30,7 +37,8 @@ export interface DynamicFormRendererProps {
   deleteAction?: ReactNode
   footerActions?: ReactNode
   headerTitle?: string
-  fieldStatuses?: Partial<Record<string, DynamicFormFieldStatus>>
+  /** Autofill highlights of the open form: each colours its field's row beside its text label. */
+  fieldStatuses?: AutofillHighlights
   schema: FormSchema
   values?: DynamicFormValues
   errors?: DynamicFormErrors
@@ -182,7 +190,10 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
   const labelId = `${fieldId}-label`
   const errorId = `${fieldId}-error`
   const fieldStatusId = `${fieldId}-autofill-status`
-  const describedBy = [error ? errorId : null, fieldStatus ? fieldStatusId : null]
+  const helpId = `${fieldId}-help`
+  // Help text guides filling the field in, so a read-only value does not repeat it.
+  const helpText = !readOnly && typeof field.helpText === 'string' ? field.helpText.trim() : ''
+  const describedBy = [helpText ? helpId : null, error ? errorId : null, fieldStatus ? fieldStatusId : null]
     .filter((id): id is string => id !== null)
     .join(' ') || undefined
   const label = <>
@@ -193,7 +204,7 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
   const labelsGroup = !readOnly && field.type === 'radio'
 
   return (
-    <div className="dynamic-form__row">
+    <div className={fieldStatus ? `dynamic-form__row ${autofillHighlightRowClass(fieldStatus)}` : 'dynamic-form__row'}>
       {labelsGroup ? <span className="dynamic-form__label" id={labelId}>{label}</span>
         : <label className="dynamic-form__label" htmlFor={fieldId} id={labelId}>{label}</label>}
       <div className="dynamic-form__control">
@@ -211,10 +222,11 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
           readOnly={readOnly}
           value={value}
         />}
+        {helpText ? <p className="dynamic-form__help" id={helpId}>{helpText}</p> : null}
         {error ? <p className="ui-error" id={errorId}>{error}</p> : null}
         {fieldStatus ? (
           <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
-            {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
+            {AUTOFILL_HIGHLIGHT_LABELS[fieldStatus]}
           </p>
         ) : null}
       </div>
@@ -272,7 +284,9 @@ function FieldInput({ describedBy, error, field, fieldId, labelId, onChange, rea
   if (field.type === 'radio') {
     return (
       <div aria-describedby={describedBy} aria-invalid={error || undefined} aria-labelledby={labelId}
-        aria-required={field.required || undefined} className="dynamic-form__radio-group" role="radiogroup">
+        aria-required={field.required || undefined}
+        className={field.optionLayout === 'vertical' ? 'dynamic-form__radio-group dynamic-form__radio-group--vertical' : 'dynamic-form__radio-group'}
+        role="radiogroup">
         {options.map((option, index) => (
           <label className={`dynamic-form__radio-option${value === option ? ' dynamic-form__radio-option--selected' : ''}`} key={option}>
             <input

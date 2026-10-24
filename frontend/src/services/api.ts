@@ -116,6 +116,7 @@ export interface StatusCatalogEntry {
   psfAccessTrigger?: boolean
 }
 
+/** The status catalog in catalog order: Draft first in `entries`, then the Work Statuses in the order administrators set; `statuses` lists their names in that order. */
 export interface WorkflowConfiguration {
   statuses: string[]
   entries: StatusCatalogEntry[]
@@ -131,6 +132,8 @@ export type WorkflowConfigurationOperation =
   | { action: 'delete'; id: string; replacementId?: string; expectedUpdatedAt: string }
   | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
   | { action: 'email-policy'; id: string; emailPolicy: StatusEmailPolicy; expectedUpdatedAt: string }
+  /** Moves a Work Status to a 1-based position among the Work Statuses; Draft always stays first. */
+  | { action: 'move'; id: string; position: number; expectedUpdatedAt: string }
 
 export interface PsfRequestQuery {
   scope?: 'all' | 'related' | 'my-drafts'
@@ -161,6 +164,7 @@ export interface PsfRequestListItem {
   priority: string | null
   requester: string | null
   productType: string | null
+  requestFor: string | null
   requestDate: string | null
   dueDate: string | null
   updatedAt: string
@@ -369,12 +373,16 @@ export interface GlobalAuditLogEntry {
   metadata: Record<string, unknown>
 }
 
+/** The server's Attachment Category, worked out from the file name. */
+export type AttachmentCategory = 'map_layout' | 'fpc_layout' | 'other'
+
 export interface RequestAttachment {
   id: string
   filename: string
   mimeType: string
   sizeBytes: number
   isImage: boolean
+  category: AttachmentCategory
   /** Null for a file placed on the NAS directly. */
   uploadedByDisplayName: string | null
   createdAt: string

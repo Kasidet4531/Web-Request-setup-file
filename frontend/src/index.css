@@ -24,6 +24,9 @@
   --request-page-max-width: calc(1.5 * (var(--form-rows-max-width) + 2 * var(--card-padding) + 2px));
   /* Room kept clear above the pinned form action bar when keyboard focus scrolls a field into view. */
   --action-bar-clearance: 96px; --action-bar-clearance-preview: 72px;
+  /* Autofill highlight: rows Autofill filled (blue) and rows edited after Autofill (orange); tint, outline and label badge. */
+  --autofill-filled-bg: #eef4fd; --autofill-filled-ink: #24519a; --autofill-filled-badge-text: #fff;
+  --autofill-edited-bg: #fff2df; --autofill-edited-ink: #8a4700; --autofill-edited-badge-text: #fff;
 }
 .dark {
   color-scheme: dark;
@@ -32,6 +35,8 @@
   --secondary: #303335; --muted-foreground: #b7bab8; --border: #3b3e40; --border-strong: #858b8b; --input-border: #858b8b;
   --success: #a0d58d; --warning: #ffc36b; --destructive: #ffa2ab; --destructive-foreground: #181a1c; --sidebar: #1e2022; --sidebar-foreground: #f4f3ee; --sidebar-muted: #b7bab8;
   --shadow-bar: 0 -4px 12px #0000004d;
+  --autofill-filled-bg: #233350; --autofill-filled-ink: #a9c7f7; --autofill-filled-badge-text: #181a1c;
+  --autofill-edited-bg: #362b1f; --autofill-edited-ink: #ffc36b; --autofill-edited-badge-text: #181a1c;
 }
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
@@ -216,7 +221,13 @@ td > span:not([class]), td .cell-meta { color: var(--muted-foreground); }
 .dynamic-form__row { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 4px 24px; align-items: start; min-width: 0; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .dynamic-form__label { padding-top: 8px; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--foreground); overflow-wrap: anywhere; }
 .dynamic-form__control { display: grid; gap: 6px; min-width: 0; }
-.dynamic-form__control > .dynamic-form__autofill-status { margin: 0; }
+/* Autofill highlight (open form only, never saved): the row is tinted and outlined in its colour and its text label
+   becomes a badge, so the meaning does not rest on colour. The outline sits in the 12px the row reaches past the
+   column, so labels and controls stay aligned with plain rows; controls keep their own background and focus ring. */
+.dynamic-form__row--auto-filled { --autofill-bg: var(--autofill-filled-bg); --autofill-ink: var(--autofill-filled-ink); --autofill-badge-text: var(--autofill-filled-badge-text); }
+.dynamic-form__row--edited-by-user { --autofill-bg: var(--autofill-edited-bg); --autofill-ink: var(--autofill-edited-ink); --autofill-badge-text: var(--autofill-edited-badge-text); }
+.dynamic-form__row--auto-filled, .dynamic-form__row--edited-by-user { margin-inline: -12px; padding: 5px 11px 6px; background: var(--autofill-bg); border: 1px solid var(--autofill-ink); border-radius: 6px; }
+.dynamic-form__control > .dynamic-form__autofill-status { width: fit-content; margin: 0; padding: 1px 8px; border-radius: 4px; background: var(--autofill-ink); color: var(--autofill-badge-text); font-weight: 600; }
 /* Chromium's calendar button makes a date input 2px taller than the other controls; hold it to the shared line. */
 .dynamic-form__control input[type="date"] { height: 36px; }
 .request-snapshot-link { display: block; margin-top: 4px; font-size: 12px; }
@@ -287,6 +298,13 @@ html:has(.dynamic-form__actions) { scroll-padding-bottom: var(--action-bar-clear
 .admin-form-config__item { padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
 .admin-form-config__item-summary { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .admin-form-config__item-summary span { font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+/* "Move to position": type a number, then Move (or Enter); a refused value is explained under the row. */
+.admin-form-config__position { display: flex; align-items: center; gap: 8px; }
+.admin-form-config__item .admin-form-config__controls > .admin-form-config__position { min-height: 0; padding: 0; }
+.admin-form-config__position input { width: 4rem; min-height: 30px; padding: 3px 8px; }
+.admin-form-config__position button { min-height: 30px; padding: 3px 10px; }
+.admin-form-config__item:has(.admin-form-config__position-error) { flex-wrap: wrap; }
+.admin-form-config__position-error { flex-basis: 100%; text-align: right; }
 .admin-form-config__options { padding-top: 12px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
 .admin-form-config__options legend { font-weight: 500; font-size: 12px; }
 .admin-form-config__toggle, .admin-workflow-transition__checkbox { display: flex; align-items: center; gap: 8px; font-size: 12px; min-height: 28px; }
@@ -300,6 +318,7 @@ html:has(.dynamic-form__actions) { scroll-padding-bottom: var(--action-bar-clear
 .admin-form-config__read-fields { list-style: none; margin: 0; padding: 0; }
 .admin-form-config__read-fields li { padding: 12px 0; border-bottom: 1px solid var(--border); display: grid; gap: 4px; }
 .admin-form-config__read-fields li span { color: var(--muted-foreground); font-size: 12px; }
+.admin-form-config__read-fields li .admin-form-config__help-text { white-space: pre-line; overflow-wrap: anywhere; }
 .admin-user-management__cards { display: none; }
 .admin-user-management__email { overflow-wrap: anywhere; }
 .admin-user-management__editor, .admin-user-management__identity { display: grid; gap: 16px; }
@@ -545,16 +564,17 @@ dialog::backdrop { background: #10182066; }
 .request-list-filters { grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px); gap: 16px; }
 .request-list-filters--drafts { grid-template-columns: minmax(0, 1fr); }
 .request-browser__results { border: 0; border-radius: 0 0 8px 8px; }
-.requests-table table { table-layout: fixed; min-width: 1120px; }
-/* One value per column: Product Description, Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date, Requester. */
-.requests-table th:nth-child(1) { width: 16%; }
+.requests-table table { table-layout: fixed; min-width: 1240px; }
+/* One value per column: Target 12NC Desc, Request No., Request To, Request For, Status, PSF Setup File Name, Job File Name, Due Date, Requester. */
+.requests-table th:nth-child(1) { width: 14%; }
 .requests-table th:nth-child(2) { width: 10%; }
 .requests-table th:nth-child(3) { width: 10%; }
-.requests-table th:nth-child(4) { width: 17%; }
-.requests-table th:nth-child(5) { width: 14%; }
-.requests-table th:nth-child(6) { width: 11%; }
+.requests-table th:nth-child(4) { width: 10%; }
+.requests-table th:nth-child(5) { width: 15%; }
+.requests-table th:nth-child(6) { width: 12%; }
 .requests-table th:nth-child(7) { width: 9%; }
-.requests-table th:nth-child(8) { width: 13%; }
+.requests-table th:nth-child(8) { width: 9%; }
+.requests-table th:nth-child(9) { width: 11%; }
 .requests-table td, .requests-table th { padding-inline: 16px; }
 /* File names have no spaces; break them rather than overflow the column. */
 .requests-table td { overflow-wrap: break-word; }
@@ -585,6 +605,11 @@ dialog::backdrop { background: #10182066; }
 .dynamic-form__radio-group { display: flex; flex-wrap: wrap; gap: 12px; }
 .dynamic-form__radio-option { border: 1px solid var(--input-border); border-radius: 6px; padding: 8px 12px; min-height: 38px; }
 .dynamic-form__radio-option--selected { border-color: var(--primary); background: var(--accent-light); }
+/* A vertical Multiple choice field stacks one option per line, each as wide as the longest (at most the column). */
+.dynamic-form__radio-group--vertical { display: grid; grid-template-columns: minmax(0, max-content); }
+/* Field Help Text under a control: the muted 12px help type (at least 5.1:1 on the card and on both Autofill tints,
+   in both themes), with the administrator's line breaks kept. */
+.dynamic-form__help { color: var(--muted-foreground); font-size: 12px; line-height: 18px; white-space: pre-line; overflow-wrap: anywhere; }
 .active-schema-form__identity { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted-foreground); font-size: 12px; margin-bottom: 16px; }
 .active-schema-form__footer { display: grid; gap: 6px; max-width: 60ch; font-size: 12px; color: var(--muted-foreground); }
 .detail-summary__heading { margin-bottom: 16px; align-items: center; }
@@ -625,6 +650,9 @@ dialog::backdrop { background: #10182066; }
 .request-attachments__picker { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .request-attachments__picker:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
 .request-attachments__picker.is-disabled { opacity: .6; cursor: not-allowed; }
+.request-attachments__groups { display: grid; gap: 16px; min-width: 0; }
+.request-attachments__group { display: grid; gap: 8px; min-width: 0; }
+.request-attachments__count { font-weight: 400; color: var(--muted-foreground); }
 .request-attachments__list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
 .request-attachments__list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .request-attachments__name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--primary); font: inherit; font-weight: 500; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
@@ -782,6 +810,9 @@ tbody .request-export__pinned { color: var(--foreground); font-weight: 500; bord
 .admin-autofill-dialog .admin-autofill-rules__source { padding: 0; border: 0; background: transparent; }
 .admin-autofill-dialog__feedback { padding: 0 24px 24px; }
 .admin-autofill-rules__target-options { display: flex; flex-wrap: wrap; align-content: start; gap: 12px 20px; }
+/* Select all / Clear all and the count of ticked targets, above the target checkboxes. */
+.admin-autofill-rules__target-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.admin-autofill-rules__target-count { font-size: 12px; line-height: 18px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .admin-autofill-rules__target-options label { flex: 1 1 180px; min-width: 0; }
 .admin-autofill-rules__targets { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .admin-autofill-rules__targets li { display: block; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); }

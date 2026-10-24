@@ -93,7 +93,7 @@ export function GlobalAuditLogFilters({
           <RotateCcw size={14} aria-hidden="true" />Clear filters
         </button>
       </form>
-      <p className="filter-help" id="history-search-help">Searches request no., product description, user name and username.</p>
+      <p className="filter-help" id="history-search-help">Searches request no., Target 12NC Desc, user name and username.</p>
       <div className="global-history-filters__dates" id="history-more-filters" hidden={!moreFiltersOpen}>
         <label>
           From (Bangkok)
@@ -168,7 +168,7 @@ export function GlobalAuditLogTable({
         <thead>
           <tr>
             <th scope="col">Time</th>
-            <th scope="col">Product Description</th>
+            <th scope="col">Target 12NC Desc</th>
             <th scope="col">Request No.</th>
             <th scope="col">User</th>
             <th scope="col">Action</th>

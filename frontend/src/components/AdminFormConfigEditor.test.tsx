@@ -1,7 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { FormSchemaDraft, FormSchemaField } from '../types/forms'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
+
+// The editor keeps typed positions in local state; these tests call it as a
+// function, so useState is replaced by a minimal per-render store.
+const hooks = vi.hoisted(() => ({
+  states: [] as unknown[],
+  index: 0,
+  begin() { this.index = 0 },
+  reset() { this.states = []; this.index = 0 },
+  useState(initial: unknown) {
+    const index = this.index++
+    if (index === this.states.length) this.states.push(initial)
+    return [this.states[index], (next: unknown) => { this.states[index] = next }]
+  },
+}))
+vi.mock('react', async (load) => ({ ...(await load<typeof import('react')>()), useState: hooks.useState.bind(hooks) }))
+beforeEach(() => hooks.reset())
 
 interface ElementNode { type: unknown; props: Record<string, unknown> }
 function find(node: unknown, match: (element: ElementNode) => boolean): ElementNode {
@@ -26,7 +42,7 @@ const schema: FormSchemaDraft = {
   }],
 }
 const onEditField = vi.fn()
-const editor = (draft = schema, onChange = vi.fn()) => AdminFormConfigEditor({ schema: draft, disabled: false, onChange, onEditField })
+const editor = (draft = schema, onChange = vi.fn()) => { hooks.begin(); return AdminFormConfigEditor({ schema: draft, disabled: false, onChange, onEditField }) }
 const fieldEditor = (field: FormSchemaField, onChange = vi.fn()) => AdminFormConfigFieldEditor({
   field, isNew: false, canRemove: true, onChange, onApply: vi.fn(), onCancel: vi.fn(), onRemove: vi.fn(),
 })
@@ -180,5 +196,139 @@ describe('visual form configuration editor', () => {
     tree = editor(moved, onChange)
     ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove New section').props.onClick as () => void)()
     expect((onChange.mock.calls[2][0] as FormSchemaDraft).sections).toEqual(schema.sections)
+  })
+})
+
+describe('Field Help Text and choice layout in the field dialog', () => {
+  const nameField = schema.sections[0].fields[0]
+  const requestTo: FormSchemaField = { fieldKey: 'product_type', canonicalKey: 'product_type', label: 'Request To', type: 'radio', required: true, options: ['Create new PSF', 'Revise from old PSF'] }
+  const helpTextArea = (tree: unknown) => find(tree, (element) => element.type === 'textarea' && element.props.id === 'form-config-field-help-text')
+  const layoutChoice = (tree: unknown, value: string) => find(tree, (element) => element.type === 'input' && element.props.name === 'form-config-field-option-layout' && element.props.value === value)
+  const type = (tree: unknown, value: string) => (helpTextArea(tree).props.onChange as (event: unknown) => void)({ target: { value } })
+
+  it("edits a field's help text, keeping its other properties, and drops it when cleared", () => {
+    const onChange = vi.fn()
+    type(fieldEditor(nameField, onChange), 'Put NA if not Motion Sensor')
+    const withHelp = onChange.mock.calls[0][0] as FormSchemaField
+    expect(withHelp).toEqual({ ...nameField, helpText: 'Put NA if not Motion Sensor' })
+
+    const html = renderToStaticMarkup(fieldEditor(withHelp))
+    expect(html).toContain('>Put NA if not Motion Sensor</textarea>')
+    expect(html).toContain('maxLength="500"')
+
+    type(fieldEditor(withHelp, onChange), '')
+    expect(onChange.mock.calls[1][0]).toEqual(nameField)
+    expect(Object.hasOwn(onChange.mock.calls[1][0] as object, 'helpText')).toBe(false)
+  })
+
+  it('refuses help text over 500 characters with a message and keeps Apply disabled', () => {
+    const tree = fieldEditor({ ...nameField, helpText: 'x'.repeat(501) })
+    const area = helpTextArea(tree)
+
+    expect(area.props['aria-invalid']).toBe(true)
+    const error = find(tree, (element) => element.props.id === 'form-config-field-help-text-error')
+    expect(error.props.children).toBe('Help text must be 500 characters or fewer.')
+    expect(String(area.props['aria-describedby']).split(' ')).toContain('form-config-field-help-text-error')
+    expect(find(tree, (element) => element.type === 'button' && element.props.type === 'submit').props.disabled).toBe(true)
+    expect(find(fieldEditor({ ...nameField, helpText: 'x'.repeat(500) }), (element) => element.type === 'button' && element.props.type === 'submit').props.disabled).toBe(false)
+  })
+
+  it('offers a horizontal or vertical layout for a Multiple choice field, horizontal by default', () => {
+    const onChange = vi.fn()
+    const tree = fieldEditor(requestTo, onChange)
+    expect(layoutChoice(tree, 'horizontal').props.checked).toBe(true)
+    expect(layoutChoice(tree, 'vertical').props.checked).toBe(false)
+    expect(renderToStaticMarkup(tree)).toContain('<legend>Choice layout</legend>')
+
+    ;(layoutChoice(tree, 'vertical').props.onChange as () => void)()
+    const vertical = onChange.mock.calls[0][0] as FormSchemaField
+    expect(vertical).toEqual({ ...requestTo, optionLayout: 'vertical' })
+    expect(layoutChoice(fieldEditor(vertical), 'vertical').props.checked).toBe(true)
+
+    ;(layoutChoice(fieldEditor(vertical, onChange), 'horizontal').props.onChange as () => void)()
+    expect(onChange.mock.calls[1][0]).toEqual(requestTo)
+  })
+
+  it('offers no choice layout for other field types and drops it when a field stops being Multiple choice', () => {
+    for (const field of [nameField, schema.sections[0].fields[1]]) expect(renderToStaticMarkup(fieldEditor(field))).not.toContain('Choice layout')
+
+    const onChange = vi.fn()
+    const tree = fieldEditor({ ...requestTo, optionLayout: 'vertical' }, onChange)
+    ;(find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type').props.onChange as (event: unknown) => void)({ target: { value: 'select' } })
+    expect(onChange.mock.calls[0][0]).toEqual({ ...requestTo, type: 'select' })
+  })
+
+  it('shows help text and a vertical layout in the field list and the read-only view', () => {
+    const configured: FormSchemaDraft = { ...schema, sections: [{ ...schema.sections[0], fields: [
+      { ...requestTo, optionLayout: 'vertical', helpText: 'Revise from old PSF copies files.' },
+      { ...nameField, helpText: 'Put NA if not Motion Sensor' },
+    ] }] }
+
+    const list = renderToStaticMarkup(editor(configured))
+    expect(list).toContain('Multiple choice · Required · Vertical · Help text')
+    expect(list).toContain('Short text · Required · Help text')
+    const view = renderToStaticMarkup(<AdminFormConfigEditor schema={configured} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
+    expect(view).toContain('Choice layout: Vertical')
+    expect(view).toContain('Help text: Revise from old PSF copies files.')
+    expect(view).toContain('Help text: Put NA if not Motion Sensor')
+    const plain = renderToStaticMarkup(<AdminFormConfigEditor schema={schema} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
+    expect(plain).not.toMatch(/Help text|Choice layout/)
+  })
+
+  it('keeps the editor usable when the schema JSON holds help text that is not text', () => {
+    const odd = { ...nameField, helpText: 7 } as unknown as FormSchemaField
+    const draft: FormSchemaDraft = { ...schema, sections: [{ ...schema.sections[0], fields: [odd] }] }
+
+    expect(renderToStaticMarkup(editor(draft))).toContain('Short text · Required</span>')
+    expect(renderToStaticMarkup(<AdminFormConfigEditor schema={draft} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)).not.toContain('Help text')
+    expect(helpTextArea(fieldEditor(odd)).props.value).toBe('')
+  })
+})
+
+describe('moving a field to a typed position', () => {
+  const field = (key: string) => ({ fieldKey: key, canonicalKey: key, label: key.toUpperCase(), type: 'text' as const, required: false })
+  const fourFields: FormSchemaDraft = {
+    formKey: 'psf-request', title: 'PSF Request Form',
+    sections: [
+      { sectionKey: 'first', title: 'First', fields: [field('a'), field('b'), field('c'), field('d')] },
+      { sectionKey: 'second', title: 'Second', fields: [field('e'), field('f')] },
+    ],
+  }
+  function submitPosition(draft: FormSchemaDraft, onChange: Parameters<typeof editor>[1], label: string, value: string) {
+    ;(find(editor(draft, onChange), (element) => element.props['aria-label'] === `Position of ${label}`).props.onChange as (event: unknown) => void)({ target: { value } })
+    const form = find(editor(draft, onChange), (element) => element.type === 'form' && (() => { try { find(element.props.children, (child) => child.props['aria-label'] === `Position of ${label}`); return true } catch { return false } })())
+    ;(form.props.onSubmit as (event: unknown) => void)({ preventDefault() {} })
+  }
+
+  it('moves the field there in one step and shifts the others, keeping their keys', () => {
+    const onChange = vi.fn()
+    expect(find(editor(fourFields, onChange), (element) => element.props['aria-label'] === 'Position of D').props.value).toBe('4')
+
+    submitPosition(fourFields, onChange, 'D', '2')
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const moved = onChange.mock.calls[0][0] as FormSchemaDraft
+    expect(moved.sections[0].fields.map((item) => item.fieldKey)).toEqual(['a', 'd', 'b', 'c'])
+    expect(moved.sections[1]).toEqual(fourFields.sections[1])
+  })
+
+  it.each(['0', '5', '1.5', '', 'two'])('refuses position %j with a message and moves nothing', (value) => {
+    const onChange = vi.fn()
+
+    submitPosition(fourFields, onChange, 'B', value)
+
+    expect(onChange).not.toHaveBeenCalled()
+    const tree = editor(fourFields, onChange)
+    expect(find(tree, (element) => element.props.role === 'alert').props.children).toBe('Enter a whole number from 1 to 4.')
+    expect(find(tree, (element) => element.props['aria-label'] === 'Position of B').props['aria-invalid']).toBe(true)
+  })
+
+  it("counts positions within the field's own section", () => {
+    const onChange = vi.fn()
+
+    submitPosition(fourFields, onChange, 'E', '3')
+
+    expect(onChange).not.toHaveBeenCalled()
+    expect(find(editor(fourFields, onChange), (element) => element.props.role === 'alert').props.children).toBe('Enter a whole number from 1 to 2.')
   })
 })

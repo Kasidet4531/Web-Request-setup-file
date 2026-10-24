@@ -11,6 +11,7 @@ import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
 import { ApiError, type PsfRequestResponse } from '../services/api'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { takeHandedOverAutofillHighlights, type AutofillHighlights } from './autofillHighlight'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { HistoryChanges } from './ui/HistoryChanges'
@@ -962,6 +963,12 @@ describe('Queue filtering and retained results', () => {
     expect(findRenderedElement(page, element => element.type === 'option' && element.props.children === 'Legacy Transfer -- pending')).not.toBeNull()
   })
 
+  it.each([true, false])('says Search covers Target 12NC Desc and the Requester name (dashboard=%s)', async (dashboard) => {
+    render(dashboard); const page = await settle(dashboard)
+    const help = requireRenderedElement(page, element => element.type === 'p' && element.props.className === 'filter-help')
+    expect(help.props.children).toBe('Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.')
+  })
+
   it('selecting a Dashboard Status clears its work-state card while preserving Team and Search', async () => {
     requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'actor-1', role: 'setup_owner', setupOwnerDepartment: 'GNTC' } })
     render(true); let page = await settle(true)
@@ -1141,6 +1148,37 @@ describe('Request dirty navigation protection (blocker wiring, not mounted Route
     expect(navigation.blocker?.enableBeforeUnload).toBe(false)
     expect(navigation.blocker?.shouldBlockFn(location)).toBe(false)
     expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('hands the form\'s current Autofill highlights to the Draft page it opens after the first save', () => {
+    takeHandedOverAutofillHighlights('') // nothing left over from an earlier test
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const form = requireRenderedElement(render(), (element) => element.type === ActiveSchemaForm)
+    const reportHighlights = form.props.onAutofillHighlightsChange as (highlights: AutofillHighlights) => void
+    reportHighlights({ product: 'auto-filled', wafer_fab: 'auto-filled' })
+    reportHighlights({ product: 'edited-by-user', wafer_fab: 'auto-filled' })
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    render()
+    requestDetailHookHarness.runEffects()
+
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+    expect(takeHandedOverAutofillHighlights('request-1')).toEqual({ product: 'edited-by-user', wafer_fab: 'auto-filled' })
+  })
+
+  it('hands no Autofill highlights over while the saved Draft stays on New Request', () => {
+    takeHandedOverAutofillHighlights('')
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const form = requireRenderedElement(render(), (element) => element.type === ActiveSchemaForm)
+    ;(form.props.onAutofillHighlightsChange as (highlights: AutofillHighlights) => void)({ product: 'auto-filled' })
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    // The Requester typed again after the save, so the page stays on New Request.
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(true)
+    render()
+    requestDetailHookHarness.runEffects()
+
+    expect(navigation.navigate).not.toHaveBeenCalled()
+    expect(takeHandedOverAutofillHighlights('request-1')).toEqual({})
   })
 
   it('guards requester OR PSF edits, leaves values intact on cancel, and stops guarding after separate saves', async () => {
@@ -2373,7 +2411,7 @@ describe('Private draft table presentation', () => {
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
       referencePsfName: null, psfSetupFileName: null, jobFileName: null, probecardName: null, status: 'Draft',
       priority: 'Normal', requester: 'Engineer',
-      productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
+      productType: 'New Product', requestFor: null, requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
     const onOpenItem = vi.fn()
     const onDeleteItem = vi.fn()
     const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true, onOpenItem, onDeleteItem })
@@ -2422,7 +2460,7 @@ describe('Draft detail deletion access', () => {
  })
 })
 
-describe('Product Type team Dashboard', () => {
+describe('Request To team Dashboard', () => {
  beforeEach(() => { requestDetailHookHarness.reset(); requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Submitted'] }); requestDetailApi.queryPsfRequests.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0, summary: { open: 0, overdue: 0, completed: 0 } }) })
  it.each(['GNTC', 'MFG'] as const)('defaults to %s account team and permits all shared work', async setupOwnerDepartment => {
   requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner', role: 'setup_owner', setupOwnerDepartment } })
@@ -2434,7 +2472,27 @@ describe('Product Type team Dashboard', () => {
   ;(select.props.onChange as (event: unknown) => void)({ target: { value: 'all' } })
   requestDetailHookHarness.beginRender(); page = RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
   expect(requestDetailApi.queryPsfRequests.mock.lastCall?.[0]).toMatchObject({ team: 'all', offset: 0 })
-  expect(JSON.stringify(page)).toContain('รอระบุ Product Type')
+  expect(JSON.stringify(page)).toContain('รอระบุ Request To')
+ })
+
+ it('names the Request To values in the Team options and still filters by the same teams', async () => {
+  requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner', role: 'setup_owner', setupOwnerDepartment: 'GNTC' } })
+  requestDetailHookHarness.beginRender(); RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  requestDetailHookHarness.beginRender(); let page = RequestsWorkspace.DashboardPage()
+  const select = requireRenderedElement(page, element => element.type === 'select' && element.props['aria-label'] === 'Team')
+  const options = (select.props.children as Array<{ props: { value: string; children: string } }>).map(option => [option.props.value, option.props.children])
+  expect(options).toEqual([
+   ['all', 'All shared work'],
+   ['GNTC', 'GNTC — Create new PSF'],
+   ['MFG', 'MFG — Revise from old PSF / Product Transfer'],
+   ['unclassified', 'รอระบุ Request To'],
+  ])
+  for (const team of ['MFG', 'unclassified', 'GNTC']) {
+   const current = requireRenderedElement(page, element => element.type === 'select' && element.props['aria-label'] === 'Team')
+   ;(current.props.onChange as (event: unknown) => void)({ target: { value: team } })
+   requestDetailHookHarness.beginRender(); page = RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+   expect(requestDetailApi.queryPsfRequests.mock.lastCall?.[0]).toMatchObject({ team, offset: 0 })
+  }
  })
 
  it('displays Modified By alongside Requester in RequestHeaderSummary when modified_by is present', () => {
@@ -2455,8 +2513,8 @@ describe('Product Type team Dashboard', () => {
 })
 
 describe('Request Attachments', () => {
-  const image = { id: 'image-id', filename: 'wafer.png', mimeType: 'image/png', sizeBytes: 2048, isImage: true, uploadedByDisplayName: 'Fook', createdAt: '2026-10-20T01:00:00.000Z' }
-  const layout = { id: 'layout-id', filename: 'layout.dpl', mimeType: 'application/octet-stream', sizeBytes: 12, isImage: false, uploadedByDisplayName: null, createdAt: '2026-10-19T01:00:00.000Z' }
+  const image = { id: 'image-id', filename: 'wafer.png', mimeType: 'image/png', sizeBytes: 2048, isImage: true, category: 'other', uploadedByDisplayName: 'Fook', createdAt: '2026-10-20T01:00:00.000Z' }
+  const layout = { id: 'layout-id', filename: 'layout.dpl', mimeType: 'application/octet-stream', sizeBytes: 12, isImage: false, category: 'map_layout', uploadedByDisplayName: null, createdAt: '2026-10-19T01:00:00.000Z' }
 
   beforeEach(() => {
     requestDetailHookHarness.reset()
@@ -2612,6 +2670,52 @@ describe('Request Attachments', () => {
     requestDetailHookHarness.runEffects()
     expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledTimes(2)
     expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+  })
+
+  /** Text a reader sees in a rendered element tree, component props aside. */
+  function renderedText(node: unknown): string {
+    if (typeof node === 'string' || typeof node === 'number') return String(node)
+    if (Array.isArray(node)) return node.map(renderedText).join('')
+    if (node && typeof node === 'object' && 'props' in node) return renderedText((node.props as { children?: unknown }).children)
+    return ''
+  }
+
+  /** Each group of the panel: a region named by its heading, with its files or the line saying it is empty. */
+  function attachmentGroups(panel: unknown) {
+    const headings = new Map(findAllRenderedElements(panel, (element) => element.type === 'h3').map((heading) => [heading.props.id, renderedText(heading)]))
+    return findAllRenderedElements(panel, (element) => element.type === 'section' && headings.has(element.props['aria-labelledby'])).map((group) => ({
+      heading: headings.get(group.props['aria-labelledby']),
+      files: findAllRenderedElements(group, (element) => element.type === 'li').map((item) => renderedText(requireRenderedElement(item, (element) => element.props.className === 'request-attachments__name')).trim()),
+      empty: findRenderedElement(group, (element) => element.type === 'p') ? renderedText(findRenderedElement(group, (element) => element.type === 'p')) : null,
+    }))
+  }
+
+  it('groups Attachments into Map Layout File, FPC Layout File and Other by the category the server gives each file', async () => {
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [
+      { ...layout, id: 'notes-id', filename: 'notes.xlsx', category: 'other' },
+      { ...layout, id: 'e142-id', filename: 'E142_map.XML', category: 'map_layout' },
+      image,
+      layout,
+    ] })
+    let panel = await loadPanel()
+    expect(attachmentGroups(panel)).toEqual([
+      { heading: 'Map Layout File (2)', files: ['E142_map.XML', 'layout.dpl'], empty: null },
+      { heading: 'FPC Layout File (0)', files: [], empty: 'No FPC Layout Files.' },
+      { heading: 'Other (2)', files: ['notes.xlsx', 'wafer.png'], empty: null },
+    ])
+
+    // Files still download, preview and delete from inside their group.
+    expect(requireRenderedElement(panel, (element) => element.type === 'a' && element.props.download === 'E142_map.XML').props.href).toBe('/api/requests/request-1/attachments/e142-id/download')
+    expect(findRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete notes.xlsx')).not.toBeNull()
+
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [] })
+    panel = await loadPanel()
+    expect(attachmentGroups(panel)).toEqual([
+      { heading: 'Map Layout File (0)', files: [], empty: 'No Map Layout Files.' },
+      { heading: 'FPC Layout File (0)', files: [], empty: 'No FPC Layout Files.' },
+      { heading: 'Other (0)', files: [], empty: 'No other files.' },
+    ])
   })
 
   it('opens image attachments in a preview modal and downloads other files directly', async () => {
@@ -2799,5 +2903,40 @@ describe('Request Attachments', () => {
     expect(findRenderedElement(panel, (element) => element.props.label === 'Upload files')).toBeNull()
     expect(findRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete layout.dpl')).toBeNull()
     expect(findRenderedElement(panel, (element) => element.props.download === 'layout.dpl')).not.toBeNull()
+  })
+})
+
+describe('Action center Status order', () => {
+  beforeEach(() => {
+    requestDetailApi.fetchPsfRequest.mockReset()
+    requestDetailApi.fetchPsfRequestHistory.mockReset()
+    requestDetailApi.fetchPsfRequestStatusOptions.mockReset()
+    requestDetailApi.fetchWorkflowStatuses.mockReset()
+    requestDetailHookHarness.reset()
+  })
+
+  it("lists the request's Status choices in the catalog order an administrator set", async () => {
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(buildSubmittedRequest())
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: ['Setup In Progress', 'Completed'] })
+    requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({
+      statuses: ['Completed', 'Submitted', 'Setup In Progress'],
+      entries: [
+        { id: 'draft', name: 'Draft', kind: 'draft' },
+        { id: 'completed', name: 'Completed', kind: 'completed' },
+        { id: 'submitted', name: 'Submitted', kind: 'open' },
+        { id: 'setup', name: 'Setup In Progress', kind: 'open' },
+      ],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-24T00:00:00.000000Z',
+    })
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const actions = requireRenderedElement(renderRequestDetailShell(), (element) => element.type === WorkflowStatusActions)
+    const markup = renderToStaticMarkup(createElement(WorkflowStatusActions, actions.props as unknown as Parameters<typeof WorkflowStatusActions>[0]))
+
+    expect([...markup.matchAll(/<option value="([^"]*)"/g)].map((match) => match[1])).toEqual(['Completed', 'Submitted', 'Setup In Progress'])
   })
 })

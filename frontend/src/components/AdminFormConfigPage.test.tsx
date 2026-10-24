@@ -159,6 +159,31 @@ describe('AdminFormConfigPage helpers', () => {
     expect(parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...first, fields: [{ ...first.fields[0], options: [] }, first.fields[1]] }] })).error).toContain('at least one option')
   })
 
+  it('catches over-long or non-text help text and a misplaced or unknown choice layout in the schema JSON', () => {
+    const [productType, note] = editableSchema.sections[0].fields
+    const errorWith = (fields: object[]) => parseFormSchemaDraft(JSON.stringify({ ...editableSchema, sections: [{ ...editableSchema.sections[0], fields }] })).error
+
+    expect(errorWith([productType, { ...note, helpText: 'x'.repeat(501) }])).toBe('Field 2 in section 1 help text must be 500 characters or fewer.')
+    expect(errorWith([productType, { ...note, helpText: 7 }])).toBe('Field 2 in section 1 help text must be plain text.')
+    expect(errorWith([{ ...productType, optionLayout: 'grid' }, note])).toBe('Field 1 in section 1 choice layout must be horizontal or vertical.')
+    expect(errorWith([productType, { ...note, optionLayout: 'vertical' }])).toBe('Field 2 in section 1 choice layout applies only to Multiple choice fields.')
+    expect(errorWith([{ ...productType, optionLayout: 'horizontal' }, { ...note, helpText: 'x'.repeat(500) }])).toBeNull()
+  })
+
+  it('previews help text and a vertical layout and keeps both in the saved draft', () => {
+    const version = buildVersion()
+    const [productType, note] = editableSchema.sections[0].fields
+    const configured = { ...editableSchema, sections: [{ ...editableSchema.sections[0], fields: [
+      { ...productType, optionLayout: 'vertical' as const }, { ...note, helpText: 'Put NA if not Motion Sensor' },
+    ] }] }
+    const parsed = parseFormSchemaDraft(formatFormSchemaDraft(configured))
+    const html = renderToStaticMarkup(<AdminFormConfigPreview schema={parsed.schema ? buildPreviewSchema(parsed.schema, version) : null} />)
+
+    expect(html).toContain('dynamic-form__radio-group dynamic-form__radio-group--vertical')
+    expect(html).toContain('>Put NA if not Motion Sensor</p>')
+    expect(buildAdminFormConfigSavePayload(version, parsed.schema!).schema.sections[0].fields).toEqual(configured.sections[0].fields)
+  })
+
   it('keeps restricted legacy metadata visible to validation and out of the visual editor', () => {
     const legacy = { ...editableSchema, sections: [{ ...editableSchema.sections[0], visibleTo: ['admin'] }] }
     const text = formatFormSchemaDraft(legacy)

@@ -15,6 +15,7 @@ import { DraftDeleteDialog } from './DraftDeleteDialog'
 import { RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { handOverAutofillHighlights, type AutofillHighlights } from './autofillHighlight'
 import { DynamicFormRenderer, type DynamicFormActionFeedback } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
@@ -150,6 +151,8 @@ export interface WorkflowStatusActionsProps {
   selectedStatus: string
   isDraft?: boolean
   disabledReason?: string | null
+  /** Status names in catalog order (Draft first); the dropdown follows it. */
+  catalogOrder?: readonly string[]
 }
 
 export function WorkflowStatusActions({
@@ -161,8 +164,11 @@ export function WorkflowStatusActions({
   selectedStatus,
   isDraft = false,
   disabledReason = null,
+  catalogOrder = [],
 }: WorkflowStatusActionsProps) {
+  // A current status outside the catalog (an Imported Request's) ranks -1 and stays first.
   const options = [currentStatus, ...allowedNextStatuses.filter((status) => status !== currentStatus)]
+    .sort((a, b) => catalogOrder.indexOf(a) - catalogOrder.indexOf(b))
   const canUpdate = selectedStatus !== currentStatus && allowedNextStatuses.includes(selectedStatus)
   const guidance = disabledReason ?? (!saving && !canUpdate
     ? options.length === 1
@@ -362,10 +368,11 @@ export function RequestsTable({
       <table>
         <thead>
           <tr>
-            <th scope="col">Product Description</th>
+            <th scope="col">Target 12NC Desc</th>
             <th scope="col">Request No.</th>
-            <th scope="col">Product Type</th>
+            <th scope="col">Request To</th>
             {drafts ? <th scope="col">Updated</th> : <>
+              <th scope="col">Request For</th>
               <th scope="col">Status</th>
               <th scope="col">PSF Setup File Name</th>
               <th scope="col">Job File Name</th>
@@ -392,12 +399,13 @@ export function RequestsTable({
               } : undefined}
               tabIndex={interactiveRows ? 0 : undefined}
             >
-              <td data-label="Product Description"><span className="request-identity__title">{item.title || '—'}</span></td>
+              <td data-label="Target 12NC Desc"><span className="request-identity__title">{item.title || '—'}</span></td>
               <td data-label="Request No.">
                 <Link className="request-identity__link font-mono-code" to="/requests/$requestId" params={{ requestId: item.requestId }}>{item.requestNo}</Link>
               </td>
-              <td data-label="Product Type">{productTypeLabel(item.productType)}</td>
+              <td data-label="Request To">{productTypeLabel(item.productType)}</td>
               {drafts ? <td data-label="Updated">{formatDateTime(item.updatedAt)}</td> : <>
+                <td data-label="Request For">{item.requestFor || '—'}</td>
                 <td data-label="Status"><StatusLabel kind={statusKinds[item.status]} status={item.status} /></td>
                 <td data-label="PSF Setup File Name">{item.psfSetupFileName || '—'}</td>
                 <td data-label="Job File Name">{item.jobFileName || '—'}</td>
@@ -554,7 +562,7 @@ export function DashboardPage() {
         <div className="workspace-section-heading"><h2>Your related work</h2></div>
       {state.data.user?.role === 'setup_owner' ? <label>Team
         <select aria-label="Team" value={team ?? 'all'} onChange={(event) => { setTeam(event.target.value as typeof team); setOffset(0) }}>
-          <option value="all">All shared work</option><option value="GNTC">GNTC — New Product / Create new PSF</option><option value="MFG">MFG — Transfer / Existing / Revise</option><option value="unclassified">รอระบุ Product Type</option>
+          <option value="all">All shared work</option><option value="GNTC">GNTC — Create new PSF</option><option value="MFG">MFG — Revise from old PSF / Product Transfer</option><option value="unclassified">รอระบุ Request To</option>
         </select>
       </label> : null}
       {summary ? <div className="summary-grid dashboard-summary-grid" aria-busy={pending}>
@@ -570,7 +578,7 @@ export function DashboardPage() {
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); if (event.target.value) setWorkState('all'); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
-      <p className="filter-help" id="dashboard-search-help">Searches request no., product description, reference PSF name, PSF setup file name and probecard name.</p>
+      <p className="filter-help" id="dashboard-search-help">Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.</p>
       {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, ROW_PX.dashboard)}>
         <RequestsTable statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
@@ -733,7 +741,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
 
         <p className="filter-help" id="request-search-help">{scope === 'my-drafts'
           ? 'Searches request no. and all requester information.'
-          : 'Searches request no., product description, reference PSF name, PSF setup file name and probecard name.'}</p>
+          : 'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.'}</p>
         </QueueFilterPanel>
         <div className="queue-surface request-browser__results">
         {scope === 'all' && catalog.loading ? <p role="status">Loading status catalog…</p> : null}
@@ -792,8 +800,13 @@ export function RequestCreatePage() {
   const shouldBlockExit = useCallback(({ current, next }: { current: { pathname: string }; next: { pathname: string } }) =>
     unsaved && current.pathname !== next.pathname, [unsaved])
   const blocker = useBlocker({ shouldBlockFn: shouldBlockExit, enableBeforeUnload: unsaved, withResolver: true })
+  // The form's current Autofill highlights, handed to the Draft page this page opens after the first save.
+  const autofillHighlights = useRef<AutofillHighlights>({})
+  const rememberAutofillHighlights = useCallback((highlights: AutofillHighlights) => { autofillHighlights.current = highlights }, [])
   useEffect(() => {
-    if (savedRequest && !unsaved && !stagedUpload.pending) void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
+    if (!savedRequest || unsaved || stagedUpload.pending) return
+    handOverAutofillHighlights(savedRequest.id, autofillHighlights.current)
+    void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
   }, [navigate, savedRequest, stagedUpload.pending, unsaved])
 
   async function uploadStagedFiles(request: PsfRequestResponse) {
@@ -825,7 +838,7 @@ export function RequestCreatePage() {
   return (
     <article className="workflow-page request-create-page">
       <PageHeader title="New Request" description="Save a private draft, then review and submit from its detail page." />
-      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
+      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onAutofillHighlightsChange={rememberAutofillHighlights} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
       <StagedAttachmentsPanel files={stagedFiles} disabled={stagedUpload.pending} error={stagedUpload.error} onChange={setStagedFiles} />
       {stagedUpload.pending ? <AsyncNotice kind="loading" title="Uploading attachments…" /> : null}
       {savedRequest && stagedUpload.error && stagedFiles.length > 0 ? <button className="btn-primary" type="button" onClick={() => void uploadStagedFiles(savedRequest)}>Retry attachment upload</button> : null}
@@ -875,9 +888,14 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   const [psfEditing, setPsfEditing] = useState(false)
   const [psfSaveFeedback, setPsfSaveFeedback] = useState<DynamicFormActionFeedback>()
   const [statusKinds, setStatusKinds] = useState<Record<string, WorkflowStatusKind>>({})
+  const [catalogOrder, setCatalogOrder] = useState<string[]>([])
   useEffect(() => {
     let active = true
-    void Promise.resolve(api.fetchWorkflowStatuses()).then((configuration) => { if (active) setStatusKinds(Object.fromEntries((configuration?.entries ?? []).map((entry) => [entry.name, entry.kind]))) }).catch(() => { /* Unknown catalog kinds remain neutral. */ })
+    void Promise.resolve(api.fetchWorkflowStatuses()).then((configuration) => {
+      if (!active) return
+      setStatusKinds(Object.fromEntries((configuration?.entries ?? []).map((entry) => [entry.name, entry.kind])))
+      setCatalogOrder((configuration?.entries ?? []).map((entry) => entry.name))
+    }).catch(() => { /* Unknown catalog kinds remain neutral and the Status choices keep their listed order. */ })
     return () => { active = false }
   }, [loadAttempt])
 
@@ -1151,6 +1169,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
                   selectedStatus={status}
                   isDraft={request.status === 'Draft'}
                   disabledReason={disabledReason}
+                  catalogOrder={catalogOrder}
                 />
               </div>
             </section>

@@ -486,3 +486,89 @@ describe('Status email policy interactions', () => {
   })
 
 })
+
+const orderedConfig = {
+  statuses: ['First work', 'Second work', 'Third work'],
+  entries: [
+    { id: 'draft-id', name: 'Draft', kind: 'draft', requestCount: null },
+    { id: 'first', name: 'First work', kind: 'open', requestCount: 2 },
+    { id: 'second', name: 'Second work', kind: 'open', requestCount: 0 },
+    { id: 'third', name: 'Third work', kind: 'completed', requestCount: 1 },
+  ],
+  psfVisibilityTriggerId: null,
+  updatedAt: '2026-10-24T01:02:03.123456Z',
+}
+const positionOf = (name: string) => control(`Position of ${name}`)
+function submitPosition(name: string, value: string) {
+  change(`Position of ${name}`, value)
+  const form = find(render(), (element) => element.type === 'form' && find(element.props.children, (child) => child.props['aria-label'] === `Position of ${name}`) !== null)
+  if (!form) throw new Error(`Missing position form for ${name}`)
+  ;(form.props.onSubmit as (event: unknown) => void)({ preventDefault() {} })
+}
+const rowOrder = () => {
+  const names: string[] = []
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) { node.forEach(visit); return }
+    if (!node || typeof node !== 'object' || !('props' in node)) return
+    const props = (node as { props: Record<string, unknown> }).props
+    const label = props['aria-label']
+    if (typeof label === 'string' && label.startsWith('Position of ')) names.push(label.slice('Position of '.length))
+    visit(props.children)
+  }
+  visit(render())
+  return names
+}
+
+describe('Status order', () => {
+  beforeEach(() => {
+    hookState.reset()
+    workflowApi.fetchAdminWorkflowTransitionConfiguration.mockReset().mockResolvedValue(orderedConfig)
+    workflowApi.fetchAdminUsers.mockReset().mockResolvedValue([])
+    workflowApi.replaceAdminWorkflowTransitionConfiguration.mockReset()
+  })
+
+  it('moves a Work Status to a typed position in one save and lists the catalog in the new order', async () => {
+    const moved = { ...orderedConfig, statuses: ['Third work', 'First work', 'Second work'], entries: [orderedConfig.entries[0], orderedConfig.entries[3], orderedConfig.entries[1], orderedConfig.entries[2]], updatedAt: '2026-10-24T01:02:04.000001Z' }
+    workflowApi.replaceAdminWorkflowTransitionConfiguration.mockResolvedValue(moved)
+    render(); hookState.effect(); await flush()
+    expect(rowOrder()).toEqual(['First work', 'Second work', 'Third work'])
+    expect(positionOf('Third work').props.value).toBe('3')
+
+    submitPosition('Third work', '1'); await flush()
+
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).toHaveBeenCalledExactlyOnceWith({ action: 'move', id: 'third', position: 1, expectedUpdatedAt: orderedConfig.updatedAt })
+    expect(rowOrder()).toEqual(['Third work', 'First work', 'Second work'])
+    expect(positionOf('Third work').props.value).toBe('1')
+    expect(positionOf('First work').props.value).toBe('2')
+  })
+
+  it.each(['0', '4', '1.5', '', 'two'])('refuses position %j with a message and moves nothing', async (value) => {
+    render(); hookState.effect(); await flush()
+
+    submitPosition('Second work', value); await flush()
+
+    expect(workflowApi.replaceAdminWorkflowTransitionConfiguration).not.toHaveBeenCalled()
+    expect(find(render(), (element) => element.props.role === 'alert' && element.props.children === 'Enter a whole number from 1 to 3.')).not.toBeNull()
+    expect(positionOf('Second work').props['aria-invalid']).toBe(true)
+    expect(rowOrder()).toEqual(['First work', 'Second work', 'Third work'])
+  })
+
+  it('keeps Draft in its fixed first place without a position control', async () => {
+    render(); hookState.effect(); await flush()
+    expect(find(render(), (element) => element.props['aria-label'] === 'Position of Draft')).toBeNull()
+    expect(find(render(), (element) => element.type === 'span' && element.props.children === 'Always first')).not.toBeNull()
+  })
+
+  it("shows the reload conflict and the other administrator's order when the catalog changed meanwhile", async () => {
+    const theirs = { ...orderedConfig, statuses: ['Second work', 'First work', 'Third work'], entries: [orderedConfig.entries[0], orderedConfig.entries[2], orderedConfig.entries[1], orderedConfig.entries[3]], updatedAt: '2026-10-24T01:05:00.000000Z' }
+    workflowApi.replaceAdminWorkflowTransitionConfiguration.mockRejectedValue(new ApiError('The workflow status catalog changed. Reload and try again.', 409, 'Conflict', null))
+    render(); hookState.effect(); await flush()
+    workflowApi.fetchAdminWorkflowTransitionConfiguration.mockResolvedValue(theirs)
+
+    submitPosition('Third work', '1'); await flush(); await flush()
+
+    expect(find(render(), (element) => element.props.title === 'The workflow status catalog changed. Reload and try again.')).not.toBeNull()
+    expect(rowOrder()).toEqual(['Second work', 'First work', 'Third work'])
+    expect(positionOf('Third work').props.value).toBe('3')
+  })
+})

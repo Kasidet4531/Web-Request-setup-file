@@ -607,3 +607,105 @@ describe('AdminAutofillRulesPage interactions', () => {
   })
 
 })
+
+describe('Auto-fill Rules Select all and Clear all', () => {
+  beforeEach(() => {
+    adminAutofillHookHarness.reset()
+    adminAutofillApi.createAdminAutofillRule.mockReset()
+    adminAutofillApi.fetchActiveFormSchema.mockReset()
+    adminAutofillApi.fetchAdminAutofillRules.mockReset()
+    adminAutofillApi.updateAdminAutofillRule.mockReset()
+    adminAutofillApi.fetchActiveFormSchema.mockResolvedValue(activeSchema)
+  })
+
+  function checkedTargets(editor: unknown): Record<string, boolean> {
+    return Object.fromEntries(['reference_psf_name', 'reference_product', 'product', 'wafer_fab']
+      .map((key) => [key, findRenderedElement(editor, (element) => element.type === 'input' && element.props.id === `admin-autofill-target-${key}`)])
+      .filter(([, checkbox]) => checkbox !== null)
+      .map(([key, checkbox]) => [key, (checkbox as RenderedElement).props.checked === true]))
+  }
+
+  function hasText(editor: unknown, text: string): boolean {
+    return findRenderedElement(editor, (element) => element.props.children === text) !== null
+  }
+
+  async function openCreateRuleWithTrigger(triggerCanonicalKey: string) {
+    adminAutofillApi.fetchAdminAutofillRules.mockResolvedValue([])
+    let page = await loadAdminAutofillRulesPage()
+    click(getPageButton(page, 'Create rule'))
+    page = renderAdminAutofillRulesPage()
+    changeTrigger(renderEditor(page), triggerCanonicalKey)
+    return renderAdminAutofillRulesPage()
+  }
+
+  it('ticks every field that can be a target, but not the trigger, then unticks them all, showing the count', async () => {
+    let page = await openCreateRuleWithTrigger('reference_product')
+    let editor = renderEditor(page)
+    expect(hasText(editor, '0 of 3 fields selected')).toBe(true)
+
+    click(getEditorButton(editor, 'Select all'))
+    page = renderAdminAutofillRulesPage()
+    editor = renderEditor(page)
+
+    expect(checkedTargets(editor)).toEqual({ reference_psf_name: true, product: true, wafer_fab: true })
+    expect(hasText(editor, '3 of 3 fields selected')).toBe(true)
+    expect(getEditorButton(editor, 'Create autofill rule').props.disabled).toBe(false)
+
+    click(getEditorButton(editor, 'Clear all'))
+    page = renderAdminAutofillRulesPage()
+    editor = renderEditor(page)
+
+    expect(checkedTargets(editor)).toEqual({ reference_psf_name: false, product: false, wafer_fab: false })
+    expect(hasText(editor, '0 of 3 fields selected')).toBe(true)
+    expect(getEditorButton(editor, 'Create autofill rule').props.disabled).toBe(true)
+  })
+
+  it('saves the same rule after Select all as ticking each field by hand', async () => {
+    adminAutofillApi.createAdminAutofillRule.mockResolvedValue({ ...existingRule, targetCanonicalKeys: ['reference_product', 'product', 'wafer_fab'] })
+    let page = await openCreateRuleWithTrigger('reference_psf_name')
+    for (const key of ['reference_product', 'product', 'wafer_fab']) {
+      toggleTarget(renderEditor(page), key, true)
+      page = renderAdminAutofillRulesPage()
+    }
+    click(getEditorButton(renderEditor(page), 'Create autofill rule'))
+    await flushAsyncWork()
+    const byHand = adminAutofillApi.createAdminAutofillRule.mock.calls[0]
+
+    adminAutofillHookHarness.reset()
+    page = await openCreateRuleWithTrigger('reference_psf_name')
+    click(getEditorButton(renderEditor(page), 'Select all'))
+    page = renderAdminAutofillRulesPage()
+    click(getEditorButton(renderEditor(page), 'Create autofill rule'))
+    await flushAsyncWork()
+
+    expect(byHand).toEqual([{ formKey: 'psf-request', triggerCanonicalKey: 'reference_psf_name', targetCanonicalKeys: ['reference_product', 'product', 'wafer_fab'], status: 'active' }])
+    expect(adminAutofillApi.createAdminAutofillRule.mock.calls[1]).toEqual(byHand)
+  })
+
+  it('adds the remaining fields to an edited rule and keeps the selection when the save is refused', async () => {
+    adminAutofillApi.fetchAdminAutofillRules.mockResolvedValue([existingRule])
+    adminAutofillApi.updateAdminAutofillRule.mockRejectedValueOnce(
+      new ApiError('The trigger already has a rule.', 409, 'Conflict', null),
+    )
+    let page = await loadAdminAutofillRulesPage()
+    click(getEditButton(renderRulesTable(page), existingRule.id))
+    page = renderAdminAutofillRulesPage()
+    expect(hasText(renderEditor(page), '2 of 3 fields selected')).toBe(true)
+
+    click(getEditorButton(renderEditor(page), 'Select all'))
+    page = renderAdminAutofillRulesPage()
+    click(getEditorButton(renderEditor(page), 'Save autofill rule'))
+    await flushAsyncWork()
+    page = renderAdminAutofillRulesPage()
+    const editor = renderEditor(page)
+
+    expect(adminAutofillApi.updateAdminAutofillRule).toHaveBeenCalledExactlyOnceWith(existingRule.id, {
+      formKey: 'psf-request',
+      triggerCanonicalKey: 'reference_psf_name',
+      targetCanonicalKeys: ['product', 'wafer_fab', 'reference_product'],
+      status: 'active',
+    })
+    expect(checkedTargets(editor)).toEqual({ reference_product: true, product: true, wafer_fab: true })
+    expect(getFeedback(page).props.feedback).toEqual({ kind: 'error', message: 'The trigger already has a rule.' })
+  })
+})

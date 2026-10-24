@@ -73,7 +73,7 @@ test(
     const pagination = page.getByLabel('Audit history pagination');
     await expect(rows).toHaveCount(25);
     await expect(page.locator('.global-history-page__results .data-table > table > thead th')).toHaveText([
-      'Time', 'Product Description', 'Request No.', 'User', 'Action', 'Detail',
+      'Time', 'Target 12NC Desc', 'Request No.', 'User', 'Action', 'Detail',
     ]);
     await expect(rows.first().locator('td').nth(1)).toHaveText('Search Filter Silicon');
     await expect(rows.first().locator('td').nth(2)).toHaveText(submitted.requestNo);
@@ -217,7 +217,7 @@ test(
     await expect(page.locator('.request-results tbody tr')).toHaveCount(1);
     await expect(
       page.getByText(
-        'Searches request no., product description, reference PSF name, PSF setup file name and probecard name.',
+        'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.',
         { exact: true },
       ),
     ).toBeVisible();

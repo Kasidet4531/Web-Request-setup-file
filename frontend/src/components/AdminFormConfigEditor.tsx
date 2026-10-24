@@ -1,8 +1,22 @@
+import { useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
-import type { FormControlType, FormSchemaDraft, FormSchemaField } from '../types/forms'
+import { FIELD_HELP_TEXT_MAX_LENGTH, type FieldOptionLayout, type FormControlType, type FormSchemaDraft, type FormSchemaField } from '../types/forms'
+import { readTargetPosition } from './targetPosition'
 
 const FIELD_TYPE_LABELS: Record<FormControlType, string> = {
   text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', select: 'Dropdown', radio: 'Multiple choice',
+}
+const OPTION_LAYOUT_LABELS: Record<FieldOptionLayout, string> = {
+  horizontal: 'Horizontal: options side by side', vertical: 'Vertical: one option per line',
+}
+
+const isVertical = (field: FormSchemaField) => field.type === 'radio' && field.optionLayout === 'vertical'
+const hasHelpText = (field: FormSchemaField) => typeof field.helpText === 'string' && !!field.helpText.trim()
+
+/** The field list's one-line summary: type, required flag, and a vertical layout or help text when set. */
+function fieldSummary(field: FormSchemaField): string {
+  return [FIELD_TYPE_LABELS[field.type], field.required ? 'Required' : 'Optional', isVertical(field) ? 'Vertical' : null, hasHelpText(field) ? 'Help text' : null]
+    .filter(Boolean).join(' · ')
 }
 
 interface AdminFormConfigEditorProps {
@@ -14,10 +28,26 @@ interface AdminFormConfigEditorProps {
 }
 
 export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onChange, onEditField }: AdminFormConfigEditorProps) {
+  // Typed "move to position" values by field key, and the one refused value's message.
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({})
+  const [positionError, setPositionError] = useState<{ fieldKey: string; message: string } | null>(null)
+
   function edit(update: (draft: FormSchemaDraft) => void) {
     const next = structuredClone(schema)
     update(next)
     onChange(next)
+  }
+
+  function moveFieldToPosition(sectionIndex: number, fieldIndex: number, fieldKey: string) {
+    const fields = schema.sections[sectionIndex].fields
+    const typed = readTargetPosition(positionDrafts[fieldKey] ?? String(fieldIndex + 1), fields.length)
+    if ('error' in typed) {
+      setPositionError({ fieldKey, message: typed.error })
+      return
+    }
+    setPositionError(null)
+    setPositionDrafts(Object.fromEntries(Object.entries(positionDrafts).filter(([key]) => key !== fieldKey)))
+    if (typed.position !== fieldIndex + 1) edit((draft) => move(draft.sections[sectionIndex].fields, fieldIndex, typed.position - 1))
   }
 
   function addField(sectionIndex: number, trigger: HTMLButtonElement) {
@@ -53,6 +83,8 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
               <span>{FIELD_TYPE_LABELS[field.type]} · {field.required ? 'Required' : 'Optional'}</span>
               <span className="admin-form-config__key">Field key: {field.fieldKey} · Canonical key: {field.canonicalKey ?? 'None'}</span>
               {field.options?.length ? <span>Choices: {field.options.join(', ')}</span> : null}
+              {isVertical(field) ? <span>Choice layout: Vertical</span> : null}
+              {hasHelpText(field) ? <span className="admin-form-config__help-text">Help text: {field.helpText}</span> : null}
             </li>)}
           </ol>
         </section>
@@ -91,13 +123,21 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
                 <div className="admin-form-config__item-summary">
                   <strong>{fieldIndex + 1}. {field.label || 'Untitled field'}</strong>
                   <span className="admin-form-config__key">{field.fieldKey} · {field.canonicalKey ?? 'No canonical key'}</span>
-                  <span>{!field.label.trim() || field.options?.some((option) => !option.trim()) ? 'Needs attention' : `${FIELD_TYPE_LABELS[field.type]} · ${field.required ? 'Required' : 'Optional'}`}</span>
+                  <span>{!field.label.trim() || field.options?.some((option) => !option.trim()) ? 'Needs attention' : fieldSummary(field)}</span>
                 </div>
                 <div className="admin-form-config__controls">
                   <button aria-label={`Edit ${field.label || field.fieldKey}`} className="secondary-button" disabled={disabled} onClick={(event) => onEditField(index, fieldIndex, field, event.currentTarget)} type="button">Edit</button>
                   <button aria-label={`Move ${field.label || field.fieldKey} up`} className="secondary-button" disabled={disabled || fieldIndex === 0} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex - 1))} type="button"><ArrowUp aria-hidden="true" size={16} /></button>
                   <button aria-label={`Move ${field.label || field.fieldKey} down`} className="secondary-button" disabled={disabled || fieldIndex === section.fields.length - 1} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex + 1))} type="button"><ArrowDown aria-hidden="true" size={16} /></button>
+                  <form className="admin-form-config__position" noValidate onSubmit={(event) => { event.preventDefault(); moveFieldToPosition(index, fieldIndex, field.fieldKey) }}>
+                    <input aria-describedby={positionError?.fieldKey === field.fieldKey ? `form-config-position-${field.fieldKey}-error` : undefined} aria-invalid={positionError?.fieldKey === field.fieldKey} aria-label={`Position of ${field.label || field.fieldKey}`} disabled={disabled} inputMode="numeric" max={section.fields.length} min={1} onChange={(event) => {
+                      setPositionDrafts({ ...positionDrafts, [field.fieldKey]: event.target.value })
+                      if (positionError?.fieldKey === field.fieldKey) setPositionError(null)
+                    }} step={1} type="number" value={positionDrafts[field.fieldKey] ?? String(fieldIndex + 1)} />
+                    <button aria-label={`Move ${field.label || field.fieldKey} to position`} className="secondary-button" disabled={disabled} type="submit">Move</button>
+                  </form>
                 </div>
+                {positionError?.fieldKey === field.fieldKey ? <p className="dynamic-form__error admin-form-config__position-error" id={`form-config-position-${field.fieldKey}-error`} role="alert">{positionError.message}</p> : null}
               </div>
             ))}
           </div>
@@ -121,7 +161,10 @@ interface AdminFormConfigFieldEditorProps {
 
 export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, onApply, onCancel, onRemove }: AdminFormConfigFieldEditorProps) {
   const choiceField = field.type === 'select' || field.type === 'radio'
-  const valid = !!field.label.trim() && (!choiceField || !!field.options?.length && field.options.every((option) => option.trim()))
+  // The schema JSON editor can hold anything; help text that is not text shows an empty box (and fails validation).
+  const helpText = typeof field.helpText === 'string' ? field.helpText : ''
+  const helpTextTooLong = helpText.length > FIELD_HELP_TEXT_MAX_LENGTH
+  const valid = !!field.label.trim() && (!choiceField || !!field.options?.length && field.options.every((option) => option.trim())) && !helpTextTooLong
   function edit(update: (draft: FormSchemaField) => void) {
     const next = structuredClone(field)
     update(next)
@@ -145,6 +188,8 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
         <select id="form-config-field-type" onChange={(event) => edit((draft) => {
           draft.type = event.target.value as FormControlType
           if ((draft.type === 'select' || draft.type === 'radio') && !draft.options?.length) draft.options = ['Option 1']
+          // Only a Multiple choice field lays out its options.
+          if (draft.type !== 'radio') delete draft.optionLayout
         })} value={field.type}>
           {Object.entries(FIELD_TYPE_LABELS).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
         </select>
@@ -153,6 +198,17 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
       <label className="admin-form-config__toggle">
         <input checked={field.required} onChange={(event) => edit((draft) => { draft.required = event.target.checked })} type="checkbox" />
         Required field
+      </label>
+      <label className="admin-form-config__field" htmlFor="form-config-field-help-text">
+        <span>Help text (optional)</span>
+        <textarea aria-describedby={helpTextTooLong ? 'form-config-field-help-text-hint form-config-field-help-text-error' : 'form-config-field-help-text-hint'}
+          aria-invalid={helpTextTooLong} id="form-config-field-help-text" maxLength={FIELD_HELP_TEXT_MAX_LENGTH}
+          onChange={(event) => edit((draft) => {
+            if (event.target.value) draft.helpText = event.target.value
+            else delete draft.helpText
+          })} rows={3} value={helpText} />
+        <small className="ui-help" id="form-config-field-help-text-hint">Shown in smaller text under the field while it is filled in. Plain text, {helpText.length} of {FIELD_HELP_TEXT_MAX_LENGTH} characters.</small>
+        {helpTextTooLong ? <small className="dynamic-form__error" id="form-config-field-help-text-error">{`Help text must be ${FIELD_HELP_TEXT_MAX_LENGTH} characters or fewer.`}</small> : null}
       </label>
       {choiceField ? (
         <fieldset className="admin-form-config__options">
@@ -175,6 +231,20 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
               options.push(`Option ${number}`)
             })} type="button"><Plus aria-hidden="true" size={16} /> Add choice</button>
           </div>
+        </fieldset>
+      ) : null}
+      {field.type === 'radio' ? (
+        <fieldset className="admin-form-config__options">
+          <legend>Choice layout</legend>
+          {(Object.entries(OPTION_LAYOUT_LABELS) as [FieldOptionLayout, string][]).map(([layout, label]) => (
+            <label className="admin-form-config__toggle" key={layout}>
+              <input checked={(field.optionLayout ?? 'horizontal') === layout} name="form-config-field-option-layout" onChange={() => edit((draft) => {
+                if (layout === 'vertical') draft.optionLayout = 'vertical'
+                else delete draft.optionLayout
+              })} type="radio" value={layout} />
+              {label}
+            </label>
+          ))}
         </fieldset>
       ) : null}
       <div className="admin-form-config__identity"><span className="admin-form-config__key">Field key: {field.fieldKey}</span><span className="admin-form-config__key">Canonical key: {field.canonicalKey ?? 'None'}</span><small className="ui-help">Stable keys retain the identity of saved values.</small></div>
