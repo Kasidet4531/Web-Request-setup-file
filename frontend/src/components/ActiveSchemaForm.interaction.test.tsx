@@ -369,20 +369,18 @@ describe('ActiveSchemaForm draft schema upgrade interactions', () => {
     expect(getFormRenderer(page).props.footerActions).toBeFalsy()
   })
 
-  it('pre-fills Product_Description on a new request as its saved baseline and sends it on save', async () => {
+  it('starts a new request with an empty Target 12NC Desc and saves the Draft with it blank', async () => {
     const withTitle = structuredClone(currentActiveRequestSchema)
-    withTitle.schema.sections[0].fields.unshift({ fieldKey: 'title', canonicalKey: 'title', label: 'Product_Description', type: 'text', required: true })
+    withTitle.schema.sections[0].fields.unshift({ fieldKey: 'title', canonicalKey: 'title', label: 'Target 12NC Desc', type: 'text', required: true })
     requestApi.fetchActiveFormSchema.mockResolvedValue(withTitle)
-    requestApi.createDraftRequest.mockResolvedValue(buildDraft({ requesterData: { title: 'Product_Description', product_type: '', legacy_note: '' } }))
+    requestApi.createDraftRequest.mockResolvedValue(buildDraft({ requesterData: { title: '', product_type: '', legacy_note: '' } }))
     const page = await loadNewDraftForm()
     const values = getFormRenderer(page).props.values as Record<string, string>
-    expect(values.title).toBe('Product_Description')
-    expect(values.legacy_note).toBe('')
-    // The default is not an unsaved change of the user's.
+    expect(values.title).toBe('')
     expect(findRenderedElement(page, (element) => element.props.children === 'Not saved')).not.toBeNull()
     ;(getFormRenderer(page).props.onSubmit as (values: Record<string, string>) => void)(values)
     await flushAsyncWork()
-    expect(requestApi.createDraftRequest).toHaveBeenCalledWith({ requesterData: expect.objectContaining({ title: 'Product_Description' }) })
+    expect(requestApi.createDraftRequest).toHaveBeenCalledWith({ requesterData: expect.objectContaining({ title: '' }) })
   })
 
   it('retains a committed new draft and its runtime triggers without requiring another schema fetch', async () => {

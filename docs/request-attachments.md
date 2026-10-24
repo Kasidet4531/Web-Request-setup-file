@@ -35,9 +35,12 @@ Source: [storage and submit](../backend/src/requests/requests.service.ts),
 
 ## New Request default
 
-New Request (`/requests/new`) starts its `title` field (Product_Description)
-as `Product_Description`. The default is the form's saved baseline, so it does
-not count as an unsaved change. Source:
+Since 24 October 2026 (issue #112) New Request (`/requests/new`) starts its
+`title` field (Target 12NC Desc, labelled Product_Description in the Initial
+Data Load forms) blank, like every other field, so the Requester types the real
+name. A Draft saved without it uses the `_[ID]` folder below, and typing it
+later renames the folder. Whether submission needs it is the captured form's
+required flag. Before, the field started as `Product_Description`. Source:
 [form](../frontend/src/components/ActiveSchemaForm.tsx).
 
 ## Storage
@@ -206,7 +209,8 @@ Source: [controller](../backend/src/requests/request-attachments.controller.ts),
 - Clicking an image (`png`, `jpg`, `jpeg`, `gif`, `webp`, `bmp`, `svg`) opens
   an Image Preview dialog with a Download button; clicking any other file
   downloads it. Deleting asks for confirmation.
-- **Audit History** shows each request by its Product_Description, or
+- **Audit History** shows each request by its Product_Description (in the
+  column headed Target 12NC Desc since 24 October 2026), or
   `Untitled Draft (#ID)` (`Untitled Request (#ID)` once submitted) while it is
   blank, with the `PSF-` number beneath it. Draft numbers are not shown.
 

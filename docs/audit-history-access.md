@@ -37,6 +37,9 @@ hidden. Existing `Untitled Draft (#ID)` / `Untitled Request (#ID)` labels are
 preserved; if the API supplies no label, show `—` instead of the request number.
 Configuration events without a request keep the configuration label and show
 `—` for Request No. Snapshot links and access rules are unchanged.
+Since 24 October 2026 (issue #112) that column is headed Target 12NC Desc, and
+the Search help names Target 12NC Desc instead of product description; the
+values and the search are unchanged.
 
 ## Search and filters, 22 October 2026
 

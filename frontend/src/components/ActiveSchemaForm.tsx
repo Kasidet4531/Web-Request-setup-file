@@ -39,14 +39,12 @@ function isRequesterIdentityKey(canonicalKey: string): boolean {
   )
 }
 
-// A new request starts with this Product_Description (the `title` field), which
-// also prefixes its `[Product_Description]_[ID]` attachment folder.
-const DEFAULT_PRODUCT_DESCRIPTION = 'Product_Description'
-
-function buildInitialValues(schema: FormSchema, mode: ActiveSchemaFormProps['mode']): DynamicFormValues {
+// Every field starts blank, Target 12NC Desc (the `title` field) included: the
+// Requester types the real name, and the folder is `_[ID]` until then.
+function buildInitialValues(schema: FormSchema): DynamicFormValues {
   return schema.sections.reduce<DynamicFormValues>((values, section) => {
     section.fields.forEach((field) => {
-      values[field.fieldKey] = mode === 'request' && field.fieldKey === 'title' ? DEFAULT_PRODUCT_DESCRIPTION : ''
+      values[field.fieldKey] = ''
     })
 
     return values
@@ -299,7 +297,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
         setDraftSchemaVersion('not-applicable')
         onDraftSchemaSubmitAllowedChange?.(false)
         setActiveSchema(response)
-        const nextValues = buildInitialValues(response.schema, mode)
+        const nextValues = buildInitialValues(response.schema)
 
         savedValuesRef.current = nextValues
         onDirtyChange?.(false)

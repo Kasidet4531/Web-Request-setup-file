@@ -546,7 +546,7 @@ dialog::backdrop { background: #10182066; }
 .request-list-filters--drafts { grid-template-columns: minmax(0, 1fr); }
 .request-browser__results { border: 0; border-radius: 0 0 8px 8px; }
 .requests-table table { table-layout: fixed; min-width: 1120px; }
-/* One value per column: Product Description, Request No., Product Type, Status, PSF Setup File Name, Job File Name, Due Date, Requester. */
+/* One value per column: Target 12NC Desc, Request No., Request To, Status, PSF Setup File Name, Job File Name, Due Date, Requester. */
 .requests-table th:nth-child(1) { width: 16%; }
 .requests-table th:nth-child(2) { width: 10%; }
 .requests-table th:nth-child(3) { width: 10%; }

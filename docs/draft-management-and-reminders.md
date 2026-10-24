@@ -72,12 +72,17 @@ legacy assignment values and assignment-only metadata, preserving unrelated form
 request and status history. Cached pre-removal export artifacts are invalidated.
 Account Setup File Owner role and GNTC/MFG department remain intact.
 
-Dashboard defaults to the Setup File Owner's department group: New Product is
-GNTC; Transfer Product and Existing Product are MFG. All teams and unclassified
-work are selectable. Unknown/missing types display “รอระบุ Product Type”.
+Dashboard defaults to the Setup File Owner's department group, derived from
+Request To (stored as `product_type`; called Product Type on screen before
+24 October 2026): `Create new PSF*` and the seed form's New Product are GNTC;
+`Revise from old PSF*`, `Revise Old PSF*`, `Product Transfer*` and the seed form's
+Transfer Product and Existing Product are MFG. The Team options read
+`GNTC — Create new PSF`, `MFG — Revise from old PSF / Product Transfer` and
+`รอระบุ Request To`; all teams and unclassified work are selectable. Unknown or
+missing values display “รอระบุ Request To”.
 This is filtering only: both departments can edit each other's accessible shared
 PSF work, and Admin rights remain unchanged. Grouping follows the latest saved
-Product Type and preserves existing PSF values. Rows/totals/cards share one query;
+Request To and preserves existing PSF values. Rows/totals/cards share one query;
 Requester/Admin Dashboard remains creator-scoped, and Drafts stay out of shared
 totals.
 
