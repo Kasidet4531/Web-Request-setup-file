@@ -1,10 +1,22 @@
 import { useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
-import type { FormControlType, FormSchemaDraft, FormSchemaField } from '../types/forms'
+import { FIELD_HELP_TEXT_MAX_LENGTH, type FieldOptionLayout, type FormControlType, type FormSchemaDraft, type FormSchemaField } from '../types/forms'
 import { readTargetPosition } from './targetPosition'
 
 const FIELD_TYPE_LABELS: Record<FormControlType, string> = {
   text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', select: 'Dropdown', radio: 'Multiple choice',
+}
+const OPTION_LAYOUT_LABELS: Record<FieldOptionLayout, string> = {
+  horizontal: 'Horizontal: options side by side', vertical: 'Vertical: one option per line',
+}
+
+const isVertical = (field: FormSchemaField) => field.type === 'radio' && field.optionLayout === 'vertical'
+const hasHelpText = (field: FormSchemaField) => !!field.helpText?.trim()
+
+/** The field list's one-line summary: type, required flag, and a vertical layout or help text when set. */
+function fieldSummary(field: FormSchemaField): string {
+  return [FIELD_TYPE_LABELS[field.type], field.required ? 'Required' : 'Optional', isVertical(field) ? 'Vertical' : null, hasHelpText(field) ? 'Help text' : null]
+    .filter(Boolean).join(' · ')
 }
 
 interface AdminFormConfigEditorProps {
@@ -71,6 +83,8 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
               <span>{FIELD_TYPE_LABELS[field.type]} · {field.required ? 'Required' : 'Optional'}</span>
               <span className="admin-form-config__key">Field key: {field.fieldKey} · Canonical key: {field.canonicalKey ?? 'None'}</span>
               {field.options?.length ? <span>Choices: {field.options.join(', ')}</span> : null}
+              {isVertical(field) ? <span>Choice layout: Vertical</span> : null}
+              {hasHelpText(field) ? <span className="admin-form-config__help-text">Help text: {field.helpText}</span> : null}
             </li>)}
           </ol>
         </section>
@@ -109,7 +123,7 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
                 <div className="admin-form-config__item-summary">
                   <strong>{fieldIndex + 1}. {field.label || 'Untitled field'}</strong>
                   <span className="admin-form-config__key">{field.fieldKey} · {field.canonicalKey ?? 'No canonical key'}</span>
-                  <span>{!field.label.trim() || field.options?.some((option) => !option.trim()) ? 'Needs attention' : `${FIELD_TYPE_LABELS[field.type]} · ${field.required ? 'Required' : 'Optional'}`}</span>
+                  <span>{!field.label.trim() || field.options?.some((option) => !option.trim()) ? 'Needs attention' : fieldSummary(field)}</span>
                 </div>
                 <div className="admin-form-config__controls">
                   <button aria-label={`Edit ${field.label || field.fieldKey}`} className="secondary-button" disabled={disabled} onClick={(event) => onEditField(index, fieldIndex, field, event.currentTarget)} type="button">Edit</button>
@@ -147,7 +161,9 @@ interface AdminFormConfigFieldEditorProps {
 
 export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, onApply, onCancel, onRemove }: AdminFormConfigFieldEditorProps) {
   const choiceField = field.type === 'select' || field.type === 'radio'
-  const valid = !!field.label.trim() && (!choiceField || !!field.options?.length && field.options.every((option) => option.trim()))
+  const helpText = field.helpText ?? ''
+  const helpTextTooLong = helpText.length > FIELD_HELP_TEXT_MAX_LENGTH
+  const valid = !!field.label.trim() && (!choiceField || !!field.options?.length && field.options.every((option) => option.trim())) && !helpTextTooLong
   function edit(update: (draft: FormSchemaField) => void) {
     const next = structuredClone(field)
     update(next)
@@ -171,6 +187,8 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
         <select id="form-config-field-type" onChange={(event) => edit((draft) => {
           draft.type = event.target.value as FormControlType
           if ((draft.type === 'select' || draft.type === 'radio') && !draft.options?.length) draft.options = ['Option 1']
+          // Only a Multiple choice field lays out its options.
+          if (draft.type !== 'radio') delete draft.optionLayout
         })} value={field.type}>
           {Object.entries(FIELD_TYPE_LABELS).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
         </select>
@@ -179,6 +197,17 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
       <label className="admin-form-config__toggle">
         <input checked={field.required} onChange={(event) => edit((draft) => { draft.required = event.target.checked })} type="checkbox" />
         Required field
+      </label>
+      <label className="admin-form-config__field" htmlFor="form-config-field-help-text">
+        <span>Help text (optional)</span>
+        <textarea aria-describedby={helpTextTooLong ? 'form-config-field-help-text-hint form-config-field-help-text-error' : 'form-config-field-help-text-hint'}
+          aria-invalid={helpTextTooLong} id="form-config-field-help-text" maxLength={FIELD_HELP_TEXT_MAX_LENGTH}
+          onChange={(event) => edit((draft) => {
+            if (event.target.value) draft.helpText = event.target.value
+            else delete draft.helpText
+          })} rows={3} value={helpText} />
+        <small className="ui-help" id="form-config-field-help-text-hint">Shown in smaller text under the field while it is filled in. Plain text, {helpText.length} of {FIELD_HELP_TEXT_MAX_LENGTH} characters.</small>
+        {helpTextTooLong ? <small className="dynamic-form__error" id="form-config-field-help-text-error">{`Help text must be ${FIELD_HELP_TEXT_MAX_LENGTH} characters or fewer.`}</small> : null}
       </label>
       {choiceField ? (
         <fieldset className="admin-form-config__options">
@@ -201,6 +230,20 @@ export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, 
               options.push(`Option ${number}`)
             })} type="button"><Plus aria-hidden="true" size={16} /> Add choice</button>
           </div>
+        </fieldset>
+      ) : null}
+      {field.type === 'radio' ? (
+        <fieldset className="admin-form-config__options">
+          <legend>Choice layout</legend>
+          {(Object.entries(OPTION_LAYOUT_LABELS) as [FieldOptionLayout, string][]).map(([layout, label]) => (
+            <label className="admin-form-config__toggle" key={layout}>
+              <input checked={(field.optionLayout ?? 'horizontal') === layout} name="form-config-field-option-layout" onChange={() => edit((draft) => {
+                if (layout === 'vertical') draft.optionLayout = 'vertical'
+                else delete draft.optionLayout
+              })} type="radio" value={layout} />
+              {label}
+            </label>
+          ))}
         </fieldset>
       ) : null}
       <div className="admin-form-config__identity"><span className="admin-form-config__key">Field key: {field.fieldKey}</span><span className="admin-form-config__key">Canonical key: {field.canonicalKey ?? 'None'}</span><small className="ui-help">Stable keys retain the identity of saved values.</small></div>

@@ -318,6 +318,7 @@ html:has(.dynamic-form__actions) { scroll-padding-bottom: var(--action-bar-clear
 .admin-form-config__read-fields { list-style: none; margin: 0; padding: 0; }
 .admin-form-config__read-fields li { padding: 12px 0; border-bottom: 1px solid var(--border); display: grid; gap: 4px; }
 .admin-form-config__read-fields li span { color: var(--muted-foreground); font-size: 12px; }
+.admin-form-config__read-fields li .admin-form-config__help-text { white-space: pre-line; overflow-wrap: anywhere; }
 .admin-user-management__cards { display: none; }
 .admin-user-management__email { overflow-wrap: anywhere; }
 .admin-user-management__editor, .admin-user-management__identity { display: grid; gap: 16px; }

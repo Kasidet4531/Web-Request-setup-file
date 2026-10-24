@@ -8,7 +8,7 @@ import type {
   FormSchemaVersionResponse,
   SaveFormSchemaDraftPayload,
 } from '../types/forms'
-import { isFormKey } from '../types/forms'
+import { FIELD_HELP_TEXT_MAX_LENGTH, FIELD_OPTION_LAYOUTS, isFormKey } from '../types/forms'
 
 const SUPPORTED_FORM_CONTROL_TYPES = new Set<FormControlType>(['text', 'textarea', 'number', 'date', 'select', 'radio'])
 
@@ -91,6 +91,23 @@ function validateField(field: unknown, sectionIndex: number, fieldIndex: number)
 
   if (field.options !== undefined && !isStringArray(field.options)) {
     return `${fieldPrefix} options must be an array of strings.`
+  }
+
+  // Field Help Text and choice layout follow the server's rules, so the JSON editor explains them before saving.
+  if (field.helpText !== undefined && typeof field.helpText !== 'string') {
+    return `${fieldPrefix} help text must be plain text.`
+  }
+
+  if (typeof field.helpText === 'string' && field.helpText.length > FIELD_HELP_TEXT_MAX_LENGTH) {
+    return `${fieldPrefix} help text must be ${FIELD_HELP_TEXT_MAX_LENGTH} characters or fewer.`
+  }
+
+  if (field.optionLayout !== undefined && field.type !== 'radio') {
+    return `${fieldPrefix} choice layout applies only to Multiple choice fields.`
+  }
+
+  if (field.optionLayout !== undefined && !(FIELD_OPTION_LAYOUTS as readonly unknown[]).includes(field.optionLayout)) {
+    return `${fieldPrefix} choice layout must be horizontal or vertical.`
   }
 
   return null
