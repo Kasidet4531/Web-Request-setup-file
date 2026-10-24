@@ -43,13 +43,13 @@ const request: PsfRequestListItem = {
 }
 
 describe('Request list columns', () => {
-  it('starts with Product Description and adds the PSF Setup File Name and Job File Name', () => {
+  it('starts with Target 12NC Desc and names the Request To column', () => {
     const table = RequestsTable({ items: [request], onOpenItem: () => {} })
 
     expect(headers(table)).toEqual([
-      'Product Description',
+      'Target 12NC Desc',
       'Request No.',
-      'Product Type',
+      'Request To',
       'Status',
       'PSF Setup File Name',
       'Job File Name',
@@ -63,9 +63,9 @@ describe('Request list columns', () => {
   it('holds one value in each cell', () => {
     const table = RequestsTable({ items: [request], onOpenItem: () => {} })
 
-    expect(cell(table, 'Product Description')).toBe('Probe card update')
+    expect(cell(table, 'Target 12NC Desc')).toBe('Probe card update')
     expect(cell(table, 'Request No.')).toBe('PSF-000042')
-    expect(cell(table, 'Product Type')).toBe('Create new PSF')
+    expect(cell(table, 'Request To')).toBe('Create new PSF')
     expect(cell(table, 'Requester')).toBe('Somchai')
   })
 
@@ -75,16 +75,16 @@ describe('Request list columns', () => {
       onOpenItem: () => {},
     })
 
-    expect(cell(table, 'Product Description')).toBe('—')
+    expect(cell(table, 'Target 12NC Desc')).toBe('—')
     expect(cell(table, 'PSF Setup File Name')).toBe('—')
     expect(cell(table, 'Job File Name')).toBe('—')
   })
 
-  it('lists My Drafts by Product Description and Request No. in separate columns', () => {
+  it('lists My Drafts by Target 12NC Desc, Request No. and Request To in separate columns', () => {
     const table = RequestsTable({ items: [{ ...request, status: 'Draft', requestNo: 'DRAFT-20261021-0001' }], drafts: true, onDeleteItem: () => {} })
 
-    expect(headers(table)).toEqual(['Product Description', 'Request No.', 'Product Type', 'Updated', 'Actions'])
-    expect(cell(table, 'Product Description')).toBe('Probe card update')
+    expect(headers(table)).toEqual(['Target 12NC Desc', 'Request No.', 'Request To', 'Updated', 'Actions'])
+    expect(cell(table, 'Target 12NC Desc')).toBe('Probe card update')
     expect(cell(table, 'Request No.')).toBe('DRAFT-20261021-0001')
   })
 })

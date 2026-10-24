@@ -18,6 +18,10 @@ import {
 import type { AuthenticatedUserProfile } from '../auth/session.types';
 import { DATABASE_POOL } from '../database/database.service';
 import {
+  type AttachmentCategory,
+  attachmentCategory,
+} from './attachment-category';
+import {
   AttachmentStorage,
   attachmentMimeType,
   isImageFilename,
@@ -42,6 +46,8 @@ export interface RequestAttachmentResponse {
   mimeType: string;
   sizeBytes: number;
   isImage: boolean;
+  /** From the file name (ADR 0022), so every screen groups files alike. */
+  category: AttachmentCategory;
   uploadedByDisplayName: string | null;
   createdAt: string;
 }
@@ -408,6 +414,7 @@ export class RequestAttachmentsService implements OnApplicationBootstrap {
       mimeType: row.mime_type,
       sizeBytes: Number(row.size_bytes),
       isImage: isImageFilename(row.filename),
+      category: attachmentCategory(row.filename),
       uploadedByDisplayName: row.uploaded_by_display_name,
       createdAt:
         row.created_at instanceof Date

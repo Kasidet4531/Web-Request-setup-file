@@ -84,5 +84,16 @@ describe('Request list rows', () => {
   const table = RequestsTable({ items: [item], drafts: true, onDeleteItem: () => {} })
   expect(JSON.stringify(table)).toContain('Delete')
   expect(JSON.stringify(RequestsTable({ items: [item] }))).not.toContain('Owner / Dept')
-  expect(JSON.stringify(table)).toContain('รอระบุ Product Type')
+  expect(JSON.stringify(table)).toContain('รอระบุ Request To')
+  expect(JSON.stringify(table)).not.toContain('Product Type')
+ })
+
+ it('asks for Request To on a Dashboard row whose Request To is missing or not a known option', () => {
+  const row = (productType: string | null) => ({ requestId: `request-${productType}`, requestNo: 'PSF-000007', title: 'Chip', productType, status: 'Submitted', updatedAt: '2026-10-07T00:00:00Z', requester: 'Creator' }) as PsfRequestListItem
+  const table = RequestsTable({ items: [row(null), row('Custom Product')], onOpenItem: () => {} })
+  const cells = JSON.stringify(table).match(/"data-label":"Request To","children":"[^"]*"/g)
+  expect(cells).toEqual([
+   '"data-label":"Request To","children":"รอระบุ Request To"',
+   '"data-label":"Request To","children":"รอระบุ Request To"',
+  ])
  })

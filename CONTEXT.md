@@ -29,12 +29,11 @@ An engineer or user role responsible for shared PSF work and setup details, belo
 _Avoid_: Engineer, Owner, Setup Owner
 
 **Related Work**:
-Shared PSF Requests available to a Setup File Owner, optionally filtered by Product Type-derived Dashboard Team Group. Requester and Admin Dashboard views remain creator-scoped. Drafts are excluded from shared work and operational totals.
+Shared PSF Requests available to a Setup File Owner, optionally filtered by the Request To-derived Dashboard Team Group. Requester and Admin Dashboard views remain creator-scoped. Drafts are excluded from shared work and operational totals.
 
-**Product Type**:
-The first field in the default requester form, with the options **New Product**, **Transfer Product**, or **Existing Product**. Administrators may change the active form. Product Type is stored in the search index and displayed in its own Product Type column of the request tables (21 October 2026; before, under the title). XLSX places metadata columns before requester-form fields; Product Type is not its first column.
-Decided 8 October 2026, implemented in source and loaded into the configured database on 8 October 2026 (with `--lenient`): after the **Initial Data Load** the Product Type field is the **Request To** field, labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint.
-_Avoid_: Type of product, product category
+**Request To**:
+The request classification stored under the `product_type` key: the first field of the requester form. After the **Initial Data Load** it is labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint (decided 8 October 2026 and loaded into the configured database that day with `--lenient`); the built-in seed form still labels it Product Type with the options **New Product**, **Transfer Product** and **Existing Product**. Administrators may change the active form. It is stored in the search index and shown, shortened without its hint, in the Request To column of the request tables, in Draft Management and in request emails. Since 24 October 2026 every label written in code says Request To; before, they said Product Type (its own column since 21 October 2026; before that, under the title). Form field labels come from the Form Schema. XLSX places metadata columns before requester-form fields; Request To is not its first column.
+_Avoid_: Product Type, type of product, product category
 
 
 
@@ -88,8 +87,12 @@ A sequential integer within one Form Schema family: `psf-request` or `psf-create
 _Avoid_: Version number, revision
 
 **Attachment**:
-An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Product_Description]_[ID]`, named as the SharePoint export named the Imported Requests' folders, and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too, except system files such as those Windows or the SharePoint export leave there. Implemented 20 October 2026; folder naming settled 21 October 2026 ([ADR 0018](docs/adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). See [Request Attachments](docs/request-attachments.md).
+An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Target 12NC Desc]_[ID]`, named as the SharePoint export named the Imported Requests' folders, and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too, except system files such as those Windows or the SharePoint export leave there. Implemented 20 October 2026; folder naming settled 21 October 2026 ([ADR 0018](docs/adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). See [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
+
+**Attachment Category**:
+The group an Attachment is shown in, worked out from its file name whenever it is listed: Map Layout File (ends in `.xml`, `.dpl`, `.lay`, `.tpl` or `.mdf`, E142 files included), FPC Layout File (starts with `PCSF` and ends in `.xls`, `.xlsx` or `.xlsm`) or Other, ignoring case. Nothing is chosen on upload or stored, and files stay in the request's one folder. Built 24 October 2026 ([ADR 0022](docs/adr/0022-attachment-categories-and-revise-file-copy.md)); see [Request Attachments](docs/request-attachments.md#attachment-categories).
+_Avoid_: Attachment slot, file type
 
 **Attachment Policy**:
 What the server refuses on upload: the per-file size limit (`ATTACHMENT_MAX_BYTES`) and the blocked file extensions. It is served to every signed-in role, independent of any request, so each Attachment picker can state it before files are chosen; the backend holds the only copy. Added 21 October 2026; see [Request Attachments](docs/request-attachments.md#access-and-api).
@@ -99,9 +102,9 @@ _Avoid_: Upload rules, file restrictions
 The sequential integer identifying a PSF Request, continuing the Imported Requests' `ID` (`PSF-000100` is ID 100). It names the request's NAS folder, and a submitted request's number is `PSF-` and the ID padded to six digits. A Draft keeps its `DRAFT-YYYYMMDD-NNNN` number until submitted. IDs are never reused.
 _Avoid_: Draft number (a different, temporary identifier), UUID
 
-**Product_Description**:
-The requester form's `title` field, labelled Product_Description in the Initial Data Load forms. It names a request in Audit History and prefixes its NAS folder; New Request starts it as `Product_Description`. The request tables show it in their first column, headed Product Description (21 October 2026).
-_Avoid_: Title alone when the folder or Audit History label is meant
+**Target 12NC Desc**:
+The requester form's `title` field, labelled Product_Description in the Initial Data Load forms. It names a request in Audit History and prefixes its NAS folder (`[Target 12NC Desc]_[ID]`, or `_[ID]` while blank). The request tables show it in their first column and Audit History in its own column, both headed Target 12NC Desc since 24 October 2026 (Product Description from 21 October), and request emails head its row the same way. Since 24 October 2026 New Request starts it blank; before, it started as `Product_Description`.
+_Avoid_: Product Description, Product_Description, Title alone when the folder or Audit History label is meant
 
 **Master Data**:
 The standardized reference values (e.g., list of Products, Wafer FABs, or Machines) embedded directly within the Form Schema to populate selection dropdowns, ensuring data consistency.
@@ -118,8 +121,8 @@ A one-time reminder about a PSF Request still in Draft seven days after creation
 The Admin capability to list and read Drafts and permanently delete them before submission. Management read access does not transfer a Draft's editing or submission rights. Creators can permanently delete their own Drafts through My Drafts.
 
 **Dashboard Team Group**:
-A Product Type-derived grouping: New Product belongs to GNTC; Transfer Product and Existing Product belong to MFG. It is used for Dashboard filtering while preserving cross-team PSF editing rights. Missing or unrecognized Product Type is displayed as “รอระบุ Product Type” and belongs to neither team group.
-Decided 8 October 2026 and updated 19 October 2026: with the Request To options, `Create new PSF*` belongs to GNTC; `Revise from old PSF*`, `Revise Old PSF*` and `Product Transfer*` belong to MFG.
+A Request To-derived grouping: New Product belongs to GNTC; Transfer Product and Existing Product belong to MFG. It is used for Dashboard filtering while preserving cross-team PSF editing rights. Missing or unrecognized Request To is displayed as “รอระบุ Request To” (“รอระบุ Product Type” before 24 October 2026) and belongs to neither team group.
+Decided 8 October 2026 and updated 19 October 2026: with the Request To options, `Create new PSF*` belongs to GNTC; `Revise from old PSF*`, `Revise Old PSF*` and `Product Transfer*` belong to MFG. Since 24 October 2026 the Team options read `GNTC — Create new PSF` and `MFG — Revise from old PSF / Product Transfer`.
 
 ## Initial Data Load vocabulary
 
@@ -175,10 +178,10 @@ _Avoid_: snapshot on its own (a request's captured Form Schema is its "schema sn
 
 Fook's fix plan for the 22 October review settled these terms and decisions. They are not in source yet; until they are, the entries above describe current behaviour. Definitions are in [GLOSSARY.md](GLOSSARY.md).
 
-- **Request To** replaces Product Type as the name people see; **Target 12NC Desc** replaces Product Description (the `title` field).
+- **Request To** replaces Product Type as the name people see; **Target 12NC Desc** replaces Product Description (the `title` field). Built in source on 24 October 2026 (issue #112); see the entries above.
 - **Submission Status** and **Requester-Selectable Status**: Requesters change Status only where an administrator allows it ([ADR 0020](docs/adr/0020-requesters-change-status-only-where-allowed.md)).
 - **Due Date**, **Team Capacity**, **Team Queue**, **Due Date Postponement** and **Overdue**: the system sets Due Date at submission ([ADR 0021](docs/adr/0021-system-sets-due-date-from-team-capacity.md)).
 - **Status Reminder**: a repeating email while a request stays in a Work Status, off by default.
-- **Attachment Category**, **Map Layout File**, **FPC Layout File**, **Reference PSF** and **Revise Change Type**: categories from file names, and Autofill only for Revise from old PSF with a one-time file copy ([ADR 0022](docs/adr/0022-attachment-categories-and-revise-file-copy.md)).
+- **Reference PSF** and **Revise Change Type**: Autofill only for Revise from old PSF with a one-time file copy ([ADR 0022](docs/adr/0022-attachment-categories-and-revise-file-copy.md)). **Attachment Category**, **Map Layout File** and **FPC Layout File** were built on 24 October 2026; see the Attachment Category entry above.
 - **Field Help Text**: guidance under a form field.
 - Go-live loads the final MIS export into an empty database once ([ADR 0023](docs/adr/0023-go-live-from-an-empty-database.md)).

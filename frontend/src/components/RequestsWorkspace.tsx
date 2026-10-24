@@ -362,9 +362,9 @@ export function RequestsTable({
       <table>
         <thead>
           <tr>
-            <th scope="col">Product Description</th>
+            <th scope="col">Target 12NC Desc</th>
             <th scope="col">Request No.</th>
-            <th scope="col">Product Type</th>
+            <th scope="col">Request To</th>
             {drafts ? <th scope="col">Updated</th> : <>
               <th scope="col">Status</th>
               <th scope="col">PSF Setup File Name</th>
@@ -392,11 +392,11 @@ export function RequestsTable({
               } : undefined}
               tabIndex={interactiveRows ? 0 : undefined}
             >
-              <td data-label="Product Description"><span className="request-identity__title">{item.title || '—'}</span></td>
+              <td data-label="Target 12NC Desc"><span className="request-identity__title">{item.title || '—'}</span></td>
               <td data-label="Request No.">
                 <Link className="request-identity__link font-mono-code" to="/requests/$requestId" params={{ requestId: item.requestId }}>{item.requestNo}</Link>
               </td>
-              <td data-label="Product Type">{productTypeLabel(item.productType)}</td>
+              <td data-label="Request To">{productTypeLabel(item.productType)}</td>
               {drafts ? <td data-label="Updated">{formatDateTime(item.updatedAt)}</td> : <>
                 <td data-label="Status"><StatusLabel kind={statusKinds[item.status]} status={item.status} /></td>
                 <td data-label="PSF Setup File Name">{item.psfSetupFileName || '—'}</td>
@@ -554,7 +554,7 @@ export function DashboardPage() {
         <div className="workspace-section-heading"><h2>Your related work</h2></div>
       {state.data.user?.role === 'setup_owner' ? <label>Team
         <select aria-label="Team" value={team ?? 'all'} onChange={(event) => { setTeam(event.target.value as typeof team); setOffset(0) }}>
-          <option value="all">All shared work</option><option value="GNTC">GNTC — New Product / Create new PSF</option><option value="MFG">MFG — Transfer / Existing / Revise</option><option value="unclassified">รอระบุ Product Type</option>
+          <option value="all">All shared work</option><option value="GNTC">GNTC — Create new PSF</option><option value="MFG">MFG — Revise from old PSF / Product Transfer</option><option value="unclassified">รอระบุ Request To</option>
         </select>
       </label> : null}
       {summary ? <div className="summary-grid dashboard-summary-grid" aria-busy={pending}>
@@ -570,7 +570,7 @@ export function DashboardPage() {
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); if (event.target.value) setWorkState('all'); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
-      <p className="filter-help" id="dashboard-search-help">Searches request no., product description, reference PSF name, PSF setup file name and probecard name.</p>
+      <p className="filter-help" id="dashboard-search-help">Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.</p>
       {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, ROW_PX.dashboard)}>
         <RequestsTable statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
@@ -733,7 +733,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
 
         <p className="filter-help" id="request-search-help">{scope === 'my-drafts'
           ? 'Searches request no. and all requester information.'
-          : 'Searches request no., product description, reference PSF name, PSF setup file name and probecard name.'}</p>
+          : 'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.'}</p>
         </QueueFilterPanel>
         <div className="queue-surface request-browser__results">
         {scope === 'all' && catalog.loading ? <p role="status">Loading status catalog…</p> : null}

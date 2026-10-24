@@ -86,7 +86,7 @@ describe('GlobalAuditLogFilters', () => {
       onChange={vi.fn()} onClear={vi.fn()} moreFiltersOpen={false} onToggleMoreFilters={vi.fn()}
     />)
     expect(html).toContain('name="keyword"')
-    expect(html).toContain('Searches request no., product description, user name and username.')
+    expect(html).toContain('Searches request no., Target 12NC Desc, user name and username.')
     expect(html).toContain('More filters')
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('Dates (Bangkok):')
@@ -136,7 +136,7 @@ describe('GlobalAuditLogTable', () => {
     expect(html.indexOf('View changes')).toBeGreaterThan(html.indexOf('/history/entry-new'))
   })
 
-  it('separates Product Description and Request No. while keeping Draft labels and Attachment changes', () => {
+  it('separates Target 12NC Desc and Request No. while keeping Draft labels and Attachment changes', () => {
     const base = { hasRequestSnapshot: false, actorDisplayName: 'Editor', actorRole: 'requester' as const, createdAt: '2026-10-20T01:00:00Z' }
     const html = renderToStaticMarkup(GlobalAuditLogTable({
       entries: [
@@ -254,7 +254,8 @@ describe('GlobalAuditLogTable', () => {
 
     expect(html).toContain('aria-label="Global audit history"')
     expect(html).toContain('<th scope="col">Time</th>')
-    expect(html).toContain('<th scope="col">Product Description</th><th scope="col">Request No.</th>')
+    expect(html).toContain('<th scope="col">Target 12NC Desc</th><th scope="col">Request No.</th>')
+    expect(html).not.toContain('Product Description')
     expect(html).toContain('<th scope="col">User</th>')
     expect(html).toContain('<th scope="col">Action</th>')
     expect(html).toContain('<th scope="col">Detail</th>')
