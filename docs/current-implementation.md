@@ -5,6 +5,8 @@ The dated updates below include subsequent changes to that baseline.
 See [main documentation alignment and evidence availability](verification/2026-10-06-main-documentation-alignment.md)
 for the scope of this review.
 
+> **Autofill highlight and Select all, 24 October 2026:** in the Requester form a field Autofill filled is now coloured as well as labelled: its row is tinted blue with a blue outline and an "Auto-filled" badge, and a field the Requester changes after Autofill turns orange with an "Edited by user" badge; rows Autofill did not fill stay plain (issue #114). The colours are light and dark tokens in [the stylesheet](../frontend/src/index.css); text on a tint measures at least 11.38:1, badge text 7.04:1, control borders 3.14:1 against the tint, the row outline 7.04:1 against the card and the focus ring 7.25:1, and the text labels keep the meaning without colour. A later Autofill run (a new trigger value) marks the fields it fills that time Auto-filled, including one that showed Edited by user, and leaves the others as they were. The highlight belongs to the open form only ([highlight rules](../frontend/src/components/autofillHighlight.ts)): saving a Draft on the open page now keeps it (before, every save cleared it); a reload, reopening a Draft (the Draft page that New Request's first save opens included), Reload draft, a Draft Form Version upgrade and Cancel in Edit information show plain fields with their values. Nothing about it is sent with a save, stored on the request or in the database, or written to Audit History. Auto-fill Rules' Fill target fields add **Select all**, which ticks every listed field (every field of the active form except the trigger; ticked fields keep their place and the rest follow in form order, as ticking each by hand would), **Clear all**, which unticks every target including removed ones, and a count "N of M fields selected" of the listed fields; saving keeps the existing validation and conflict checks. Thai admin guide: [Autofill: สีไฮไลต์และ Select All](admin-guide-th/autofill-highlight-and-select-all.md). See the [verification record](verification/2026-10-24-autofill-highlight-and-select-all.md).
+
 > **Request email summary, 22 October 2026:** request emails (New Request, Status change, Completed, Cancelled) follow the current form and request tables. The Priority row and the cancellation-only Reason / Remarks row are removed for every form (the Initial Data Load forms have neither field; the built-in seed form's Priority is no longer emailed either), Title is headed Product Description, Product Type is shortened as in the tables (`Create new PSF` rather than `Create new PSF (Require PCSF , E142 or .DPL)`; unrecognised values are shown as stored), and Updated By shows only the actor's display name instead of `Name (role)`. Everything outside the table's data is centred, row labels are left-aligned, the status update line ("Status Updated to …") is highlighted yellow and Product Description and Product Type are filled green, using inline styles for Outlook. Values were already current when queued; emails already in the outbox keep their queued body. The Draft reminder email is unchanged. See [email notifications](email-notifications.md#trigger-rules). Checked with unit tests and the in-memory notification database suite; no mail was sent.
 
 > **Workflow catalog updates left out of Audit History, 22 October 2026:** the Audit History page no longer lists entries with the action "Workflow catalog updated", and its Action filter no longer offers that action (issue #106). `GET /api/audit-logs` leaves them out of both the rows and the total for every role, even when the action filter asks for them. Before, each such entry had a "View changes" toggle that listed the raw catalog operation, the whole Status catalog before and after, and "Requester PSF access released for N request(s)"; it was hard to read and widened the Detail column when opened. Status Management changes are still recorded in `psf_request_audit_logs` with the same metadata, so they can be read from the database or shown again later. A PSF Visibility Release made by enabling a trigger in Edit status for requests already at that status is recorded only in such an entry, so no page shows that release now. Bulk Status replacement entries belong to each request and stay listed with "View changes". See the [verification record](verification/2026-10-22-catalog-entries-hidden.md). Checks ran in Chromium against a throwaway local database.
@@ -186,7 +188,9 @@ on the controls' line, so switching a request between viewing and editing keeps
 ordinary rows at the same height; radio groups and text areas may grow while
 editing. A radio group is a `role="radiogroup"` element named by its row's label
 cell and keeps its required, invalid and described-by state. The required marker,
-field error and Auto-fill status stay in the field's row.
+field error and Auto-fill status stay in the field's row; a row with an Auto-fill
+status is tinted and outlined in its colour (see
+[Autofill, audit and export](#autofill-audit-and-export)).
 Detail keeps 16px section headings. Request
 Owner / Dept metadata has been removed.
 An editable form ends in an action bar that is `position: sticky` at the bottom of
@@ -309,6 +313,13 @@ choice until Active is explicitly selected; manual disabling is identified as
 targets against the active schema. Existing clients omitting status create Active
 rules and preserve stored status/reason when editing. Renaming labels does not
 change canonical identity. Autofill preserves manual values and edits made during a lookup.
+In the open Requester form each field Autofill filled shows "Auto-filled" on a blue
+row and each such field the Requester then changes shows "Edited by user" on an
+orange row; a later run marks the fields it fills that time Auto-filled and leaves
+the others. The highlight is local state of the mounted form: a Draft save keeps it,
+loading a request (reload, reopening a Draft, the Draft page opened by New Request's
+first save), Reload draft, a Draft Form Version upgrade and Cancel in Edit
+information clear it, and it is never sent, stored or audited.
 A select or radio target is filled only with a value among the options of the form being filled; any other value leaves it blank.
 Unindexed historical values are read through their original schema snapshot;
 requests with restricted legacy sections are excluded as autofill sources.
@@ -320,7 +331,11 @@ discard the local draft; failed saves retain it, and pending saves block closing
 or duplicate submission. Field selectors and the table display labels without
 canonical keys. Fill target labels wrap horizontally in the space freed by
 removing the Source table column; lookup still uses previous completed requests.
+Above the targets, Select all ticks every listed field (all but the trigger), keeping
+ticked fields in place and adding the rest in form order; Clear all unticks every
+target, removed targets included; "N of M fields selected" counts the listed fields.
 Sources: [admin rule editor](../frontend/src/components/AdminAutofillRulesPage.tsx),
+[highlight rules](../frontend/src/components/autofillHighlight.ts),
 [autofill](../backend/src/requests/autofill.service.ts),
 [rules](../backend/src/admin/autofill_rule.service.ts),
 [audit service](../backend/src/audit/audit_log.service.ts),

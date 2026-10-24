@@ -12,7 +12,7 @@ describe('AdminAutofillRulesPage', () => {
     const html = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, {
       disabled: false, isEditing: true, fields,
       draft: { formKey: 'psf-request', triggerCanonicalKey: 'deleted_trigger', targetCanonicalKeys: ['deleted_target'], status: 'active' },
-      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onSave() {},
+      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onClearTargets() {}, onSave() {}, onSelectAllTargets() {},
     }))
     expect(html).toContain('<option value="product">')
     expect(html).toContain('Removed trigger field')
@@ -42,7 +42,7 @@ describe('AdminAutofillRulesPage', () => {
     expect(table).not.toContain('trigger_key')
     expect(table).not.toContain('target_key')
     expect(table).not.toContain('>Source<')
-    const editor = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, { disabled: false, isEditing: true, fields: schemaFields, draft: { formKey: 'psf-request', triggerCanonicalKey: 'trigger_key', targetCanonicalKeys: ['target_key'], status: 'inactive' }, onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onSave() {} }))
+    const editor = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, { disabled: false, isEditing: true, fields: schemaFields, draft: { formKey: 'psf-request', triggerCanonicalKey: 'trigger_key', targetCanonicalKeys: ['target_key'], status: 'inactive' }, onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onClearTargets() {}, onSave() {}, onSelectAllTargets() {} }))
     expect(editor).toContain('Rule status')
     expect(editor).toContain('<option value="inactive" selected="">Inactive</option>')
     expect(editor).not.toContain('Reference (trigger_key)')
@@ -57,7 +57,7 @@ describe('AdminAutofillRulesPage', () => {
     const editor = renderToStaticMarkup(createElement(AdminAutofillRuleEditor, {
       disabled: false, isEditing: true, fields: schemaFields,
       draft: { formKey: 'psf-request', triggerCanonicalKey: 'trigger_key', targetCanonicalKeys: [], status: 'active' },
-      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onSave() {},
+      onCancel() {}, onChangeTarget() {}, onChangeTrigger() {}, onChangeStatus() {}, onClearTargets() {}, onSave() {}, onSelectAllTargets() {},
     }))
     expect(editor).toContain('admin-autofill-rules__source')
     expect(editor).toContain('admin-autofill-rules__editor-grid')
