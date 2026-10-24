@@ -369,12 +369,16 @@ export interface GlobalAuditLogEntry {
   metadata: Record<string, unknown>
 }
 
+/** The server's Attachment Category, worked out from the file name. */
+export type AttachmentCategory = 'map_layout' | 'fpc_layout' | 'other'
+
 export interface RequestAttachment {
   id: string
   filename: string
   mimeType: string
   sizeBytes: number
   isImage: boolean
+  category: AttachmentCategory
   /** Null for a file placed on the NAS directly. */
   uploadedByDisplayName: string | null
   createdAt: string
