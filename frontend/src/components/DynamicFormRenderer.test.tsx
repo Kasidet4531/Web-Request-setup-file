@@ -550,3 +550,98 @@ describe('DynamicFormRenderer field policy', () => {
     expect(headerHtml).toContain('Due Date')
   })
 })
+
+describe('DynamicFormRenderer Field Help Text', () => {
+  /** `allTypesSchema` with extra properties on the field with `fieldKey`. */
+  function withField(fieldKey: string, extra: Record<string, unknown>): FormSchema {
+    const [section] = allTypesSchema.sections
+    return { ...allTypesSchema, sections: [{ ...section, fields: section.fields.map((field) => field.fieldKey === fieldKey ? { ...field, ...extra } : field) }] }
+  }
+
+  it("shows a field's help text under its control and names it in the control's description", () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={withField('title', { helpText: 'Put NA if not Motion Sensor' })} showSchemaHeader={false} onChange={() => undefined} />)
+    const row = rowsOf(html)[1]
+
+    const help = row.match(/<p class="dynamic-form__help" id="([^"]+)">([^<]*)<\/p>/)
+    expect(help?.[2]).toBe('Put NA if not Motion Sensor')
+    const control = row.match(/<input[^>]*type="text"[^>]*>/)?.[0] ?? ''
+    expect(attribute(control, 'aria-describedby')).toBe(help?.[1])
+    expect(row.indexOf(control)).toBeLessThan(row.indexOf('dynamic-form__help'))
+    expect(html.match(/dynamic-form__help/g)).toHaveLength(1)
+  })
+
+  it('names the help text, error and Auto-fill status of a Multiple choice field, which keeps its Autofill colour', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={withField('request_to', { helpText: 'Choose Revise from old PSF to start from an earlier request.' })}
+      errors={{ request_to: 'Choose Request To.' }} fieldStatuses={{ request_to: 'edited-by-user' }} showSchemaHeader={false} onChange={() => undefined} />)
+    const row = rowsOf(html)[0]
+
+    expect(row.match(/^<div class="([^"]+)"/)?.[1]).toBe('dynamic-form__row dynamic-form__row--edited-by-user')
+    const ids = (pattern: RegExp) => row.match(pattern)?.[1]
+    const expected = [
+      ids(/<p class="dynamic-form__help" id="([^"]+)">Choose Revise from old PSF to start from an earlier request.<\/p>/),
+      ids(/<p class="ui-error" id="([^"]+)">Choose Request To.<\/p>/),
+      ids(/<p class="dynamic-form__autofill-status" id="([^"]+)" role="status">Edited by user<\/p>/),
+    ]
+    expect(expected.every(Boolean)).toBe(true)
+    const group = row.match(/<div[^>]*role="radiogroup"[^>]*>/)?.[0] ?? ''
+    expect(attribute(group, 'aria-describedby')?.split(' ')).toEqual(expected)
+    for (const radio of row.match(/<input[^>]*type="radio"[^>]*>/g) ?? []) expect(attribute(radio, 'aria-describedby')?.split(' ')).toEqual(expected)
+  })
+
+  it('shows help text as plain text, keeping its line breaks', () => {
+    const helpText = 'Use <b>NA</b> & "N/A" only\nwhen not Motion Sensor'
+    const html = renderToStaticMarkup(<DynamicFormRenderer schema={withField('description', { helpText })} showSchemaHeader={false} onChange={() => undefined} />)
+
+    expect(html).toContain('>Use &lt;b&gt;NA&lt;/b&gt; &amp; &quot;N/A&quot; only\nwhen not Motion Sensor</p>')
+    expect(html).not.toContain('<b>')
+  })
+
+  it('leaves a field without help text, or with blank help text, exactly as before', () => {
+    const plain = renderToStaticMarkup(<DynamicFormRenderer schema={allTypesSchema} showSchemaHeader={false} onChange={() => undefined} />)
+    for (const helpText of ['', '   \n ']) {
+      expect(renderToStaticMarkup(<DynamicFormRenderer schema={withField('title', { helpText })} showSchemaHeader={false} onChange={() => undefined} />)).toBe(plain)
+    }
+    expect(plain).not.toContain('dynamic-form__help')
+  })
+
+  it('does not repeat help text beside a read-only value', () => {
+    const schemaWithHelp = withField('title', { helpText: 'Put NA if not Motion Sensor' })
+
+    expect(renderToStaticMarkup(<DynamicFormRenderer readOnly schema={schemaWithHelp} values={{ title: 'Sensor X' }} />)).not.toContain('Put NA if not Motion Sensor')
+    expect(renderToStaticMarkup(<DynamicFormRenderer readOnlyFieldKeys={['title']} schema={schemaWithHelp} values={{ title: 'Sensor X' }} />)).not.toContain('Put NA if not Motion Sensor')
+  })
+})
+
+describe('DynamicFormRenderer choice layout', () => {
+  const requestTo = (extra: Record<string, unknown>): FormSchema => ({
+    ...allTypesSchema,
+    sections: [{ ...allTypesSchema.sections[0], fields: [{ ...allTypesSchema.sections[0].fields[0], ...extra }] }],
+  })
+  const groupClass = (schemaToRender: FormSchema) => attribute(
+    renderToStaticMarkup(<DynamicFormRenderer schema={schemaToRender} showSchemaHeader={false} onChange={() => undefined} />).match(/<div[^>]*role="radiogroup"[^>]*>/)?.[0] ?? '',
+    'class',
+  )
+
+  it('stacks the options of a vertical Multiple choice field one per line', () => {
+    expect(groupClass(requestTo({ optionLayout: 'vertical' }))).toBe('dynamic-form__radio-group dynamic-form__radio-group--vertical')
+  })
+
+  it('lays out a horizontal field, and one saved before choice layouts existed, exactly as before', () => {
+    const before = renderToStaticMarkup(<DynamicFormRenderer schema={requestTo({})} showSchemaHeader={false} onChange={() => undefined} />)
+
+    expect(groupClass(requestTo({}))).toBe('dynamic-form__radio-group')
+    expect(renderToStaticMarkup(<DynamicFormRenderer schema={requestTo({ optionLayout: 'horizontal' })} showSchemaHeader={false} onChange={() => undefined} />)).toBe(before)
+  })
+
+  it('keeps the Autofill colour, label and help text of a vertical field', () => {
+    const html = renderToStaticMarkup(<DynamicFormRenderer fieldStatuses={{ request_to: 'auto-filled' }} schema={requestTo({ optionLayout: 'vertical', helpText: 'Pick one.' })}
+      showSchemaHeader={false} values={{ request_to: 'Transfer Product (MFG)' }} onChange={() => undefined} />)
+    const [row] = rowsOf(html)
+
+    expect(row.match(/^<div class="([^"]+)"/)?.[1]).toBe('dynamic-form__row dynamic-form__row--auto-filled')
+    expect(row).toContain('dynamic-form__radio-group--vertical')
+    expect(row).toContain('role="status">Auto-filled</p>')
+    expect(row).toContain('>Pick one.</p>')
+    expect(row).toContain('checked="" value="Transfer Product (MFG)"')
+  })
+})
