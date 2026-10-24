@@ -116,6 +116,7 @@ export interface StatusCatalogEntry {
   psfAccessTrigger?: boolean
 }
 
+/** The status catalog in catalog order: Draft first in `entries`, then the Work Statuses in the order administrators set; `statuses` lists their names in that order. */
 export interface WorkflowConfiguration {
   statuses: string[]
   entries: StatusCatalogEntry[]
@@ -131,6 +132,8 @@ export type WorkflowConfigurationOperation =
   | { action: 'delete'; id: string; replacementId?: string; expectedUpdatedAt: string }
   | { action: 'settings'; psfVisibilityTriggerId: string | null; expectedUpdatedAt: string }
   | { action: 'email-policy'; id: string; emailPolicy: StatusEmailPolicy; expectedUpdatedAt: string }
+  /** Moves a Work Status to a 1-based position among the Work Statuses; Draft always stays first. */
+  | { action: 'move'; id: string; position: number; expectedUpdatedAt: string }
 
 export interface PsfRequestQuery {
   scope?: 'all' | 'related' | 'my-drafts'

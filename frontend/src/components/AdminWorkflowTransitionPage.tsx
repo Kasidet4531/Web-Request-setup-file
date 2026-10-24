@@ -4,6 +4,7 @@ import './AdminWorkflowTransitionPage.css'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { StatusLabel } from './ui/StatusLabel'
+import { readTargetPosition } from './targetPosition'
 import { api, ApiError, type AdminUserProfile, type RequesterPlacement, type StatusEmailPolicy, type StatusCatalogEntry, type WorkflowConfiguration, type WorkflowConfigurationOperation, type WorkflowStatusKind } from '../services/api'
 
 type WorkflowOperationInput = WorkflowConfigurationOperation extends infer Operation
@@ -78,6 +79,8 @@ export function AdminWorkflowTransitionPage() {
   const [users, setUsers] = useState<AdminUserProfile[] | null>(null)
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState<string | null>(null)
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({})
+  const [positionError, setPositionError] = useState<{ id: string; message: string } | null>(null)
   const emailButtons = useRef(new Map<string, HTMLButtonElement>())
   const emailFocusTarget = useRef<string | null>(null)
   const catalogRegion = useRef<HTMLDivElement | null>(null)
@@ -119,6 +122,7 @@ export function AdminWorkflowTransitionPage() {
       setConfiguration(refreshed)
       setDeleting(null)
       setEmailEditing(null)
+      setPositionDrafts({})
       setFeedback({ kind: 'success', message: 'Status catalog updated.' })
     } catch (error) {
       setFeedback({ kind: 'error', message: errorMessage(error) })
@@ -128,6 +132,7 @@ export function AdminWorkflowTransitionPage() {
           setDeleting(null)
           setEmailEditing(null)
           setReplacementId('')
+          setPositionDrafts({})
         } catch { /* Keep the user's conflict context visible. */ }
       }
     } finally { setBusy(false) }
@@ -213,9 +218,25 @@ export function AdminWorkflowTransitionPage() {
   const canDelete = Boolean(deleting && deleting.kind !== 'draft' &&
     (deleting.requestCount === 0 ? !replacementId || validReplacement : validReplacement))
 
+  // Work Status positions count from 1 after Draft, which always stays first.
+  function moveToPosition(entry: StatusCatalogEntry, current: number) {
+    if (catalogBusy) return
+    const typed = readTargetPosition(positionDrafts[entry.id] ?? String(current), businessEntries.length)
+    if ('error' in typed) {
+      setPositionError({ id: entry.id, message: typed.error })
+      return
+    }
+    setPositionError(null)
+    if (typed.position === current) {
+      setPositionDrafts(Object.fromEntries(Object.entries(positionDrafts).filter(([id]) => id !== entry.id)))
+      return
+    }
+    void mutate({ action: 'move', id: entry.id, position: typed.position })
+  }
+
   return (
     <article className="page-card admin-workflow-transition">
-      <PageHeader title="Status Management" description="Draft is protected. Statuses form a catalog, with no fixed process sequence." />
+      <PageHeader title="Status Management" description="Draft is protected and always first. Work Statuses appear in this order in every Status list and filter; type a new position and choose Move to reorder them." />
       <div className="page-card__body admin-workflow-transition__body">
         {loading ? <AsyncNotice kind="loading" title="Loading status catalog…" /> : null}
         {feedback && !dialogMode ? <AsyncNotice kind={feedback.kind} title={feedback.message} /> : null}
@@ -228,8 +249,13 @@ export function AdminWorkflowTransitionPage() {
           <div className="admin-workflow-transition__catalog">
           <p className="table-scroll__hint">Scroll horizontally to see request counts and status actions.</p>
           <div className="data-table admin-workflow-transition__table" ref={catalogRegion} role="region" aria-label="Status catalog" tabIndex={0}><table>
-            <thead><tr><th scope="col">Status</th><th scope="col">Status type</th><th scope="col">Requests</th><th scope="col">Email on entry</th><th scope="col">PSF access trigger</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>{configuration.entries.map((entry) => <tr key={entry.id}>
+            <thead><tr><th scope="col">Position</th><th scope="col">Status</th><th scope="col">Status type</th><th scope="col">Requests</th><th scope="col">Email on entry</th><th scope="col">PSF access trigger</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+            <tbody>{configuration.entries.map((entry) => { const position = businessEntries.indexOf(entry) + 1; const invalidPosition = positionError?.id === entry.id; return <tr key={entry.id}>
+              <td>{entry.kind === 'draft' ? <span className="ui-help">Always first</span> : <form className="admin-workflow-transition__position" noValidate onSubmit={(event) => { event.preventDefault(); moveToPosition(entry, position) }}>
+                <input aria-label={`Position of ${entry.name}`} aria-invalid={invalidPosition} aria-describedby={invalidPosition ? `status-position-error-${entry.id}` : undefined} disabled={catalogBusy} inputMode="numeric" max={businessEntries.length} min={1} step={1} type="number" value={positionDrafts[entry.id] ?? String(position)} onChange={(event) => { setPositionDrafts({ ...positionDrafts, [entry.id]: event.target.value }); if (invalidPosition) setPositionError(null) }} />
+                <button className="ui-button ui-button--secondary" aria-label={`Move ${entry.name} to position`} disabled={catalogBusy} type="submit">Move</button>
+                {invalidPosition ? <p className="admin-workflow-transition__position-error" id={`status-position-error-${entry.id}`} role="alert">{positionError.message}</p> : null}
+              </form>}</td>
               <td><StatusLabel status={entry.name} kind={entry.kind} /></td>
               <td>{entry.kind === 'cancelled' ? 'Cancel' : entry.kind === 'open' ? 'Open work' : entry.kind === 'completed' ? 'Completed' : 'Draft'}</td><td>{entry.requestCount ?? '—'}</td>
               <td><div className="admin-workflow-transition__email-summary"><span>{statusEmailPolicy(entry).enabled ? 'Enabled' : 'Do not send'}</span>{statusEmailPolicy(entry).enabled ? <span className="ui-help">{recipientSummary(statusEmailPolicy(entry))}</span> : null}</div></td>
@@ -238,7 +264,7 @@ export function AdminWorkflowTransitionPage() {
                 <button className="ui-button ui-button--secondary" disabled={catalogBusy} aria-label={`Edit ${entry.name}`} ref={(node) => { if (node) emailButtons.current.set(`edit:${entry.id}`, node); else emailButtons.current.delete(`edit:${entry.id}`) }} onClick={() => void editEmailPolicy(entry)} type="button">Edit</button>
                 <button className="ui-button ui-button--danger" disabled={catalogBusy} ref={(node) => { if (node) emailButtons.current.set(`delete:${entry.id}`, node); else emailButtons.current.delete(`delete:${entry.id}`) }} onClick={() => { emailFocusTarget.current = `delete:${entry.id}`; setFeedback(null); setDeleting(entry); setReplacementId('') }} type="button">Delete</button>
               </>}</div></td>
-            </tr>)}</tbody>
+            </tr> })}</tbody>
           </table></div></div>
           {dialogMode ? <dialog ref={dialogRef} className={`ui-dialog admin-status-dialog${dialogMode === 'edit' ? ' admin-status-dialog--edit' : ''}`} aria-labelledby={dialogMode === 'edit' ? 'edit-status-heading' : 'delete-status-heading'} aria-busy={busy}
             onCancel={(event) => { event.preventDefault(); closeDialog() }} onClick={(event) => { if (event.target === event.currentTarget) closeDialog() }}>

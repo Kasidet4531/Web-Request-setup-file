@@ -31,6 +31,12 @@ export interface StatusCatalogEntry {
   psfAccessTrigger?: boolean;
 }
 
+/**
+ * The status catalog in catalog order: `entries` holds Draft first, then the
+ * Work Statuses in the order administrators set (the `move` operation), and
+ * `statuses` lists the Work Status names in that order. Every list of Work
+ * Statuses (filters, the Status dropdown, Status Management) follows it.
+ */
 export interface WorkflowConfiguration {
   statuses: string[];
   entries: StatusCatalogEntry[];
@@ -71,6 +77,13 @@ export type WorkflowConfigurationOperation =
       action: 'settings';
       psfVisibilityTriggerId: string | null;
       expectedUpdatedAt: string;
+    }
+  | {
+      /** Moves a Work Status to a 1-based position among the Work Statuses. */
+      action: 'move';
+      id: string;
+      position: number;
+      expectedUpdatedAt: string;
     };
 
 export type PublicWorkflowConfiguration = Omit<
@@ -94,6 +107,7 @@ interface StoredStatus {
 }
 
 interface StoredWorkflowConfiguration {
+  /** Catalog order is array order; Draft is always at index 0. */
   entries: StoredStatus[];
   psfVisibilityTriggerIds: string[];
 }
@@ -394,6 +408,26 @@ export class WorkflowTransitionService implements OnModuleInit {
               ...(await this.releaseExistingRequests(client, trigger.name)),
             );
           }
+          break;
+        }
+        case 'move': {
+          const target = this.requireEntry(entries, operation.id);
+          if (target.kind === 'draft') {
+            throw new BadRequestException('Draft keeps its place first.');
+          }
+          const workStatusCount = entries.length - 1;
+          if (
+            !Number.isInteger(operation.position) ||
+            operation.position < 1 ||
+            operation.position > workStatusCount
+          ) {
+            throw new BadRequestException(
+              `Position must be a whole number from 1 to ${workStatusCount}.`,
+            );
+          }
+          // Draft stays at index 0, so position N is array index N.
+          entries.splice(entries.indexOf(target), 1);
+          entries.splice(operation.position, 0, target);
           break;
         }
         case 'delete': {
@@ -904,6 +938,24 @@ export class WorkflowTransitionService implements OnModuleInit {
           psfVisibilityTriggerId: input.psfVisibilityTriggerId,
           expectedUpdatedAt,
         };
+      case 'move':
+        this.assertOnlyKeys(input, [
+          'action',
+          'id',
+          'position',
+          'expectedUpdatedAt',
+        ]);
+        if (typeof input.id !== 'string' || !this.isUuid(input.id)) {
+          throw new BadRequestException('move requires a status id.');
+        }
+        return {
+          action,
+          id: input.id,
+          // Checked against the catalog size when applied; NaN is refused there.
+          position:
+            typeof input.position === 'number' ? input.position : Number.NaN,
+          expectedUpdatedAt,
+        };
       default:
         throw new BadRequestException('Unsupported workflow operation.');
     }
@@ -1188,6 +1240,12 @@ export class WorkflowTransitionService implements OnModuleInit {
         return {
           action: operation.action,
           psfVisibilityTriggerId: operation.psfVisibilityTriggerId,
+        };
+      case 'move':
+        return {
+          action: operation.action,
+          id: operation.id,
+          position: operation.position,
         };
     }
   }
