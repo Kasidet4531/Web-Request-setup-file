@@ -14,7 +14,7 @@ export function escapeHtml(value: unknown): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-// The request tables' short Product Type (frontend productTypeLabel), but other
+// The request tables' short Request To (frontend productTypeLabel), but other
 // values are shown as stored.
 const KNOWN_PRODUCT_TYPES =
   /^(New Product|Transfer Product|Existing Product|Create new PSF|Revise from old PSF|Revise Old PSF|Product Transfer)\b/;
@@ -69,10 +69,10 @@ export function renderRequestEmail(
     );
   const fields: [string, unknown, string?][] = [
     ['Request No', request.request_no],
-    ['Product Description', title, GREEN],
+    ['Target 12NC Desc', title, GREEN],
     ['Requester', request.requester],
     [
-      'Product Type',
+      'Request To',
       shortProductType(valueFor('product_type') ?? request.product_type),
       GREEN,
     ],

@@ -154,11 +154,11 @@ void describe('notification SQL on an isolated in-memory PostgreSQL engine', () 
     ).rows;
     assert.match(
       job.body_html,
-      /<th[^>]*>Product Description<\/th><td[^>]*>Chip B<\/td>/,
+      /<th[^>]*>Target 12NC Desc<\/th><td[^>]*>Chip B<\/td>/,
     );
     assert.match(
       job.body_html,
-      /<th[^>]*>Product Type<\/th><td[^>]*>Product Transfer<\/td>/,
+      /<th[^>]*>Request To<\/th><td[^>]*>Product Transfer<\/td>/,
     );
     assert.match(job.body_html, /<th[^>]*>Updated By<\/th><td>Tester<\/td>/);
     assert.equal(job.body_html.includes('Priority'), false);

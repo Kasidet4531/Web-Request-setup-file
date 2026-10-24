@@ -101,16 +101,16 @@ The lifecycle gate coordinates dispatch with Submit/Delete. Already accepted
 external mail cannot be recalled; unsent/deleted payloads are removed. Missing
 recipient addresses are visible in Admin management.
 
-## Product Type team filtering
+## Request To team filtering
 
 ```mermaid
 flowchart LR
-  Product[Latest saved Product Type] --> New[New Product]
-  Product --> Transfer[Transfer Product / Existing Product]
+  Product[Latest saved Request To] --> New[Create new PSF / New Product]
+  Product --> Transfer[Revise from old PSF / Revise Old PSF / Product Transfer / Transfer Product / Existing Product]
   Product --> Other[Missing / custom value]
   New --> GNTC[GNTC Dashboard group]
   Transfer --> MFG[MFG Dashboard group]
-  Other --> Unknown[รอระบุ Product Type]
+  Other --> Unknown[รอระบุ Request To]
   GNTC --> Filter[Selectable Dashboard filter]
   MFG --> Filter
   Unknown --> Filter
@@ -119,7 +119,8 @@ flowchart LR
 Source: [query predicates](../backend/src/requests/search-index.service.ts).
 Rows/totals/cards share the same filter. Both Setup File Owner departments retain
 cross-team PSF editing; account roles/departments remain intact. No individual
-owner is captured by PSF saves or Product Type changes.
+owner is captured by PSF saves or Request To changes. Request To is stored as
+`product_type` and was called Product Type on screen before 24 October 2026.
 
 ## Persistence and mutation flow
 
