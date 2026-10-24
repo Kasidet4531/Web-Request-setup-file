@@ -604,6 +604,13 @@ describe('DynamicFormRenderer Field Help Text', () => {
     expect(plain).not.toContain('dynamic-form__help')
   })
 
+  it('treats help text a stored form holds as something other than text as no help text', () => {
+    const plain = renderToStaticMarkup(<DynamicFormRenderer schema={allTypesSchema} showSchemaHeader={false} onChange={() => undefined} />)
+    for (const helpText of [null, 7, ['Put NA']]) {
+      expect(renderToStaticMarkup(<DynamicFormRenderer schema={withField('title', { helpText })} showSchemaHeader={false} onChange={() => undefined} />)).toBe(plain)
+    }
+  })
+
   it('does not repeat help text beside a read-only value', () => {
     const schemaWithHelp = withField('title', { helpText: 'Put NA if not Motion Sensor' })
 

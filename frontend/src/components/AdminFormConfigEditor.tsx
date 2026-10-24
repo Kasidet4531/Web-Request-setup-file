@@ -11,7 +11,7 @@ const OPTION_LAYOUT_LABELS: Record<FieldOptionLayout, string> = {
 }
 
 const isVertical = (field: FormSchemaField) => field.type === 'radio' && field.optionLayout === 'vertical'
-const hasHelpText = (field: FormSchemaField) => !!field.helpText?.trim()
+const hasHelpText = (field: FormSchemaField) => typeof field.helpText === 'string' && !!field.helpText.trim()
 
 /** The field list's one-line summary: type, required flag, and a vertical layout or help text when set. */
 function fieldSummary(field: FormSchemaField): string {
@@ -161,7 +161,8 @@ interface AdminFormConfigFieldEditorProps {
 
 export function AdminFormConfigFieldEditor({ field, isNew, canRemove, onChange, onApply, onCancel, onRemove }: AdminFormConfigFieldEditorProps) {
   const choiceField = field.type === 'select' || field.type === 'radio'
-  const helpText = field.helpText ?? ''
+  // The schema JSON editor can hold anything; help text that is not text shows an empty box (and fails validation).
+  const helpText = typeof field.helpText === 'string' ? field.helpText : ''
   const helpTextTooLong = helpText.length > FIELD_HELP_TEXT_MAX_LENGTH
   const valid = !!field.label.trim() && (!choiceField || !!field.options?.length && field.options.every((option) => option.trim())) && !helpTextTooLong
   function edit(update: (draft: FormSchemaField) => void) {

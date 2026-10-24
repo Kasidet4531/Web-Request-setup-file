@@ -274,6 +274,15 @@ describe('Field Help Text and choice layout in the field dialog', () => {
     const plain = renderToStaticMarkup(<AdminFormConfigEditor schema={schema} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
     expect(plain).not.toMatch(/Help text|Choice layout/)
   })
+
+  it('keeps the editor usable when the schema JSON holds help text that is not text', () => {
+    const odd = { ...nameField, helpText: 7 } as unknown as FormSchemaField
+    const draft: FormSchemaDraft = { ...schema, sections: [{ ...schema.sections[0], fields: [odd] }] }
+
+    expect(renderToStaticMarkup(editor(draft))).toContain('Short text · Required</span>')
+    expect(renderToStaticMarkup(<AdminFormConfigEditor schema={draft} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)).not.toContain('Help text')
+    expect(helpTextArea(fieldEditor(odd)).props.value).toBe('')
+  })
 })
 
 describe('moving a field to a typed position', () => {

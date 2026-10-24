@@ -192,7 +192,7 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
   const fieldStatusId = `${fieldId}-autofill-status`
   const helpId = `${fieldId}-help`
   // Help text guides filling the field in, so a read-only value does not repeat it.
-  const helpText = readOnly ? '' : field.helpText?.trim() ?? ''
+  const helpText = !readOnly && typeof field.helpText === 'string' ? field.helpText.trim() : ''
   const describedBy = [helpText ? helpId : null, error ? errorId : null, fieldStatus ? fieldStatusId : null]
     .filter((id): id is string => id !== null)
     .join(' ') || undefined
