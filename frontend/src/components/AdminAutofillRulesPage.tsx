@@ -7,8 +7,10 @@ import type { FormSchemaField } from '../types/forms'
 import { api, type AdminAutofillRule } from '../services/api'
 import {
   canSaveAdminAutofillRuleDraft,
+  clearAdminAutofillRuleDraftTargets,
   createAdminAutofillRuleDraft,
   getAdminAutofillRuleErrorMessage,
+  selectAllAdminAutofillRuleDraftTargets,
   setAdminAutofillRuleDraftTrigger,
   toAdminAutofillRuleDraft,
   toggleAdminAutofillRuleDraftTarget,
@@ -148,7 +150,11 @@ export interface AdminAutofillRuleEditorProps {
   onChangeTarget: (canonicalKey: string, checked: boolean) => void
   onChangeStatus: (status: AdminAutofillRule['status']) => void
   onChangeTrigger: (canonicalKey: string) => void
+  /** Clear all: unticks every target. */
+  onClearTargets: () => void
   onSave: () => void
+  /** Select all: ticks every listed target field (all fields but the trigger). */
+  onSelectAllTargets: (targetCanonicalKeys: string[]) => void
 }
 
 export function AdminAutofillRuleEditor({
@@ -160,7 +166,9 @@ export function AdminAutofillRuleEditor({
   onChangeTarget,
   onChangeStatus,
   onChangeTrigger,
+  onClearTargets,
   onSave,
+  onSelectAllTargets,
 }: AdminAutofillRuleEditorProps) {
   const triggerFields = fields.filter((field) => ['text', 'textarea', 'number', 'date', 'select', 'radio'].includes(field.type))
   const targetFields = fields.filter(
@@ -172,6 +180,7 @@ export function AdminAutofillRuleEditor({
   const triggerRemoved = draft.triggerCanonicalKey !== '' && !triggerFields.some(
     (field) => field.canonicalKey === draft.triggerCanonicalKey,
   )
+  const selectedTargetCount = targetFields.filter((field) => draft.targetCanonicalKeys.includes(field.canonicalKey)).length
   const validationMessage = getDraftValidationMessage(draft)
   const saveLabel = isEditing ? 'Save autofill rule' : 'Create autofill rule'
 
@@ -224,6 +233,15 @@ export function AdminAutofillRuleEditor({
         <p className="page-card__description">
           Select one or more fields to fill.
         </p>
+        <div className="admin-autofill-rules__target-tools">
+          <button className="secondary-button" disabled={disabled} onClick={() => onSelectAllTargets(targetFields.map((field) => field.canonicalKey))} type="button">
+            Select all
+          </button>
+          <button className="secondary-button" disabled={disabled} onClick={onClearTargets} type="button">
+            Clear all
+          </button>
+          <p className="admin-autofill-rules__target-count" role="status">{`${selectedTargetCount} of ${targetFields.length} fields selected`}</p>
+        </div>
         <div className="admin-autofill-rules__target-options">
           {removedTargets.map((key) => (
             <label key={key} htmlFor={`admin-autofill-target-${key}`}>
@@ -414,6 +432,18 @@ export function AdminAutofillRulesPage() {
     setFeedback(null)
   }
 
+  function selectAllTargets(targetCanonicalKeys: string[]) {
+    if (saving || requestInFlight.current) return
+    setDraft((current) => selectAllAdminAutofillRuleDraftTargets(current, targetCanonicalKeys))
+    setFeedback(null)
+  }
+
+  function clearTargets() {
+    if (saving || requestInFlight.current) return
+    setDraft(clearAdminAutofillRuleDraftTargets)
+    setFeedback(null)
+  }
+
   function changeStatus(status: AdminAutofillRule['status']) {
     if (saving || requestInFlight.current) return
     setDraft((current) => ({ ...current, status }))
@@ -531,7 +561,9 @@ export function AdminAutofillRulesPage() {
             onChangeStatus={changeStatus}
             onChangeTarget={changeTarget}
             onChangeTrigger={changeTrigger}
+            onClearTargets={clearTargets}
             onSave={() => void saveRule()}
+            onSelectAllTargets={selectAllTargets}
           />
           {feedback?.kind === 'error' ? <div className="admin-autofill-dialog__feedback"><AdminAutofillRulesFeedback feedback={feedback} loading={false} /></div> : null}
           </dialog>
