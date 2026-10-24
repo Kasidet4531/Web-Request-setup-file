@@ -12,7 +12,7 @@ Issue #114 (parent spec #111, plan items 16 and 29):
   longer clears the highlight; loading a request still starts plain.
 - Auto-fill Rules' Fill target fields gain Select all, Clear all and "N of M fields selected".
 
-Environment: branch `impl/114` from the integration branch at `5100034`; Node 22.22.0;
+Environment: branch `impl/114` with the integration branch merged at `b705b25`; Node 22.22.0;
 Chromium from `/opt/pw-browsers/chromium` driven by Playwright from `backend/node_modules`,
 headless. Browser checks used the `email-system` fixture (embedded PostgreSQL created for the
 run and deleted afterwards, compiled backend and built frontend of this branch, offline
@@ -22,11 +22,11 @@ mail). No configured database, NAS share or deployment was used, and no mail was
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend tests | `cd frontend && npx vitest run` | 39 files, 555 tests passed |
+| Frontend tests | `cd frontend && npx vitest run` | 39 files, 560 tests passed |
 | Frontend type check and lint | `npx tsc -b`, `npx eslint .` | Passed |
-| Backend unit tests | `cd backend && npx jest` | 50 suites, 765 tests passed |
+| Backend unit tests | `cd backend && npx jest` | 51 suites, 787 tests passed |
 | Backend API e2e | `npm run test:e2e` | 20 passed, 1 failed: `exposes ordered workflow statuses…`, which also fails on the base (it expects no `filterStatuses`) |
-| PGlite lifecycle suites | `node --require ts-node/register --test test/*.postgres.test.ts` | 115 passed, 1 skipped |
+| PGlite lifecycle suites | `node --require ts-node/register --test test/*.postgres.test.ts` | 116 passed, 1 skipped |
 | Auto-fill Rules browser suite | `node --test test/email-system.admin-dialogs.e2e.mjs` | 2 passed |
 
 New component tests: the renderer colours an auto-filled row and an edited row differently,
