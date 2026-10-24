@@ -170,3 +170,15 @@ _Avoid_: snapshot on its own (a request's captured Form Schema is its "schema sn
 
 
 
+
+## Decided 24 October 2026, not yet built
+
+Fook's fix plan for the 22 October review settled these terms and decisions. They are not in source yet; until they are, the entries above describe current behaviour. Definitions are in [GLOSSARY.md](GLOSSARY.md).
+
+- **Request To** replaces Product Type as the name people see; **Target 12NC Desc** replaces Product Description (the `title` field).
+- **Submission Status** and **Requester-Selectable Status**: Requesters change Status only where an administrator allows it ([ADR 0020](docs/adr/0020-requesters-change-status-only-where-allowed.md)).
+- **Due Date**, **Team Capacity**, **Team Queue**, **Due Date Postponement** and **Overdue**: the system sets Due Date at submission ([ADR 0021](docs/adr/0021-system-sets-due-date-from-team-capacity.md)).
+- **Status Reminder**: a repeating email while a request stays in a Work Status, off by default.
+- **Attachment Category**, **Map Layout File**, **FPC Layout File**, **Reference PSF** and **Revise Change Type**: categories from file names, and Autofill only for Revise from old PSF with a one-time file copy ([ADR 0022](docs/adr/0022-attachment-categories-and-revise-file-copy.md)).
+- **Field Help Text**: guidance under a form field.
+- Go-live loads the final MIS export into an empty database once ([ADR 0023](docs/adr/0023-go-live-from-an-empty-database.md)).

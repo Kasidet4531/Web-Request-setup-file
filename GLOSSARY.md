@@ -28,12 +28,16 @@ _Avoid_: Last editor, updater
 An engineer in the GNTC or MFG department responsible for completing PSF Created Information and progressing shared PSF Requests.
 _Avoid_: Engineer, owner, setup owner
 
-**Product Type**:
-The request classification (`Request To`) that identifies whether a PSF Request creates a new PSF, revises an existing PSF, or transfers a product.
-_Avoid_: Type of product, product category
+**Request To**:
+The request classification that says whether a PSF Request creates a new PSF (Create new PSF), revises an existing one (Revise from old PSF) or transfers a product (Product Transfer).
+_Avoid_: Product Type, type of product, product category
+
+**Target 12NC Desc**:
+The standard product description that names a PSF Request and its Attachment folder.
+_Avoid_: Product Description, Product_Description, Title
 
 **Dashboard Team Group**:
-The operational team grouping (GNTC or MFG) derived from a request's Product Type for filtering shared work queues.
+The operational team grouping (GNTC or MFG) derived from a request's Request To for filtering shared work queues.
 
 **PSF Created Information**:
 The setup details section completed by Setup File Owners or Administrators after the request is created.
@@ -43,12 +47,46 @@ _Avoid_: Setup Information, Completed Info
 A named lifecycle stage in the administrator-managed status catalog, classified as draft, open, completed, or cancelled.
 _Avoid_: Percentage stage
 
+**Submission Status**:
+The Work Status every submitted Draft enters, chosen by an administrator.
+_Avoid_: Initial status, first status
+
+**Requester-Selectable Status**:
+A Work Status a Requester may choose, and only while the request is in one of the Work Statuses an administrator listed for it.
+_Avoid_: Requester step, Requester transition
+
 **Status Email Policy**:
 The administrator's choice, per Work Status, of who is emailed when a PSF Request enters it: fixed addresses in To and CC, and optionally the request's own Requester in To or CC.
 _Avoid_: Notification subscription, mailing list
 
 **PSF Visibility Release**:
 A permanent release milestone granted when a PSF Request enters a configured trigger Work Status, making PSF Created Information visible to Requesters on screen. Excel exports do not wait for it.
+
+## Schedule and Reminders
+
+**Due Date**:
+The date by which the PSF team should reach PSF Visibility Release, set by the system when the request is submitted.
+_Avoid_: Deadline, target date
+
+**Team Capacity**:
+How many PSF Requests a Dashboard Team Group takes on per day when Due Dates are set.
+_Avoid_: Quota, daily limit
+
+**Team Queue**:
+The PSF Requests of one Dashboard Team Group that were submitted in this web and have not reached PSF Visibility Release.
+_Avoid_: Backlog, pending list
+
+**Due Date Postponement**:
+A later Due Date set by any role, with a required reason.
+_Avoid_: Extension, reschedule
+
+**Overdue**:
+The state of an open PSF Request past its Due Date, which lasts until the request is completed or cancelled.
+_Avoid_: Late, delayed
+
+**Status Reminder**:
+A repeating email sent every set number of days while a PSF Request stays in a Work Status that has reminders switched on.
+_Avoid_: Stuck alert, overdue reminder
 
 ## Forms and Automation
 
@@ -68,9 +106,34 @@ _Avoid_: Global key, standardized key
 The structured projection of canonical request values used to filter, sort, and summarize shared PSF Requests.
 _Avoid_: Query table, view
 
+**Field Help Text**:
+Guidance shown under a form field, set per field by administrators.
+_Avoid_: Hint, tooltip, description
+
 **Autofill Rule**:
-An administrator-configured rule that populates target fields in a new PSF Request from the latest completed PSF Request matching a trigger field value.
+An administrator-configured rule that populates target fields in a new PSF Request from the latest completed PSF Request matching a trigger field value, used only when Request To is Revise from old PSF.
 _Avoid_: Auto-complete mapping, field copy rule, smart suggestion
+
+**Reference PSF**:
+The earlier PSF Request that a Revise from old PSF request is based on, named by its old PSF name.
+_Avoid_: Old PSF, refer PSF
+
+**Revise Change Type**:
+What a Revise from old PSF request changes (Change Map layout, Change FPC layout or Any change), which decides the Attachments copied from the Reference PSF.
+_Avoid_: Product layout
+
+## Attachments
+
+**Attachment Category**:
+The group an Attachment belongs to by its file name: Map Layout File, FPC Layout File or Other.
+_Avoid_: Attachment slot, file type
+
+**Map Layout File**:
+A wafer map layout file (.xml, .dpl, .lay, .tpl or .mdf), including E142 files.
+
+**FPC Layout File**:
+An Excel workbook whose name starts with PCSF.
+_Avoid_: PCSF file
 
 **Master Data**:
 Standardized reference options embedded within a Form Schema to populate choice fields.
@@ -132,4 +195,4 @@ The `For` classification in `Column_Mapping` that assigns a workbook column to R
 
 **Legacy Column**:
 A retired workbook column in `Column_Mapping` with no assigned audience (`For` is blank, excluding core fields `Due Date`, `Created By`, and `Modified By`) that is preserved on Imported Requests under Form Version 1 and omitted from the active Form Version.
-_Avoid_: Old field, deprecated field
+_Avoid_: Old field, deprecated field, grey field
