@@ -44,7 +44,7 @@ The setup details section completed by Setup File Owners or Administrators after
 _Avoid_: Setup Information, Completed Info
 
 **Work Status**:
-A named lifecycle stage in the administrator-managed status catalog, classified as draft, open, completed, or cancelled.
+A named lifecycle stage in the administrator-managed status catalog, classified as draft, open, completed, or cancelled, and listed in the order administrators set.
 _Avoid_: Percentage stage
 
 **Submission Status**:

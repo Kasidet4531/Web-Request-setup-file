@@ -28,7 +28,7 @@ Read `workflow_transition_config`, key `status-catalog-v1`, field `config_json.e
 
 Preserve the complete string, including percent prefix, punctuation, capitalization, spacing (`85 %`) and the literal backslash in the `93%` name. Do not substitute the old short labels `Submitted`, `Setup In Progress`, `PSF Created`, `Need More Information`, `Rejected`, `Cancelled`, or a bare `Completed` for a stored status. `PSF Created Information` remains the name of a form section; it is not a current catalog status. Dashboard summaries may use **Open work**, **Overdue** and **Completed** as group labels, not individual Status values.
 
-The snapshot has 17 entries and a maximum name length of 71 characters. Every stored request Status in the inspected database belongs to this catalog. Percent prefixes are part of the name, not calculated progress, ordering, completion rules or automatic triggers. Classify summaries and badge styling using `kind`: `draft`, `open`, `completed`, `cancelled`. In particular, `83% -- Complete Excel probe pattern` and `99% -- Wait requestor Buyoff site location and wafer map` are `open`.
+The snapshot has 17 entries and a maximum name length of 71 characters. Every stored request Status in the inspected database belongs to this catalog. Percent prefixes are part of the name, not calculated progress, ordering, completion rules or automatic triggers; the order of Status lists is the catalog order administrators set (see [Status order](#status-order-24-october-2026)). Classify summaries and badge styling using `kind`: `draft`, `open`, `completed`, `cancelled`. In particular, `83% -- Complete Excel probe pattern` and `99% -- Wait requestor Buyoff site location and wafer map` are `open`.
 
 ## Confirmed interaction constraints
 
@@ -60,6 +60,46 @@ to query all work states, keeping Team and Search. Users can select a summary
 card afterward to narrow the result again. Clearing all Dashboard filters retains
 the existing reset to Open work. History has no Status filter. See
 [verification](verification/2026-10-22-search-filters.md).
+
+## Status order, 24 October 2026
+
+The catalog keeps an explicit order (issue #115): `config_json.entries` holds Draft
+first, then the Work Statuses in the order administrators set, and `statuses` in
+the catalog responses lists the Work Status names in that order. Code that needs
+"the first open status" or any other ordered choice reads `entries` in array order.
+
+Status Management shows a Position column. An administrator types a Work
+Status's new position, a whole number from 1 (the first Work Status after Draft)
+to the number of Work Statuses, and chooses Move or presses Enter; the others
+shift. Any other value is refused under the input and nothing is sent. Draft
+shows "Always first" and has no control. The page sends the `move` operation of
+`PUT /api/admin/workflow`:
+
+```json
+{ "action": "move", "id": "<status id>", "position": 1, "expectedUpdatedAt": "<catalog revision>" }
+```
+
+The server refuses moving Draft ("Draft keeps its place first.") and a position
+that is not a whole number in range ("Position must be a whole number from 1 to
+N."). The usual `expectedUpdatedAt` check applies: when another administrator
+changed the catalog first, the save fails with "The workflow status catalog
+changed. Reload and try again." and the page loads the current order. A move
+changes only the order: no request's Status, no name, kind, Status Email Policy
+or PSF Visibility Release trigger, and no email. It is recorded as a Workflow
+catalog update.
+
+Every list of Work Statuses follows the order: Status Management, the Requests,
+Dashboard and Export Status filters (legacy names from `filterStatuses` follow
+the catalog), and the Action center's Status dropdown, where the request's
+current status sits in its catalog place (a current status outside the catalog
+stays first). The order is display order only. It does not restrict which
+status may be chosen and is not a progression. It survives restarts; an
+[Initial Data Load](initial-data-load.md) sets it to the workbook's Status options.
+Sources: [catalog service](../backend/src/admin/workflow_transition.service.ts),
+[Status Management](../frontend/src/components/AdminWorkflowTransitionPage.tsx),
+[Action center](../frontend/src/components/RequestsWorkspace.tsx). Administrators'
+steps are in the Thai guide page
+[เรียงลำดับ Work Status และย้ายตำแหน่งช่องในฟอร์ม](admin-guide-th/status-and-field-order.md).
 
 ## Documentation and design boundary
 

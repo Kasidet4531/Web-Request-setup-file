@@ -51,7 +51,8 @@ non-fitting values per column, which are real data: use it only in your own term
    line/Person or Group→text, Multiple lines→textarea, Number→number, Date and Time→date,
    Choice→radio (3 options or fewer) or select. Every field is optional and exportable except
    `product_type`/`requester_name` (required); the "Remark" and "Source" columns are not used.
-4. **Status catalog** is replaced by the Status options in `Column_Mapping` (names verbatim).
+4. **Status catalog** is replaced by the Status options in `Column_Mapping` (names verbatim),
+   in the workbook's order, which replaces any order an administrator set in Status Management.
    Names that match the former catalog keep their id and kind; others are `open`. Email policies
    are off and `100% -- Completed` is the only PSF Visibility Release trigger.
 5. **Requests.** One per `Data` row, found by header name (whitespace-insensitive, with aliases
