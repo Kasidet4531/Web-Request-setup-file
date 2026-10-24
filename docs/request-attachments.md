@@ -3,7 +3,7 @@
 Implemented in source on 20 October 2026 for issue #78; the Attachment Policy
 route and the picker limits were added on 21 October 2026 for issue #89, and
 folder names were aligned with the SharePoint export the same day for issue
-#97. Source
+#97. Attachment Categories were added on 24 October 2026 for issue #122. Source
 is authoritative; this guide describes the source as of those changes. It is
 not deployment
 evidence: the checks it names ran against disposable databases and a temporary
@@ -111,6 +111,31 @@ Explorer show up the next time the request is opened.
 
 Source: [service](../backend/src/requests/request-attachments.service.ts).
 
+## Attachment Categories
+
+Every Attachment belongs to one **Attachment Category**, worked out from its
+file name each time the list is read
+([ADR 0022](adr/0022-attachment-categories-and-revise-file-copy.md)). Nobody
+chooses it on upload and nothing is stored: files keep their names and stay in
+the request's one folder, so the Imported Requests' existing files and files
+placed on the NAS directly are grouped at once, with no migration.
+
+Letter case is ignored:
+
+| Category | `category` | Rule | Examples |
+| --- | --- | --- | --- |
+| Map Layout File | `map_layout` | The name ends in `.xml`, `.dpl`, `.lay`, `.tpl` or `.mdf` (E142 files included) | `E142_map.XML`, `wafer.dpl`, `PCSF_layout.xml` |
+| FPC Layout File | `fpc_layout` | The name starts with `PCSF` and ends in `.xls`, `.xlsx` or `.xlsm` | `pcsf_ABC.xlsm`, `PCSF ABC.XLS` |
+| Other | `other` | Every other file | `PCSF_ABC.csv`, `notes.xlsx`, `old_PCSF.xlsx`, `wafer.png` |
+
+The Map Layout File test comes first, so `PCSF_layout.xml` is a Map Layout
+File. The extension lists and the `PCSF` prefix are defined once, in
+`attachmentCategory` in the backend, and each item of the Attachments response
+carries its `category`, so every screen groups files by the same rule.
+Changing the lists is a code change (plan Q23).
+
+Source: [rule](../backend/src/requests/attachment-category.ts).
+
 ## Checking existing NAS folders
 
 Before deploying, compare the folders already on the NAS with the names the app
@@ -143,7 +168,7 @@ Source: [check script](../backend/scripts/check-attachment-folders.ts).
 
 | Route | Who |
 | --- | --- |
-| `GET /api/requests/:requestId/attachments` → `{ folderName, canManage, items }` | Anyone who can see the request; Admin also on any Draft (read only) |
+| `GET /api/requests/:requestId/attachments` → `{ folderName, canManage, items }`; each item has `id`, `filename`, `mimeType`, `sizeBytes`, `isImage`, `category`, `uploadedByDisplayName` and `createdAt` | Anyone who can see the request; Admin also on any Draft (read only) |
 | `GET /api/requests/:requestId/attachments/:attachmentId/download` | Same as above |
 | `POST /api/requests/:requestId/attachments` (multipart field `files`, up to 10) | The creator of a Draft; anyone signed in on a submitted request |
 | `DELETE /api/requests/:requestId/attachments/:attachmentId` | Same as upload |
@@ -179,6 +204,16 @@ Source: [controller](../backend/src/requests/request-attachments.controller.ts),
   `PSF Created Information` | `Attachments` | `History`.
 - **Draft Detail and Admin Draft inspection:** the Attachments section sits
   directly below Requester Information.
+- **Groups:** on submitted Request Detail, Draft Detail and Admin Draft
+  inspection, the files are listed under Map Layout File, FPC Layout File and
+  Other, in that order, each heading with its count, for example "Map Layout
+  File (2)". Within a group files keep the list's order (oldest first). An
+  empty group says so ("No Map Layout Files.", "No FPC Layout Files.", "No
+  other files."), so a request with no files shows all three empty groups.
+  The category is the one the server sends; one the screen does not know is
+  shown under Other. Upload, download, preview and delete work in every group
+  as before. New Request's files chosen before the first save are not
+  grouped: they are not Attachments until uploaded.
 - **New Request:** files chosen before the first save are listed as "Not
   uploaded yet" and uploaded right after the Draft is created; the page then
   opens the Draft. If the upload fails, the files stay listed with the error and
@@ -215,6 +250,20 @@ Source: [panel](../frontend/src/components/RequestAttachmentsPanel.tsx),
 [Audit History](../frontend/src/components/GlobalHistoryPage.tsx).
 
 ## Verification
+
+24 October 2026, on the feature branch for issue #122:
+
+- `attachment-category.spec.ts` (Jest) checks the rule against a table of
+  names, including the ticket's examples (`E142_map.XML` Map,
+  `pcsf_ABC.xlsm` FPC, `PCSF_ABC.csv` and `notes.xlsx` Other) and names that
+  only look close (`old_PCSF.xlsx`, `map.xml.pdf`, `layout.dplx`).
+- `npm run test:attachments:postgres` adds a test that the Attachments
+  response gives every file its category, for uploaded files and for files
+  written into the request folder directly, and that the folder's files keep
+  their names.
+- A frontend test checks the three groups, their order, counts and empty
+  messages, and that files in a group still download and offer Delete.
+- Not checked in a browser or against the NAS share.
 
 21 October 2026, on the feature branch for issue #97:
 

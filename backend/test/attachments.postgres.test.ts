@@ -454,6 +454,41 @@ void it('lists files already in, added to or removed from the NAS folder directl
   assert.equal(await rowCount(submitted.id), 1);
 });
 
+void it('gives every Attachment its category by file name, files placed in the NAS folder directly included', async () => {
+  const submitted = await fixture.submit(await fixture.draft());
+  const folder = folderOf(submitted);
+  await fixture.attachments.upload(
+    submitted.id,
+    [file('pcsf_ABC.xlsm'), file('notes.xlsx'), file('wafer.dpl')],
+    ownerA,
+  );
+  // As an Imported Request's files: on the NAS, never uploaded through the web.
+  await writeFile(join(root, folder, 'E142_map.XML'), 'e142');
+  await writeFile(join(root, folder, 'PCSF_ABC.csv'), 'csv');
+
+  const listed = await fixture.attachments.list(submitted.id, requester);
+  assert.deepEqual(
+    listed.items
+      .map((item) => [item.filename, item.category])
+      .sort(([a], [b]) => (a < b ? -1 : 1)),
+    [
+      ['E142_map.XML', 'map_layout'],
+      ['PCSF_ABC.csv', 'other'],
+      ['notes.xlsx', 'other'],
+      ['pcsf_ABC.xlsm', 'fpc_layout'],
+      ['wafer.dpl', 'map_layout'],
+    ],
+  );
+  // Grouping moves nothing: the files keep their names and folder.
+  assert.deepEqual(await filesIn(folder), [
+    'E142_map.XML',
+    'PCSF_ABC.csv',
+    'notes.xlsx',
+    'pcsf_ABC.xlsm',
+    'wafer.dpl',
+  ]);
+});
+
 void it('shares Attachments across roles while Drafts stay private and Admin inspection read-only', async () => {
   const draft = await fixture.draft();
   const [uploaded] = (

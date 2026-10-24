@@ -1,6 +1,6 @@
 # 22. Attachment categories come from file names, and a Revise copies the referenced request's files
 
-Status: accepted (24 October 2026, decided by Fook with the PSF team); not yet implemented.
+Status: accepted (24 October 2026, decided by Fook with the PSF team). Attachment Categories implemented in source on 24 October 2026 (issue #122; see [Request Attachments](../request-attachments.md#attachment-categories)); the Revise file copy is not yet implemented.
 
 The review asked for typed upload slots (PSF, PCSF, E142, layout, focus card, other) and for a referred request's files to come along. Typed slots were too big for the time left, so an Attachment's category is worked out from its name whenever it is shown: a Map Layout File ends in .xml, .dpl, .lay, .tpl or .mdf (E142 files included), an FPC Layout File is an Excel file (.xls, .xlsx, .xlsm) whose name starts with PCSF, ignoring case, and every other file is Other. Files stay in the request's single NAS folder ([ADR 0018](0018-nas-folder-names-follow-the-sharepoint-export.md)).
 
