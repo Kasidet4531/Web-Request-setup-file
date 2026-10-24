@@ -114,6 +114,19 @@ export function extractCanonicalValues(
   return values;
 }
 
+// The request list shows Request For whether or not its field is searchable
+// or exportable, so it is read from the captured form by canonical key alone.
+export function requestForValue(
+  schema: FormSchemaJson | null | undefined,
+  data: RequesterData | null | undefined,
+): string | null {
+  const field = schema?.sections
+    ?.flatMap((section) => section.fields)
+    .find((candidate) => candidate.canonicalKey === 'request_for');
+  if (!field || !data) return null;
+  return serializeCanonicalValue(data[field.fieldKey]) || null;
+}
+
 export interface RequestSearchIndexSource {
   requestId: string;
   requestNo: string;
@@ -154,6 +167,7 @@ export interface RequestSearchIndexItem {
   requester: string | null;
   requesterUserId?: string | null;
   productType: string | null;
+  requestFor: string | null;
   requestDate: string | null;
   dueDate: string | null;
   updatedAt: string;
@@ -216,6 +230,7 @@ interface RequestSearchIndexRow {
   setup_owner: string | null;
   setup_owner_role: string | null;
   product_type: string | null;
+  request_for: string | null;
   request_date: Date | string | null;
   due_date: Date | string | null;
   updated_at: Date | string;
@@ -346,11 +361,12 @@ export class SearchIndexService implements OnModuleInit {
           due_date,
           updated_at,
           setup_owner_user_id,
-          job_file_name
+          job_file_name,
+          request_for
         )
         VALUES (
           $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid,
-          $11, $12, $13, $14::timestamp, $15::timestamp, ($16::timestamptz AT TIME ZONE current_setting('TIMEZONE')), $17::uuid, $18
+          $11, $12, $13, $14::timestamp, $15::timestamp, ($16::timestamptz AT TIME ZONE current_setting('TIMEZONE')), $17::uuid, $18, $19
         )
         ON CONFLICT (request_id)
         DO UPDATE SET
@@ -368,6 +384,7 @@ export class SearchIndexService implements OnModuleInit {
           setup_owner = EXCLUDED.setup_owner,
           setup_owner_role = EXCLUDED.setup_owner_role,
           product_type = EXCLUDED.product_type,
+          request_for = EXCLUDED.request_for,
           request_date = EXCLUDED.request_date,
           due_date = EXCLUDED.due_date,
           updated_at = EXCLUDED.updated_at
@@ -394,6 +411,7 @@ export class SearchIndexService implements OnModuleInit {
         this.serializeDateForQuery(source.updatedAt),
         null,
         this.stringFromCanonical(canonicalValues.job_file_name),
+        this.stringFromCanonical(canonicalValues.request_for),
       ],
     );
   }
@@ -504,6 +522,7 @@ export class SearchIndexService implements OnModuleInit {
         OR reference_psf_name ILIKE ${keywordParam}
         OR ${psfSetupFileNameMatch}
         OR probecard_name ILIKE ${keywordParam}
+        OR requester ILIKE ${keywordParam}
       )`);
     }
 
@@ -669,6 +688,10 @@ export class SearchIndexService implements OnModuleInit {
           requester: row.requester,
           requesterUserId: row.requester_user_id,
           productType: row.product_type,
+          requestFor: requestForValue(
+            row.schema_snapshot_json,
+            row.requester_data_json,
+          ),
           requestDate: this.serializeNullableTimestamp(row.created_at),
           dueDate: this.stringFromCanonical(canonical.due_date),
           updatedAt:
@@ -918,6 +941,7 @@ export class SearchIndexService implements OnModuleInit {
         setup_owner TEXT,
         setup_owner_role TEXT,
         product_type TEXT,
+        request_for TEXT,
         request_date TIMESTAMP,
         due_date TIMESTAMP,
         updated_at TIMESTAMP NOT NULL
@@ -929,6 +953,9 @@ export class SearchIndexService implements OnModuleInit {
     );
     await queryRunner.query(
       `ALTER TABLE psf_request_search_index ADD COLUMN IF NOT EXISTS job_file_name TEXT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE psf_request_search_index ADD COLUMN IF NOT EXISTS request_for TEXT`,
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS idx_psf_request_search_index_setup_owner_user_id ON psf_request_search_index (setup_owner_user_id)`,
@@ -1195,6 +1222,7 @@ export class SearchIndexService implements OnModuleInit {
       requester: row.requester,
       requesterUserId: row.requester_user_id,
       productType: row.product_type,
+      requestFor: row.request_for,
       requestDate: this.serializeNullableTimestamp(row.request_date),
       dueDate: this.serializeNullableTimestamp(row.due_date),
       updatedAt: this.serializeTimestamp(row.updated_at),
