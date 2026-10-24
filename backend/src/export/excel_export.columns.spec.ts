@@ -133,6 +133,37 @@ describe('Excel export columns', () => {
     expect(rows[0]['Added By Admin']).toBe('Added value');
   });
 
+  it('leaves Field Help Text and choice layouts out of the file, which shows the stored answers as before', async () => {
+    const fields = [
+      { fieldKey: 'title', label: 'Target 12NC Desc' },
+      {
+        fieldKey: 'product_type',
+        label: 'Request To',
+        type: 'radio' as const,
+        options: ['Create new PSF', 'Revise from old PSF'],
+      },
+    ];
+    const plain = requesterForm(2, fields);
+    const guided = requesterForm(3, [
+      { ...fields[0], helpText: 'Put NA if not Motion Sensor' },
+      { ...fields[1], helpText: 'Pick one', optionLayout: 'vertical' },
+    ]);
+    const answers = { title: 'Chip A', product_type: 'Create new PSF' };
+
+    const before = await exportSheet(plain, [
+      request('PSF-000001', plain, answers),
+    ]);
+    const after = await exportSheet(guided, [
+      request('PSF-000001', guided, answers),
+    ]);
+
+    expect(after).toEqual(before);
+    expect(after.rows[0]).toMatchObject({
+      'Target 12NC Desc': 'Chip A',
+      'Request To': 'Create new PSF',
+    });
+  });
+
   it('shows NA in every cell without a value, including fields missing from the request form version', async () => {
     const oldForm = requesterForm(1, [
       { fieldKey: 'title' },

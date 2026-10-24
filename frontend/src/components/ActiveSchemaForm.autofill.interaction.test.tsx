@@ -756,6 +756,31 @@ describe('ActiveSchemaForm Autofill highlight', () => {
     })
   })
 
+  it('keeps the Autofill colours and labels on a field with help text and on a vertical choice field, beside the captured help text', async () => {
+    const guidedSchema: FormSchema = structuredClone(highlightSchema)
+    const [section] = guidedSchema.sections
+    section.fields[1].helpText = 'Product name as printed on the traveller.'
+    section.fields.push({ fieldKey: 'package_input', canonicalKey: 'package', label: 'Package', type: 'radio', required: false,
+      options: ['QFN', 'BGA'], optionLayout: 'vertical', helpText: 'Choose the package of the device.' })
+    requestApi.fetchActiveFormSchema.mockResolvedValue({ ...runtimeAutofillActiveSchema, schema: guidedSchema })
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ requesterData: { ...emptyValues, package_input: '' }, schemaSnapshot: guidedSchema }))
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValueOnce({ matched: true, suggestedValues: { product: 'Historical Product', package: 'BGA' } })
+    let page = await loadDraft()
+    change(page, 'reference_psf_input', 'REF-PSF-1')
+    await flushAsyncWork()
+    page = renderDraft()
+
+    expect(shownHighlights(page)).toEqual({ Product: 'auto-filled / Auto-filled', Package: 'auto-filled / Auto-filled' })
+    const rows = renderToStaticMarkup(createElement(DynamicFormRenderer, getFormRenderer(page).props as unknown as DynamicFormRendererProps))
+      .split('<div class="dynamic-form__row ').slice(1)
+    const row = (label: string) => rows.find((candidate) => candidate.includes(`<span>${label}</span>`)) ?? ''
+    expect(row('Product')).toContain('<p class="dynamic-form__help"')
+    expect(row('Product')).toContain('>Product name as printed on the traveller.</p>')
+    expect(row('Package')).toContain('dynamic-form__radio-group--vertical')
+    expect(row('Package')).toContain('>Choose the package of the device.</p>')
+    expect(row('Package')).toContain('checked="" value="BGA"')
+  })
+
   it('reports its highlights to New Request as they change, so they can follow the first save', async () => {
     const onAutofillHighlightsChange = vi.fn()
     const newRequest = { requestId: undefined, onAutofillHighlightsChange }
