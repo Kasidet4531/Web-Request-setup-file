@@ -1,13 +1,17 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PsfRequestResponse, RuntimeAutofillSuggestionsResponse } from '../services/api'
 import type { ActiveFormSchemaResponse, FormSchema } from '../types/forms'
-import { ActiveSchemaForm } from './ActiveSchemaForm'
-import { DynamicFormRenderer } from './DynamicFormRenderer'
+import { ActiveSchemaForm, type ActiveSchemaFormProps } from './ActiveSchemaForm'
+import { handOverAutofillHighlights } from './autofillHighlight'
+import { DynamicFormRenderer, type DynamicFormRendererProps } from './DynamicFormRenderer'
 
 const requestApi = vi.hoisted(() => ({
   fetchActiveFormSchema: vi.fn(),
   fetchPsfRequest: vi.fn(),
   fetchRuntimeAutofillSuggestions: vi.fn(),
+  updateDraftRequesterData: vi.fn(),
 }))
 
 const hookHarness = vi.hoisted(() => {
@@ -260,9 +264,28 @@ function getFormRenderer(page: unknown): RenderedElement {
   return requireRenderedElement(page, (element) => element.type === DynamicFormRenderer)
 }
 
-function renderDraft() {
+/**
+ * Renders the form's rows as the Requester sees them and returns, by field label, each highlighted row's
+ * colour (its row modifier) and text label; plain rows are left out.
+ */
+function shownHighlights(page: unknown): Record<string, string> {
+  const html = renderToStaticMarkup(createElement(
+    DynamicFormRenderer,
+    getFormRenderer(page).props as unknown as DynamicFormRendererProps,
+  ))
+  const shown: Record<string, string> = {}
+  html.split('<div class="dynamic-form__row').slice(1).forEach((row) => {
+    const label = row.match(/<span>([^<]+)<\/span>/)?.[1] ?? ''
+    const colour = row.match(/^ dynamic-form__row--([a-z-]+)"/)?.[1]
+    const text = row.match(/class="dynamic-form__autofill-status"[^>]*>([^<]+)</)?.[1]
+    if (colour || text) shown[label] = `${colour ?? 'no colour'} / ${text ?? 'no label'}`
+  })
+  return shown
+}
+
+function renderDraft(props: Partial<ActiveSchemaFormProps> = {}) {
   hookHarness.beginRender()
-  return ActiveSchemaForm({ mode: 'request', requestId: 'request-1' })
+  return ActiveSchemaForm({ mode: 'request', requestId: 'request-1', ...props })
 }
 
 function renderPreview() {
@@ -274,11 +297,11 @@ async function flushAsyncWork(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
-async function loadDraft() {
-  renderDraft()
+async function loadDraft(props: Partial<ActiveSchemaFormProps> = {}) {
+  renderDraft(props)
   hookHarness.runEffects()
   await flushAsyncWork()
-  return renderDraft()
+  return renderDraft(props)
 }
 
 async function loadPreview() {
@@ -331,6 +354,7 @@ describe('ActiveSchemaForm runtime autofill interactions', () => {
     requestApi.fetchActiveFormSchema.mockReset()
     requestApi.fetchPsfRequest.mockReset()
     requestApi.fetchRuntimeAutofillSuggestions.mockReset()
+    requestApi.updateDraftRequesterData.mockReset()
     requestApi.fetchPsfRequest.mockResolvedValue(buildDraft())
     requestApi.fetchActiveFormSchema.mockResolvedValue(runtimeAutofillActiveSchema)
     requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValue({
@@ -605,5 +629,190 @@ describe('ActiveSchemaForm runtime autofill interactions', () => {
 
     expect(getFormRenderer(page).props.onChange).toBeUndefined()
     expect(requestApi.fetchRuntimeAutofillSuggestions).not.toHaveBeenCalled()
+  })
+})
+
+describe('ActiveSchemaForm Autofill highlight', () => {
+  // Two targets, and a field no rule fills, beside the trigger.
+  const highlightSchema: FormSchema = structuredClone(runtimeAutofillSchema)
+  highlightSchema.sections[0].fields.push(
+    { fieldKey: 'wafer_fab_input', canonicalKey: 'wafer_fab', label: 'Wafer FAB', type: 'text', required: false },
+    { fieldKey: 'remarks_input', canonicalKey: 'remarks', label: 'Remarks', type: 'text', required: false },
+  )
+  const emptyValues = { reference_psf_input: '', product_input: '', wafer_fab_input: '', remarks_input: '' }
+
+  beforeEach(() => {
+    hookHarness.reset()
+    requestApi.fetchActiveFormSchema.mockReset()
+    requestApi.fetchPsfRequest.mockReset()
+    requestApi.fetchRuntimeAutofillSuggestions.mockReset()
+    requestApi.updateDraftRequesterData.mockReset()
+    requestApi.fetchActiveFormSchema.mockResolvedValue({ ...runtimeAutofillActiveSchema, schema: highlightSchema })
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ requesterData: emptyValues, schemaSnapshot: highlightSchema }))
+  })
+
+  function change(page: unknown, fieldKey: string, value: string) {
+    ;(getFormRenderer(page).props.onChange as (key: string, value: string) => void)(fieldKey, value)
+  }
+
+  /** Autofill fills Product and Wafer FAB from REF-PSF-1, then the Requester changes Product. */
+  async function autofillThenEditProduct() {
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValueOnce({
+      matched: true,
+      suggestedValues: { product: 'Historical Product', wafer_fab: 'FAB-1' },
+    })
+    let page = await loadDraft()
+    change(page, 'reference_psf_input', 'REF-PSF-1')
+    await flushAsyncWork()
+    page = renderDraft()
+    expect(shownHighlights(page)).toEqual({
+      Product: 'auto-filled / Auto-filled',
+      'Wafer FAB': 'auto-filled / Auto-filled',
+    })
+    change(page, 'product_input', 'Product chosen by requester')
+    return renderDraft()
+  }
+
+  it('switches a field the Requester edits after Autofill to the edited colour and label, and never colours untouched fields', async () => {
+    const page = await autofillThenEditProduct()
+
+    expect(shownHighlights(page)).toEqual({
+      Product: 'edited-by-user / Edited by user',
+      'Wafer FAB': 'auto-filled / Auto-filled',
+    })
+  })
+
+  it('keeps the highlights when the Draft is saved while the page stays open, and saves only the field values', async () => {
+    let page = await autofillThenEditProduct()
+    const savedValues = {
+      reference_psf_input: 'REF-PSF-1',
+      product_input: 'Product chosen by requester',
+      wafer_fab_input: 'FAB-1',
+      remarks_input: '',
+    }
+    requestApi.updateDraftRequesterData.mockResolvedValueOnce(buildDraft({
+      requesterData: savedValues,
+      schemaSnapshot: highlightSchema,
+      updatedAt: '2026-08-12T00:00:00.000Z',
+    }))
+
+    await (getFormRenderer(page).props.onSubmit as (values: unknown) => Promise<void>)(getFormRenderer(page).props.values)
+    page = renderDraft()
+
+    expect(requestApi.updateDraftRequesterData).toHaveBeenCalledExactlyOnceWith('request-1', {
+      formVersion: 1,
+      expectedUpdatedAt: '2026-08-11T00:00:00.000Z',
+      requesterData: savedValues,
+    })
+    expect(getFormRenderer(page).props.actionFeedback).toEqual({ kind: 'success', message: 'Draft DRAFT-0001 saved.' })
+    expect(getFormRenderer(page).props.values).toEqual(savedValues)
+    expect(shownHighlights(page)).toEqual({
+      Product: 'edited-by-user / Edited by user',
+      'Wafer FAB': 'auto-filled / Auto-filled',
+    })
+  })
+
+  it('shows the saved values with no colour or label when the Draft is reopened after Autofill', async () => {
+    await autofillThenEditProduct()
+    const savedValues = {
+      reference_psf_input: 'REF-PSF-1',
+      product_input: 'Product chosen by requester',
+      wafer_fab_input: 'FAB-1',
+      remarks_input: '',
+    }
+    hookHarness.unmount()
+    hookHarness.reset()
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ requesterData: savedValues, schemaSnapshot: highlightSchema }))
+
+    const page = await loadDraft()
+
+    expect(getFormRenderer(page).props.values).toEqual(savedValues)
+    expect(shownHighlights(page)).toEqual({})
+  })
+
+  it('recolours the fields a later Autofill fills and leaves the others as they were', async () => {
+    let page = await autofillThenEditProduct()
+    change(page, 'wafer_fab_input', '')
+    page = renderDraft()
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValueOnce({
+      matched: true,
+      suggestedValues: { product: 'Second Product', wafer_fab: 'FAB-2', remarks: 'Second remarks' },
+    })
+
+    change(page, 'reference_psf_input', 'REF-PSF-2')
+    await flushAsyncWork()
+    page = renderDraft()
+
+    expect(getFormRenderer(page).props.values).toEqual({
+      reference_psf_input: 'REF-PSF-2',
+      product_input: 'Product chosen by requester',
+      wafer_fab_input: 'FAB-2',
+      remarks_input: 'Second remarks',
+    })
+    expect(shownHighlights(page)).toEqual({
+      Product: 'edited-by-user / Edited by user',
+      'Wafer FAB': 'auto-filled / Auto-filled',
+      Remarks: 'auto-filled / Auto-filled',
+    })
+  })
+
+  it('reports its highlights to New Request as they change, so they can follow the first save', async () => {
+    const onAutofillHighlightsChange = vi.fn()
+    const newRequest = { requestId: undefined, onAutofillHighlightsChange }
+    requestApi.fetchRuntimeAutofillSuggestions.mockResolvedValueOnce({
+      matched: true,
+      suggestedValues: { product: 'Historical Product', wafer_fab: 'FAB-1' },
+    })
+    let page = await loadDraft(newRequest)
+
+    change(page, 'reference_psf_input', 'REF-PSF-1')
+    await flushAsyncWork()
+    page = renderDraft(newRequest)
+    hookHarness.runEffects()
+    expect(onAutofillHighlightsChange).toHaveBeenLastCalledWith({ product_input: 'auto-filled', wafer_fab_input: 'auto-filled' })
+
+    change(page, 'product_input', 'Product chosen by requester')
+    renderDraft(newRequest)
+    hookHarness.runEffects()
+    expect(onAutofillHighlightsChange).toHaveBeenLastCalledWith({ product_input: 'edited-by-user', wafer_fab_input: 'auto-filled' })
+  })
+
+  it('shows the highlights New Request handed to the new Draft on its first load, and plain fields on any later load', async () => {
+    const savedValues = {
+      reference_psf_input: 'REF-PSF-1',
+      product_input: 'Product chosen by requester',
+      wafer_fab_input: 'FAB-1',
+      remarks_input: '',
+    }
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ requesterData: savedValues, schemaSnapshot: highlightSchema }))
+    handOverAutofillHighlights('request-1', { product_input: 'edited-by-user', wafer_fab_input: 'auto-filled' })
+
+    let page = await loadDraft()
+
+    expect(getFormRenderer(page).props.values).toEqual(savedValues)
+    expect(shownHighlights(page)).toEqual({
+      Product: 'edited-by-user / Edited by user',
+      'Wafer FAB': 'auto-filled / Auto-filled',
+    })
+
+    hookHarness.unmount()
+    hookHarness.reset()
+    page = await loadDraft()
+
+    expect(getFormRenderer(page).props.values).toEqual(savedValues)
+    expect(shownHighlights(page)).toEqual({})
+  })
+
+  it('never shows highlights handed to another request, and drops them at the next load', async () => {
+    handOverAutofillHighlights('request-2', { product_input: 'auto-filled' })
+
+    let page = await loadDraft()
+    expect(shownHighlights(page)).toEqual({})
+
+    hookHarness.unmount()
+    hookHarness.reset()
+    requestApi.fetchPsfRequest.mockResolvedValue(buildDraft({ id: 'request-2', requesterData: { ...emptyValues, product_input: 'P' }, schemaSnapshot: highlightSchema }))
+    page = await loadDraft({ requestId: 'request-2' })
+    expect(shownHighlights(page)).toEqual({})
   })
 })

@@ -9,12 +9,17 @@ import {
   createDraftSchemaUpgradeLock,
   DRAFT_STATUS,
   getRequesterAutofillTriggerField,
-  type RuntimeAutofillFieldState,
   type DraftSchemaVersionClassification,
   isDraftSchemaDecisionRequired,
   requesterFieldsAreReadOnly,
   resolveRequestFormSchema,
 } from './activeSchemaFormState'
+import {
+  markAutoFilled,
+  markEditedByUser,
+  takeHandedOverAutofillHighlights,
+  type AutofillHighlights,
+} from './autofillHighlight'
 import {
   ApiError,
   api,
@@ -59,6 +64,8 @@ export interface ActiveSchemaFormProps {
   deleteAction?: ReactNode
   explicitEdit?: boolean
   requesterIdentity?: string
+  /** Reports the open form's Autofill highlights whenever they change (New Request hands them to the Draft it opens). */
+  onAutofillHighlightsChange?: (highlights: AutofillHighlights) => void
   onDirtyChange?: (dirty: boolean) => void
   onDraftSchemaSubmitAllowedChange?: (allowed: boolean) => void
   onRequestSaved?: (request: PsfRequestResponse) => void
@@ -163,7 +170,7 @@ export function DraftSchemaUpgradeDecision({
 
 type DraftSchemaDecision = 'not-needed' | 'remain' | 'unresolved'
 
-export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, deleteAction, explicitEdit = false, requesterIdentity, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, loadedRequest, submissionConflict = 0 }: ActiveSchemaFormProps) {
+export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = false, deleteAction, explicitEdit = false, requesterIdentity, onAutofillHighlightsChange, onDirtyChange, onDraftSchemaSubmitAllowedChange, onRequestSaved, onSavingChange, onSubmissionConflictSettled, loadedRequest, submissionConflict = 0 }: ActiveSchemaFormProps) {
   const savedValuesRef = useRef<DynamicFormValues>({})
   const [activeSchema, setActiveSchema] = useState<ActiveFormSchemaResponse | null>(null)
   const [activeRequestSchema, setActiveRequestSchema] = useState<ActiveFormSchemaResponse | null>(null)
@@ -171,9 +178,9 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   const [draftSchemaDecision, setDraftSchemaDecision] = useState<DraftSchemaDecision>('not-needed')
   const [draftSchemaVersion, setDraftSchemaVersion] = useState<DraftSchemaVersionClassification>('not-applicable')
   const [errors, setErrors] = useState<DynamicFormErrors>({})
-  const [autofillStatuses, setAutofillStatuses] = useState<
-    Partial<Record<string, RuntimeAutofillFieldState>>
-  >({})
+  // Autofill highlights live only in this mounted form: a load starts them empty (or with what New Request
+  // handed to the Draft it just opened) and nothing saves them.
+  const [autofillStatuses, setAutofillStatuses] = useState<AutofillHighlights>({})
   const [autofillError, setAutofillError] = useState<string | null>(null)
   const [autofillLoading, setAutofillLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -229,6 +236,10 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
   }, [onRequestSaved])
 
   useEffect(() => {
+    onAutofillHighlightsChange?.(autofillStatuses)
+  }, [autofillStatuses, onAutofillHighlightsChange])
+
+  useEffect(() => {
     let mounted = true
     autofillLookupGeneration.current += 1
 
@@ -276,7 +287,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
           replaceValues(nextValues)
           setAutofillError(null)
           setAutofillLoading(false)
-          setAutofillStatuses({})
+          setAutofillStatuses(mode === 'request' ? takeHandedOverAutofillHighlights(request.id) : {})
           return
         }
 
@@ -603,13 +614,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
 
     replaceValues(applied.values)
     onDirtyChange?.(JSON.stringify(applied.values) !== JSON.stringify(savedValuesRef.current))
-    setAutofillStatuses((currentStatuses) => {
-      const nextStatuses = { ...currentStatuses }
-      applied.appliedFieldKeys.forEach((fieldKey) => {
-        nextStatuses[fieldKey] = 'auto-filled'
-      })
-      return nextStatuses
-    })
+    setAutofillStatuses((currentStatuses) => markAutoFilled(currentStatuses, applied.appliedFieldKeys))
   }
 
   function updateField(fieldKey: string, value: string) {
@@ -630,11 +635,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       delete nextErrors[fieldKey]
       return nextErrors
     })
-    setAutofillStatuses((currentStatuses) =>
-      currentStatuses[fieldKey] === 'auto-filled'
-        ? { ...currentStatuses, [fieldKey]: 'edited-by-user' }
-        : currentStatuses,
-    )
+    setAutofillStatuses((currentStatuses) => markEditedByUser(currentStatuses, fieldKey))
     setAutofillError(null)
     clearFeedback()
 
@@ -736,7 +737,7 @@ export function ActiveSchemaForm({ mode, headerTitle, requestId, disabled = fals
       savedValuesRef.current = savedValues
       onDirtyChange?.(false)
       setAutofillError(null)
-      setAutofillStatuses({})
+      // The page stays open, so the Autofill highlights stay as they are; the save sends none of them.
       replaceValues(buildRequestValuesForSchema(resolvedSchema.schema, savedRequest.requesterData))
       setEditingInformation(false)
       setSaveFeedback({ kind: 'success', message: savedRequest.status === DRAFT_STATUS ? `Draft ${savedRequest.requestNo} saved.` : 'Requester information saved.' })

@@ -5,6 +5,12 @@ import type {
   FormSchema,
   FormSchemaField,
 } from '../types/forms'
+import {
+  AUTOFILL_HIGHLIGHT_LABELS,
+  autofillHighlightRowClass,
+  type AutofillHighlight,
+  type AutofillHighlights,
+} from './autofillHighlight'
 
 export type {
   DynamicFormErrors,
@@ -13,7 +19,8 @@ export type {
   FormSchemaField,
 } from '../types/forms'
 
-export type DynamicFormFieldStatus = 'auto-filled' | 'edited-by-user'
+/** A field's Autofill highlight (see `autofillHighlight.ts`). */
+export type DynamicFormFieldStatus = AutofillHighlight
 
 /** The latest result of the bar's action (saving, saved, or the error), shown in the bar beside the buttons. */
 export interface DynamicFormActionFeedback {
@@ -30,7 +37,8 @@ export interface DynamicFormRendererProps {
   deleteAction?: ReactNode
   footerActions?: ReactNode
   headerTitle?: string
-  fieldStatuses?: Partial<Record<string, DynamicFormFieldStatus>>
+  /** Autofill highlights of the open form: each colours its field's row beside its text label. */
+  fieldStatuses?: AutofillHighlights
   schema: FormSchema
   values?: DynamicFormValues
   errors?: DynamicFormErrors
@@ -193,7 +201,7 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
   const labelsGroup = !readOnly && field.type === 'radio'
 
   return (
-    <div className="dynamic-form__row">
+    <div className={fieldStatus ? `dynamic-form__row ${autofillHighlightRowClass(fieldStatus)}` : 'dynamic-form__row'}>
       {labelsGroup ? <span className="dynamic-form__label" id={labelId}>{label}</span>
         : <label className="dynamic-form__label" htmlFor={fieldId} id={labelId}>{label}</label>}
       <div className="dynamic-form__control">
@@ -214,7 +222,7 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
         {error ? <p className="ui-error" id={errorId}>{error}</p> : null}
         {fieldStatus ? (
           <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
-            {fieldStatus === 'auto-filled' ? 'Auto-filled' : 'Edited by user'}
+            {AUTOFILL_HIGHLIGHT_LABELS[fieldStatus]}
           </p>
         ) : null}
       </div>

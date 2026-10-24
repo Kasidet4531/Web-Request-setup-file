@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
 import type { FormControlType, FormSchemaDraft, FormSchemaField } from '../types/forms'
+import { readTargetPosition } from './targetPosition'
 
 const FIELD_TYPE_LABELS: Record<FormControlType, string> = {
   text: 'Short text', textarea: 'Long text', number: 'Number', date: 'Date', select: 'Dropdown', radio: 'Multiple choice',
@@ -14,10 +16,26 @@ interface AdminFormConfigEditorProps {
 }
 
 export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onChange, onEditField }: AdminFormConfigEditorProps) {
+  // Typed "move to position" values by field key, and the one refused value's message.
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({})
+  const [positionError, setPositionError] = useState<{ fieldKey: string; message: string } | null>(null)
+
   function edit(update: (draft: FormSchemaDraft) => void) {
     const next = structuredClone(schema)
     update(next)
     onChange(next)
+  }
+
+  function moveFieldToPosition(sectionIndex: number, fieldIndex: number, fieldKey: string) {
+    const fields = schema.sections[sectionIndex].fields
+    const typed = readTargetPosition(positionDrafts[fieldKey] ?? String(fieldIndex + 1), fields.length)
+    if ('error' in typed) {
+      setPositionError({ fieldKey, message: typed.error })
+      return
+    }
+    setPositionError(null)
+    setPositionDrafts(Object.fromEntries(Object.entries(positionDrafts).filter(([key]) => key !== fieldKey)))
+    if (typed.position !== fieldIndex + 1) edit((draft) => move(draft.sections[sectionIndex].fields, fieldIndex, typed.position - 1))
   }
 
   function addField(sectionIndex: number, trigger: HTMLButtonElement) {
@@ -97,7 +115,15 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
                   <button aria-label={`Edit ${field.label || field.fieldKey}`} className="secondary-button" disabled={disabled} onClick={(event) => onEditField(index, fieldIndex, field, event.currentTarget)} type="button">Edit</button>
                   <button aria-label={`Move ${field.label || field.fieldKey} up`} className="secondary-button" disabled={disabled || fieldIndex === 0} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex - 1))} type="button"><ArrowUp aria-hidden="true" size={16} /></button>
                   <button aria-label={`Move ${field.label || field.fieldKey} down`} className="secondary-button" disabled={disabled || fieldIndex === section.fields.length - 1} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex + 1))} type="button"><ArrowDown aria-hidden="true" size={16} /></button>
+                  <form className="admin-form-config__position" noValidate onSubmit={(event) => { event.preventDefault(); moveFieldToPosition(index, fieldIndex, field.fieldKey) }}>
+                    <input aria-describedby={positionError?.fieldKey === field.fieldKey ? `form-config-position-${field.fieldKey}-error` : undefined} aria-invalid={positionError?.fieldKey === field.fieldKey} aria-label={`Position of ${field.label || field.fieldKey}`} disabled={disabled} inputMode="numeric" max={section.fields.length} min={1} onChange={(event) => {
+                      setPositionDrafts({ ...positionDrafts, [field.fieldKey]: event.target.value })
+                      if (positionError?.fieldKey === field.fieldKey) setPositionError(null)
+                    }} step={1} type="number" value={positionDrafts[field.fieldKey] ?? String(fieldIndex + 1)} />
+                    <button aria-label={`Move ${field.label || field.fieldKey} to position`} className="secondary-button" disabled={disabled} type="submit">Move</button>
+                  </form>
                 </div>
+                {positionError?.fieldKey === field.fieldKey ? <p className="dynamic-form__error admin-form-config__position-error" id={`form-config-position-${field.fieldKey}-error`} role="alert">{positionError.message}</p> : null}
               </div>
             ))}
           </div>
