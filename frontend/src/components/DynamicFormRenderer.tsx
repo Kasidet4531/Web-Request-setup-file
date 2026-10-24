@@ -190,7 +190,10 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
   const labelId = `${fieldId}-label`
   const errorId = `${fieldId}-error`
   const fieldStatusId = `${fieldId}-autofill-status`
-  const describedBy = [error ? errorId : null, fieldStatus ? fieldStatusId : null]
+  const helpId = `${fieldId}-help`
+  // Help text guides filling the field in, so a read-only value does not repeat it.
+  const helpText = !readOnly && typeof field.helpText === 'string' ? field.helpText.trim() : ''
+  const describedBy = [helpText ? helpId : null, error ? errorId : null, fieldStatus ? fieldStatusId : null]
     .filter((id): id is string => id !== null)
     .join(' ') || undefined
   const label = <>
@@ -219,6 +222,7 @@ function FieldRow({ errors, field, fieldStatus, onChange, readOnly, value }: Fie
           readOnly={readOnly}
           value={value}
         />}
+        {helpText ? <p className="dynamic-form__help" id={helpId}>{helpText}</p> : null}
         {error ? <p className="ui-error" id={errorId}>{error}</p> : null}
         {fieldStatus ? (
           <p className="dynamic-form__autofill-status" id={fieldStatusId} role="status">
@@ -280,7 +284,9 @@ function FieldInput({ describedBy, error, field, fieldId, labelId, onChange, rea
   if (field.type === 'radio') {
     return (
       <div aria-describedby={describedBy} aria-invalid={error || undefined} aria-labelledby={labelId}
-        aria-required={field.required || undefined} className="dynamic-form__radio-group" role="radiogroup">
+        aria-required={field.required || undefined}
+        className={field.optionLayout === 'vertical' ? 'dynamic-form__radio-group dynamic-form__radio-group--vertical' : 'dynamic-form__radio-group'}
+        role="radiogroup">
         {options.map((option, index) => (
           <label className={`dynamic-form__radio-option${value === option ? ' dynamic-form__radio-option--selected' : ''}`} key={option}>
             <input

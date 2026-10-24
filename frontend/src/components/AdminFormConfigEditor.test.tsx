@@ -199,6 +199,92 @@ describe('visual form configuration editor', () => {
   })
 })
 
+describe('Field Help Text and choice layout in the field dialog', () => {
+  const nameField = schema.sections[0].fields[0]
+  const requestTo: FormSchemaField = { fieldKey: 'product_type', canonicalKey: 'product_type', label: 'Request To', type: 'radio', required: true, options: ['Create new PSF', 'Revise from old PSF'] }
+  const helpTextArea = (tree: unknown) => find(tree, (element) => element.type === 'textarea' && element.props.id === 'form-config-field-help-text')
+  const layoutChoice = (tree: unknown, value: string) => find(tree, (element) => element.type === 'input' && element.props.name === 'form-config-field-option-layout' && element.props.value === value)
+  const type = (tree: unknown, value: string) => (helpTextArea(tree).props.onChange as (event: unknown) => void)({ target: { value } })
+
+  it("edits a field's help text, keeping its other properties, and drops it when cleared", () => {
+    const onChange = vi.fn()
+    type(fieldEditor(nameField, onChange), 'Put NA if not Motion Sensor')
+    const withHelp = onChange.mock.calls[0][0] as FormSchemaField
+    expect(withHelp).toEqual({ ...nameField, helpText: 'Put NA if not Motion Sensor' })
+
+    const html = renderToStaticMarkup(fieldEditor(withHelp))
+    expect(html).toContain('>Put NA if not Motion Sensor</textarea>')
+    expect(html).toContain('maxLength="500"')
+
+    type(fieldEditor(withHelp, onChange), '')
+    expect(onChange.mock.calls[1][0]).toEqual(nameField)
+    expect(Object.hasOwn(onChange.mock.calls[1][0] as object, 'helpText')).toBe(false)
+  })
+
+  it('refuses help text over 500 characters with a message and keeps Apply disabled', () => {
+    const tree = fieldEditor({ ...nameField, helpText: 'x'.repeat(501) })
+    const area = helpTextArea(tree)
+
+    expect(area.props['aria-invalid']).toBe(true)
+    const error = find(tree, (element) => element.props.id === 'form-config-field-help-text-error')
+    expect(error.props.children).toBe('Help text must be 500 characters or fewer.')
+    expect(String(area.props['aria-describedby']).split(' ')).toContain('form-config-field-help-text-error')
+    expect(find(tree, (element) => element.type === 'button' && element.props.type === 'submit').props.disabled).toBe(true)
+    expect(find(fieldEditor({ ...nameField, helpText: 'x'.repeat(500) }), (element) => element.type === 'button' && element.props.type === 'submit').props.disabled).toBe(false)
+  })
+
+  it('offers a horizontal or vertical layout for a Multiple choice field, horizontal by default', () => {
+    const onChange = vi.fn()
+    const tree = fieldEditor(requestTo, onChange)
+    expect(layoutChoice(tree, 'horizontal').props.checked).toBe(true)
+    expect(layoutChoice(tree, 'vertical').props.checked).toBe(false)
+    expect(renderToStaticMarkup(tree)).toContain('<legend>Choice layout</legend>')
+
+    ;(layoutChoice(tree, 'vertical').props.onChange as () => void)()
+    const vertical = onChange.mock.calls[0][0] as FormSchemaField
+    expect(vertical).toEqual({ ...requestTo, optionLayout: 'vertical' })
+    expect(layoutChoice(fieldEditor(vertical), 'vertical').props.checked).toBe(true)
+
+    ;(layoutChoice(fieldEditor(vertical, onChange), 'horizontal').props.onChange as () => void)()
+    expect(onChange.mock.calls[1][0]).toEqual(requestTo)
+  })
+
+  it('offers no choice layout for other field types and drops it when a field stops being Multiple choice', () => {
+    for (const field of [nameField, schema.sections[0].fields[1]]) expect(renderToStaticMarkup(fieldEditor(field))).not.toContain('Choice layout')
+
+    const onChange = vi.fn()
+    const tree = fieldEditor({ ...requestTo, optionLayout: 'vertical' }, onChange)
+    ;(find(tree, (element) => element.type === 'select' && element.props.id === 'form-config-field-type').props.onChange as (event: unknown) => void)({ target: { value: 'select' } })
+    expect(onChange.mock.calls[0][0]).toEqual({ ...requestTo, type: 'select' })
+  })
+
+  it('shows help text and a vertical layout in the field list and the read-only view', () => {
+    const configured: FormSchemaDraft = { ...schema, sections: [{ ...schema.sections[0], fields: [
+      { ...requestTo, optionLayout: 'vertical', helpText: 'Revise from old PSF copies files.' },
+      { ...nameField, helpText: 'Put NA if not Motion Sensor' },
+    ] }] }
+
+    const list = renderToStaticMarkup(editor(configured))
+    expect(list).toContain('Multiple choice · Required · Vertical · Help text')
+    expect(list).toContain('Short text · Required · Help text')
+    const view = renderToStaticMarkup(<AdminFormConfigEditor schema={configured} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
+    expect(view).toContain('Choice layout: Vertical')
+    expect(view).toContain('Help text: Revise from old PSF copies files.')
+    expect(view).toContain('Help text: Put NA if not Motion Sensor')
+    const plain = renderToStaticMarkup(<AdminFormConfigEditor schema={schema} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)
+    expect(plain).not.toMatch(/Help text|Choice layout/)
+  })
+
+  it('keeps the editor usable when the schema JSON holds help text that is not text', () => {
+    const odd = { ...nameField, helpText: 7 } as unknown as FormSchemaField
+    const draft: FormSchemaDraft = { ...schema, sections: [{ ...schema.sections[0], fields: [odd] }] }
+
+    expect(renderToStaticMarkup(editor(draft))).toContain('Short text · Required</span>')
+    expect(renderToStaticMarkup(<AdminFormConfigEditor schema={draft} disabled={false} readOnly onChange={vi.fn()} onEditField={vi.fn()} />)).not.toContain('Help text')
+    expect(helpTextArea(fieldEditor(odd)).props.value).toBe('')
+  })
+})
+
 describe('moving a field to a typed position', () => {
   const field = (key: string) => ({ fieldKey: key, canonicalKey: key, label: key.toUpperCase(), type: 'text' as const, required: false })
   const fourFields: FormSchemaDraft = {
