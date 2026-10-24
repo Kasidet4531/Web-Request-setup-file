@@ -70,6 +70,27 @@ export function toggleAdminAutofillRuleDraftTarget(
   }
 }
 
+/**
+ * Select all: ticks every field that can be a target (every field but the trigger), as ticking each
+ * unticked one by hand would: fields already ticked keep their place and the rest follow in form order.
+ */
+export function selectAllAdminAutofillRuleDraftTargets(
+  draft: AdminAutofillRuleDraft,
+  targetCanonicalKeys: readonly string[],
+): AdminAutofillRuleDraft {
+  return targetCanonicalKeys.reduce(
+    (current, targetCanonicalKey) => toggleAdminAutofillRuleDraftTarget(current, targetCanonicalKey, true),
+    draft,
+  )
+}
+
+/** Clear all: unticks every target, including targets the active form no longer has. */
+export function clearAdminAutofillRuleDraftTargets(
+  draft: AdminAutofillRuleDraft,
+): AdminAutofillRuleDraft {
+  return { ...draft, targetCanonicalKeys: [] }
+}
+
 export function canSaveAdminAutofillRuleDraft(
   draft: AdminAutofillRuleDraft,
 ): boolean {

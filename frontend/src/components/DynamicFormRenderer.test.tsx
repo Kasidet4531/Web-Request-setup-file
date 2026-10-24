@@ -183,6 +183,23 @@ describe('DynamicFormRenderer rows', () => {
     expect(editable[4]).toMatch(/role="status">Edited by user<\/p>/)
     expect(editable.filter((row) => row.includes('role="status"'))).toHaveLength(2)
   })
+
+  it('colours an auto-filled row and a row edited after Autofill differently, beside their labels, and leaves other rows plain', () => {
+    const fieldStatuses = { title: 'auto-filled', priority: 'edited-by-user' } as const
+    for (const readOnly of [false, true]) {
+      const rows = rowsOf(renderToStaticMarkup(<DynamicFormRenderer schema={allTypesSchema} showSchemaHeader={false}
+        fieldStatuses={fieldStatuses} readOnly={readOnly} onChange={() => undefined} />))
+      const rowClass = (row: string) => row.match(/^<div class="([^"]+)"/)?.[1].split(' ')
+      expect(rowClass(rows[1])).toEqual(['dynamic-form__row', 'dynamic-form__row--auto-filled'])
+      expect(rows[1]).toContain('Auto-filled')
+      expect(rowClass(rows[4])).toEqual(['dynamic-form__row', 'dynamic-form__row--edited-by-user'])
+      expect(rows[4]).toContain('Edited by user')
+      for (const index of [0, 2, 3, 5]) {
+        expect(rowClass(rows[index])).toEqual(['dynamic-form__row'])
+        expect(rows[index]).not.toMatch(/Auto-filled|Edited by user/)
+      }
+    }
+  })
 })
 
 describe('DynamicFormRenderer', () => {

@@ -8,8 +8,6 @@ import type {
 
 export const DRAFT_STATUS = 'Draft'
 
-export type RuntimeAutofillFieldState = 'auto-filled' | 'edited-by-user'
-
 export interface ApplyRuntimeAutofillSuggestionsInput {
   currentEditVersions: Record<string, number | undefined>
   currentValues: DynamicFormValues

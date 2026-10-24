@@ -11,6 +11,7 @@ import { requesterFieldsAreReadOnly } from './activeSchemaFormState'
 import { ApiError, type PsfRequestResponse } from '../services/api'
 import { DynamicFormRenderer } from './DynamicFormRenderer'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { takeHandedOverAutofillHighlights, type AutofillHighlights } from './autofillHighlight'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { AsyncNotice } from './ui/AsyncNotice'
 import { HistoryChanges } from './ui/HistoryChanges'
@@ -1147,6 +1148,37 @@ describe('Request dirty navigation protection (blocker wiring, not mounted Route
     expect(navigation.blocker?.enableBeforeUnload).toBe(false)
     expect(navigation.blocker?.shouldBlockFn(location)).toBe(false)
     expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('hands the form\'s current Autofill highlights to the Draft page it opens after the first save', () => {
+    takeHandedOverAutofillHighlights('') // nothing left over from an earlier test
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const form = requireRenderedElement(render(), (element) => element.type === ActiveSchemaForm)
+    const reportHighlights = form.props.onAutofillHighlightsChange as (highlights: AutofillHighlights) => void
+    reportHighlights({ product: 'auto-filled', wafer_fab: 'auto-filled' })
+    reportHighlights({ product: 'edited-by-user', wafer_fab: 'auto-filled' })
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(false)
+    render()
+    requestDetailHookHarness.runEffects()
+
+    expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+    expect(takeHandedOverAutofillHighlights('request-1')).toEqual({ product: 'edited-by-user', wafer_fab: 'auto-filled' })
+  })
+
+  it('hands no Autofill highlights over while the saved Draft stays on New Request', () => {
+    takeHandedOverAutofillHighlights('')
+    const render = () => { requestDetailHookHarness.beginRender(); return RequestsWorkspace.RequestCreatePage() }
+    const form = requireRenderedElement(render(), (element) => element.type === ActiveSchemaForm)
+    ;(form.props.onAutofillHighlightsChange as (highlights: AutofillHighlights) => void)({ product: 'auto-filled' })
+    ;(form.props.onRequestSaved as (request: PsfRequestResponse) => void)(buildDraftRequest())
+    // The Requester typed again after the save, so the page stays on New Request.
+    ;(form.props.onDirtyChange as (dirty: boolean) => void)(true)
+    render()
+    requestDetailHookHarness.runEffects()
+
+    expect(navigation.navigate).not.toHaveBeenCalled()
+    expect(takeHandedOverAutofillHighlights('request-1')).toEqual({})
   })
 
   it('guards requester OR PSF edits, leaves values intact on cancel, and stops guarding after separate saves', async () => {
