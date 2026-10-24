@@ -2481,8 +2481,8 @@ describe('Request To team Dashboard', () => {
 })
 
 describe('Request Attachments', () => {
-  const image = { id: 'image-id', filename: 'wafer.png', mimeType: 'image/png', sizeBytes: 2048, isImage: true, uploadedByDisplayName: 'Fook', createdAt: '2026-10-20T01:00:00.000Z' }
-  const layout = { id: 'layout-id', filename: 'layout.dpl', mimeType: 'application/octet-stream', sizeBytes: 12, isImage: false, uploadedByDisplayName: null, createdAt: '2026-10-19T01:00:00.000Z' }
+  const image = { id: 'image-id', filename: 'wafer.png', mimeType: 'image/png', sizeBytes: 2048, isImage: true, category: 'other', uploadedByDisplayName: 'Fook', createdAt: '2026-10-20T01:00:00.000Z' }
+  const layout = { id: 'layout-id', filename: 'layout.dpl', mimeType: 'application/octet-stream', sizeBytes: 12, isImage: false, category: 'map_layout', uploadedByDisplayName: null, createdAt: '2026-10-19T01:00:00.000Z' }
 
   beforeEach(() => {
     requestDetailHookHarness.reset()
@@ -2638,6 +2638,52 @@ describe('Request Attachments', () => {
     requestDetailHookHarness.runEffects()
     expect(requestDetailApi.uploadRequestAttachments).toHaveBeenCalledTimes(2)
     expect(navigation.navigate).toHaveBeenCalledExactlyOnceWith({ to: '/requests/$requestId', params: { requestId: 'request-1' } })
+  })
+
+  /** Text a reader sees in a rendered element tree, component props aside. */
+  function renderedText(node: unknown): string {
+    if (typeof node === 'string' || typeof node === 'number') return String(node)
+    if (Array.isArray(node)) return node.map(renderedText).join('')
+    if (node && typeof node === 'object' && 'props' in node) return renderedText((node.props as { children?: unknown }).children)
+    return ''
+  }
+
+  /** Each group of the panel: a region named by its heading, with its files or the line saying it is empty. */
+  function attachmentGroups(panel: unknown) {
+    const headings = new Map(findAllRenderedElements(panel, (element) => element.type === 'h3').map((heading) => [heading.props.id, renderedText(heading)]))
+    return findAllRenderedElements(panel, (element) => element.type === 'section' && headings.has(element.props['aria-labelledby'])).map((group) => ({
+      heading: headings.get(group.props['aria-labelledby']),
+      files: findAllRenderedElements(group, (element) => element.type === 'li').map((item) => renderedText(requireRenderedElement(item, (element) => element.props.className === 'request-attachments__name')).trim()),
+      empty: findRenderedElement(group, (element) => element.type === 'p') ? renderedText(findRenderedElement(group, (element) => element.type === 'p')) : null,
+    }))
+  }
+
+  it('groups Attachments into Map Layout File, FPC Layout File and Other by the category the server gives each file', async () => {
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [
+      { ...layout, id: 'notes-id', filename: 'notes.xlsx', category: 'other' },
+      { ...layout, id: 'e142-id', filename: 'E142_map.XML', category: 'map_layout' },
+      image,
+      layout,
+    ] })
+    let panel = await loadPanel()
+    expect(attachmentGroups(panel)).toEqual([
+      { heading: 'Map Layout File (2)', files: ['E142_map.XML', 'layout.dpl'], empty: null },
+      { heading: 'FPC Layout File (0)', files: [], empty: 'No FPC Layout Files.' },
+      { heading: 'Other (2)', files: ['notes.xlsx', 'wafer.png'], empty: null },
+    ])
+
+    // Files still download, preview and delete from inside their group.
+    expect(requireRenderedElement(panel, (element) => element.type === 'a' && element.props.download === 'E142_map.XML').props.href).toBe('/api/requests/request-1/attachments/e142-id/download')
+    expect(findRenderedElement(panel, (element) => element.props['aria-label'] === 'Delete notes.xlsx')).not.toBeNull()
+
+    requestDetailHookHarness.reset()
+    requestDetailApi.fetchRequestAttachments.mockResolvedValue({ folderName: 'Chip A_5571', canManage: true, items: [] })
+    panel = await loadPanel()
+    expect(attachmentGroups(panel)).toEqual([
+      { heading: 'Map Layout File (0)', files: [], empty: 'No Map Layout Files.' },
+      { heading: 'FPC Layout File (0)', files: [], empty: 'No FPC Layout Files.' },
+      { heading: 'Other (0)', files: [], empty: 'No other files.' },
+    ])
   })
 
   it('opens image attachments in a preview modal and downloads other files directly', async () => {
