@@ -15,6 +15,7 @@ import { DraftDeleteDialog } from './DraftDeleteDialog'
 import { RequestAttachmentsPanel, StagedAttachmentsPanel } from './RequestAttachmentsPanel'
 import { productTypeLabel } from './productTypeLabel'
 import { ActiveSchemaForm } from './ActiveSchemaForm'
+import { handOverAutofillHighlights, type AutofillHighlights } from './autofillHighlight'
 import { DynamicFormRenderer, type DynamicFormActionFeedback } from './DynamicFormRenderer'
 import { PageHeader } from './ui/PageHeader'
 import { AsyncNotice } from './ui/AsyncNotice'
@@ -792,8 +793,13 @@ export function RequestCreatePage() {
   const shouldBlockExit = useCallback(({ current, next }: { current: { pathname: string }; next: { pathname: string } }) =>
     unsaved && current.pathname !== next.pathname, [unsaved])
   const blocker = useBlocker({ shouldBlockFn: shouldBlockExit, enableBeforeUnload: unsaved, withResolver: true })
+  // The form's current Autofill highlights, handed to the Draft page this page opens after the first save.
+  const autofillHighlights = useRef<AutofillHighlights>({})
+  const rememberAutofillHighlights = useCallback((highlights: AutofillHighlights) => { autofillHighlights.current = highlights }, [])
   useEffect(() => {
-    if (savedRequest && !unsaved && !stagedUpload.pending) void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
+    if (!savedRequest || unsaved || stagedUpload.pending) return
+    handOverAutofillHighlights(savedRequest.id, autofillHighlights.current)
+    void navigate({ to: '/requests/$requestId', params: { requestId: savedRequest.id } })
   }, [navigate, savedRequest, stagedUpload.pending, unsaved])
 
   async function uploadStagedFiles(request: PsfRequestResponse) {
@@ -825,7 +831,7 @@ export function RequestCreatePage() {
   return (
     <article className="workflow-page request-create-page">
       <PageHeader title="New Request" description="Save a private draft, then review and submit from its detail page." />
-      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
+      <ActiveSchemaForm headerTitle="Requester Information" mode="request" requesterIdentity={requesterIdentity} onAutofillHighlightsChange={rememberAutofillHighlights} onDirtyChange={setDirty} onRequestSaved={acceptSavedRequest} />
       <StagedAttachmentsPanel files={stagedFiles} disabled={stagedUpload.pending} error={stagedUpload.error} onChange={setStagedFiles} />
       {stagedUpload.pending ? <AsyncNotice kind="loading" title="Uploading attachments…" /> : null}
       {savedRequest && stagedUpload.error && stagedFiles.length > 0 ? <button className="btn-primary" type="button" onClick={() => void uploadStagedFiles(savedRequest)}>Retry attachment upload</button> : null}

@@ -9,7 +9,8 @@ Issue #114 (parent spec #111, plan items 16 and 29):
   rules are in [`autofillHighlight.ts`](../../frontend/src/components/autofillHighlight.ts),
   the row class in [`DynamicFormRenderer.tsx`](../../frontend/src/components/DynamicFormRenderer.tsx)
   and the colour tokens in [`index.css`](../../frontend/src/index.css). A Draft save no
-  longer clears the highlight; loading a request still starts plain.
+  longer clears the highlight, and New Request's first save hands it in memory to the Draft
+  page it opens (first load only); any other load of a request starts plain.
 - Auto-fill Rules' Fill target fields gain Select all, Clear all and "N of M fields selected".
 
 Environment: branch `impl/114` with the integration branch merged at `b705b25`; Node 22.22.0;
@@ -77,10 +78,24 @@ Controls keep their own background, so the text inside them keeps its usual cont
 plain rows, and at 375px wide the page has no horizontal scroll. The Auto-fill Rules count text
 measures 5.65:1 (light) and 7.75:1 (dark) against the dialog.
 
+### New Request first save
+
+Added after review: a second scratch script (not committed) opened New Request, typed a Title
+and `REF-HL-2` in Reference PSF Name (Product, Wafer FAB and Probecard Name auto-filled), changed
+Wafer FAB and pressed Save draft request.
+
+| Step | Result |
+| --- | --- |
+| Redirect to the new Draft's page | Product and Probecard Name Auto-filled, Wafer FAB Edited by user, Title plain: the same as on New Request |
+| `window.history.state` on the Draft page | Router keys only; no highlight |
+| Reload the page | Saved values; every row plain |
+| Open the Dashboard, then the Draft again | Saved values; every row plain |
+
+Component tests cover the same: New Request hands the form's latest highlights over only when it
+redirects (`RequestsWorkspace.test.tsx`), and the Draft form shows them on its first load only,
+never for another request (`ActiveSchemaForm.autofill.interaction.test.tsx`).
+
 ## Not checked
 
-The first save from New Request was not driven in the browser. In the source, New Request opens
-the new Draft's page after that save, and that page loads the request, which starts with no
-highlight (the remount test above).
 No screen reader was used; the badges are the existing `role="status"` labels referenced by
 each control's `aria-describedby`.
