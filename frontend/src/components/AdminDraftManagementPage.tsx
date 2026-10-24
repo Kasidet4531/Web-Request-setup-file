@@ -36,7 +36,7 @@ export function AdminDraftTable({
           <tr>
             <th scope="col">Draft</th>
             <th scope="col">Creator</th>
-            <th scope="col">Product Type</th>
+            <th scope="col">Request To</th>
             <th scope="col">Created / Updated</th>
             <th scope="col">Reminder status</th>
             <th scope="col"><span className="sr-only">Actions</span></th>
@@ -68,7 +68,7 @@ export function AdminDraftTable({
                 </Link>
               </td>
               <td data-label="Creator">{item.requester ?? '—'}</td>
-              <td data-label="Product Type">{productTypeLabel(item.productType)}</td>
+              <td data-label="Request To">{productTypeLabel(item.productType)}</td>
               <td data-label="Created / Updated">
                 <span>{formatHistoryDateTime(item.createdAt)}</span><br />
                 <span>{formatHistoryDateTime(item.updatedAt)}</span>
@@ -176,7 +176,7 @@ export function AdminDraftManagementPage() {
             Keyword
             <input
               value={filters.keyword}
-              placeholder="Draft number or title…"
+              placeholder="Draft number or Target 12NC Desc…"
               onChange={event => setFilters(current => ({ ...current, keyword: event.target.value }))}
             />
           </label>

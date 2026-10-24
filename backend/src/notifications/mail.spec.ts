@@ -308,7 +308,7 @@ describe('mail safety and SOAP', () => {
       '[PSF Request] New Request: PSF-1 - Captured title',
     );
     expect(result.html).toContain('2026-10-08');
-    expect(rows(result.html)).toContainEqual(['Product Type', 'IC']);
+    expect(rows(result.html)).toContainEqual(['Request To', 'IC']);
   });
 
   it('has no Priority row, even when the request captured a priority', () => {
@@ -321,36 +321,53 @@ describe('mail safety and SOAP', () => {
     expect(result.html).not.toContain('Urgent');
   });
 
-  it('labels the title row Product Description, as the request tables do', () => {
+  it('labels the title row Target 12NC Desc, as the request tables do', () => {
     const result = renderRequestEmail(
       statusChange(),
       importedFormRequest(),
       'http://localhost:3000',
     );
-    expect(rows(result.html)).toContainEqual(['Product Description', 'Chip A']);
+    expect(rows(result.html)).toContainEqual(['Target 12NC Desc', 'Chip A']);
     expect(rowLabels(result.html)).not.toContain('Title');
+    expect(rowLabels(result.html)).not.toContain('Product Description');
   });
 
-  it('shows Product Type without its document hint, as the request tables do', () => {
+  it('keeps the summary rows in their order under the Request To and Target 12NC Desc names', () => {
     const result = renderRequestEmail(
       statusChange(),
       importedFormRequest(),
       'http://localhost:3000',
     );
-    expect(rows(result.html)).toContainEqual([
-      'Product Type',
-      'Create new PSF',
+    expect(rowLabels(result.html)).toEqual([
+      'Request No',
+      'Target 12NC Desc',
+      'Requester',
+      'Request To',
+      'Due Date',
+      'Previous Status',
+      'New Status',
+      'Updated By',
     ]);
+    expect(result.html).not.toContain('Product Type');
   });
 
-  it('shows a Product Type the request tables do not recognise as stored', () => {
+  it('shows Request To without its document hint, as the request tables do', () => {
+    const result = renderRequestEmail(
+      statusChange(),
+      importedFormRequest(),
+      'http://localhost:3000',
+    );
+    expect(rows(result.html)).toContainEqual(['Request To', 'Create new PSF']);
+  });
+
+  it('shows a Request To value the request tables do not recognise as stored', () => {
     const result = renderRequestEmail(
       statusChange(),
       importedFormRequest({ product_type: 'Legacy line (B2)' }),
       'http://localhost:3000',
     );
     expect(rows(result.html)).toContainEqual([
-      'Product Type',
+      'Request To',
       'Legacy line (B2)',
     ]);
   });
@@ -391,7 +408,7 @@ describe('mail safety and SOAP', () => {
       expect(labelStyle).toContain('text-align:left');
   });
 
-  it('highlights Product Description and Product Type in green', () => {
+  it('highlights Target 12NC Desc and Request To in green', () => {
     const { html } = renderRequestEmail(
       statusChange(),
       importedFormRequest(),
@@ -403,8 +420,8 @@ describe('mail safety and SOAP', () => {
         valueStyle.includes('background-color:#C6EFCE'),
     );
     expect(green.map(({ label }) => label)).toEqual([
-      'Product Description',
-      'Product Type',
+      'Target 12NC Desc',
+      'Request To',
     ]);
   });
 

@@ -962,6 +962,12 @@ describe('Queue filtering and retained results', () => {
     expect(findRenderedElement(page, element => element.type === 'option' && element.props.children === 'Legacy Transfer -- pending')).not.toBeNull()
   })
 
+  it.each([true, false])('says Search covers Target 12NC Desc, the name the tables use (dashboard=%s)', async (dashboard) => {
+    render(dashboard); const page = await settle(dashboard)
+    const help = requireRenderedElement(page, element => element.type === 'p' && element.props.className === 'filter-help')
+    expect(help.props.children).toBe('Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.')
+  })
+
   it('selecting a Dashboard Status clears its work-state card while preserving Team and Search', async () => {
     requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'actor-1', role: 'setup_owner', setupOwnerDepartment: 'GNTC' } })
     render(true); let page = await settle(true)
@@ -2422,7 +2428,7 @@ describe('Draft detail deletion access', () => {
  })
 })
 
-describe('Product Type team Dashboard', () => {
+describe('Request To team Dashboard', () => {
  beforeEach(() => { requestDetailHookHarness.reset(); requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({ statuses: ['Submitted'] }); requestDetailApi.queryPsfRequests.mockResolvedValue({ items: [], total: 0, limit: 25, offset: 0, summary: { open: 0, overdue: 0, completed: 0 } }) })
  it.each(['GNTC', 'MFG'] as const)('defaults to %s account team and permits all shared work', async setupOwnerDepartment => {
   requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner', role: 'setup_owner', setupOwnerDepartment } })
@@ -2434,7 +2440,27 @@ describe('Product Type team Dashboard', () => {
   ;(select.props.onChange as (event: unknown) => void)({ target: { value: 'all' } })
   requestDetailHookHarness.beginRender(); page = RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
   expect(requestDetailApi.queryPsfRequests.mock.lastCall?.[0]).toMatchObject({ team: 'all', offset: 0 })
-  expect(JSON.stringify(page)).toContain('รอระบุ Product Type')
+  expect(JSON.stringify(page)).toContain('รอระบุ Request To')
+ })
+
+ it('names the Request To values in the Team options and still filters by the same teams', async () => {
+  requestDetailApi.fetchCurrentUser.mockResolvedValue({ user: { id: 'owner', role: 'setup_owner', setupOwnerDepartment: 'GNTC' } })
+  requestDetailHookHarness.beginRender(); RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+  requestDetailHookHarness.beginRender(); let page = RequestsWorkspace.DashboardPage()
+  const select = requireRenderedElement(page, element => element.type === 'select' && element.props['aria-label'] === 'Team')
+  const options = (select.props.children as Array<{ props: { value: string; children: string } }>).map(option => [option.props.value, option.props.children])
+  expect(options).toEqual([
+   ['all', 'All shared work'],
+   ['GNTC', 'GNTC — Create new PSF'],
+   ['MFG', 'MFG — Revise from old PSF / Product Transfer'],
+   ['unclassified', 'รอระบุ Request To'],
+  ])
+  for (const team of ['MFG', 'unclassified', 'GNTC']) {
+   const current = requireRenderedElement(page, element => element.type === 'select' && element.props['aria-label'] === 'Team')
+   ;(current.props.onChange as (event: unknown) => void)({ target: { value: team } })
+   requestDetailHookHarness.beginRender(); page = RequestsWorkspace.DashboardPage(); requestDetailHookHarness.runEffects(); await flushRequestDetailAsyncWork()
+   expect(requestDetailApi.queryPsfRequests.mock.lastCall?.[0]).toMatchObject({ team, offset: 0 })
+  }
  })
 
  it('displays Modified By alongside Requester in RequestHeaderSummary when modified_by is present', () => {
