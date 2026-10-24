@@ -217,7 +217,7 @@ test(
     await expect(page.locator('.request-results tbody tr')).toHaveCount(1);
     await expect(
       page.getByText(
-        'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.',
+        'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.',
         { exact: true },
       ),
     ).toBeVisible();

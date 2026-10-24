@@ -21,7 +21,7 @@ A request to create or update a PSF Setup File.
 _Avoid_: File Request, Setup Request
 
 **Requester**:
-A user role providing request information. Every authenticated role may create a PSF Request; the stored requester is its creator, not a later editor. All authenticated actors may edit shared requester information, while Draft editing remains creator-only.
+A user role providing request information. Every authenticated role may create a PSF Request; the stored requester is its creator, not a later editor. All authenticated actors may edit shared requester information, while Draft editing remains creator-only. Keyword search on Requests and Dashboard matches any part of the stored Requester name, ignoring case (24 October 2026).
 _Avoid_: Requester Role, Applicant
 
 **Setup File Owner**:
@@ -34,6 +34,9 @@ Shared PSF Requests available to a Setup File Owner, optionally filtered by the 
 **Request To**:
 The request classification stored under the `product_type` key: the first field of the requester form. After the **Initial Data Load** it is labelled "Request To", with the options **Create new PSF**, **Revise from old PSF** and **Product Transfer**, each followed by its required-document hint (decided 8 October 2026 and loaded into the configured database that day with `--lenient`); the built-in seed form still labels it Product Type with the options **New Product**, **Transfer Product** and **Existing Product**. Administrators may change the active form. It is stored in the search index and shown, shortened without its hint, in the Request To column of the request tables, in Draft Management and in request emails. Since 24 October 2026 every label written in code says Request To; before, they said Product Type (its own column since 21 October 2026; before that, under the title). Form field labels come from the Form Schema. XLSX places metadata columns before requester-form fields; Request To is not its first column.
 _Avoid_: Product Type, type of product, product category
+
+**Request For**:
+The requester-form field with canonical key `request_for`, which the Initial Data Load creates from the workbook's "Request For" column; it tells engineering work from production. Since 24 October 2026 the Requests and Dashboard tables show it in its own column right after Request To, read from the request's captured form whatever the field's searchable or exportable flags; a form without a field of that canonical key leaves the column blank. My Drafts and Draft Management do not show it.
 
 
 

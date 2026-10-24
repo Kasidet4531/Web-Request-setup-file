@@ -962,10 +962,10 @@ describe('Queue filtering and retained results', () => {
     expect(findRenderedElement(page, element => element.type === 'option' && element.props.children === 'Legacy Transfer -- pending')).not.toBeNull()
   })
 
-  it.each([true, false])('says Search covers Target 12NC Desc, the name the tables use (dashboard=%s)', async (dashboard) => {
+  it.each([true, false])('says Search covers Target 12NC Desc and the Requester name (dashboard=%s)', async (dashboard) => {
     render(dashboard); const page = await settle(dashboard)
     const help = requireRenderedElement(page, element => element.type === 'p' && element.props.className === 'filter-help')
-    expect(help.props.children).toBe('Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.')
+    expect(help.props.children).toBe('Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.')
   })
 
   it('selecting a Dashboard Status clears its work-state card while preserving Team and Search', async () => {
@@ -2379,7 +2379,7 @@ describe('Private draft table presentation', () => {
     const row = { requestId: 'draft-uuid', requestNo: 'PSF-DRAFT-9', title: 'Probe revision',
       referencePsfName: null, psfSetupFileName: null, jobFileName: null, probecardName: null, status: 'Draft',
       priority: 'Normal', requester: 'Engineer',
-      productType: 'New Product', requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
+      productType: 'New Product', requestFor: null, requestDate: null, dueDate: null, updatedAt: '2026-10-05T04:00:00Z' }
     const onOpenItem = vi.fn()
     const onDeleteItem = vi.fn()
     const rendered = RequestsWorkspace.RequestsTable({ items: [row], drafts: true, onOpenItem, onDeleteItem })

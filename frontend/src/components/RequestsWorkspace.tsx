@@ -366,6 +366,7 @@ export function RequestsTable({
             <th scope="col">Request No.</th>
             <th scope="col">Request To</th>
             {drafts ? <th scope="col">Updated</th> : <>
+              <th scope="col">Request For</th>
               <th scope="col">Status</th>
               <th scope="col">PSF Setup File Name</th>
               <th scope="col">Job File Name</th>
@@ -398,6 +399,7 @@ export function RequestsTable({
               </td>
               <td data-label="Request To">{productTypeLabel(item.productType)}</td>
               {drafts ? <td data-label="Updated">{formatDateTime(item.updatedAt)}</td> : <>
+                <td data-label="Request For">{item.requestFor || '—'}</td>
                 <td data-label="Status"><StatusLabel kind={statusKinds[item.status]} status={item.status} /></td>
                 <td data-label="PSF Setup File Name">{item.psfSetupFileName || '—'}</td>
                 <td data-label="Job File Name">{item.jobFileName || '—'}</td>
@@ -570,7 +572,7 @@ export function DashboardPage() {
         <label>Status<select disabled={catalog.loading || Boolean(catalog.error)} value={status} onChange={(event) => { setStatus(event.target.value); if (event.target.value) setWorkState('all'); setOffset(0) }}><option value="">All statuses</option>{catalog.data.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <button className="btn-secondary" disabled={!hasActiveFilters} onClick={resetFilters} type="button"><RotateCcw size={14} /> Clear filters</button>
       </div>
-      <p className="filter-help" id="dashboard-search-help">Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.</p>
+      <p className="filter-help" id="dashboard-search-help">Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.</p>
       {hasResults ? <div className="request-results" inert={pending} aria-busy={pending} style={pagedMinHeight(state.data.total, state.data.limit, ROW_PX.dashboard)}>
         <RequestsTable statusKinds={catalog.statusKinds} items={state.data.items} emptyTitle={hasActiveFilters ? 'No requests match these filters' : 'No related open requests'} emptyDescription={hasActiveFilters ? 'Try another keyword or status, or clear the filters.' : 'Your related work queue has no open requests.'} onClearFilters={hasActiveFilters ? resetFilters : undefined} onOpenItem={(requestId) => void navigate({ to: '/requests/$requestId', params: { requestId } })} />
       </div> : null}
@@ -733,7 +735,7 @@ export function RequestsListPage({ scope = 'all' }: { scope?: 'all' | 'my-drafts
 
         <p className="filter-help" id="request-search-help">{scope === 'my-drafts'
           ? 'Searches request no. and all requester information.'
-          : 'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name and probecard name.'}</p>
+          : 'Searches request no., Target 12NC Desc, reference PSF name, PSF setup file name, probecard name and Requester name.'}</p>
         </QueueFilterPanel>
         <div className="queue-surface request-browser__results">
         {scope === 'all' && catalog.loading ? <p role="status">Loading status catalog…</p> : null}
