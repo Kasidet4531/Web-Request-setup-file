@@ -86,6 +86,10 @@ _Avoid_: Form layout, form template
 A sequential integer within one Form Schema family: `psf-request` or `psf-created-information`. Requester draft schema upgrades remain explicit. A request's PSF schema snapshot is captured at creation and is not upgraded by publishing either family or by upgrading its requester schema. Historical rendering and export resolve each request's stored descriptor, with fixed-schema compatibility for legacy PSF records.
 _Avoid_: Version number, revision
 
+**Field Help Text**:
+Guidance an administrator sets per form field in Form Management (`helpText`, plain text of at most 500 characters), shown in smaller text under the field's control wherever the form is filled in and announced with the control; a read-only value does not repeat it. It is part of the Form Version, so requests show the help text of the form they captured, and it never changes stored answers or the Excel export. A Multiple choice field may likewise be laid out Vertical (one option per line) instead of the default Horizontal (`optionLayout`). Built 24 October 2026 (issue #116); see [current implementation](docs/current-implementation.md) and the Thai admin guide page [ข้อความช่วยใต้ช่อง และการเรียงตัวเลือกแนวตั้ง](docs/admin-guide-th/field-help-text-and-vertical-choices.md).
+_Avoid_: Hint, tooltip, description
+
 **Attachment**:
 An external file linked to a PSF Request (e.g. PCSF, E142, `.dpl`, `.lay`, specification sheets or images), kept under its original name in the request's NAS folder `[Target 12NC Desc]_[ID]`, named as the SharePoint export named the Imported Requests' folders, and shared by every role that can see the request. Files placed in that folder directly on the NAS are Attachments too, except system files such as those Windows or the SharePoint export leave there. Implemented 20 October 2026; folder naming settled 21 October 2026 ([ADR 0018](docs/adr/0018-nas-folder-names-follow-the-sharepoint-export.md)). See [Request Attachments](docs/request-attachments.md).
 _Avoid_: File upload, document
@@ -183,5 +187,5 @@ Fook's fix plan for the 22 October review settled these terms and decisions. The
 - **Due Date**, **Team Capacity**, **Team Queue**, **Due Date Postponement** and **Overdue**: the system sets Due Date at submission ([ADR 0021](docs/adr/0021-system-sets-due-date-from-team-capacity.md)).
 - **Status Reminder**: a repeating email while a request stays in a Work Status, off by default.
 - **Reference PSF** and **Revise Change Type**: Autofill only for Revise from old PSF with a one-time file copy ([ADR 0022](docs/adr/0022-attachment-categories-and-revise-file-copy.md)). **Attachment Category**, **Map Layout File** and **FPC Layout File** were built on 24 October 2026; see the Attachment Category entry above.
-- **Field Help Text**: guidance under a form field.
+- **Field Help Text**: guidance under a form field. Built in source on 24 October 2026 with the vertical choice layout (issue #116); see the entry above.
 - Go-live loads the final MIS export into an empty database once ([ADR 0023](docs/adr/0023-go-live-from-an-empty-database.md)).
