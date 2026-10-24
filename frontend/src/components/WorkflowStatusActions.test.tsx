@@ -46,3 +46,38 @@ describe('Workflow status guidance', () => {
     expect(renderActions({ saving: true })).not.toContain('Choose a different status')
   })
 })
+
+describe('Status dropdown order', () => {
+  const optionOrder = (markup: string) => [...markup.matchAll(/<option value="([^"]*)"/g)].map((match) => match[1])
+
+  it('lists the statuses in catalog order, with the current status in its own place', () => {
+    const markup = renderActions({
+      allowedNextStatuses: ['Third work', 'First work'],
+      currentStatus: 'Second work',
+      selectedStatus: 'Second work',
+      catalogOrder: ['Draft', 'Third work', 'Second work', 'First work'],
+    })
+    expect(optionOrder(markup)).toEqual(['Third work', 'Second work', 'First work'])
+  })
+
+  it('keeps Draft first while a Draft is submitted', () => {
+    const markup = renderActions({
+      allowedNextStatuses: ['Second work', 'First work'],
+      currentStatus: 'Draft',
+      selectedStatus: 'Draft',
+      isDraft: true,
+      catalogOrder: ['Draft', 'Second work', 'First work'],
+    })
+    expect(optionOrder(markup)).toEqual(['Draft', 'Second work', 'First work'])
+  })
+
+  it('keeps a current status that is no longer in the catalog first', () => {
+    const markup = renderActions({
+      allowedNextStatuses: ['Second work', 'First work'],
+      currentStatus: 'Imported status',
+      selectedStatus: 'Imported status',
+      catalogOrder: ['Draft', 'Second work', 'First work'],
+    })
+    expect(optionOrder(markup)).toEqual(['Imported status', 'Second work', 'First work'])
+  })
+})

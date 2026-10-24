@@ -68,15 +68,21 @@
 
 /* Keep status names and actions readable as the catalog gains PSF access. */
 .admin-workflow-transition .admin-workflow-transition__table table {
-  min-width: 1040px;
+  min-width: 1180px;
 }
 
-.admin-workflow-transition .admin-workflow-transition__table th:first-child { width: 32%; }
-.admin-workflow-transition .admin-workflow-transition__table th:nth-child(2) { width: 12%; }
-.admin-workflow-transition .admin-workflow-transition__table th:nth-child(3) { width: 8%; }
-.admin-workflow-transition .admin-workflow-transition__table th:nth-child(4) { width: 15%; }
+.admin-workflow-transition .admin-workflow-transition__table th:first-child { width: 13%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(2) { width: 28%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(3) { width: 10%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(4) { width: 7%; }
 .admin-workflow-transition .admin-workflow-transition__table th:nth-child(5) { width: 13%; }
-.admin-workflow-transition .admin-workflow-transition__table th:nth-child(6) { width: 20%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(6) { width: 11%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(7) { width: 18%; }
+
+/* Type a position, then Move (or Enter); a refused value is explained below. */
+.admin-workflow-transition__position { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-workflow-transition__position input { width: 4.5rem; }
+.admin-workflow-transition__position-error { flex-basis: 100%; color: var(--destructive); font-size: 12px; line-height: 18px; }
 
 .admin-workflow-transition .admin-workflow-transition__email-error {
   color: var(--destructive);

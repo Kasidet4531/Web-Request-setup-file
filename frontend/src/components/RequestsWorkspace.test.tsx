@@ -2801,3 +2801,38 @@ describe('Request Attachments', () => {
     expect(findRenderedElement(panel, (element) => element.props.download === 'layout.dpl')).not.toBeNull()
   })
 })
+
+describe('Action center Status order', () => {
+  beforeEach(() => {
+    requestDetailApi.fetchPsfRequest.mockReset()
+    requestDetailApi.fetchPsfRequestHistory.mockReset()
+    requestDetailApi.fetchPsfRequestStatusOptions.mockReset()
+    requestDetailApi.fetchWorkflowStatuses.mockReset()
+    requestDetailHookHarness.reset()
+  })
+
+  it("lists the request's Status choices in the catalog order an administrator set", async () => {
+    requestDetailApi.fetchPsfRequest.mockResolvedValue(buildSubmittedRequest())
+    requestDetailApi.fetchPsfRequestHistory.mockResolvedValue([])
+    requestDetailApi.fetchPsfRequestStatusOptions.mockResolvedValue({ allowedNextStatuses: ['Setup In Progress', 'Completed'] })
+    requestDetailApi.fetchWorkflowStatuses.mockResolvedValue({
+      statuses: ['Completed', 'Submitted', 'Setup In Progress'],
+      entries: [
+        { id: 'draft', name: 'Draft', kind: 'draft' },
+        { id: 'completed', name: 'Completed', kind: 'completed' },
+        { id: 'submitted', name: 'Submitted', kind: 'open' },
+        { id: 'setup', name: 'Setup In Progress', kind: 'open' },
+      ],
+      psfVisibilityTriggerId: null,
+      updatedAt: '2026-10-24T00:00:00.000000Z',
+    })
+
+    renderRequestDetailShell()
+    requestDetailHookHarness.runEffects()
+    await flushRequestDetailAsyncWork()
+    const actions = requireRenderedElement(renderRequestDetailShell(), (element) => element.type === WorkflowStatusActions)
+    const markup = renderToStaticMarkup(createElement(WorkflowStatusActions, actions.props as unknown as Parameters<typeof WorkflowStatusActions>[0]))
+
+    expect([...markup.matchAll(/<option value="([^"]*)"/g)].map((match) => match[1])).toEqual(['Completed', 'Submitted', 'Setup In Progress'])
+  })
+})

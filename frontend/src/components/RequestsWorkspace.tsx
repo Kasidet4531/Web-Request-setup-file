@@ -150,6 +150,8 @@ export interface WorkflowStatusActionsProps {
   selectedStatus: string
   isDraft?: boolean
   disabledReason?: string | null
+  /** Status names in catalog order (Draft first); the dropdown follows it. */
+  catalogOrder?: readonly string[]
 }
 
 export function WorkflowStatusActions({
@@ -161,8 +163,11 @@ export function WorkflowStatusActions({
   selectedStatus,
   isDraft = false,
   disabledReason = null,
+  catalogOrder = [],
 }: WorkflowStatusActionsProps) {
+  // A current status outside the catalog (an Imported Request's) ranks -1 and stays first.
   const options = [currentStatus, ...allowedNextStatuses.filter((status) => status !== currentStatus)]
+    .sort((a, b) => catalogOrder.indexOf(a) - catalogOrder.indexOf(b))
   const canUpdate = selectedStatus !== currentStatus && allowedNextStatuses.includes(selectedStatus)
   const guidance = disabledReason ?? (!saving && !canUpdate
     ? options.length === 1
@@ -875,9 +880,14 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
   const [psfEditing, setPsfEditing] = useState(false)
   const [psfSaveFeedback, setPsfSaveFeedback] = useState<DynamicFormActionFeedback>()
   const [statusKinds, setStatusKinds] = useState<Record<string, WorkflowStatusKind>>({})
+  const [catalogOrder, setCatalogOrder] = useState<string[]>([])
   useEffect(() => {
     let active = true
-    void Promise.resolve(api.fetchWorkflowStatuses()).then((configuration) => { if (active) setStatusKinds(Object.fromEntries((configuration?.entries ?? []).map((entry) => [entry.name, entry.kind]))) }).catch(() => { /* Unknown catalog kinds remain neutral. */ })
+    void Promise.resolve(api.fetchWorkflowStatuses()).then((configuration) => {
+      if (!active) return
+      setStatusKinds(Object.fromEntries((configuration?.entries ?? []).map((entry) => [entry.name, entry.kind])))
+      setCatalogOrder((configuration?.entries ?? []).map((entry) => entry.name))
+    }).catch(() => { /* Unknown catalog kinds remain neutral and the Status choices keep their listed order. */ })
     return () => { active = false }
   }, [loadAttempt])
 
@@ -1151,6 +1161,7 @@ export function RequestDetailShell({ requestId, onIdentityResolved }: { requestI
                   selectedStatus={status}
                   isDraft={request.status === 'Draft'}
                   disabledReason={disabledReason}
+                  catalogOrder={catalogOrder}
                 />
               </div>
             </section>

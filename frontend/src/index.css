@@ -287,6 +287,10 @@ html:has(.dynamic-form__actions) { scroll-padding-bottom: var(--action-bar-clear
 .admin-form-config__item { padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
 .admin-form-config__item-summary { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .admin-form-config__item-summary span { font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+/* "Move to position": type a number, then Move (or Enter); a refused value is explained under the row. */
+.admin-form-config__position { display: flex; align-items: center; gap: 8px; }
+.admin-form-config__position input { width: 4.5rem; }
+.admin-form-config__position-error { flex-basis: 100%; }
 .admin-form-config__options { padding-top: 12px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
 .admin-form-config__options legend { font-weight: 500; font-size: 12px; }
 .admin-form-config__toggle, .admin-workflow-transition__checkbox { display: flex; align-items: center; gap: 8px; font-size: 12px; min-height: 28px; }

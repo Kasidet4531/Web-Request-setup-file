@@ -1,7 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { FormSchemaDraft, FormSchemaField } from '../types/forms'
 import { AdminFormConfigEditor, AdminFormConfigFieldEditor } from './AdminFormConfigEditor'
+
+// The editor keeps typed positions in local state; these tests call it as a
+// function, so useState is replaced by a minimal per-render store.
+const hooks = vi.hoisted(() => ({
+  states: [] as unknown[],
+  index: 0,
+  begin() { this.index = 0 },
+  reset() { this.states = []; this.index = 0 },
+  useState(initial: unknown) {
+    const index = this.index++
+    if (index === this.states.length) this.states.push(initial)
+    return [this.states[index], (next: unknown) => { this.states[index] = next }]
+  },
+}))
+vi.mock('react', async (load) => ({ ...(await load<typeof import('react')>()), useState: hooks.useState.bind(hooks) }))
+beforeEach(() => hooks.reset())
 
 interface ElementNode { type: unknown; props: Record<string, unknown> }
 function find(node: unknown, match: (element: ElementNode) => boolean): ElementNode {
@@ -26,7 +42,7 @@ const schema: FormSchemaDraft = {
   }],
 }
 const onEditField = vi.fn()
-const editor = (draft = schema, onChange = vi.fn()) => AdminFormConfigEditor({ schema: draft, disabled: false, onChange, onEditField })
+const editor = (draft = schema, onChange = vi.fn()) => { hooks.begin(); return AdminFormConfigEditor({ schema: draft, disabled: false, onChange, onEditField }) }
 const fieldEditor = (field: FormSchemaField, onChange = vi.fn()) => AdminFormConfigFieldEditor({
   field, isNew: false, canRemove: true, onChange, onApply: vi.fn(), onCancel: vi.fn(), onRemove: vi.fn(),
 })
@@ -180,5 +196,53 @@ describe('visual form configuration editor', () => {
     tree = editor(moved, onChange)
     ;(find(tree, (element) => element.type === 'button' && element.props['aria-label'] === 'Remove New section').props.onClick as () => void)()
     expect((onChange.mock.calls[2][0] as FormSchemaDraft).sections).toEqual(schema.sections)
+  })
+})
+
+describe('moving a field to a typed position', () => {
+  const field = (key: string) => ({ fieldKey: key, canonicalKey: key, label: key.toUpperCase(), type: 'text' as const, required: false })
+  const fourFields: FormSchemaDraft = {
+    formKey: 'psf-request', title: 'PSF Request Form',
+    sections: [
+      { sectionKey: 'first', title: 'First', fields: [field('a'), field('b'), field('c'), field('d')] },
+      { sectionKey: 'second', title: 'Second', fields: [field('e'), field('f')] },
+    ],
+  }
+  function submitPosition(draft: FormSchemaDraft, onChange: Parameters<typeof editor>[1], label: string, value: string) {
+    ;(find(editor(draft, onChange), (element) => element.props['aria-label'] === `Position of ${label}`).props.onChange as (event: unknown) => void)({ target: { value } })
+    const form = find(editor(draft, onChange), (element) => element.type === 'form' && (() => { try { find(element.props.children, (child) => child.props['aria-label'] === `Position of ${label}`); return true } catch { return false } })())
+    ;(form.props.onSubmit as (event: unknown) => void)({ preventDefault() {} })
+  }
+
+  it('moves the field there in one step and shifts the others, keeping their keys', () => {
+    const onChange = vi.fn()
+    expect(find(editor(fourFields, onChange), (element) => element.props['aria-label'] === 'Position of D').props.value).toBe('4')
+
+    submitPosition(fourFields, onChange, 'D', '2')
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const moved = onChange.mock.calls[0][0] as FormSchemaDraft
+    expect(moved.sections[0].fields.map((item) => item.fieldKey)).toEqual(['a', 'd', 'b', 'c'])
+    expect(moved.sections[1]).toEqual(fourFields.sections[1])
+  })
+
+  it.each(['0', '5', '1.5', '', 'two'])('refuses position %j with a message and moves nothing', (value) => {
+    const onChange = vi.fn()
+
+    submitPosition(fourFields, onChange, 'B', value)
+
+    expect(onChange).not.toHaveBeenCalled()
+    const tree = editor(fourFields, onChange)
+    expect(find(tree, (element) => element.props.role === 'alert').props.children).toBe('Enter a whole number from 1 to 4.')
+    expect(find(tree, (element) => element.props['aria-label'] === 'Position of B').props['aria-invalid']).toBe(true)
+  })
+
+  it("counts positions within the field's own section", () => {
+    const onChange = vi.fn()
+
+    submitPosition(fourFields, onChange, 'E', '3')
+
+    expect(onChange).not.toHaveBeenCalled()
+    expect(find(editor(fourFields, onChange), (element) => element.props.role === 'alert').props.children).toBe('Enter a whole number from 1 to 2.')
   })
 })

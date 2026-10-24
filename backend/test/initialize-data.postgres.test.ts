@@ -393,3 +393,32 @@ void it('lenient mode blanks non-fitting values and skips unusable rows', async 
   assert.equal(rows[0].requester_data_json.diameter_inch, '');
   assert.equal(rows[1].psf_created_data_json.touch_down_per_wafer, '');
 });
+
+void it("sets the Work Status order to the workbook's Status options, replacing an administrator's order", async () => {
+  const db2 = {
+    query: (sql: string, args?: unknown[]) => db.query(sql, args),
+  } as unknown as PoolClient;
+  await initialize(db2, await fakeWorkbook());
+  const loaded = await fixture.workflow.getConfiguration();
+  const cancel = loaded.entries.find(
+    (entry) => entry.name === '0% -- Rejected (Cancel Request)',
+  );
+  assert.ok(cancel);
+  const arranged = await fixture.workflow.applyOperation(
+    {
+      action: 'move',
+      id: cancel.id,
+      position: 1,
+      expectedUpdatedAt: loaded.updatedAt,
+    },
+    admin,
+  );
+  assert.notDeepEqual(arranged.statuses, STATUSES.slice(1));
+
+  await initialize(db2, await fakeWorkbook());
+
+  assert.deepEqual(
+    (await fixture.workflow.getConfiguration()).statuses,
+    STATUSES.slice(1),
+  );
+});
