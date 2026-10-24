@@ -112,6 +112,9 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
                   <span>{!field.label.trim() || field.options?.some((option) => !option.trim()) ? 'Needs attention' : `${FIELD_TYPE_LABELS[field.type]} · ${field.required ? 'Required' : 'Optional'}`}</span>
                 </div>
                 <div className="admin-form-config__controls">
+                  <button aria-label={`Edit ${field.label || field.fieldKey}`} className="secondary-button" disabled={disabled} onClick={(event) => onEditField(index, fieldIndex, field, event.currentTarget)} type="button">Edit</button>
+                  <button aria-label={`Move ${field.label || field.fieldKey} up`} className="secondary-button" disabled={disabled || fieldIndex === 0} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex - 1))} type="button"><ArrowUp aria-hidden="true" size={16} /></button>
+                  <button aria-label={`Move ${field.label || field.fieldKey} down`} className="secondary-button" disabled={disabled || fieldIndex === section.fields.length - 1} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex + 1))} type="button"><ArrowDown aria-hidden="true" size={16} /></button>
                   <form className="admin-form-config__position" noValidate onSubmit={(event) => { event.preventDefault(); moveFieldToPosition(index, fieldIndex, field.fieldKey) }}>
                     <input aria-describedby={positionError?.fieldKey === field.fieldKey ? `form-config-position-${field.fieldKey}-error` : undefined} aria-invalid={positionError?.fieldKey === field.fieldKey} aria-label={`Position of ${field.label || field.fieldKey}`} disabled={disabled} inputMode="numeric" max={section.fields.length} min={1} onChange={(event) => {
                       setPositionDrafts({ ...positionDrafts, [field.fieldKey]: event.target.value })
@@ -119,9 +122,6 @@ export function AdminFormConfigEditor({ schema, disabled, readOnly = false, onCh
                     }} step={1} type="number" value={positionDrafts[field.fieldKey] ?? String(fieldIndex + 1)} />
                     <button aria-label={`Move ${field.label || field.fieldKey} to position`} className="secondary-button" disabled={disabled} type="submit">Move</button>
                   </form>
-                  <button aria-label={`Edit ${field.label || field.fieldKey}`} className="secondary-button" disabled={disabled} onClick={(event) => onEditField(index, fieldIndex, field, event.currentTarget)} type="button">Edit</button>
-                  <button aria-label={`Move ${field.label || field.fieldKey} up`} className="secondary-button" disabled={disabled || fieldIndex === 0} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex - 1))} type="button"><ArrowUp aria-hidden="true" size={16} /></button>
-                  <button aria-label={`Move ${field.label || field.fieldKey} down`} className="secondary-button" disabled={disabled || fieldIndex === section.fields.length - 1} onClick={() => edit((draft) => move(draft.sections[index].fields, fieldIndex, fieldIndex + 1))} type="button"><ArrowDown aria-hidden="true" size={16} /></button>
                 </div>
                 {positionError?.fieldKey === field.fieldKey ? <p className="dynamic-form__error admin-form-config__position-error" id={`form-config-position-${field.fieldKey}-error`} role="alert">{positionError.message}</p> : null}
               </div>

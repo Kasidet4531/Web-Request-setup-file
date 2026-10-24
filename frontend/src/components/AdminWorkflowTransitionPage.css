@@ -70,9 +70,11 @@
 .admin-workflow-transition .admin-workflow-transition__table table {
   min-width: 1180px;
 }
+/* Contain the visually hidden Actions heading, which would otherwise widen the page on phones. */
+.admin-workflow-transition .admin-workflow-transition__table { position: relative; }
 
-.admin-workflow-transition .admin-workflow-transition__table th:first-child { width: 13%; }
-.admin-workflow-transition .admin-workflow-transition__table th:nth-child(2) { width: 28%; }
+.admin-workflow-transition .admin-workflow-transition__table th:first-child { width: 15%; }
+.admin-workflow-transition .admin-workflow-transition__table th:nth-child(2) { width: 26%; }
 .admin-workflow-transition .admin-workflow-transition__table th:nth-child(3) { width: 10%; }
 .admin-workflow-transition .admin-workflow-transition__table th:nth-child(4) { width: 7%; }
 .admin-workflow-transition .admin-workflow-transition__table th:nth-child(5) { width: 13%; }
@@ -80,9 +82,10 @@
 .admin-workflow-transition .admin-workflow-transition__table th:nth-child(7) { width: 18%; }
 
 /* Type a position, then Move (or Enter); a refused value is explained below. */
-.admin-workflow-transition__position { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.admin-workflow-transition__position input { width: 4.5rem; }
-.admin-workflow-transition__position-error { flex-basis: 100%; color: var(--destructive); font-size: 12px; line-height: 18px; }
+.admin-workflow-transition__position { display: grid; grid-template-columns: auto auto; justify-content: start; justify-items: start; align-items: center; gap: 8px; }
+.admin-workflow-transition__position input { width: 4rem; }
+/* Wraps within the input and button instead of widening the column. */
+.admin-workflow-transition__position-error { grid-column: 1 / -1; width: 0; min-width: 100%; color: var(--destructive); font-size: 12px; line-height: 18px; }
 
 .admin-workflow-transition .admin-workflow-transition__email-error {
   color: var(--destructive);
