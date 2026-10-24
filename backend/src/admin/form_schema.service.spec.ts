@@ -1204,4 +1204,117 @@ describe('FormSchemaService', () => {
     ).rejects.toBe(updateFailure);
     expect(transactionClient.release).toHaveBeenCalledTimes(1);
   });
+
+  describe('Field Help Text and choice layout', () => {
+    // The draft's Product Type (radio), Requester Name and Title (text) fields with extra properties.
+    const draftSchema = (
+      extra: Partial<
+        Record<'product_type' | 'title', Record<string, unknown>>
+      > = {},
+    ): FormSchemaJson => {
+      const schema = makeValidSchema(2, 'PSF Request Form v2');
+      schema.sections[0].fields = schema.sections[0].fields.map((field) => ({
+        ...field,
+        ...(extra[field.fieldKey as 'product_type' | 'title'] ?? {}),
+      }));
+      return schema;
+    };
+    const saveDraft = (schema: FormSchemaJson) => {
+      configureTransaction((query, values) => {
+        if (query.includes('FOR UPDATE'))
+          return { rows: [makeRow(1, 'active'), makeRow(2, 'draft')] };
+        if (query.includes('SET title = $1'))
+          return {
+            rows: [makeRow(2, 'draft', { schema_json: values?.[2] })],
+          };
+        throw new Error(`Unexpected query: ${query}`);
+      });
+      return service.saveDraft({ draftVersion: 2, schema }, adminActor);
+    };
+
+    it('saves help text on any field and a vertical layout on a Multiple choice field', async () => {
+      const helpText = 'Put NA if not Motion Sensor';
+      const saved = await saveDraft(
+        draftSchema({
+          product_type: { optionLayout: 'vertical' },
+          title: { helpText },
+        }),
+      );
+
+      const [productType, , title] = saved.schema.sections[0].fields;
+      expect(productType).toMatchObject({ optionLayout: 'vertical' });
+      expect(title).toMatchObject({ helpText });
+    });
+
+    it('accepts help text of exactly 500 characters and an explicit horizontal layout', async () => {
+      await expect(
+        saveDraft(
+          draftSchema({
+            product_type: { optionLayout: 'horizontal', helpText: '' },
+            title: { helpText: 'ก'.repeat(500) },
+          }),
+        ),
+      ).resolves.toEqual(expect.objectContaining({ version: 2 }));
+    });
+
+    it.each([
+      {
+        description: 'help text longer than 500 characters',
+        extra: { title: { helpText: 'x'.repeat(501) } },
+        message: 'Help text for "Title" must be 500 characters or fewer.',
+      },
+      {
+        description: 'help text that is not text',
+        extra: { title: { helpText: 42 } },
+        message: 'Help text for "Title" must be plain text.',
+      },
+      {
+        description: 'an unknown choice layout',
+        extra: { product_type: { optionLayout: 'diagonal' } },
+        message:
+          'Choice layout for "Product Type" must be horizontal or vertical.',
+      },
+      {
+        description: 'a choice layout on a text field',
+        extra: { title: { optionLayout: 'vertical' } },
+        message:
+          'Choice layout for "Title" applies only to Multiple choice fields.',
+      },
+      {
+        description: 'a choice layout on a Dropdown field',
+        extra: {
+          product_type: { type: 'select', optionLayout: 'horizontal' },
+        },
+        message:
+          'Choice layout for "Product Type" applies only to Multiple choice fields.',
+      },
+    ])(
+      'refuses $description with a clear message and saves nothing',
+      async ({ extra, message }) => {
+        await expect(saveDraft(draftSchema(extra))).rejects.toThrow(
+          new BadRequestException(message),
+        );
+        expect(transactionClient.query).not.toHaveBeenCalledWith(
+          expect.stringContaining('SET title = $1'),
+          expect.anything(),
+        );
+      },
+    );
+
+    it('refuses to publish a stored draft whose help text is too long', async () => {
+      const draft = makeRow(2, 'draft', {
+        schema_json: draftSchema({ title: { helpText: 'x'.repeat(501) } }),
+        published_at: null,
+      });
+      configureTransaction((query) => {
+        if (query.includes('FOR UPDATE'))
+          return { rows: [makeRow(1, 'active'), draft] };
+        throw new Error(`Unexpected query: ${query}`);
+      });
+
+      await expect(service.publishDraft(2)).rejects.toThrow(
+        'Help text for "Title" must be 500 characters or fewer.',
+      );
+    });
+  });
 });

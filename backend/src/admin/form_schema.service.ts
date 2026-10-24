@@ -13,9 +13,12 @@ import { DATABASE_POOL } from '../database/database.service';
 import { getAutofillRuleSchemaState } from './autofill-rule-schema';
 import {
   DEFAULT_PSF_REQUEST_SCHEMA,
+  FIELD_HELP_TEXT_MAX_LENGTH,
+  FIELD_OPTION_LAYOUTS,
   LEGACY_PSF_CREATED_INFORMATION_SCHEMA,
   PSF_REQUEST_FORM_KEY,
   SUPPORTED_FORM_KEYS,
+  type FieldOptionLayout,
   type FormSchemaField,
   type FormSchemaJson,
   type FormSchemaSection,
@@ -106,6 +109,41 @@ function hasRestrictedLegacySection(section: unknown): boolean {
     roles.length !== 3 ||
     !['requester', 'setup_owner', 'admin'].every((role) => roles.includes(role))
   );
+}
+
+/**
+ * Field Help Text is optional plain text of at most 500 characters on any field; a choice layout is optional,
+ * horizontal or vertical, and only on a Multiple choice (radio) field, the one choice control that lays out options.
+ */
+function assertFieldGuidance(
+  field: Record<string, unknown>,
+  label: string,
+): void {
+  const { helpText, optionLayout } = field;
+  if (helpText !== undefined) {
+    if (typeof helpText !== 'string') {
+      throw new BadRequestException(
+        `Help text for "${label}" must be plain text.`,
+      );
+    }
+    if (helpText.length > FIELD_HELP_TEXT_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Help text for "${label}" must be ${FIELD_HELP_TEXT_MAX_LENGTH} characters or fewer.`,
+      );
+    }
+  }
+  if (optionLayout !== undefined) {
+    if (field.type !== 'radio') {
+      throw new BadRequestException(
+        `Choice layout for "${label}" applies only to Multiple choice fields.`,
+      );
+    }
+    if (!FIELD_OPTION_LAYOUTS.includes(optionLayout as FieldOptionLayout)) {
+      throw new BadRequestException(
+        `Choice layout for "${label}" must be horizontal or vertical.`,
+      );
+    }
+  }
 }
 
 @Injectable()
@@ -885,6 +923,8 @@ export class FormSchemaService implements OnModuleInit {
             );
           }
         }
+
+        assertFieldGuidance(field, field.label.trim());
       }
     }
 
